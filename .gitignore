@@ -30,3 +30,6 @@ coverage/
 
 # Build
 dist/
+
+# Supabase CLI local state (project link, cached versions)
+supabase/.temp/

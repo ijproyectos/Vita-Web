@@ -27,12 +27,17 @@ A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vitapp es **singl
 - **Repo separado** (`ijproyectos/Vita-Web`), no se tocó `ijproyectos/Vitapp` — ese repo queda intacto como referencia.
 - **Mismo Google OAuth Client de NutrIA**, agregando el redirect URI de este proyecto nuevo en Google Cloud Console (en vez de crear un client aparte) — decisión explícita del usuario para no duplicar configuración.
 
-## Infra — pendiente de acción del usuario (no verificable desde una sesión de Claude Code sin acceso a esos dashboards)
+## Infra
 
-- [ ] Crear el proyecto Supabase (misma org que NutrIA) y aplicar `supabase/migrations/001_initial_schema.sql` + `002_rls_policies.sql` vía `psql`/pooler — mismo mecanismo que NutrIA, ver su `CLAUDE.md` para el comando exacto. **No asumir aplicada sin verificar contra la DB en vivo.**
-- [ ] Agregar el redirect URI de este proyecto (`https://<ref>.supabase.co/auth/v1/callback`) al Google OAuth Client existente de NutrIA, en Google Cloud Console.
+**Supabase está vivo**: proyecto **VitaAPP-WEB**, ref `jvmsmrdddyxgdnyrqhqe` (región `us-west-2`, plan Free, **org propia nueva, no la de NutrIA** — el usuario lo creó en otro perfil), URL `https://jvmsmrdddyxgdnyrqhqe.supabase.co`. Local ya está `supabase link`eado a este proyecto (`.git`-ignorado `supabase/.temp/`). `001_initial_schema.sql` y `002_rls_policies.sql` **aplicadas y verificadas** contra la DB en vivo: `supabase migration list --linked` confirma local=remote en las dos, y una query de solo lectura vía la Management API (`pg_tables`) confirma las 3 tablas (`perfiles`, `medicamentos`, `medicamentos_tomas`) con `rowsecurity = true`. Aplicado con `supabase db push --linked --password <db password>` — la CLI de Supabase no necesita `psql`/pooler como en NutrIA, hace el push directo. **La contraseña de la DB no se guardó en ningún archivo** (a diferencia de NutrIA, que la tiene en `.env.local` a pedido explícito del usuario) — si hace falta de nuevo, pedírsela.
+
+`.env.local` (raíz, gitignored, symlink en `apps/web/`) ya tiene `NEXT_PUBLIC_SUPABASE_URL` y las dos API keys (legacy JWT `anon`/`service_role`, no las nuevas `sb_publishable_`/`sb_secret_` — por compatibilidad con `@supabase/supabase-js@^2.112` que ya usa NutrIA).
+
+**Pendiente, acción del usuario (no verificable desde acá sin acceso a esos dashboards):**
+- [ ] `ANTHROPIC_API_KEY` en `.env.local` — todavía vacía.
+- [ ] Agregar el redirect URI de este proyecto (`https://jvmsmrdddyxgdnyrqhqe.supabase.co/auth/v1/callback`) al Google OAuth Client existente de NutrIA, en Google Cloud Console.
 - [ ] Activar el provider de Google en Supabase Auth (Authentication → Providers) con el Client ID/Secret de ese mismo client.
-- [ ] Crear el sitio Netlify (misma cuenta que NutrIA), conectar `ijproyectos/Vita-Web`, cargar las 4 env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`).
+- [ ] Crear el sitio Netlify, conectar `ijproyectos/Vita-Web`, cargar las 4 env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`).
 
 ## Stack
 
