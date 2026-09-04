@@ -1,0 +1,16 @@
+# Monorepo: the Next.js app lives in apps/web, not the repo root.
+#
+# `publish` is set explicitly because of a documented Netlify default:
+# when `base` is set but `publish` isn't, Netlify defaults publish to
+# the *same* value as base. The Next.js Runtime plugin then refuses to
+# run ("Your publish directory cannot be the same as the base directory
+# of your site") — confirmed against the 2021 Netlify forum post on this
+# exact default. ".next" (Next's real build output, relative to base)
+# is what the plugin actually reads from.
+[build]
+  base = "apps/web"
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
