@@ -24,7 +24,7 @@ A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vitapp es **singl
 - **Web primero, no Flutter**: se descartó migrar o continuar la app Flutter original. Next.js responsive, con el esquema pensado para eventualmente exponer una API a una app móvil (no construida todavía).
 - **Anthropic API en vez de LangGraph+Gemma**: consistencia con el resto del stack (NutrIA también usa Anthropic). El contrato SSE del agente original se conservó porque estaba bien diseñado, no por inercia.
 - **Alcance inicial = auth + un solo módulo completo** (medicamentos, el que tenía más tools ya diseñadas en el agente original) en vez de un esqueleto de los 4 módulos a medio construir. Turnos/métricas quedan para cuando se pida ese siguiente módulo, replicando el mismo patrón (`lib/<módulo>/nucleo.ts` + Server Actions + tools de chat).
-- **Repo separado** (`ijproyectos/vitapp-web`), no se tocó `ijproyectos/Vitapp` — ese repo queda intacto como referencia.
+- **Repo separado** (`ijproyectos/Vita-Web`), no se tocó `ijproyectos/Vitapp` — ese repo queda intacto como referencia.
 - **Mismo Google OAuth Client de NutrIA**, agregando el redirect URI de este proyecto nuevo en Google Cloud Console (en vez de crear un client aparte) — decisión explícita del usuario para no duplicar configuración.
 
 ## Infra — pendiente de acción del usuario (no verificable desde una sesión de Claude Code sin acceso a esos dashboards)
@@ -32,7 +32,7 @@ A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vitapp es **singl
 - [ ] Crear el proyecto Supabase (misma org que NutrIA) y aplicar `supabase/migrations/001_initial_schema.sql` + `002_rls_policies.sql` vía `psql`/pooler — mismo mecanismo que NutrIA, ver su `CLAUDE.md` para el comando exacto. **No asumir aplicada sin verificar contra la DB en vivo.**
 - [ ] Agregar el redirect URI de este proyecto (`https://<ref>.supabase.co/auth/v1/callback`) al Google OAuth Client existente de NutrIA, en Google Cloud Console.
 - [ ] Activar el provider de Google en Supabase Auth (Authentication → Providers) con el Client ID/Secret de ese mismo client.
-- [ ] Crear el sitio Netlify (misma cuenta que NutrIA), conectar `ijproyectos/vitapp-web`, cargar las 4 env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`).
+- [ ] Crear el sitio Netlify (misma cuenta que NutrIA), conectar `ijproyectos/Vita-Web`, cargar las 4 env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`).
 
 ## Stack
 
