@@ -33,11 +33,13 @@ A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vitapp es **singl
 
 `.env.local` (raíz, gitignored, symlink en `apps/web/`) ya tiene `NEXT_PUBLIC_SUPABASE_URL` y las dos API keys (legacy JWT `anon`/`service_role`, no las nuevas `sb_publishable_`/`sb_secret_` — por compatibilidad con `@supabase/supabase-js@^2.112` que ya usa NutrIA).
 
-**Pendiente, acción del usuario (no verificable desde acá sin acceso a esos dashboards):**
-- [ ] `ANTHROPIC_API_KEY` en `.env.local` — todavía vacía.
-- [ ] Agregar el redirect URI de este proyecto (`https://jvmsmrdddyxgdnyrqhqe.supabase.co/auth/v1/callback`) al Google OAuth Client existente de NutrIA, en Google Cloud Console.
-- [ ] Activar el provider de Google en Supabase Auth (Authentication → Providers) con el Client ID/Secret de ese mismo client.
-- [ ] Crear el sitio Netlify, conectar `ijproyectos/Vita-Web`, cargar las 4 env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`).
+**Auth con Google, activado y verificado** (vía Management API, `GET .../config/auth`): `external_google_enabled = true`, Client ID cargado en el dashboard de Supabase por el usuario (mismo OAuth Client de Google Cloud que usa NutrIA — no un client nuevo, redirect URI de este proyecto ya agregado ahí). `site_url` estaba en `http://localhost:3000` (default de un proyecto nuevo) — corregido a `https://vitappweb.netlify.app`, y `uri_allow_list` ganó `https://vitappweb.netlify.app/**,http://localhost:3000/**` (sin esto el `redirectTo` de `signInWithOAuth` en producción hubiera sido rechazado). **No probado un login real de punta a punta todavía** — eso requiere un navegador con una cuenta de Google, pendiente de que el usuario lo pruebe en https://vitappweb.netlify.app/.
+
+**Netlify está vivo**: sitio `vitappweb` (`site_id` `3c956a4d-b077-4ef4-a6e0-b6cef204ed44`, cuenta `ijsociety-exe`), conectado por el usuario vía la UI de Netlify a `ijproyectos/Vita-Web` rama `main` (auto-deploy). Las 3 env vars de Supabase cargadas vía Management API (contexto `all`) y confirmado un deploy `ready` con ellas ya presentes — `https://vitappweb.netlify.app/` responde 200 y redirige a `/login` (antes tiraba 500 por faltar las env vars). `ANTHROPIC_API_KEY` **deliberadamente no cargada** — decisión explícita del usuario de no sumar el chat con IA por ahora; sin esa var, `/app/chat` fallaría si se usa (el resto de la app no depende de Anthropic).
+
+**Pendiente, acción del usuario:**
+- [ ] Probar el login con Google de punta a punta en https://vitappweb.netlify.app/ (nunca se probó con un navegador real).
+- [ ] `ANTHROPIC_API_KEY` — cuando se decida sumar el chat, pasarla para cargarla en `.env.local` y en Netlify.
 
 ## Stack
 
