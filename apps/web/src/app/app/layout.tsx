@@ -17,7 +17,12 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-3">
+      {/* AppBar navy con texto blanco — mismo AppBarTheme(backgroundColor:
+          primaryColor, foregroundColor: Colors.white) del Vitapp original.
+          Los Button variant="ghost" no necesitan color propio: heredan
+          text-primary-foreground en reposo y su hover (bg-muted claro)
+          ya da el contraste correcto sobre navy, sin tocar button.tsx. */}
+      <header className="flex items-center justify-between bg-primary px-6 py-3 text-primary-foreground">
         <div className="flex items-center gap-6">
           <span className="text-sm font-semibold">Vitapp</span>
           <nav className="flex items-center gap-1">
@@ -33,7 +38,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">{nombre}</span>
+          <span className="text-sm text-primary-foreground/70">{nombre}</span>
           <form action="/auth/signout" method="post">
             <Button type="submit" variant="ghost" size="icon-sm" aria-label="Cerrar sesión">
               <LogOut className="size-4" />

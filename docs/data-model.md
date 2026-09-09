@@ -41,9 +41,33 @@ Adherencia — una fila por medicamento+fecha.
 
 unique `(medicamento_id, fecha)`.
 
+## `sesiones_chat`
+
+Historial de chat — replica `ChatProvider.historySessions` del Vitapp original (Flutter), persistido en vez de en memoria.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users |
+| created_at | timestamptz | |
+| updated_at | timestamptz | se toca en cada mensaje nuevo, para ordenar por actividad |
+
+## `mensajes_chat`
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| sesion_id | uuid | references sesiones_chat, on delete cascade |
+| usuario_id | uuid | references auth.users, denormalizado (mismo criterio que `medicamentos_tomas`) |
+| role | text | check: user / assistant |
+| contenido | text | |
+| created_at | timestamptz | |
+
+**Ojo con `sesionId` entrante desde el cliente**: la policy de insert de `mensajes_chat` solo valida `usuario_id = auth.uid()`, no que `sesion_id` sea del mismo usuario — un `sesionId` ajeno/manipulado en la URL podría, en teoría, insertar un mensaje válido pero huérfano (nunca aparece en ningún listado real). Por eso `lib/chat/nucleo.ts#sesionPerteneceAUsuario` se llama siempre antes de usar un `sesionId` entrante en `/api/chat/route.ts` — si no matchea, se trata como si no hubiera llegado ninguno (se crea una sesión nueva).
+
 ## RLS
 
-Todas las tablas: `usuario_id = auth.uid()` (o `id = auth.uid()` en `perfiles`) para todas las operaciones. Ver `supabase/migrations/002_rls_policies.sql`.
+Todas las tablas: `usuario_id = auth.uid()` (o `id = auth.uid()` en `perfiles`) para todas las operaciones. Ver `supabase/migrations/002_rls_policies.sql` y `003_chat_historial.sql`.
 
 ## Fuera de alcance (del modelo original de Vitapp, no construido todavía)
 

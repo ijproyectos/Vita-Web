@@ -39,6 +39,10 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-chat-sent: var(--chat-sent);
+  --color-chat-sent-foreground: var(--chat-sent-foreground);
+  --color-chat-received: var(--chat-received);
+  --color-chat-received-foreground: var(--chat-received-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,38 +53,48 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Identidad visual del Vitapp original (Flutter), portada 1:1 desde
+     app/lib/theme/app_theme.dart + app/context/spec/UI_UX.md del repo
+     ijproyectos/Vitapp — hex exactos, no oklch estimado (mismo criterio
+     que usó NutrIA en su rediseño). */
+  --background: #F0F2F5; /* Soft Grey */
+  --foreground: #1F2430;
+  --card: #FFFFFF;
+  --card-foreground: #1F2430;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2430;
+  --primary: #2C3E50; /* Dark Navy — AppBar/headers/botones primarios */
+  --primary-foreground: #FFFFFF;
+  --secondary: #E9EDF1;
+  --secondary-foreground: #2C3E50;
+  --muted: #E9EDF1;
+  --muted-foreground: #64748B;
+  --accent: #42A5F5; /* Light Blue — acentos e interactivos */
+  --accent-foreground: #FFFFFF;
+  --destructive: #C0392B; /* no especificado en el original, tono acorde a la paleta */
+  --border: #DCE1E7;
+  --input: #DCE1E7;
+  --ring: #42A5F5;
+  --chart-1: #2C3E50;
+  --chart-2: #42A5F5;
+  --chart-3: #005B96;
+  --chart-4: #64748B;
+  --chart-5: #94A3B8;
+  --radius: 0.75rem; /* CardThemeData borderRadius: 12 en el original */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1F2430;
+  --sidebar-primary: #2C3E50;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E9EDF1;
+  --sidebar-accent-foreground: #2C3E50;
+  --sidebar-border: #DCE1E7;
+  --sidebar-ring: #42A5F5;
+  /* Burbujas de chat — sentBubbleColor/receivedBubbleColor de
+     app_theme.dart, sin equivalente en los tokens shadcn por defecto. */
+  --chat-sent: #005B96; /* Deep Blue */
+  --chat-sent-foreground: #FFFFFF;
+  --chat-received: #FFFFFF;
+  --chat-received-foreground: #1F2430;
 }
 
 .dark {

@@ -3,6 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { TOOLS, ejecutarTool } from "@/lib/ai/tools";
+import * as chat from "@/lib/chat/nucleo";
 
 export const runtime = "nodejs";
 
@@ -28,8 +29,6 @@ Reglas:
 - Si una tool devuelve que no encontró un medicamento por nombre, decíselo
   al usuario y preguntale el nombre exacto en vez de reintentar a ciegas.`;
 
-type MensajeCliente = { role: "user" | "assistant"; content: string };
-
 function eventoSSE(data: unknown): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
@@ -44,7 +43,10 @@ export async function POST(request: Request) {
     return new Response("No autenticado.", { status: 401 });
   }
 
-  const { messages } = (await request.json()) as { messages: MensajeCliente[] };
+  const { sesionId: sesionIdEntrante, mensaje } = (await request.json()) as {
+    sesionId?: string;
+    mensaje: string;
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -54,10 +56,30 @@ export async function POST(request: Request) {
       // agente original (`agent/README.md`: "data: [DONE]", sin comillas).
       const enviarFin = () => controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 
+      let textoAcumulado = ""; // se persiste como UN mensaje del asistente al final,
+      // igual a como el cliente lo muestra en una sola burbuja.
+
       try {
-        const historial: Anthropic.MessageParam[] = messages.map((m) => ({
+        // Un sesionId entrante solo se usa si de verdad es del usuario —
+        // ver el comentario en sesionPerteneceAUsuario(). Si no matchea
+        // (URL manipulada a mano, o la sesión ya no existe), se trata
+        // igual que "sin sesionId": se crea una nueva y se le avisa al
+        // cliente cuál es la real.
+        const sesionValida =
+          !!sesionIdEntrante && (await chat.sesionPerteneceAUsuario(supabase, user.id, sesionIdEntrante));
+        const sesionId = sesionValida
+          ? sesionIdEntrante!
+          : await chat.crearSesion(supabase, user.id);
+        if (!sesionValida) enviar({ session: sesionId });
+
+        await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
+
+        // El historial se reconstruye SIEMPRE desde la DB (fuente de
+        // verdad), nunca se confía en lo que mande el cliente.
+        const mensajesGuardados = await chat.listarMensajes(supabase, user.id, sesionId);
+        const historial: Anthropic.MessageParam[] = mensajesGuardados.map((m) => ({
           role: m.role,
-          content: m.content,
+          content: m.contenido,
         }));
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
@@ -69,7 +91,10 @@ export async function POST(request: Request) {
             messages: historial,
           });
 
-          respuesta.on("text", (texto) => enviar({ chunk: texto }));
+          respuesta.on("text", (texto) => {
+            textoAcumulado += texto;
+            enviar({ chunk: texto });
+          });
 
           const mensajeFinal = await respuesta.finalMessage();
           historial.push({ role: "assistant", content: mensajeFinal.content });
@@ -96,6 +121,10 @@ export async function POST(request: Request) {
           }
 
           historial.push({ role: "user", content: resultadosTool });
+        }
+
+        if (textoAcumulado) {
+          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
         }
 
         enviarFin();

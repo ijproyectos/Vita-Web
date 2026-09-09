@@ -12,7 +12,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
         <div className="flex flex-col items-center gap-3 text-center">
           <div
             className="flex size-14 items-center justify-center rounded-2xl text-2xl font-semibold text-white shadow-[0_2px_6px_rgba(0,0,0,.18)]"
-            style={{ background: "linear-gradient(150deg,#4F8EF7,#1E4FA3)" }}
+            style={{ background: "linear-gradient(150deg,#42A5F5,#2C3E50)" }}
           >
             V
           </div>
