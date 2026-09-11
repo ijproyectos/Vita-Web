@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-body);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -43,58 +43,79 @@
   --color-chat-sent-foreground: var(--chat-sent-foreground);
   --color-chat-received: var(--chat-received);
   --color-chat-received-foreground: var(--chat-received-foreground);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-chip-teal-bg: var(--chip-teal-bg);
+  --color-chip-teal-ink: var(--chip-teal-ink);
+  --color-chip-rose-bg: var(--chip-rose-bg);
+  --color-chip-rose-ink: var(--chip-rose-ink);
+  --color-chip-amber-bg: var(--chip-amber-bg);
+  --color-chip-amber-ink: var(--chip-amber-ink);
+  --color-chip-violet-bg: var(--chip-violet-bg);
+  --color-chip-violet-ink: var(--chip-violet-ink);
+  --color-chip-slate-bg: var(--chip-slate-bg);
+  --color-chip-slate-ink: var(--chip-slate-ink);
+  --radius-sm: calc(var(--radius) * 0.7);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.4);
+  --radius-xl: calc(var(--radius) * 1.8);
+  --radius-2xl: calc(var(--radius) * 2.2);
+  --radius-3xl: calc(var(--radius) * 2.6);
+  --radius-4xl: calc(var(--radius) * 3);
 }
 
 :root {
-  /* Identidad visual del Vitapp original (Flutter), portada 1:1 desde
-     app/lib/theme/app_theme.dart + app/context/spec/UI_UX.md del repo
-     ijproyectos/Vitapp — hex exactos, no oklch estimado (mismo criterio
-     que usó NutrIA en su rediseño). */
-  --background: #F0F2F5; /* Soft Grey */
-  --foreground: #1F2430;
-  --card: #FFFFFF;
-  --card-foreground: #1F2430;
-  --popover: #FFFFFF;
-  --popover-foreground: #1F2430;
-  --primary: #2C3E50; /* Dark Navy — AppBar/headers/botones primarios */
-  --primary-foreground: #FFFFFF;
-  --secondary: #E9EDF1;
-  --secondary-foreground: #2C3E50;
-  --muted: #E9EDF1;
-  --muted-foreground: #64748B;
-  --accent: #42A5F5; /* Light Blue — acentos e interactivos */
-  --accent-foreground: #FFFFFF;
-  --destructive: #C0392B; /* no especificado en el original, tono acorde a la paleta */
-  --border: #DCE1E7;
-  --input: #DCE1E7;
-  --ring: #42A5F5;
-  --chart-1: #2C3E50;
-  --chart-2: #42A5F5;
-  --chart-3: #005B96;
-  --chart-4: #64748B;
-  --chart-5: #94A3B8;
-  --radius: 0.75rem; /* CardThemeData borderRadius: 12 en el original */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #1F2430;
-  --sidebar-primary: #2C3E50;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E9EDF1;
-  --sidebar-accent-foreground: #2C3E50;
-  --sidebar-border: #DCE1E7;
-  --sidebar-ring: #42A5F5;
-  /* Burbujas de chat — sentBubbleColor/receivedBubbleColor de
-     app_theme.dart, sin equivalente en los tokens shadcn por defecto. */
-  --chat-sent: #005B96; /* Deep Blue */
-  --chat-sent-foreground: #FFFFFF;
-  --chat-received: #FFFFFF;
-  --chat-received-foreground: #1F2430;
+  /* Identidad "vita.ia — Clinical Sanctuary", portada 1:1 desde
+     pantallas/Vitaoriginal/vita (1)/styles.css — reemplaza la navy/celeste
+     del pase anterior (derivada del Flutter original, ya descartada). */
+  --background: #f7f9fb;
+  --foreground: #0b1522;
+  --card: #ffffff;
+  --card-foreground: #0b1522;
+  --popover: #ffffff;
+  --popover-foreground: #0b1522;
+  --primary: #0891b2; /* teal-600 */
+  --primary-foreground: #ffffff;
+  --secondary: #eef2f6; /* surface-sunk */
+  --secondary-foreground: #0b1522;
+  --muted: #eef2f6;
+  --muted-foreground: #6b7687;
+  --accent: #0891b2;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --border: #c6ccd4;
+  --input: #c6ccd4;
+  --ring: #0891b2;
+  --chart-1: #0891b2;
+  --chart-2: #7c3aed;
+  --chart-3: #f59e0b;
+  --chart-4: #6b7687;
+  --chart-5: #9aa4b2;
+  --radius: 20px; /* --r-md del sistema original */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b1522;
+  --sidebar-primary: #0891b2;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef2f6;
+  --sidebar-accent-foreground: #0b1522;
+  --sidebar-border: #c6ccd4;
+  --sidebar-ring: #0891b2;
+
+  /* Burbujas de chat — usuario en gradiente teal, vita en superficie blanca. */
+  --chat-sent: #0891b2;
+  --chat-sent-foreground: #ffffff;
+  --chat-received: #ffffff;
+  --chat-received-foreground: #0b1522;
+
+  /* Paletas de chips (tonos apagados, mismo criterio que el original). */
+  --chip-teal-bg: #ecfeff;
+  --chip-teal-ink: #155e75;
+  --chip-rose-bg: #fef1f2;
+  --chip-rose-ink: #be123c;
+  --chip-amber-bg: #fff7ed;
+  --chip-amber-ink: #b45309;
+  --chip-violet-bg: #f3f0ff;
+  --chip-violet-ink: #5b21b6;
+  --chip-slate-bg: #eef2f6;
+  --chip-slate-ink: #334155;
 }
 
 .dark {

@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
 
 function GoogleLogo() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+    <svg width="20" height="20" viewBox="0 0 18 18" aria-hidden="true">
       <path
         fill="#4285F4"
         d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
@@ -51,24 +50,20 @@ export function LoginForm({ next }: { next?: string }) {
   }
 
   return (
-    <div className="flex w-full flex-col items-center gap-4">
+    <div className="flex w-full flex-col gap-3">
       {error && (
-        <p className="w-full rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
+        <p className="rounded-[14px] bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">{error}</p>
       )}
 
-      <Button
+      <button
         type="button"
-        variant="outline"
-        size="lg"
         onClick={handleGoogleLogin}
         disabled={loading}
-        className="h-12 w-full gap-3 text-sm"
+        className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full bg-white font-heading text-[15px] font-bold text-foreground shadow-[0_2px_10px_rgba(15,33,54,0.06),inset_0_0_0_1px_rgba(15,33,54,0.06)] disabled:opacity-60"
       >
         <GoogleLogo />
         {loading ? "Conectando…" : "Continuar con Google"}
-      </Button>
+      </button>
     </div>
   );
 }

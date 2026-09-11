@@ -10,12 +10,14 @@ import type { DiaSemana, MomentoDia } from "@/lib/medicamentos/tipos";
 const MOMENTO_DIA_DESDE_INGLES: Record<string, MomentoDia> = {
   morning: "mañana",
   midday: "mediodia",
+  afternoon: "tarde",
   night: "noche",
 };
 
 const MOMENTO_DIA_A_INGLES: Record<MomentoDia, string> = {
   mañana: "morning",
   mediodia: "midday",
+  tarde: "afternoon",
   noche: "night",
 };
 

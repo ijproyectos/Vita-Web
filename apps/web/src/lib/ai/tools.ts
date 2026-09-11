@@ -4,6 +4,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import type { Medicamento, MedicamentoConToma } from "@/lib/medicamentos/tipos";
+import * as turnos from "@/lib/turnos/nucleo";
+import { momentoDelDia } from "@/lib/rutina/momento";
 import {
   diasAIngles,
   diasDesdeIngles,
@@ -37,7 +39,7 @@ export const TOOLS: Anthropic.Tool[] = [
         name: { type: "string", description: "Nombre del medicamento." },
         dose: { type: "string", description: "Dosis, ej. '400mg'." },
         scheduled_time: { type: "string", description: "Hora en formato HH:MM." },
-        time_of_day: { type: "string", enum: ["morning", "midday", "night"] },
+        time_of_day: { type: "string", enum: ["morning", "midday", "afternoon", "night"] },
         condition: { type: "string", description: "Para qué condición es, opcional." },
         recurring_days: {
           type: "array",
@@ -58,8 +60,13 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         medication_name: { type: "string", description: "Nombre (o parte del nombre) del medicamento a actualizar." },
+        medication_time_hint: {
+          type: "string",
+          description:
+            "Hora actual (HH:MM) de ESE medicamento, solo si el usuario tiene más de uno con el mismo nombre (ej. la misma pastilla de mañana y de noche) — para saber cuál de los dos actualizar. Omitir si no aplica.",
+        },
         scheduled_time: { type: "string", description: "Nueva hora en formato HH:MM." },
-        time_of_day: { type: "string", enum: ["morning", "midday", "night"] },
+        time_of_day: { type: "string", enum: ["morning", "midday", "afternoon", "night"] },
         recurring_days: {
           type: "array",
           items: {
@@ -78,6 +85,11 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         medication_name: { type: "string" },
+        medication_time_hint: {
+          type: "string",
+          description:
+            "Hora actual (HH:MM) de ESE medicamento, solo si el usuario tiene más de uno con el mismo nombre — para saber cuál de los dos borrar. Omitir si no aplica.",
+        },
       },
       required: ["medication_name"],
     },
@@ -89,6 +101,11 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         medication_name: { type: "string" },
+        medication_time_hint: {
+          type: "string",
+          description:
+            "Hora actual (HH:MM) de ESE medicamento, solo si el usuario tiene más de uno con el mismo nombre — para saber cuál de los dos marcar. Omitir si no aplica.",
+        },
       },
       required: ["medication_name"],
     },
@@ -97,6 +114,22 @@ export const TOOLS: Anthropic.Tool[] = [
     name: "mark_all_taken",
     description: "Marca todos los medicamentos pendientes de hoy como tomados.",
     input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "add_appointment",
+    description: "Agenda un turno médico nuevo.",
+    input_schema: {
+      type: "object",
+      properties: {
+        specialty: { type: "string", description: "Especialidad, ej. 'Cardiología'." },
+        professional: { type: "string", description: "Nombre del profesional, opcional." },
+        place: { type: "string", description: "Lugar/institución, opcional." },
+        date: { type: "string", description: "Fecha en formato YYYY-MM-DD." },
+        time: { type: "string", description: "Hora en formato HH:MM." },
+        reason: { type: "string", description: "Motivo de la consulta, opcional." },
+      },
+      required: ["specialty", "date", "time"],
+    },
   },
   {
     name: "show_today_medications",
@@ -138,30 +171,50 @@ export async function ejecutarTool(
     }
 
     case "add_medication": {
+      // momentoDia se deriva de scheduled_time, no del time_of_day que
+      // manda el modelo — evita que queden inconsistentes entre sí (ej.
+      // "20hs" guardado como momento "mediodia" si el modelo se equivoca
+      // al llenar el campo separado; la hora es la única fuente de verdad).
       const creado = await medicamentos.agregar(supabase, usuarioId, {
         nombre: String(input.name),
         dosis: (input.dose as string) ?? null,
         horaProgramada: String(input.scheduled_time),
-        momentoDia: momentoDiaDesdeIngles(String(input.time_of_day)),
+        momentoDia: momentoDelDia(String(input.scheduled_time)),
         condicion: (input.condition as string) ?? null,
         diasRecurrentes: input.recurring_days
           ? diasDesdeIngles(input.recurring_days as string[])
           : [],
       });
-      return { contenido: JSON.stringify(paraModelo(creado)) };
+      return {
+        contenido: JSON.stringify(paraModelo(creado)),
+        accionUI: {
+          type: "medication_added",
+          name: creado.nombre,
+          dose: creado.dosis,
+          time: creado.hora_programada,
+        },
+      };
     }
 
     case "update_schedule": {
       const medicamento = await medicamentos.buscarPorNombre(
         supabase,
         usuarioId,
-        String(input.medication_name)
+        String(input.medication_name),
+        input.medication_time_hint as string | undefined
       );
       if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
 
+      // Si viene scheduled_time, momentoDia se re-deriva de esa hora (misma
+      // razón que en add_medication) — solo se confía en el time_of_day
+      // suelto del modelo cuando no hay una hora nueva de la que derivarlo.
       const actualizado = await medicamentos.actualizarHorario(supabase, usuarioId, medicamento.id, {
         horaProgramada: input.scheduled_time as string | undefined,
-        momentoDia: input.time_of_day ? momentoDiaDesdeIngles(String(input.time_of_day)) : undefined,
+        momentoDia: input.scheduled_time
+          ? momentoDelDia(String(input.scheduled_time))
+          : input.time_of_day
+            ? momentoDiaDesdeIngles(String(input.time_of_day))
+            : undefined,
         diasRecurrentes: input.recurring_days
           ? diasDesdeIngles(input.recurring_days as string[])
           : undefined,
@@ -173,7 +226,8 @@ export async function ejecutarTool(
       const medicamento = await medicamentos.buscarPorNombre(
         supabase,
         usuarioId,
-        String(input.medication_name)
+        String(input.medication_name),
+        input.medication_time_hint as string | undefined
       );
       if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
 
@@ -185,7 +239,8 @@ export async function ejecutarTool(
       const medicamento = await medicamentos.buscarPorNombre(
         supabase,
         usuarioId,
-        String(input.medication_name)
+        String(input.medication_name),
+        input.medication_time_hint as string | undefined
       );
       if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
 
@@ -201,6 +256,31 @@ export async function ejecutarTool(
       return {
         contenido: `Marcados ${cantidad} medicamentos como tomados.`,
         accionUI: { type: "all_medications_taken" },
+      };
+    }
+
+    case "add_appointment": {
+      const creado = await turnos.agregar(supabase, usuarioId, {
+        especialidad: String(input.specialty),
+        profesional: (input.professional as string) ?? null,
+        lugar: (input.place as string) ?? null,
+        fecha: String(input.date),
+        hora: String(input.time),
+        motivo: (input.reason as string) ?? null,
+      });
+      return {
+        contenido: JSON.stringify({
+          id: creado.id,
+          specialty: creado.especialidad,
+          date: creado.fecha,
+          time: creado.hora,
+        }),
+        accionUI: {
+          type: "appointment_added",
+          specialty: creado.especialidad,
+          date: creado.fecha,
+          time: creado.hora,
+        },
       };
     }
 

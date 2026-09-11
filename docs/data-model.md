@@ -1,10 +1,10 @@
 # Modelo de datos
 
-Single-tenant por usuario — no hay concepto de "tenant" como en NutrIA (profesional/paciente). Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo.
+Single-tenant por usuario — cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo. Todas las tablas: RLS `usuario_id = auth.uid()` (o `id = auth.uid()` en `perfiles`) para todas las operaciones.
 
 ## `perfiles`
 
-1:1 con `auth.users`. Se crea/actualiza en `src/app/auth/callback/route.ts` en el primer login (nombre/avatar desde el metadata de Google) — no hay trigger de DB, mismo criterio que NutrIA.
+1:1 con `auth.users`. Fila creada en `src/app/auth/callback/route.ts` en el primer login (`upsert` con `ignoreDuplicates: true` — solo completa nombre/avatar la primera vez, nunca pisa una edición posterior del usuario en re-logins).
 
 | columna | tipo | notas |
 |---|---|---|
@@ -12,6 +12,19 @@ Single-tenant por usuario — no hay concepto de "tenant" como en NutrIA (profes
 | nombre | text | |
 | avatar_url | text | |
 | created_at | timestamptz | |
+| fecha_nacimiento | date | opcional, editable en Resumen de salud |
+| edad_rango | text | grueso, sembrado por la encuesta de onboarding; redundante en cuanto se carga `fecha_nacimiento` |
+| genero | text | |
+| grupo_sanguineo | text | |
+| altura_cm | numeric | |
+| peso_kg | numeric | |
+| condiciones | jsonb | array de `{label, tipo: 'permanente'\|'temporal', desde}` |
+| alergias | text[] | |
+| obra_social | text | |
+| numero_afiliado | text | |
+| contacto_emergencia_nombre | text | |
+| contacto_emergencia_telefono | text | |
+| onboarding_completado_at | timestamptz | gatea si `/app/*` redirige a `/onboarding/nombre` |
 
 ## `medicamentos`
 
@@ -21,14 +34,21 @@ Single-tenant por usuario — no hay concepto de "tenant" como en NutrIA (profes
 | usuario_id | uuid | references auth.users |
 | nombre | text | |
 | dosis | text | opcional |
+| unidad | text | default 'mg' |
 | hora_programada | text | "HH:MM" |
-| momento_dia | text | check: mañana / mediodia / noche |
-| condicion | text | opcional, para qué es |
-| dias_recurrentes | text[] | días de la semana en español; vacío = todos los días |
+| momento_dia | text | check: mañana / mediodia / tarde / noche |
+| condicion | text | opcional, legacy — no se pide en el form actual |
+| dias_recurrentes | text[] | días de la semana; vacío = todos los días. No se pide en el form actual (default `[]`), sigue disponible vía chat |
+| frecuencia | text | descriptiva ("1 vez al día"...) — no gobierna el scheduling real |
+| con_comida | text | check: antes / con / despues / no-importa |
+| duracion | text | label libre ("7 días" / "Indefinido"...) |
+| notas | text | |
+
+El form "Agregar medicamento" permite elegir varios momentos del día a la vez — al guardar se inserta **una fila por momento** (mismo dato compartido, hora default por momento vía `HORA_POR_MOMENTO` en `lib/medicamentos/tipos.ts`).
 
 ## `medicamentos_tomas`
 
-Adherencia — una fila por medicamento+fecha.
+Adherencia — una fila por medicamento+fecha. Sin cambios respecto al pase anterior (booleano `tomado` alcanza; este diseño no tiene concepto de "sin confirmar"/alerta a un contacto).
 
 | columna | tipo | notas |
 |---|---|---|
@@ -41,37 +61,32 @@ Adherencia — una fila por medicamento+fecha.
 
 unique `(medicamento_id, fecha)`.
 
-## `sesiones_chat`
-
-Historial de chat — replica `ChatProvider.historySessions` del Vitapp original (Flutter), persistido en vez de en memoria.
+## `turnos`
 
 | columna | tipo | notas |
 |---|---|---|
 | id | uuid PK | |
 | usuario_id | uuid | references auth.users |
-| created_at | timestamptz | |
-| updated_at | timestamptz | se toca en cada mensaje nuevo, para ordenar por actividad |
-
-## `mensajes_chat`
-
-| columna | tipo | notas |
-|---|---|---|
-| id | uuid PK | |
-| sesion_id | uuid | references sesiones_chat, on delete cascade |
-| usuario_id | uuid | references auth.users, denormalizado (mismo criterio que `medicamentos_tomas`) |
-| role | text | check: user / assistant |
-| contenido | text | |
+| especialidad | text | |
+| profesional | text | opcional |
+| lugar | text | opcional |
+| fecha | date | |
+| hora | text | "HH:MM" |
+| motivo | text | opcional |
+| recordatorio | text | descriptivo ("1 día antes"...), sin notificación real detrás |
+| acompanado | boolean | solo el flag, no notifica a nadie |
+| notas | text | |
 | created_at | timestamptz | |
 
-**Ojo con `sesionId` entrante desde el cliente**: la policy de insert de `mensajes_chat` solo valida `usuario_id = auth.uid()`, no que `sesion_id` sea del mismo usuario — un `sesionId` ajeno/manipulado en la URL podría, en teoría, insertar un mensaje válido pero huérfano (nunca aparece en ningún listado real). Por eso `lib/chat/nucleo.ts#sesionPerteneceAUsuario` se llama siempre antes de usar un `sesionId` entrante en `/api/chat/route.ts` — si no matchea, se trata como si no hubiera llegado ninguno (se crea una sesión nueva).
+Momento del día (para agrupar en la Rutina) se deriva de `hora` con `momentoDelDia()` (`lib/rutina/momento.ts`), no se guarda aparte. "Próximo"/pasado se deriva de `fecha`, sin columna de estado.
 
-## RLS
+## `sesiones_chat` / `mensajes_chat`
 
-Todas las tablas: `usuario_id = auth.uid()` (o `id = auth.uid()` en `perfiles`) para todas las operaciones. Ver `supabase/migrations/002_rls_policies.sql` y `003_chat_historial.sql`.
+Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_chat_historial.sql`.
 
-## Fuera de alcance (del modelo original de Vitapp, no construido todavía)
+## Fuera de alcance (sin tabla, decisión — ver CLAUDE.md)
 
-- `turnos` (appointments)
-- métricas de salud / `health_profiles` (peso, altura, tipo de sangre, condiciones, alergias)
-- historial médico / registros con archivo adjunto
-- login con Apple
+- Métricas de salud (presión, glucemia, peso) — "Monitoreo activo" en Mi Salud.
+- Estudios / vacunas / consultas — timeline de "Historial" en Mi Salud.
+- Rol Cuidador / vínculo con otro usuario.
+- Login con Apple.

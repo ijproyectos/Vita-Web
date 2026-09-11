@@ -1,7 +1,6 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import {
   Sheet,
   SheetContent,
@@ -9,37 +8,39 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { Trash2 } from "lucide-react";
-import { eliminarHistorialAction } from "./actions";
+import { VitaIcon } from "@/lib/vita-icons";
+import { eliminarHistorialAction } from "./chat-actions";
 import type { SesionChat } from "@/lib/chat/tipos";
 
-// Replica el Drawer del Vitapp original (chat_screen.dart): header sobre
-// navy con el nombre de la app, lista de sesiones pasadas (título "Chat N"
-// + preview del último mensaje, como historySessions), y "Borrar
-// historial" al pie.
-export function HistorialSheet({
+// Drawer de sesiones pasadas — se mantiene como funcionalidad real aunque
+// el diseño vita.ia no lo muestre (decisión ya tomada: no sacar algo real
+// ya construido). Ahora controlado 100% en cliente (el chat es un overlay,
+// no una ruta), sin navegación — cambiar de sesión carga sus mensajes vía
+// Server Action en vez de un `router.push`.
+export function HistorialDrawer({
   open,
   onOpenChange,
   sesiones,
   sesionActivaId,
+  onAbrirSesion,
+  onNuevoChat,
+  onHistorialBorrado,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sesiones: SesionChat[];
   sesionActivaId: string | null;
+  onAbrirSesion: (id: string) => void;
+  onNuevoChat: () => void;
+  onHistorialBorrado: () => void;
 }) {
-  const router = useRouter();
   const [pendiente, startTransition] = useTransition();
-
-  function abrirSesion(id: string) {
-    onOpenChange(false);
-    router.push(`/app/chat?sesion=${id}`);
-  }
 
   function borrarHistorial() {
     if (!window.confirm("¿Borrar todo el historial de chat? No se puede deshacer.")) return;
-    startTransition(() => {
-      eliminarHistorialAction();
+    startTransition(async () => {
+      await eliminarHistorialAction();
+      onHistorialBorrado();
     });
   }
 
@@ -47,8 +48,17 @@ export function HistorialSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-72 p-0 sm:max-w-72">
         <SheetHeader className="bg-primary text-primary-foreground">
-          <SheetTitle className="text-primary-foreground">Vitapp</SheetTitle>
+          <SheetTitle className="text-primary-foreground">vita.ia</SheetTitle>
         </SheetHeader>
+
+        <button
+          type="button"
+          onClick={onNuevoChat}
+          className="flex items-center gap-2 border-b px-4 py-3 text-left text-sm font-semibold text-primary hover:bg-muted"
+        >
+          <VitaIcon name="plus" size={16} />
+          Nuevo chat
+        </button>
 
         <div className="flex-1 overflow-y-auto">
           {sesiones.length === 0 ? (
@@ -58,7 +68,7 @@ export function HistorialSheet({
               <button
                 key={s.id}
                 type="button"
-                onClick={() => abrirSesion(s.id)}
+                onClick={() => onAbrirSesion(s.id)}
                 className={
                   "flex w-full flex-col gap-0.5 border-b px-4 py-3 text-left transition-colors hover:bg-muted " +
                   (s.id === sesionActivaId ? "bg-accent/10" : "")
@@ -80,7 +90,7 @@ export function HistorialSheet({
           disabled={pendiente || sesiones.length === 0}
           className="flex items-center gap-2 p-4 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
-          <Trash2 className="size-4" />
+          <VitaIcon name="close" size={16} />
           Borrar historial
         </button>
       </SheetContent>

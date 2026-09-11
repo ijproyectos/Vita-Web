@@ -4,11 +4,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   DatosActualizarHorario,
   DatosNuevoMedicamento,
+  DatosNuevoMedicamentoMultiMomento,
   DiaSemana,
   Medicamento,
   MedicamentoConToma,
   ResumenAdherencia,
 } from "./tipos";
+import { HORA_POR_MOMENTO } from "./tipos";
 
 // Núcleo de lógica de medicamentos, sin acoplarse a Server Actions ni al
 // chat con IA — ambos llaman a estas mismas funciones (pasando el cliente
@@ -93,19 +95,34 @@ export async function listarHoy(
  * substring — igual necesidad que el `mark_taken` del agente original
  * ("resolves name → ID"), solo que acá no hay un ID que el modelo pueda
  * conocer de antemano.
+ *
+ * `horaHint` (opcional, "HH:MM") desambigua cuando el mismo nombre tiene
+ * varias filas — el form de "Agregar medicamento" puede crear varias de
+ * una sola vez (una por momento elegido, mismo nombre) desde
+ * `agregarMultiMomento`, y sin esto la de "la noche" quedaba inalcanzable
+ * por chat: siempre resolvía a la primera coincidencia (típicamente la de
+ * la mañana). Si no hay hint o no matchea ninguna, cae al primer match de
+ * siempre.
  */
 export async function buscarPorNombre(
   supabase: Cliente,
   usuarioId: string,
-  nombre: string
+  nombre: string,
+  horaHint?: string
 ): Promise<Medicamento | null> {
   const todos = await listarTodos(supabase, usuarioId);
   const buscado = nombre.trim().toLowerCase();
-  return (
-    todos.find((m) => m.nombre.toLowerCase() === buscado) ??
-    todos.find((m) => m.nombre.toLowerCase().includes(buscado)) ??
-    null
-  );
+
+  // Exactas primero (mismo criterio que antes: una coincidencia exacta le
+  // gana a cualquier cantidad de coincidencias parciales); recién si no
+  // hay ninguna exacta se cae a substring.
+  const exactas = todos.filter((m) => m.nombre.toLowerCase() === buscado);
+  const coincidencias = exactas.length > 0 ? exactas : todos.filter((m) => m.nombre.toLowerCase().includes(buscado));
+
+  if (coincidencias.length === 0) return null;
+  if (coincidencias.length === 1 || !horaHint) return coincidencias[0];
+
+  return coincidencias.find((m) => m.hora_programada === horaHint) ?? coincidencias[0];
 }
 
 export async function agregar(
@@ -119,16 +136,69 @@ export async function agregar(
       usuario_id: usuarioId,
       nombre: datos.nombre,
       dosis: datos.dosis ?? null,
+      unidad: datos.unidad ?? "mg",
       hora_programada: datos.horaProgramada,
       momento_dia: datos.momentoDia,
       condicion: datos.condicion ?? null,
       dias_recurrentes: datos.diasRecurrentes ?? [],
+      frecuencia: datos.frecuencia ?? null,
+      con_comida: datos.conComida ?? "no-importa",
+      duracion: datos.duracion ?? null,
+      notas: datos.notas ?? null,
     })
     .select()
     .single();
 
   if (error) throw new Error(`No se pudo crear el medicamento: ${error.message}`);
   return data as Medicamento;
+}
+
+/**
+ * Crea una fila por cada momento elegido en el form nuevo
+ * (AgregarMedicamentoScreen del diseño) — mismo dato compartido, hora
+ * default por momento (HORA_POR_MOMENTO). No usa una transacción explícita:
+ * si una fila falla a mitad de camino, las ya insertadas quedan (mismo
+ * riesgo aceptado que el resto de los inserts simples de este proyecto,
+ * sin RPC porque no hay dinero ni un invariante cross-fila que proteger).
+ */
+export async function agregarMultiMomento(
+  supabase: Cliente,
+  usuarioId: string,
+  datos: DatosNuevoMedicamentoMultiMomento
+): Promise<Medicamento[]> {
+  const filas = datos.momentos.map((momento) => ({
+    usuario_id: usuarioId,
+    nombre: datos.nombre,
+    dosis: datos.dosis ?? null,
+    unidad: datos.unidad ?? "mg",
+    hora_programada: HORA_POR_MOMENTO[momento],
+    momento_dia: momento,
+    dias_recurrentes: [],
+    frecuencia: datos.frecuencia ?? null,
+    con_comida: datos.conComida ?? "no-importa",
+    duracion: datos.duracion ?? null,
+    notas: datos.notas ?? null,
+  }));
+
+  const { data, error } = await supabase.from("medicamentos").insert(filas).select();
+  if (error) throw new Error(`No se pudo crear el medicamento: ${error.message}`);
+  return data as Medicamento[];
+}
+
+export async function obtenerPorId(
+  supabase: Cliente,
+  usuarioId: string,
+  medicamentoId: string
+): Promise<Medicamento | null> {
+  const { data, error } = await supabase
+    .from("medicamentos")
+    .select("*")
+    .eq("id", medicamentoId)
+    .eq("usuario_id", usuarioId)
+    .maybeSingle();
+
+  if (error) throw new Error(`No se pudo leer el medicamento: ${error.message}`);
+  return data as Medicamento | null;
 }
 
 export async function actualizarHorario(
