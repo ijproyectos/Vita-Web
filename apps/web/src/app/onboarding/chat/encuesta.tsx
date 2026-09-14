@@ -78,7 +78,7 @@ export function EncuestaOnboarding() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
       <div className="flex items-center justify-between px-6 pb-3 pt-4.5">
         <StepDots total={3} activo={2} />
         <button

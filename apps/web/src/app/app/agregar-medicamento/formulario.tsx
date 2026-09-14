@@ -218,7 +218,10 @@ export function FormularioAgregarMedicamento() {
         <p className="rounded-[14px] bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">{estado.message}</p>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-md gap-2.5 bg-gradient-to-t from-background from-70% to-transparent px-4 pb-6 pt-4">
+      <div
+        className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-md gap-2.5 bg-gradient-to-t from-background from-70% to-transparent px-4 pt-4"
+        style={{ paddingBottom: "var(--safe-bottom)" }}
+      >
         <button
           type="button"
           onClick={() => router.back()}

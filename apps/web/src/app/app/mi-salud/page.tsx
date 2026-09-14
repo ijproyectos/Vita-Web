@@ -2,14 +2,20 @@ import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
+import * as estudiosNucleo from "@/lib/estudios/nucleo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Chip } from "@/components/vita/chip";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
+import { formatoFechaCorta } from "@/lib/rutina/formato";
+import { EliminarEstudioButton } from "./eliminar-estudio-button";
 
 export default async function MiSaludPage() {
   const usuario = await requireUser();
   const supabase = await createClient();
-  const perfil = await perfilNucleo.obtenerPerfil(supabase, usuario.id);
+  const [perfil, estudios] = await Promise.all([
+    perfilNucleo.obtenerPerfil(supabase, usuario.id),
+    estudiosNucleo.listar(supabase, usuario.id),
+  ]);
   const condiciones = perfil?.condiciones ?? [];
   const alergias = perfil?.alergias ?? [];
 
@@ -73,13 +79,67 @@ export default async function MiSaludPage() {
         descripcion="Presión, glucemia y peso — próximamente vas a poder registrarlos acá y ver su evolución."
       />
 
-      {/* Historial (estudios/vacunas/consultas/mediciones) — no hay pantalla
-          de alta para ninguno de estos en el diseño real, tampoco se
-          fabrica acá. */}
-      <SeccionProximamente
-        titulo="Historial"
-        descripcion="Estudios, vacunas y consultas van a aparecer acá a medida que los cargues o vita los detecte."
-      />
+      {/* Estudios — real: foto + extracción automática por IA
+          (agregar-estudio/). Vacunas/consultas/mediciones siguen sin
+          pantalla de alta en ningún lado del diseño, no se fabrican acá. */}
+      <div>
+        <div className="flex items-center justify-between px-0.5 pb-2.5">
+          <div className="font-heading text-[15px] font-bold">Estudios</div>
+          <Link href="/app/mi-salud/agregar-estudio" className="flex items-center gap-1 text-sm font-semibold text-primary">
+            <VitaIcon name="plus" size={14} /> Agregar
+          </Link>
+        </div>
+
+        {estudios.length === 0 ? (
+          <div className="rounded-[20px] bg-secondary p-5 text-center">
+            <p className="text-sm text-muted-foreground">
+              Sacale una foto a un estudio (análisis, radiografía, informe) y vita completa los datos por vos.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {estudios.map((e) => (
+              <div key={e.id} className="flex gap-3 rounded-[20px] bg-card p-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+                {e.urlFirmada ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal de Storage privado, no un asset de Next
+                  <img src={e.urlFirmada} alt="" className="size-14 shrink-0 rounded-[14px] object-cover" />
+                ) : (
+                  <div className="flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-chip-teal-bg text-chip-teal-ink">
+                    <VitaIcon name="camera" size={20} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="truncate font-heading text-[14.5px] font-bold">
+                      {e.tipo ?? "Estudio sin identificar"}
+                    </div>
+                    <EliminarEstudioButton estudioId={e.id} nombre={e.tipo ?? "este estudio"} />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatoFechaCorta(e.fecha ?? e.created_at.slice(0, 10))}
+                    {!e.fecha && " (cargado)"}
+                  </div>
+                  {e.resumen && <div className="mt-1 text-xs text-muted-foreground">{e.resumen}</div>}
+                  {e.estado === "error" && (
+                    <div className="mt-1 text-[11px] font-semibold text-primary">
+                      vita no pudo leer los datos — la foto quedó guardada igual.
+                    </div>
+                  )}
+                  {e.valores.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {e.valores.slice(0, 4).map((v) => (
+                        <span key={v.nombre} className="rounded-full bg-secondary px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                          {v.nombre}: {v.valor}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

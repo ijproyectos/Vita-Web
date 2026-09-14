@@ -10,7 +10,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
   const next = Array.isArray(nextParam) ? nextParam[0] : nextParam;
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-b from-[#f8fbfc] to-white px-7 pb-10 pt-16">
+    <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-[#f8fbfc] to-white px-7 pb-10 pt-16">
       <div
         className="pointer-events-none absolute left-1/2 top-[-120px] size-[360px] -translate-x-1/2 rounded-full"
         style={{ background: "radial-gradient(circle, rgba(8,145,178,0.14), transparent 60%)" }}

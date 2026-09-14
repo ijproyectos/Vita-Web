@@ -10,7 +10,7 @@ import { listarSesionesAction, listarMensajesAction } from "./chat-actions";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
 
-const SUGERENCIAS_INICIALES = ["Agregar medicamento", "¿Cómo vengo esta semana?", "Agendar turno"];
+const SUGERENCIAS_INICIALES = ["Contame mi día", "Agregar medicamento", "Agendar turno"];
 
 function mensajeBienvenida(): MensajeChatUI {
   return {
@@ -157,6 +157,13 @@ export function VitaChatOverlay() {
             if (evento.action.type === "all_medications_taken") toast.success("Marcaste todo como tomado.");
             if (evento.action.type === "medication_taken") {
               toast.success(`"${evento.action.medication_name}" marcado como tomado.`);
+            }
+            if (evento.action.type === "profile_updated") toast.success("Perfil de salud actualizado.");
+            if (evento.action.type === "condition_added") {
+              toast.success(`"${evento.action.label}" agregada a tus condiciones.`);
+            }
+            if (evento.action.type === "allergy_added") {
+              toast.success(`"${evento.action.name}" agregada a tus alergias.`);
             }
           } else if ("error" in evento) {
             toast.error(evento.error);

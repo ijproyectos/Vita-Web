@@ -84,9 +84,28 @@ Momento del día (para agrupar en la Rutina) se deriva de `hora` con `momentoDel
 
 Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_chat_historial.sql`.
 
+## `estudios`
+
+Estudios médicos cargados por foto (cámara o galería), con extracción automática por IA. Ver `007_estudios.sql`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users |
+| tipo | text | ej. "Análisis de sangre completo" — null si la extracción falló |
+| fecha | date | solo si la IA la vio en la imagen, y solo si es una fecha válida (`fechaValidaOnull` en `lib/estudios/nucleo.ts`) |
+| resumen | text | 1-2 oraciones generadas por la IA |
+| valores | jsonb | array de `{nombre, valor}` |
+| archivo_path | text | path dentro del bucket `estudios` |
+| archivo_tipo | text | mime type real del archivo subido |
+| estado | text | check: listo / error — 'error' si la extracción falló, la foto se guarda igual |
+| created_at | timestamptz | |
+
+**Storage**: bucket privado `estudios`, path `{usuario_id}/{uuid}.{ext}`. 3 policies de `storage.objects` (select/insert/delete) que exigen `(storage.foldername(name))[1] = auth.uid()::text` — mismo patrón que los buckets privados de NutrIA. La app nunca arma una URL a mano — siempre genera una signed URL de corta duración (`lib/estudios/nucleo.ts#listar`, 1 hora) para mostrar la foto.
+
 ## Fuera de alcance (sin tabla, decisión — ver CLAUDE.md)
 
 - Métricas de salud (presión, glucemia, peso) — "Monitoreo activo" en Mi Salud.
-- Estudios / vacunas / consultas — timeline de "Historial" en Mi Salud.
+- Vacunas / consultas — timeline de "Historial" en Mi Salud (a diferencia de Estudios, que sí tiene tabla).
 - Rol Cuidador / vínculo con otro usuario.
 - Login con Apple.

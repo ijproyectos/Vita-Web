@@ -6,20 +6,22 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { Chip } from "@/components/vita/chip";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
+import { GENEROS, GRUPOS_SANGUINEOS, OTRA_PREPAGA, PREPAGAS_ARGENTINA } from "@/lib/perfil/opciones";
 import type { Perfil } from "@/lib/perfil/tipos";
 import {
-  actualizarCampoAction,
+  actualizarPerfilCompletoAction,
   agregarAlergiaAction,
   agregarCondicionAction,
   quitarAlergiaAction,
   quitarCondicionAction,
+  type DatosPerfilCompleto,
 } from "./actions";
 
 export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: string }) {
   const { abrir } = useChatOverlay();
 
   return (
-    <div className="flex flex-col gap-4.5 pb-8">
+    <div className="flex flex-col gap-4.5 pb-28">
       {/* Hero */}
       <div className="rounded-[20px] bg-card p-5 text-center shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
         <div className="mx-auto flex size-[72px] items-center justify-center rounded-full bg-gradient-to-br from-[#e6f7fb] to-[#d1eef4] font-heading text-2xl font-bold text-[#0e7490]">
@@ -55,31 +57,10 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
         <VitaIcon name="chevron-right" size={18} className="text-primary" />
       </button>
 
-      <Seccion titulo="Datos personales">
-        <EditRow label="Nombre" campo="nombre" valor={perfil.nombre ?? ""} />
-        <EditRow label="Email" valor={email} soloLectura />
-        <EditRow label="Fecha de nacimiento" campo="fecha_nacimiento" valor={perfil.fecha_nacimiento ?? ""} tipo="date" />
-        <EditRow label="Género" campo="genero" valor={perfil.genero ?? ""} ultimo />
-      </Seccion>
-
-      <Seccion titulo="Medidas">
-        <EditRow label="Altura (cm)" campo="altura_cm" valor={perfil.altura_cm?.toString() ?? ""} tipo="number" />
-        <EditRow label="Peso (kg)" campo="peso_kg" valor={perfil.peso_kg?.toString() ?? ""} tipo="number" />
-        <EditRow label="Grupo sanguíneo" campo="grupo_sanguineo" valor={perfil.grupo_sanguineo ?? ""} ultimo />
-      </Seccion>
+      <FormularioPerfil perfil={perfil} email={email} />
 
       <Condiciones condiciones={perfil.condiciones} />
       <Alergias alergias={perfil.alergias} />
-
-      <Seccion titulo="Cobertura médica">
-        <EditRow label="Obra social / prepaga" campo="obra_social" valor={perfil.obra_social ?? ""} />
-        <EditRow label="N° afiliado" campo="numero_afiliado" valor={perfil.numero_afiliado ?? ""} ultimo />
-      </Seccion>
-
-      <Seccion titulo="Contacto de emergencia" subtitulo="Alguien a quien llamar en caso de urgencia">
-        <EditRow label="Nombre y relación" campo="contacto_emergencia_nombre" valor={perfil.contacto_emergencia_nombre ?? ""} />
-        <EditRow label="Teléfono" campo="contacto_emergencia_telefono" valor={perfil.contacto_emergencia_telefono ?? ""} ultimo />
-      </Seccion>
     </div>
   );
 }
@@ -87,10 +68,151 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
 function edadTexto(perfil: Perfil): string | null {
   if (perfil.fecha_nacimiento) {
     const nacimiento = new Date(perfil.fecha_nacimiento);
-    const edad = Math.floor((Date.now() - nacimiento.getTime()) / (365.25 * 24 * 3600 * 1000));
+    const edad = Math.floor((new Date().getTime() - nacimiento.getTime()) / (365.25 * 24 * 3600 * 1000));
     return `${edad} años`;
   }
   return perfil.edad_rango;
+}
+
+// Todo el form de campos escalares en un solo lugar, con un único botón de
+// guardar — reemplaza el patrón EditRow (un guardado por campo) del pase
+// anterior.
+function FormularioPerfil({ perfil, email }: { perfil: Perfil; email: string }) {
+  const obraSocialEsPrepagaConocida =
+    !!perfil.obra_social && (PREPAGAS_ARGENTINA as readonly string[]).includes(perfil.obra_social);
+
+  const [datos, setDatos] = useState<DatosPerfilCompleto>({
+    nombre: perfil.nombre ?? "",
+    fechaNacimiento: perfil.fecha_nacimiento ?? "",
+    genero: perfil.genero ?? "",
+    grupoSanguineo: perfil.grupo_sanguineo ?? "",
+    alturaCm: perfil.altura_cm?.toString() ?? "",
+    pesoKg: perfil.peso_kg?.toString() ?? "",
+    obraSocial: obraSocialEsPrepagaConocida ? perfil.obra_social! : perfil.obra_social ? OTRA_PREPAGA : "",
+    numeroAfiliado: perfil.numero_afiliado ?? "",
+    contactoEmergenciaNombre: perfil.contacto_emergencia_nombre ?? "",
+    contactoEmergenciaTelefono: perfil.contacto_emergencia_telefono ?? "",
+  });
+  // Texto libre de la prepaga cuando se elige "Otra" — separado de `datos`
+  // porque lo que se guarda en obraSocial es este valor, no "Otra" en sí.
+  const [obraSocialOtra, setObraSocialOtra] = useState(obraSocialEsPrepagaConocida ? "" : (perfil.obra_social ?? ""));
+  const [pendiente, startTransition] = useTransition();
+
+  function campo<K extends keyof DatosPerfilCompleto>(clave: K, valor: string) {
+    setDatos((prev) => ({ ...prev, [clave]: valor }));
+  }
+
+  function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    const aEnviar: DatosPerfilCompleto = {
+      ...datos,
+      obraSocial: datos.obraSocial === OTRA_PREPAGA ? obraSocialOtra : datos.obraSocial,
+    };
+    startTransition(async () => {
+      const resultado = await actualizarPerfilCompletoAction(aEnviar);
+      if (resultado.ok) toast.success("Perfil actualizado.");
+      else toast.error(resultado.message);
+    });
+  }
+
+  return (
+    <form onSubmit={guardar} className="flex flex-col gap-4.5">
+      <Seccion titulo="Datos personales">
+        <div className="flex flex-col gap-3 p-4">
+          <Campo label="Nombre">
+            <Input value={datos.nombre} onChange={(v) => campo("nombre", v)} />
+          </Campo>
+          <Campo label="Email">
+            <div className="rounded-[14px] bg-secondary px-3.5 py-3 text-sm text-muted-foreground">{email}</div>
+          </Campo>
+          <Campo label="Fecha de nacimiento">
+            <Input tipo="date" value={datos.fechaNacimiento} onChange={(v) => campo("fechaNacimiento", v)} />
+          </Campo>
+          <Campo label="Género">
+            <Select
+              value={datos.genero}
+              onChange={(v) => campo("genero", v)}
+              placeholder="Elegir…"
+              opciones={GENEROS}
+              valorLegacy={perfil.genero}
+            />
+          </Campo>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="Medidas">
+        <div className="flex flex-col gap-3 p-4">
+          <div className="flex gap-3">
+            <Campo label="Altura (cm)">
+              <Input tipo="number" value={datos.alturaCm} onChange={(v) => campo("alturaCm", v)} />
+            </Campo>
+            <Campo label="Peso (kg)">
+              <Input tipo="number" value={datos.pesoKg} onChange={(v) => campo("pesoKg", v)} />
+            </Campo>
+          </div>
+          <Campo label="Grupo sanguíneo">
+            <Select
+              value={datos.grupoSanguineo}
+              onChange={(v) => campo("grupoSanguineo", v)}
+              placeholder="Elegir…"
+              opciones={GRUPOS_SANGUINEOS}
+              valorLegacy={perfil.grupo_sanguineo}
+            />
+          </Campo>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="Cobertura médica">
+        <div className="flex flex-col gap-3 p-4">
+          <Campo label="Obra social / prepaga">
+            <Select
+              value={datos.obraSocial}
+              onChange={(v) => campo("obraSocial", v)}
+              placeholder="Elegir…"
+              opciones={PREPAGAS_ARGENTINA}
+              otra={{ value: OTRA_PREPAGA, label: "Otra" }}
+            />
+          </Campo>
+          {datos.obraSocial === OTRA_PREPAGA && (
+            <Campo label="¿Cuál?">
+              <Input value={obraSocialOtra} onChange={setObraSocialOtra} placeholder="Nombre de tu obra social/prepaga" />
+            </Campo>
+          )}
+          <Campo label="N° afiliado">
+            <Input value={datos.numeroAfiliado} onChange={(v) => campo("numeroAfiliado", v)} />
+          </Campo>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="Contacto de emergencia" subtitulo="Alguien a quien llamar en caso de urgencia">
+        <div className="flex flex-col gap-3 p-4">
+          <Campo label="Nombre y relación">
+            <Input value={datos.contactoEmergenciaNombre} onChange={(v) => campo("contactoEmergenciaNombre", v)} />
+          </Campo>
+          <Campo label="Teléfono">
+            <Input tipo="tel" value={datos.contactoEmergenciaTelefono} onChange={(v) => campo("contactoEmergenciaTelefono", v)} />
+          </Campo>
+        </div>
+      </Seccion>
+
+      {/* Espaciador para que el botón fijo no tape la última sección al
+          hacer scroll hasta el final. */}
+      <div className="h-16" />
+
+      <div
+        className="fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-md bg-gradient-to-t from-background from-70% to-transparent px-4 pt-4"
+        style={{ paddingBottom: "var(--safe-bottom)" }}
+      >
+        <button
+          type="submit"
+          disabled={pendiente}
+          className="w-full rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] py-3.5 font-heading text-[15px] font-extrabold text-white shadow-[0_10px_24px_rgba(8,145,178,0.35)] disabled:opacity-60"
+        >
+          {pendiente ? "Guardando…" : "Guardar cambios"}
+        </button>
+      </div>
+    </form>
+  );
 }
 
 function Seccion({
@@ -113,71 +235,75 @@ function Seccion({
   );
 }
 
-function EditRow({
-  label,
-  campo,
-  valor,
-  tipo = "text",
-  ultimo,
-  soloLectura,
-}: {
-  label: string;
-  campo?: "nombre" | "fecha_nacimiento" | "genero" | "grupo_sanguineo" | "altura_cm" | "peso_kg" | "obra_social" | "numero_afiliado" | "contacto_emergencia_nombre" | "contacto_emergencia_telefono";
-  valor: string;
-  tipo?: "text" | "number" | "date";
-  ultimo?: boolean;
-  soloLectura?: boolean;
-}) {
-  const [editando, setEditando] = useState(false);
-  const [valorLocal, setValorLocal] = useState(valor);
-  const [pendiente, startTransition] = useTransition();
+function Campo({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex-1">
+      <div className="mb-1 text-[11.5px] text-muted-foreground">{label}</div>
+      {children}
+    </div>
+  );
+}
 
-  function guardar() {
-    if (!campo) return;
-    startTransition(async () => {
-      const resultado = await actualizarCampoAction(campo, valorLocal);
-      if (resultado.ok) {
-        setEditando(false);
-      } else {
-        // Queda abierto con lo que el usuario escribió — cerrarlo acá
-        // haría parecer que se guardó cuando en realidad falló.
-        toast.error(resultado.message);
-      }
-    });
-  }
+function Input({
+  value,
+  onChange,
+  tipo = "text",
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  tipo?: "text" | "number" | "date" | "tel";
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type={tipo}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-[14px] bg-secondary px-3.5 py-3 text-sm font-semibold outline-none"
+    />
+  );
+}
+
+function Select({
+  value,
+  onChange,
+  opciones,
+  placeholder,
+  valorLegacy,
+  otra,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  opciones: readonly string[];
+  placeholder: string;
+  // Si el perfil ya tenía un valor de texto libre (dato viejo, de antes de
+  // este picker) que no está en la lista, se muestra igual como opción
+  // extra para no perderlo silenciosamente al abrir el form.
+  valorLegacy?: string | null;
+  // Opción "Otra" con un value interno distinto de su label — necesario
+  // para no colisionar con un valor legacy que ya fuera literalmente ese
+  // mismo texto (ver OTRA_PREPAGA en lib/perfil/opciones.ts).
+  otra?: { value: string; label: string };
+}) {
+  const todasLasOpciones =
+    valorLegacy && !opciones.includes(valorLegacy) ? [valorLegacy, ...opciones] : opciones;
 
   return (
-    <div
-      className={`px-4.5 py-3.5 ${ultimo ? "" : "border-b"} ${editando || soloLectura ? "" : "cursor-pointer"}`}
-      onClick={() => !editando && !soloLectura && setEditando(true)}
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-[14px] bg-secondary px-3.5 py-3 text-sm font-semibold outline-none"
     >
-      <div className="text-[11.5px] text-muted-foreground">{label}</div>
-      {editando ? (
-        <div className="mt-1.5 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <input
-            autoFocus
-            type={tipo}
-            value={valorLocal}
-            onChange={(e) => setValorLocal(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && guardar()}
-            className="flex-1 rounded-[10px] bg-secondary px-3 py-2 text-sm font-semibold outline-none"
-          />
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={pendiente}
-            className="rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] px-3.5 py-2 font-heading text-xs font-bold text-white disabled:opacity-60"
-          >
-            Guardar
-          </button>
-        </div>
-      ) : (
-        <div className="mt-0.5 flex items-center justify-between">
-          <span className="text-sm font-semibold">{valor || "—"}</span>
-          {!soloLectura && <VitaIcon name="edit" size={14} className="text-muted-foreground" />}
-        </div>
-      )}
-    </div>
+      <option value="">{placeholder}</option>
+      {todasLasOpciones.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+      {otra && <option value={otra.value}>{otra.label}</option>}
+    </select>
   );
 }
 

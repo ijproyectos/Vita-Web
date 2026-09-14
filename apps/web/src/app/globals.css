@@ -116,6 +116,14 @@
   --chip-violet-ink: #5b21b6;
   --chip-slate-bg: #eef2f6;
   --chip-slate-ink: #334155;
+
+  /* Padding inferior seguro para elementos fixed en el borde de la
+     pantalla — definido una sola vez acá (antes estaba repetido literal
+     en 4 archivos: bottom-nav.tsx y las 3 barras fijas de "Guardar"/
+     "Guardar cambios"). env(safe-area-inset-bottom) solo resuelve a un
+     valor real con viewport-fit=cover (ver layout.tsx). */
+  --safe-bottom: max(24px, calc(env(safe-area-inset-bottom) + 8px));
+  --safe-bottom-nav: max(18px, calc(env(safe-area-inset-bottom) + 8px));
 }
 
 .dark {
@@ -155,6 +163,13 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    /* Red de seguridad de responsive: ningún elemento suelto (un
+       w-[Npx] mal calculado, un scroll horizontal decorativo, etc.)
+       debería poder generar scroll horizontal de toda la página. */
+    overflow-x: hidden;
   }
   body {
     @apply bg-background text-foreground;

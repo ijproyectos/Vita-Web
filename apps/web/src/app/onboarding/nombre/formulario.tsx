@@ -15,7 +15,7 @@ export function FormularioNombre() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-b from-[#f8fbfc] to-white px-7 pb-8 pt-14">
+    <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-[#f8fbfc] to-white px-7 pb-8 pt-14">
       <div
         className="pointer-events-none absolute left-1/2 top-[-140px] size-[340px] -translate-x-1/2 rounded-full"
         style={{ background: "radial-gradient(circle, rgba(8,145,178,0.12), transparent 60%)" }}

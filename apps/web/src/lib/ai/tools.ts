@@ -5,6 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import type { Medicamento, MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import * as turnos from "@/lib/turnos/nucleo";
+import * as perfilNucleo from "@/lib/perfil/nucleo";
+import type { CambiosPerfil } from "@/lib/perfil/tipos";
+import { GENEROS, GRUPOS_SANGUINEOS } from "@/lib/perfil/opciones";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import {
   diasAIngles,
@@ -129,6 +132,50 @@ export const TOOLS: Anthropic.Tool[] = [
         reason: { type: "string", description: "Motivo de la consulta, opcional." },
       },
       required: ["specialty", "date", "time"],
+    },
+  },
+  {
+    name: "list_today_appointments",
+    description: "Lista los turnos médicos agendados para hoy.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "update_health_profile",
+    description:
+      "Actualiza datos del perfil de salud del usuario (género, grupo sanguíneo, altura, peso, obra social). Solo actualiza los campos que vengan, el resto queda igual.",
+    input_schema: {
+      type: "object",
+      properties: {
+        gender: { type: "string", enum: [...GENEROS], description: "Género." },
+        blood_type: { type: "string", enum: [...GRUPOS_SANGUINEOS], description: "Grupo sanguíneo." },
+        height_cm: { type: "number", description: "Altura en centímetros." },
+        weight_kg: { type: "number", description: "Peso en kilogramos." },
+        health_insurance: { type: "string", description: "Obra social o prepaga." },
+      },
+    },
+  },
+  {
+    name: "add_condition",
+    description: "Agrega una condición de salud (ej. hipertensión, diabetes) al perfil del usuario.",
+    input_schema: {
+      type: "object",
+      properties: {
+        label: { type: "string", description: "Nombre de la condición, ej. 'Hipertensión'." },
+        type: { type: "string", enum: ["permanent", "temporary"], description: "Si es permanente o temporal." },
+        since: { type: "string", description: "Desde cuándo, ej. '2022' o 'Mar 2026'. Si no se sabe, usar el año actual." },
+      },
+      required: ["label"],
+    },
+  },
+  {
+    name: "add_allergy",
+    description: "Agrega una alergia al perfil del usuario.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nombre de la alergia, ej. 'Penicilina'." },
+      },
+      required: ["name"],
     },
   },
   {
@@ -282,6 +329,53 @@ export async function ejecutarTool(
           time: creado.hora,
         },
       };
+    }
+
+    case "list_today_appointments": {
+      const deHoy = await turnos.listarDeHoy(supabase, usuarioId);
+      return {
+        contenido: JSON.stringify(
+          deHoy.map((t) => ({
+            id: t.id,
+            specialty: t.especialidad,
+            professional: t.profesional,
+            place: t.lugar,
+            time: t.hora,
+          }))
+        ),
+      };
+    }
+
+    case "update_health_profile": {
+      const cambios: CambiosPerfil = {};
+      if (input.gender) cambios.genero = String(input.gender);
+      if (input.blood_type) cambios.grupo_sanguineo = String(input.blood_type);
+      if (typeof input.height_cm === "number") cambios.altura_cm = input.height_cm;
+      if (typeof input.weight_kg === "number") cambios.peso_kg = input.weight_kg;
+      if (input.health_insurance) cambios.obra_social = String(input.health_insurance);
+
+      if (Object.keys(cambios).length === 0) {
+        return { contenido: "No se especificó ningún dato para actualizar." };
+      }
+
+      await perfilNucleo.actualizarPerfil(supabase, usuarioId, cambios);
+      return { contenido: "Perfil actualizado.", accionUI: { type: "profile_updated" } };
+    }
+
+    case "add_condition": {
+      const label = String(input.label);
+      await perfilNucleo.agregarCondicion(supabase, usuarioId, {
+        label,
+        tipo: input.type === "temporary" ? "temporal" : "permanente",
+        desde: (input.since as string) ?? String(new Date().getFullYear()),
+      });
+      return { contenido: `Condición "${label}" agregada.`, accionUI: { type: "condition_added", label } };
+    }
+
+    case "add_allergy": {
+      const nombre = String(input.name);
+      await perfilNucleo.agregarAlergia(supabase, usuarioId, nombre);
+      return { contenido: `Alergia "${nombre}" agregada.`, accionUI: { type: "allergy_added", name: nombre } };
     }
 
     case "show_today_medications":

@@ -17,7 +17,12 @@ const ITEMS = [
 // Pantallas de formulario/detalle ocultan el bottom nav — mismo criterio
 // que el harness original del diseño
 // (`active !== 'resumen-salud' && active !== 'agregar-turno' && ...`).
-const SIN_NAV = ["/app/agregar-medicamento", "/app/agregar-turno", "/app/resumen-salud"];
+const SIN_NAV = [
+  "/app/agregar-medicamento",
+  "/app/agregar-turno",
+  "/app/resumen-salud",
+  "/app/mi-salud/agregar-estudio",
+];
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -29,7 +34,10 @@ export function BottomNav() {
   const derecha = ITEMS.slice(2);
 
   return (
-    <div className="fixed inset-x-3 bottom-[18px] z-30 mx-auto grid h-[76px] max-w-md grid-cols-[1fr_1fr_88px_1fr_1fr] items-center rounded-[32px] bg-card px-1.5 shadow-[0_12px_36px_rgba(15,33,54,0.12)]">
+    <div
+      className="fixed inset-x-3 z-30 mx-auto grid h-[76px] max-w-md grid-cols-[1fr_1fr_88px_1fr_1fr] items-center rounded-[32px] bg-card px-1.5 shadow-[0_12px_36px_rgba(15,33,54,0.12)]"
+      style={{ bottom: "var(--safe-bottom-nav)" }}
+    >
       {izquierda.map((item) => (
         <NavItem key={item.href} {...item} activo={pathname === item.href} />
       ))}

@@ -6,49 +6,51 @@ import { requireUser } from "@/lib/dal";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
 
-// Campos editables inline (patrón EditRow del diseño) — whitelist explícita,
-// nunca un update dinámico desde una clave arbitraria del form (mismo
-// criterio que NutrIA para las RPCs de perfil).
-const CAMPOS_TEXTO = [
-  "nombre",
-  "genero",
-  "grupo_sanguineo",
-  "obra_social",
-  "numero_afiliado",
-  "contacto_emergencia_nombre",
-  "contacto_emergencia_telefono",
-] as const;
-const CAMPOS_NUMERO = ["altura_cm", "peso_kg"] as const;
-const CAMPOS_FECHA = ["fecha_nacimiento"] as const;
-
-type CampoEditable =
-  | (typeof CAMPOS_TEXTO)[number]
-  | (typeof CAMPOS_NUMERO)[number]
-  | (typeof CAMPOS_FECHA)[number];
-
 // Resultado — nunca lanza (mismo criterio que el resto del repo,
-// EstadoAccion en rutina/actions.ts): resumen-salud-view.tsx cierra el
-// editor inline apenas dispara la transition, así que si la action tirara
-// una excepción sin capturar, el campo se vería "guardado" con el valor
-// viejo aunque el update haya fallado, sin ningún aviso al usuario.
+// EstadoAccion en rutina/actions.ts).
 export type ResultadoEdicion = { ok: true } | { ok: false; message: string };
 
-export async function actualizarCampoAction(campo: CampoEditable, valor: string): Promise<ResultadoEdicion> {
+// Todo el form de "Datos personales"/"Medidas"/"Cobertura médica"/
+// "Contacto de emergencia" se guarda de una — reemplaza el guardado
+// campo-por-campo del pase anterior (hallazgo del usuario: "un guardar
+// general y no uno por uno"). Condiciones/alergias no entran acá — son
+// acciones de lista inmediatas, no campos de este form (ver
+// agregar/quitarCondicion/Alergia más abajo, sin cambios).
+export type DatosPerfilCompleto = {
+  nombre: string;
+  fechaNacimiento: string;
+  genero: string;
+  grupoSanguineo: string;
+  alturaCm: string;
+  pesoKg: string;
+  obraSocial: string;
+  numeroAfiliado: string;
+  contactoEmergenciaNombre: string;
+  contactoEmergenciaTelefono: string;
+};
+
+function numeroOnull(valor: string): number | null {
+  const n = Number(valor.replace(",", "."));
+  return valor.trim() && !isNaN(n) ? n : null;
+}
+
+export async function actualizarPerfilCompletoAction(datos: DatosPerfilCompleto): Promise<ResultadoEdicion> {
   try {
     const usuario = await requireUser();
     const supabase = await createClient();
 
-    const cambios: CambiosPerfil = {};
-    if ((CAMPOS_TEXTO as readonly string[]).includes(campo)) {
-      (cambios as Record<string, unknown>)[campo] = valor.trim() || null;
-    } else if ((CAMPOS_NUMERO as readonly string[]).includes(campo)) {
-      const n = Number(valor.replace(",", "."));
-      (cambios as Record<string, unknown>)[campo] = valor.trim() && !isNaN(n) ? n : null;
-    } else if ((CAMPOS_FECHA as readonly string[]).includes(campo)) {
-      (cambios as Record<string, unknown>)[campo] = valor.trim() || null;
-    } else {
-      return { ok: false, message: `Campo no editable: ${campo}` };
-    }
+    const cambios: CambiosPerfil = {
+      nombre: datos.nombre.trim() || null,
+      fecha_nacimiento: datos.fechaNacimiento.trim() || null,
+      genero: datos.genero.trim() || null,
+      grupo_sanguineo: datos.grupoSanguineo.trim() || null,
+      altura_cm: numeroOnull(datos.alturaCm),
+      peso_kg: numeroOnull(datos.pesoKg),
+      obra_social: datos.obraSocial.trim() || null,
+      numero_afiliado: datos.numeroAfiliado.trim() || null,
+      contacto_emergencia_nombre: datos.contactoEmergenciaNombre.trim() || null,
+      contacto_emergencia_telefono: datos.contactoEmergenciaTelefono.trim() || null,
+    };
 
     await perfilNucleo.actualizarPerfil(supabase, usuario.id, cambios);
     revalidatePath("/app/resumen-salud");

@@ -8,7 +8,7 @@ Vita-Web ("vita.ia") es una app de salud personal — medicamentos, turnos médi
 
 A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vita-Web es **single-tenant por usuario** — cada persona ve y gestiona solo sus propios datos, sin ningún rol ni jerarquía.
 
-## Project state (2026-09-10)
+## Project state (2026-09-14)
 
 **Reconstrucción completa sobre el diseño "vita.ia"** (`pantallas/Vitaoriginal/vita (1)/`, un export JSX real con toda la lógica de navegación en `vita.ia.html`) — reemplazó dos iteraciones de diseño anteriores en esta misma sesión (el Flutter original y un bundle brutalista intermedio, ninguno de los dos vigente). `apps/web/` es Next.js 16 (Turbopack, App Router) — build y lint limpios.
 
@@ -24,10 +24,11 @@ A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vita-Web es **sin
 - **Home** (`src/app/app/page.tsx`) — card de perfil (real, linkea a Resumen de salud), progreso de hoy (anillo real de adherencia), próximos turnos (scroll horizontal), medicamentos de hoy con toggle, nudge a vita.
 - **Rutina** (`src/app/app/rutina/`) — timeline unificado medicamentos+turnos agrupado por momento del día (mañana/mediodía/tarde/noche — el diseño agregó "tarde" como 4to momento, no existía antes), toggle Hoy/Próximos días, sheet "Agregar a tu rutina".
 - **Agregar medicamento / Agregar turno** (`src/app/app/agregar-{medicamento,turno}/`) — forms completos fieles al diseño (frecuencia, momentos multi-select, con qué comida, duración / especialidad, fecha+hora con chips rápidos, recordatorio, acompañado). El shortcut "Agregar por voz con vita" **es real** — abre el chat y las tools `add_medication`/`add_appointment` ya existen, así que pedírselo a vita en texto libre funciona de verdad, no es decorativo como en el mock.
-- **Resumen de salud** (`src/app/app/resumen-salud/`) — perfil médico completo editable inline (datos personales, medidas, condiciones, alergias, cobertura médica, contacto de emergencia). "Exportar datos"/"Eliminar cuenta": no wireados, igual que el archivo original.
-- **Mi Salud** (`src/app/app/mi-salud/`) — condiciones/alergias reales (mismo dato que Resumen). "Monitoreo activo" e "Historial" (estudios/vacunas/consultas): estado vacío/"Próximamente" explícito — no hay tabla de datos real ni una sola pantalla de alta para ninguno de los dos en todo el diseño, fabricar números habría sido peor que no mostrarlos.
+- **Resumen de salud** (`src/app/app/resumen-salud/`) — perfil médico completo, **un solo formulario con un solo botón "Guardar cambios"** (ya no guardado campo-por-campo — pedido explícito del usuario). Género/grupo sanguíneo/obra social son `<select>` (`lib/perfil/opciones.ts`), no texto libre — antes había que escribirlos a mano. Condiciones/alergias siguen siendo acciones de lista inmediatas (agregar/quitar), no entran en el submit del form. "Exportar datos"/"Eliminar cuenta": no wireados, igual que el archivo original.
+- **Mi Salud** (`src/app/app/mi-salud/`) — condiciones/alergias reales (mismo dato que Resumen). **Estudios médicos, real** (`src/app/app/mi-salud/agregar-estudio/`, `lib/estudios/`) — foto por cámara o galería (`capture="environment"`), sube a un bucket privado de Storage y **Anthropic con visión extrae tipo/fecha/resumen/valores automáticamente** (`lib/estudios/extraer.ts`); si la extracción falla por lo que sea, el estudio se guarda igual con `estado='error'` y la foto nunca se pierde. "Monitoreo activo" (métricas) sigue "Próximamente" — vacunas/consultas también, ninguna de las dos tiene pantalla de alta en el diseño ni se pidió.
 - **Perfil** (`src/app/app/perfil/`) — hero con stats reales (racha de adherencia, años con vita), Conexiones/Notificaciones/Privacidad decorativas (fieles al mock), Cerrar sesión real.
-- **Chat con vita** (`src/app/app/_chat/vita-chat-overlay.tsx`) — mantiene TODO lo real ya construido en el pase anterior (Anthropic `claude-sonnet-5`, tool-calling, historial de sesiones persistido en `sesiones_chat`/`mensajes_chat`) — el overlay está **siempre montado** en el layout (oculto vía `transform`, no un mount/unmount condicional) para conservar la conversación entre aperturas. El drawer de historial se mantuvo aunque este diseño no lo muestre (decisión ya tomada: no sacar funcionalidad real). Nuevas tarjetas de acción enriquecidas (`mensaje-burbuja.tsx`) reemplazan el link plano que tenía antes.
+- **Chat con vita** (`src/app/app/_chat/vita-chat-overlay.tsx`) — mantiene TODO lo real ya construido (Anthropic `claude-sonnet-5`, tool-calling, historial de sesiones persistido en `sesiones_chat`/`mensajes_chat`) — el overlay está **siempre montado** en el layout (oculto vía `transform`, no un mount/unmount condicional) para conservar la conversación entre aperturas. El drawer de historial se mantuvo aunque el diseño no lo muestre. Tarjetas de acción enriquecidas (`mensaje-burbuja.tsx`). **Sumó tools de perfil** (`update_health_profile`/`add_condition`/`add_allergy`) y `list_today_appointments` — "Actualizar con vita"/"Contame qué cambió" (en Resumen de salud) y "Contame mi día" (sugerencia nueva del chat) ahora funcionan de verdad, antes abrían el chat pero vita no tenía cómo escribir nada del perfil ni ver los turnos de hoy.
+- **Responsive**: `viewport-fit=cover` explícito (`layout.tsx`) — sin esto, los `env(safe-area-inset-*)` que ya usaba el chat resolvían a 0 en iOS Safari. Padding/offset de safe-area centralizado en `--safe-bottom`/`--safe-bottom-nav` (`globals.css`), consumido por el bottom nav y las 3 barras de guardar fijas. Login/Onboarding ganaron el mismo `max-w-md` que ya tenía `/app/*`. `overflow-x: hidden` en `html,body` como red de seguridad.
 
 ## Decisiones tomadas explícitamente con el usuario — no reabrir sin motivo
 
@@ -37,6 +38,7 @@ A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vita-Web es **sin
 - **Historial de chat real conservado** entre rediseños — pedido explícito la primera vez que se replanteó el diseño, sigue vigente.
 - **`momento_dia` pasa a 4 valores** (se agregó `tarde`) — cambio de schema real, no solo de UI, porque el diseño nuevo agrupa la Rutina en 4 franjas horarias.
 - **`frecuencia`/`duracion` siguen siendo descriptivas**, no gobiernan el scheduling real — eso lo sigue haciendo `hora_programada`+`dias_recurrentes`, igual que antes. El form nuevo simplifica lo que pide (sin selector de días de la semana) pero el motor de adherencia no perdió capacidad — sigue disponible para uso avanzado vía chat.
+- **Estudios pasó de "fuera de alcance" a construido, a pedido explícito del usuario** (con extracción por IA, no solo la foto) — decisión tomada y confirmada antes de este pase, ver "Fuera de alcance" abajo (ya no incluye estudios, solo vacunas/consultas/monitoreo de métricas).
 
 ## Fuera de alcance (decisión, no olvido)
 
@@ -44,24 +46,24 @@ Ninguna de estas tiene un `onClick`/handler real en `vita.ia.html` tampoco:
 - Integraciones Gmail / Apple Health / Google Fit (Perfil → Conexiones).
 - Notificaciones push reales (los toggles de Perfil son decorativos, sin infraestructura de push conectada).
 - Monitoreo de métricas de salud (presión/glucemia/peso) — sin tabla de datos ni pantalla de alta.
-- Timeline de estudios/vacunas/consultas en Mi Salud — mismo motivo.
+- Vacunas/consultas en Mi Salud — sin tabla de datos ni pantalla de alta (a diferencia de Estudios, que sí se construyó — ver "Project state").
 - Exportar datos / eliminar cuenta.
 - "Voy a ir acompañado" (turno) — se guarda el flag, no notifica a nadie.
 - Rol Cuidador / vista de otra persona — no existe en este diseño (si aparece en un diseño futuro, es una decisión de producto nueva con RLS de lectura cruzada, no algo que se haya insinuado acá).
 
 ## Infra
 
-**Supabase está vivo**: proyecto **VitaAPP-WEB**, ref `jvmsmrdddyxgdnyrqhqe` (región `us-west-2`, plan Free, org propia — no la de NutrIA), URL `https://jvmsmrdddyxgdnyrqhqe.supabase.co`. Local `supabase link`eado (`.git`-ignorado `supabase/.temp/`). **`001` a `006` aplicadas y verificadas** contra la DB en vivo (`supabase migration list --linked` confirma local=remote en las 6; verificado también por `psql` a través del pooler — `aws-0-us-west-2.pooler.supabase.com:5432`, user `postgres.jvmsmrdddyxgdnyrqhqe`, binario en `/opt/homebrew/Cellar/libpq/*/bin/psql` — que 6 tablas tienen `rowsecurity = true`, las columnas nuevas de `medicamentos`/`perfiles` existen, `turnos` tiene su policy, y el constraint de `momento_dia` acepta los 4 valores). Aplicado con `supabase db push --linked --password <db password>`. **La contraseña de la DB no se guarda en ningún archivo** — pedírsela al usuario cada vez que haga falta. El Personal Access Token de la Management API usado en sesiones anteriores venció — si hace falta esa vía de nuevo, pedir uno nuevo.
+**Supabase está vivo**: proyecto **VitaAPP-WEB**, ref `jvmsmrdddyxgdnyrqhqe` (región `us-west-2`, plan Free, org propia — no la de NutrIA), URL `https://jvmsmrdddyxgdnyrqhqe.supabase.co`. Local `supabase link`eado (`.git`-ignorado `supabase/.temp/`). **`001` a `007` aplicadas y verificadas** contra la DB en vivo (`supabase migration list --linked` confirma local=remote en las 7; verificado también por `psql` a través del pooler — `aws-0-us-west-2.pooler.supabase.com:5432`, user `postgres.jvmsmrdddyxgdnyrqhqe`, binario en `/opt/homebrew/Cellar/libpq/*/bin/psql` — que 7 tablas tienen `rowsecurity = true`, las columnas nuevas existen, y el bucket privado `estudios` + sus 3 policies de `storage.objects` están creados). Aplicado con `supabase db push --linked --password <db password>`. **La contraseña de la DB no se guarda en ningún archivo** — pedírsela al usuario cada vez que haga falta. El Personal Access Token de la Management API usado en sesiones anteriores venció — si hace falta esa vía de nuevo, pedir uno nuevo.
 
 `.env.local` (raíz, gitignored, symlink en `apps/web/`) tiene `NEXT_PUBLIC_SUPABASE_URL` y las dos API keys (legacy JWT `anon`/`service_role`).
 
 **Auth con Google activado y verificado**, `site_url`/`uri_allow_list` apuntando a `https://vitappweb.netlify.app`.
 
-**Netlify está vivo**: sitio `vitappweb` (`site_id` `3c956a4d-b077-4ef4-a6e0-b6cef204ed44`, cuenta `ijsociety-exe`), conectado a `ijproyectos/Vita-Web` rama `main` (auto-deploy). `ANTHROPIC_API_KEY` **deliberadamente no cargada** en Netlify (decisión explícita del usuario) — sin ella, el chat con vita fallaría en producción si se usa; el resto de la app no depende de Anthropic.
+**Netlify está vivo**: sitio `vitappweb` (`site_id` `3c956a4d-b077-4ef4-a6e0-b6cef204ed44`, cuenta `ijsociety-exe`), conectado a `ijproyectos/Vita-Web` rama `main` (auto-deploy). `ANTHROPIC_API_KEY` **todavía no cargada** en Netlify — sin ella, el chat con vita Y la extracción automática de estudios (`lib/estudios/extraer.ts`, también usa Anthropic) no van a andar en producción; el resto de la app no depende de Anthropic. El usuario confirmó que la va a pasar para cargarla después de este pase.
 
 **Pendiente, acción del usuario:**
 - [ ] Probar el login con Google y el recorrido completo de punta a punta en https://vitappweb.netlify.app/ (nunca se probó con un navegador real).
-- [ ] `ANTHROPIC_API_KEY` — cuando se decida sumar el chat en producción, pasarla para cargarla en `.env.local` y en Netlify.
+- [ ] Pasar `ANTHROPIC_API_KEY` para cargarla en `.env.local` y en Netlify — necesaria para el chat con vita y para que la extracción automática de estudios funcione en producción.
 
 ## Stack
 
@@ -81,7 +83,7 @@ npm run lint
 ## Docs map
 
 - `docs/data-model.md` — tablas, columnas, RLS.
-- `supabase/migrations/` — `001` a `006`.
+- `supabase/migrations/` — `001` a `007`.
 - **Identidad visual y funcionalidad**: fuente de verdad es `pantallas/Vitaoriginal/vita (1)/` (12 archivos `.jsx` + `styles.css` + `vita.ia.html`, no está en el repo — vive fuera de `apps/web`, en la raíz del proyecto). Si hace falta reconfirmar un color/copy/flujo, mirar ahí, no inventar ni asumir que sigue siendo el Flutter original o el diseño brutalista de un pase anterior (ambos descartados).
 
 ## Notas para código futuro en este repo
@@ -94,3 +96,6 @@ npm run lint
 - **Asignar a un ref durante el render** (`ref.current = x` fuera de un handler/efecto) dispara `react-hooks/refs` — solo asignar refs dentro de event handlers o efectos.
 - **`Date.now()`/`Math.random()` en el cuerpo de un Server Component** disparan el lint de pureza — usar `new Date()` en su lugar (sí lo tolera).
 - **`<Button render={...}>` con algo que no sea un `<button>` real** (ej. `<Link>`) necesita `nativeButton={false}` explícito.
+- **Un `<option>` "Otra" con texto libre nunca debe usar ese mismo texto como `value`** — si el dato viejo (de antes de existir el picker) resultara ser literalmente igual al label de esa opción, el form la interpreta como "elegiste Otra, especificá" y vacía el campo de texto libre, borrando el dato al guardar. Usar un `value` interno que no pueda colisionar (`OTRA_PREPAGA` en `lib/perfil/opciones.ts` es el ejemplo real).
+- **Un valor extraído por IA que va directo a una columna tipada** (`date`, `numeric`, etc.) siempre se valida/parsea antes del insert, nunca se manda tal cual — el schema de zod de la tool solo le pide el formato al modelo en la descripción, no lo garantiza. Si el insert falla por eso, se pierde toda la extracción (y un archivo ya subido queda huérfano) por un solo campo con formato raro. Ver `fechaValidaOnull` en `lib/estudios/nucleo.ts`.
+- **Nunca asumir el `mediaType`/mime type real de un archivo subido por el usuario** — si no está en la lista de tipos que soporta la API (ej. HEIC de iPhone), declinar explícito en vez de mandarlo igual etiquetado como otra cosa (ver `TIPOS_SOPORTADOS` en `lib/estudios/extraer.ts`).
