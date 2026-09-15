@@ -9,6 +9,9 @@ import { HistorialDrawer } from "./historial-drawer";
 import { listarSesionesAction, listarMensajesAction } from "./chat-actions";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
+import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
+import { hablarTexto } from "@/lib/voz/hablar-cliente";
+import type { EstadoVoz } from "@/lib/voz/tipos";
 
 const SUGERENCIAS_INICIALES = ["Contame mi día", "Agregar medicamento", "Agendar turno"];
 
@@ -18,6 +21,21 @@ function mensajeBienvenida(): MensajeChatUI {
     content: "Hola 👋 Soy vita. ¿Cómo puedo ayudarte hoy?",
     timestamp: new Date().toISOString(),
   };
+}
+
+// Etiqueta de estado que reemplaza "en línea · siempre disponible" mientras
+// el modo voz está activo — "hablando" no viene del hook (es propio del
+// overlay, que es quien maneja el TTS), por eso se recibe aparte.
+function etiquetaEstadoVoz(estado: EstadoVoz, hablando: boolean): string {
+  if (hablando) return "vita está hablando…";
+  switch (estado) {
+    case "grabando":
+      return "te estoy escuchando…";
+    case "procesando":
+      return "transcribiendo tu mensaje…";
+    default:
+      return "modo voz activo — hablá cuando quieras";
+  }
 }
 
 // Overlay de pantalla completa que se monta siempre en AppShell (visible/
@@ -33,8 +51,87 @@ export function VitaChatOverlay() {
   const [entrada, setEntrada] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [modoVoz, setModoVoz] = useState(false);
+  const [hablando, setHablando] = useState(false);
   const finRef = useRef<HTMLDivElement>(null);
   const ultimoNonceInicial = useRef<number | null>(null);
+  const modoVozRef = useRef(false); // valor fresco de modoVoz para leer dentro del callback async de la voz
+  const mensajesRef = useRef<MensajeChatUI[]>(mensajes); // idem, para leer la última respuesta de vita ya resuelta
+  const reanudarEscuchaRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    modoVozRef.current = modoVoz;
+  }, [modoVoz]);
+
+  useEffect(() => {
+    mensajesRef.current = mensajes;
+  }, [mensajes]);
+
+  // Un turno de voz completo: transcribir ya lo hizo el hook, acá se manda
+  // el texto por el mismo enviar() de siempre, se lee la respuesta final
+  // de vita (del ref, no del closure — enviar() actualiza mensajes de a
+  // chunks) y se la lee en voz alta antes de retomar la escucha.
+  async function onTranscripcionVoz(texto: string) {
+    await enviar(texto);
+    const ultimo = mensajesRef.current[mensajesRef.current.length - 1];
+    if (ultimo?.role === "assistant" && ultimo.content) {
+      setHablando(true);
+      await hablarTexto(ultimo.content);
+      setHablando(false);
+    }
+    if (modoVozRef.current) reanudarEscuchaRef.current();
+  }
+
+  const {
+    estado: estadoVoz,
+    iniciar: iniciarVoz,
+    detener: detenerVoz,
+    reanudarEscucha,
+  } = useGrabacionVoz({
+    onTranscripcion: onTranscripcionVoz,
+    onError: (mensaje) => toast.error(mensaje),
+  });
+
+  useEffect(() => {
+    reanudarEscuchaRef.current = reanudarEscucha;
+  }, [reanudarEscucha]);
+
+  // El overlay nunca se desmonta (solo se oculta vía transform), así que
+  // cerrar el chat no corta el micrófono por sí solo — `cerrar()` del
+  // contexto solo se invoca desde el botón de cerrar de este mismo
+  // componente (ningún otro lugar de la app cierra el overlay), así que
+  // frenar la voz acá, en el handler del botón, cubre el 100% de los
+  // casos sin necesitar un efecto que reaccione a `abierto`.
+  function cerrarChat() {
+    if (modoVoz) {
+      detenerVoz();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      setModoVoz(false);
+      setHablando(false);
+    }
+    cerrar();
+  }
+
+  async function alternarModoVoz() {
+    if (modoVoz) {
+      detenerVoz();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      setModoVoz(false);
+      setHablando(false);
+      return;
+    }
+
+    const resultado = await iniciarVoz();
+    if (!resultado.ok) {
+      toast.error(
+        resultado.motivo === "permiso-denegado"
+          ? "Necesitamos acceso al micrófono para el modo voz."
+          : "Tu navegador no soporta grabación de voz."
+      );
+      return;
+    }
+    setModoVoz(true);
+  }
 
   // Carga el historial de sesiones recién la primera vez que se abre, no
   // en cada carga de página (el overlay está siempre montado). `cargadoRef`
@@ -203,9 +300,24 @@ export function VitaChatOverlay() {
             <div className="font-heading text-[16px] font-bold">vita</div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              en línea · siempre disponible
+              {modoVoz ? etiquetaEstadoVoz(estadoVoz, hablando) : "en línea · siempre disponible"}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={alternarModoVoz}
+            aria-pressed={modoVoz}
+            aria-label={modoVoz ? "Desactivar modo voz" : "Activar modo voz (manos libres)"}
+            className={
+              "flex size-9 items-center justify-center rounded-full transition-colors " +
+              (modoVoz
+                ? "bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white " +
+                  (estadoVoz === "grabando" || hablando ? "animate-pulse" : "")
+                : "bg-muted text-foreground")
+            }
+          >
+            <VitaIcon name="mic" size={18} />
+          </button>
           <button
             type="button"
             onClick={() => setHistorialAbierto(true)}
@@ -216,7 +328,7 @@ export function VitaChatOverlay() {
           </button>
           <button
             type="button"
-            onClick={cerrar}
+            onClick={cerrarChat}
             className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground"
             aria-label="Cerrar chat"
           >
