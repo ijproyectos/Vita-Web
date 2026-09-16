@@ -36,6 +36,17 @@ function obtenerVoces(): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
+// Safari/iOS bloquea en silencio (sin onerror) cualquier speechSynthesis.speak()
+// que no ocurra dentro del mismo gesto sincrónico del usuario (un tap). Nuestro
+// flujo real llama a speak() varios pasos async después del tap al micrófono
+// (transcribir → mandar a vita → recién ahí hablar), así que se "desbloquea"
+// el motor acá, en el mismo click que activa el modo voz — una utterance
+// vacía alcanza para que el navegador habilite el resto de la sesión.
+export function desbloquearVoz(): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+}
+
 export async function hablarTexto(texto: string): Promise<void> {
   if (typeof window === "undefined" || !("speechSynthesis" in window) || !texto.trim()) {
     return;

@@ -10,7 +10,7 @@ import { listarSesionesAction, listarMensajesAction } from "./chat-actions";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
-import { hablarTexto } from "@/lib/voz/hablar-cliente";
+import { hablarTexto, desbloquearVoz } from "@/lib/voz/hablar-cliente";
 import type { EstadoVoz } from "@/lib/voz/tipos";
 
 const SUGERENCIAS_INICIALES = ["Contame mi día", "Agregar medicamento", "Agendar turno"];
@@ -120,6 +120,11 @@ export function VitaChatOverlay() {
       setHablando(false);
       return;
     }
+
+    // Tiene que ser lo primero, todavía dentro del gesto sincrónico del
+    // click — después de este punto todo es async (getUserMedia, etc.) y
+    // en Safari/iOS ya sería tarde para desbloquear el motor de voz.
+    desbloquearVoz();
 
     const resultado = await iniciarVoz();
     if (!resultado.ok) {
