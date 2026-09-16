@@ -59,12 +59,10 @@ Ninguna de estas tiene un `onClick`/handler real en `vita.ia.html` tampoco:
 
 **Auth con Google activado y verificado**, `site_url`/`uri_allow_list` apuntando a `https://vitappweb.netlify.app`.
 
-**Netlify está vivo**: sitio `vitappweb` (`site_id` `3c956a4d-b077-4ef4-a6e0-b6cef204ed44`, cuenta `ijsociety-exe`), conectado a `ijproyectos/Vita-Web` rama `main` (auto-deploy). `ANTHROPIC_API_KEY` **todavía no cargada** en Netlify — sin ella, el chat con vita Y la extracción automática de estudios (`lib/estudios/extraer.ts`, también usa Anthropic) no van a andar en producción; el resto de la app no depende de Anthropic. El usuario confirmó que la va a pasar para cargarla después de este pase.
+**Netlify está vivo**: sitio `vitappweb` (`site_id` `3c956a4d-b077-4ef4-a6e0-b6cef204ed44`, cuenta `ijsociety-exe`), conectado a `ijproyectos/Vita-Web` rama `main` (auto-deploy). `ANTHROPIC_API_KEY` y `OPENAI_API_KEY` **ya cargadas** en `.env.local` y en Netlify (scope "All") — el chat con vita, la extracción automática de estudios y el modo voz ya tienen lo que necesitan tanto en local como en producción.
 
 **Pendiente, acción del usuario:**
 - [ ] Probar el login con Google y el recorrido completo de punta a punta en https://vitappweb.netlify.app/ (nunca se probó con un navegador real).
-- [ ] Pasar `ANTHROPIC_API_KEY` para cargarla en `.env.local` y en Netlify — necesaria para el chat con vita y para que la extracción automática de estudios funcione en producción.
-- [ ] Pasar `OPENAI_API_KEY` para cargarla en `.env.local` y en Netlify — necesaria para que la transcripción del modo voz (`/api/voz/transcribir`, Whisper) funcione; sin ella el modo voz degrada a avisarle al usuario y seguir andando por texto.
 
 ## Stack
 

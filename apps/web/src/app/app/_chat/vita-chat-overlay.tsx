@@ -305,21 +305,6 @@ export function VitaChatOverlay() {
           </div>
           <button
             type="button"
-            onClick={alternarModoVoz}
-            aria-pressed={modoVoz}
-            aria-label={modoVoz ? "Desactivar modo voz" : "Activar modo voz (manos libres)"}
-            className={
-              "flex size-9 items-center justify-center rounded-full transition-colors " +
-              (modoVoz
-                ? "bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white " +
-                  (estadoVoz === "grabando" || hablando ? "animate-pulse" : "")
-                : "bg-muted text-foreground")
-            }
-          >
-            <VitaIcon name="mic" size={18} />
-          </button>
-          <button
-            type="button"
             onClick={() => setHistorialAbierto(true)}
             className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground"
             aria-label="Historial de chats"
@@ -372,6 +357,21 @@ export function VitaChatOverlay() {
               disabled={enviando}
               className="min-w-0 flex-1 bg-transparent py-2 text-[15px] outline-none disabled:opacity-60"
             />
+            <button
+              type="button"
+              onClick={alternarModoVoz}
+              aria-pressed={modoVoz}
+              aria-label={modoVoz ? "Desactivar modo voz" : "Activar modo voz (manos libres)"}
+              className={
+                "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors " +
+                (modoVoz
+                  ? "bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white " +
+                    (estadoVoz === "grabando" || hablando ? "animate-pulse" : "")
+                  : "bg-muted text-foreground")
+              }
+            >
+              <VitaIcon name="mic" size={18} />
+            </button>
             <button
               type="submit"
               disabled={!entrada.trim() || enviando}

@@ -36,3 +36,6 @@ supabase/.temp/
 
 # Zip redundante con pantallas/Vitaoriginal/vita (1)/ ya extraído — ese sí se versiona como referencia de diseño.
 pantallas/Vitaoriginal/*.zip
+
+# Local Netlify folder
+.netlify
