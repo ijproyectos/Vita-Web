@@ -52,11 +52,24 @@ export async function transcribirAudio(audio: Buffer | Blob, mimeType: string): 
   }
 }
 
-// Voz elegida para vita: barítono calmado/profesional/empático — el criterio
-// pedido explícitamente fue "que suene a un asistente real, tipo Jarvis" en
-// vez de la voz de sistema robótica del navegador.
-const MODELO_VOZ_VITA = "aura-2-sirio-es";
+// Voz elegida para vita: femenina, acento argentino (es-AR) — pedido
+// explícito del usuario, no mexicana. Confirmado contra GET /v1/models de
+// Deepgram (no contra la doc genérica): de las 17 voces en español del
+// catálogo Aura-2, aura-2-antonia-es es la única con accent="Argentine".
+const MODELO_VOZ_VITA = "aura-2-antonia-es";
 const ENDPOINT_VOZ = `https://api.deepgram.com/v1/speak?model=${MODELO_VOZ_VITA}`;
+
+// El chat de vita usa emojis en el texto (ej. el saludo inicial "Hola 👋").
+// Sin filtrarlos, el motor de TTS los pronuncia como palabras ("emoji de
+// mano saludando") — se sacan solo acá, antes de sintetizar, sin tocar el
+// texto que se ve en la burbuja del chat.
+function quitarEmojis(texto: string): string {
+  return texto
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/[‍️]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 
 /**
  * Sintetiza la respuesta de vita a audio (mp3) con Deepgram Aura-2. Nunca
@@ -70,6 +83,11 @@ export async function generarAudio(texto: string): Promise<ResultadoAudio> {
     return { error: "La voz de vita no está disponible en este momento." };
   }
 
+  const limpio = quitarEmojis(texto);
+  if (!limpio) {
+    return { error: "No hay texto para sintetizar." };
+  }
+
   try {
     const respuesta = await fetch(ENDPOINT_VOZ, {
       method: "POST",
@@ -77,7 +95,7 @@ export async function generarAudio(texto: string): Promise<ResultadoAudio> {
         Authorization: `Token ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text: texto }),
+      body: JSON.stringify({ text: limpio }),
     });
 
     if (!respuesta.ok) {
