@@ -10,8 +10,10 @@ import { listarSesionesAction, listarMensajesAction } from "./chat-actions";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
-import { hablarTexto, desbloquearVoz, cancelarVoz } from "@/lib/voz/hablar-cliente";
+import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob, extraerFrasesListas } from "@/lib/voz/hablar-cliente";
 import type { EstadoVoz } from "@/lib/voz/tipos";
+
+type ItemHabla = { texto: string; audioPromise: Promise<Blob | null> };
 
 const SUGERENCIAS_INICIALES = ["Contame mi día", "Agregar medicamento", "Agendar turno"];
 
@@ -56,29 +58,50 @@ export function VitaChatOverlay() {
   const finRef = useRef<HTMLDivElement>(null);
   const ultimoNonceInicial = useRef<number | null>(null);
   const modoVozRef = useRef(false); // valor fresco de modoVoz para leer dentro del callback async de la voz
-  const mensajesRef = useRef<MensajeChatUI[]>(mensajes); // idem, para leer la última respuesta de vita ya resuelta
   const reanudarEscuchaRef = useRef<() => void>(() => {});
+  const fraseHabladaIndiceRef = useRef(0); // cuánto del texto en streaming ya se mandó a hablar
+  const colaHablaRef = useRef<ItemHabla[]>([]);
+  const colaEnCursoRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     modoVozRef.current = modoVoz;
   }, [modoVoz]);
 
-  useEffect(() => {
-    mensajesRef.current = mensajes;
-  }, [mensajes]);
+  // Encola una frase para hablar: el fetch a Deepgram arranca ya (en
+  // paralelo a lo que se esté reproduciendo), la reproducción respeta el
+  // orden de llegada — así el silencio entre frases es solo el tiempo que
+  // falte de red, no el fetch completo de la siguiente.
+  function encolarFraseVoz(frase: string) {
+    colaHablaRef.current.push({ texto: frase, audioPromise: obtenerAudioBlob(frase) });
+    if (!colaEnCursoRef.current) {
+      colaEnCursoRef.current = procesarColaHabla().finally(() => {
+        colaEnCursoRef.current = null;
+      });
+    }
+  }
 
-  // Un turno de voz completo: transcribir ya lo hizo el hook, acá se manda
-  // el texto por el mismo enviar() de siempre, se lee la respuesta final
-  // de vita (del ref, no del closure — enviar() actualiza mensajes de a
-  // chunks) y se la lee en voz alta antes de retomar la escucha.
+  async function procesarColaHabla() {
+    setHablando(true);
+    while (colaHablaRef.current.length > 0) {
+      const item = colaHablaRef.current.shift();
+      if (!item) break;
+      await reproducirBlob(await item.audioPromise);
+    }
+    setHablando(false);
+  }
+
+  function cortarHabla() {
+    colaHablaRef.current = [];
+    cancelarVoz();
+  }
+
+  // Un turno de voz completo: transcribir ya lo hizo el hook. enviar() va
+  // encolando cada oración a medida que el streaming de texto la completa
+  // (no espera a la respuesta entera), acá solo queda esperar a que la cola
+  // de habla termine de reproducirse antes de retomar la escucha.
   async function onTranscripcionVoz(texto: string) {
     await enviar(texto);
-    const ultimo = mensajesRef.current[mensajesRef.current.length - 1];
-    if (ultimo?.role === "assistant" && ultimo.content) {
-      setHablando(true);
-      await hablarTexto(ultimo.content);
-      setHablando(false);
-    }
+    if (colaEnCursoRef.current) await colaEnCursoRef.current;
     if (modoVozRef.current) reanudarEscuchaRef.current();
   }
 
@@ -105,7 +128,7 @@ export function VitaChatOverlay() {
   function cerrarChat() {
     if (modoVoz) {
       detenerVoz();
-      cancelarVoz();
+      cortarHabla();
       setModoVoz(false);
       setHablando(false);
     }
@@ -115,7 +138,7 @@ export function VitaChatOverlay() {
   async function alternarModoVoz() {
     if (modoVoz) {
       detenerVoz();
-      cancelarVoz();
+      cortarHabla();
       setModoVoz(false);
       setHablando(false);
       return;
@@ -204,6 +227,8 @@ export function VitaChatOverlay() {
     scrollAlFinal();
 
     let sesionAsignada: string | null = null;
+    let textoAcumulado = "";
+    if (modoVozRef.current) fraseHabladaIndiceRef.current = 0;
 
     try {
       const res = await fetch("/api/chat", {
@@ -240,6 +265,7 @@ export function VitaChatOverlay() {
             sesionAsignada = evento.session;
             setSesionId(evento.session);
           } else if ("chunk" in evento) {
+            textoAcumulado += evento.chunk;
             setMensajes((prev) => {
               const copia = [...prev];
               copia[copia.length - 1] = {
@@ -249,6 +275,14 @@ export function VitaChatOverlay() {
               return copia;
             });
             scrollAlFinal();
+            // Habla por oración a medida que el streaming la completa, no
+            // espera a la respuesta entera — pedido explícito del usuario
+            // (que "conteste antes", no de un bloque al final).
+            if (modoVozRef.current) {
+              const { frases, hastaIndice } = extraerFrasesListas(textoAcumulado, fraseHabladaIndiceRef.current);
+              fraseHabladaIndiceRef.current = hastaIndice;
+              frases.forEach(encolarFraseVoz);
+            }
           } else if ("action" in evento) {
             setMensajes((prev) => {
               const copia = [...prev];
@@ -271,6 +305,14 @@ export function VitaChatOverlay() {
             toast.error(evento.error);
           }
         }
+      }
+
+      // Lo que haya quedado sin punto final (el cierre de la respuesta,
+      // que raramente termina justo en un terminador de oración) también
+      // se habla — si no, la última frase de vita se pierde en silencio.
+      if (modoVozRef.current) {
+        const restante = textoAcumulado.slice(fraseHabladaIndiceRef.current).trim();
+        if (restante) encolarFraseVoz(restante);
       }
     } catch {
       toast.error("No se pudo conectar con vita. Intentá de nuevo.");
