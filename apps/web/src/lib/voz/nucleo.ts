@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ResultadoTranscripcion } from "./tipos";
+import type { ResultadoAudio, ResultadoTranscripcion } from "./tipos";
 
 // Único punto de contacto con la API de transcripción de Groq (endpoint
 // compatible con el formato de OpenAI, mismo modelo Whisper por debajo) —
@@ -49,5 +49,44 @@ export async function transcribirAudio(audio: Buffer | Blob, mimeType: string): 
     return { texto };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Error de red al transcribir el audio." };
+  }
+}
+
+// Voz elegida para vita: barítono calmado/profesional/empático — el criterio
+// pedido explícitamente fue "que suene a un asistente real, tipo Jarvis" en
+// vez de la voz de sistema robótica del navegador.
+const MODELO_VOZ_VITA = "aura-2-sirio-es";
+const ENDPOINT_VOZ = `https://api.deepgram.com/v1/speak?model=${MODELO_VOZ_VITA}`;
+
+/**
+ * Sintetiza la respuesta de vita a audio (mp3) con Deepgram Aura-2. Nunca
+ * lanza, mismo criterio que transcribirAudio: si falta DEEPGRAM_API_KEY o
+ * la API falla, devuelve {error} y quien llama simplemente no reproduce
+ * nada — el chat de texto ya mostró la respuesta, no hay nada que romper.
+ */
+export async function generarAudio(texto: string): Promise<ResultadoAudio> {
+  const apiKey = process.env.DEEPGRAM_API_KEY;
+  if (!apiKey) {
+    return { error: "La voz de vita no está disponible en este momento." };
+  }
+
+  try {
+    const respuesta = await fetch(ENDPOINT_VOZ, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: texto }),
+    });
+
+    if (!respuesta.ok) {
+      const detalle = await respuesta.text().catch(() => "");
+      return { error: `No se pudo generar el audio (${respuesta.status}). ${detalle}`.trim() };
+    }
+
+    return { audio: await respuesta.arrayBuffer() };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Error de red al generar el audio." };
   }
 }

@@ -5,6 +5,9 @@
 /** Resultado de transcribir un turno de audio grabado. */
 export type ResultadoTranscripcion = { texto: string } | { error: string };
 
+/** Resultado de sintetizar la respuesta de vita a audio. */
+export type ResultadoAudio = { audio: ArrayBuffer } | { error: string };
+
 /**
  * Estado del modo voz, expuesto por useGrabacionVoz para que la UI refleje
  * el ciclo completo: inactivo -> escuchando (esperando que el usuario

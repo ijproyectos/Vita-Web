@@ -10,7 +10,7 @@ import { listarSesionesAction, listarMensajesAction } from "./chat-actions";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
-import { hablarTexto, desbloquearVoz } from "@/lib/voz/hablar-cliente";
+import { hablarTexto, desbloquearVoz, cancelarVoz } from "@/lib/voz/hablar-cliente";
 import type { EstadoVoz } from "@/lib/voz/tipos";
 
 const SUGERENCIAS_INICIALES = ["Contame mi día", "Agregar medicamento", "Agendar turno"];
@@ -105,7 +105,7 @@ export function VitaChatOverlay() {
   function cerrarChat() {
     if (modoVoz) {
       detenerVoz();
-      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      cancelarVoz();
       setModoVoz(false);
       setHablando(false);
     }
@@ -115,7 +115,7 @@ export function VitaChatOverlay() {
   async function alternarModoVoz() {
     if (modoVoz) {
       detenerVoz();
-      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      cancelarVoz();
       setModoVoz(false);
       setHablando(false);
       return;

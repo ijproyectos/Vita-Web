@@ -1,68 +1,63 @@
 "use client";
 
-// Envuelve window.speechSynthesis para el modo voz del chat con vita.
-// Nunca rechaza la promesa: un glitch de TTS (voz no encontrada, error
-// del motor, browser sin soporte) no debe frenar el loop de la
-// conversación — el peor caso es simplemente no escuchar la respuesta.
+// Reproduce la respuesta de vita con la voz sintética generada por
+// /api/voz/hablar (Deepgram Aura-2) en vez de la voz de sistema del
+// navegador (window.speechSynthesis) — pedido explícito del usuario: la voz
+// del navegador suena robótica, sin las pausas/entonación de una voz real.
+// Nunca rechaza la promesa ni lanza: si falla la síntesis o la reproducción,
+// el chat de texto ya mostró la respuesta, no hay nada que romper.
 
-function elegirVozEspanol(voces: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
-  return (
-    voces.find((v) => v.lang?.toLowerCase() === "es-ar") ??
-    voces.find((v) => v.lang?.toLowerCase() === "es-es") ??
-    voces.find((v) => v.lang?.toLowerCase().startsWith("es")) ??
-    undefined
-  );
-}
+// WAV de un sample en silencio — un audio real pero inaudible, suficiente
+// para "desbloquear" <audio>.play() en Safari/iOS, donde la reproducción
+// programática está bloqueada si no ocurre dentro del mismo gesto
+// sincrónico del usuario (mismo problema que tenía speechSynthesis, pero
+// <audio> y speechSynthesis son dos flags de desbloqueo independientes en
+// WebKit, así que no alcanza con haber desbloqueado uno para el otro).
+const AUDIO_SILENCIO =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
-function obtenerVoces(): Promise<SpeechSynthesisVoice[]> {
-  return new Promise((resolve) => {
-    const voces = window.speechSynthesis.getVoices();
-    if (voces.length > 0) {
-      resolve(voces);
-      return;
-    }
-    // Las voces pueden cargar de forma asincrónica la primera vez —
-    // esperamos el evento, con un timeout corto como red de seguridad si
-    // el navegador nunca lo dispara.
-    const manejarCambio = () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", manejarCambio);
-      resolve(window.speechSynthesis.getVoices());
-    };
-    window.speechSynthesis.addEventListener("voiceschanged", manejarCambio);
-    setTimeout(() => {
-      window.speechSynthesis.removeEventListener("voiceschanged", manejarCambio);
-      resolve(window.speechSynthesis.getVoices());
-    }, 500);
-  });
-}
+let audioActual: HTMLAudioElement | null = null;
 
-// Safari/iOS bloquea en silencio (sin onerror) cualquier speechSynthesis.speak()
-// que no ocurra dentro del mismo gesto sincrónico del usuario (un tap). Nuestro
-// flujo real llama a speak() varios pasos async después del tap al micrófono
-// (transcribir → mandar a vita → recién ahí hablar), así que se "desbloquea"
-// el motor acá, en el mismo click que activa el modo voz — una utterance
-// vacía alcanza para que el navegador habilite el resto de la sesión.
 export function desbloquearVoz(): void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+  if (typeof window === "undefined") return;
+  const audio = new Audio(AUDIO_SILENCIO);
+  audio.play().catch(() => {});
+}
+
+export function cancelarVoz(): void {
+  audioActual?.pause();
+  audioActual = null;
 }
 
 export async function hablarTexto(texto: string): Promise<void> {
-  if (typeof window === "undefined" || !("speechSynthesis" in window) || !texto.trim()) {
-    return;
+  if (typeof window === "undefined" || !texto.trim()) return;
+
+  cancelarVoz();
+
+  try {
+    const respuesta = await fetch("/api/voz/hablar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto }),
+    });
+    if (!respuesta.ok) return;
+
+    const blob = await respuesta.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audioActual = audio;
+
+    await new Promise<void>((resolve) => {
+      const terminar = () => {
+        URL.revokeObjectURL(url);
+        if (audioActual === audio) audioActual = null;
+        resolve();
+      };
+      audio.onended = terminar;
+      audio.onerror = terminar;
+      audio.play().catch(terminar);
+    });
+  } catch {
+    // Degradación silenciosa: la respuesta de texto ya está en pantalla.
   }
-
-  window.speechSynthesis.cancel();
-
-  const voces = await obtenerVoces();
-  const vozEspanol = elegirVozEspanol(voces);
-
-  return new Promise((resolve) => {
-    const utterance = new SpeechSynthesisUtterance(texto);
-    if (vozEspanol) utterance.voice = vozEspanol;
-    utterance.lang = vozEspanol?.lang ?? "es-AR";
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
-  });
 }
