@@ -2,20 +2,22 @@ import "server-only";
 
 import type { ResultadoTranscripcion } from "./tipos";
 
-// Único punto de contacto con la API de transcripción de OpenAI — mismo
-// criterio que lib/estudios/extraer.ts para Anthropic: un solo archivo
-// server-only, nunca lanza, quien llama siempre puede degradar (acá,
-// dejar que el usuario tipee) si esto falla.
-const ENDPOINT_TRANSCRIPCIONES = "https://api.openai.com/v1/audio/transcriptions";
+// Único punto de contacto con la API de transcripción de Groq (endpoint
+// compatible con el formato de OpenAI, mismo modelo Whisper por debajo) —
+// se usa Groq y no OpenAI directo porque su free tier no pide tarjeta.
+// Mismo criterio que lib/estudios/extraer.ts para Anthropic: un solo
+// archivo server-only, nunca lanza, quien llama siempre puede degradar
+// (acá, dejar que el usuario tipee) si esto falla.
+const ENDPOINT_TRANSCRIPCIONES = "https://api.groq.com/openai/v1/audio/transcriptions";
 
 /**
  * Transcribe un turno de audio grabado a texto en español. Nunca lanza:
- * si falta OPENAI_API_KEY, si la API responde con error, o si la request
+ * si falta GROQ_API_KEY, si la API responde con error, o si la request
  * de red falla, devuelve {error} para que el llamador pueda avisarle al
  * usuario y dejarlo tipear en vez de romper el chat.
  */
 export async function transcribirAudio(audio: Buffer | Blob, mimeType: string): Promise<ResultadoTranscripcion> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     return { error: "La transcripción por voz no está disponible en este momento." };
   }
@@ -24,7 +26,7 @@ export async function transcribirAudio(audio: Buffer | Blob, mimeType: string): 
     const cuerpo = new FormData();
     const blob = audio instanceof Blob ? audio : new Blob([new Uint8Array(audio)], { type: mimeType });
     cuerpo.append("file", blob, "turno.webm");
-    cuerpo.append("model", "whisper-1");
+    cuerpo.append("model", "whisper-large-v3-turbo");
     cuerpo.append("language", "es");
 
     const respuesta = await fetch(ENDPOINT_TRANSCRIPCIONES, {
