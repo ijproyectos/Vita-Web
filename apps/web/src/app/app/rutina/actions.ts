@@ -16,6 +16,7 @@ export async function marcarTomadoAction(medicamentoId: string, tomado: boolean)
   await medicamentos.marcarTomado(supabase, usuario.id, medicamentoId, tomado);
   revalidatePath("/app");
   revalidatePath("/app/rutina");
+  revalidatePath("/app/modo-simple");
 }
 
 // Marcar todos los pendientes de hoy de una — el diálogo/botón viejo
