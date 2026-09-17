@@ -30,12 +30,90 @@ const DIAS_POR_INDICE: DiaSemana[] = [
   "sabado",
 ];
 
+/**
+ * Día de la semana (en español, minúsculas) de una fecha dada, en el
+ * calendario de Argentina — exportada porque el detector de dosis
+ * vencidas necesita el día correspondiente a un `ahora` explícito, igual
+ * criterio que `fechaEnUTC`.
+ *
+ * OJO: NO se puede usar `fecha.getDay()` directo — depende del huso
+ * horario del proceso (Netlify/Node corren en UTC), así que entre las
+ * 21:00 y 23:59 hora AR (00:00-02:59 UTC del día siguiente) devolvería el
+ * día de mañana, no el de hoy en Argentina — exactamente la misma clase
+ * de desfase que `fechaEnUTC`/`horaEnAR` ya documentan para
+ * `medicamentos_tomas.fecha`, pero en el día de la semana. Se reconstruye
+ * la fecha a partir de sus componentes Y/M/D ya en huso AR (vía
+ * `Intl.DateTimeFormat`) antes de pedir `getDay()`, para que el resultado
+ * no dependa del huso del proceso.
+ */
+export function diaSemanaDe(fecha: Date): DiaSemana {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(fecha);
+  const obj = Object.fromEntries(partes.map((p) => [p.type, p.value]));
+  const fechaAR = new Date(Number(obj.year), Number(obj.month) - 1, Number(obj.day));
+  return DIAS_POR_INDICE[fechaAR.getDay()];
+}
+
 function diaDeHoy(): DiaSemana {
-  return DIAS_POR_INDICE[new Date().getDay()];
+  return diaSemanaDe(new Date());
+}
+
+/**
+ * Fecha en formato "YYYY-MM-DD", en UTC — mismo criterio usado en toda la
+ * app para `medicamentos_tomas.fecha` (marcarTomado, listarHoy,
+ * calcularAdherencia). Exportada (con `fecha` explícito, default
+ * `new Date()`) porque el detector de dosis vencidas
+ * (lib/notificaciones/nucleo.ts) necesita calcular esta misma fecha a
+ * partir de un instante `ahora` recibido por parámetro, no del reloj del
+ * proceso — para no reimplementar el mismo slice en otro archivo.
+ */
+export function fechaEnUTC(fecha: Date = new Date()): string {
+  return fecha.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
 function fechaDeHoy(): string {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  return fechaEnUTC();
+}
+
+/**
+ * Hora de pared argentina ("HH:MM") de un instante dado. `hora_programada`
+ * siempre representa una hora AR, sin importar en qué huso horario corre
+ * el proceso (Netlify/Node corren en UTC) — `new Date()` captura el
+ * instante real, y esto lo reconstruye a la hora de pared que un usuario
+ * en Argentina vería en ese momento. Usada por `esDosisVencida` (detector
+ * de dosis vencidas) y por el badge "atrasada" de modo simple.
+ */
+export function horaEnAR(fecha: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(fecha);
+}
+
+/**
+ * Predicado puro: ¿una dosis programada a `horaProgramada` ("HH:MM", hora
+ * AR) está vencida a `ahoraHHMM` ("HH:MM", ya convertida a hora AR — ver
+ * `horaEnAR`), dado un margen de gracia en minutos? No conoce fechas ni
+ * confirmaciones — quien llama resuelve eso (ver el comentario sobre el
+ * desfase UTC/AR en `detectarDosisVencidas`, lib/notificaciones/nucleo.ts).
+ */
+export function esDosisVencida(
+  horaProgramada: string,
+  ahoraHHMM: string,
+  minutosGracia: number
+): boolean {
+  const aMinutos = (hhmm: string): number => {
+    const [horas, minutos] = hhmm.split(":").map(Number);
+    return horas * 60 + minutos;
+  };
+
+  return aMinutos(ahoraHHMM) - aMinutos(horaProgramada) >= minutosGracia;
 }
 
 function aplicaHoy(medicamento: Medicamento): boolean {
