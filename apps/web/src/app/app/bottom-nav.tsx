@@ -22,6 +22,10 @@ const SIN_NAV = [
   "/app/agregar-turno",
   "/app/resumen-salud",
   "/app/mi-salud/agregar-estudio",
+  // Modo simple (fase 3.5): pantalla única sin nav ni FAB — el FAB de
+  // chat se monta acá adentro de BottomNav, así que ocultar el nav lo
+  // oculta también, sin tocar layout.tsx.
+  "/app/modo-simple",
 ];
 
 export function BottomNav() {
