@@ -36,6 +36,11 @@ import {
   TrendingDown,
   Camera,
   LogOut,
+  Users,
+  Link2,
+  Copy,
+  Trash2,
+  AlertTriangle,
   type LucideProps,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -82,6 +87,11 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   "trend-down": TrendingDown,
   camera: Camera,
   logout: LogOut,
+  users: Users,
+  link: Link2,
+  copy: Copy,
+  trash: Trash2,
+  "alert-triangle": AlertTriangle,
 };
 
 export function VitaIcon({
