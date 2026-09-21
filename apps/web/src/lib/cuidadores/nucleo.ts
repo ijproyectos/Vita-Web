@@ -1,7 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ElderVinculado, ResultadoReclamo, VinculoCuidador } from "./tipos";
+import { esDosisVencida, horaEnAR, listarHoy } from "@/lib/medicamentos/nucleo";
+import type { DosisVencidaCuidador, ElderVinculado, ResultadoReclamo, VinculoCuidador } from "./tipos";
 
 // Núcleo de lógica de vínculos cuidador↔elder — mismo criterio que
 // lib/medicamentos/nucleo.ts: funciones puras `(supabase, usuarioId, ...)`
@@ -187,4 +188,45 @@ export async function reclamarInvitacion(
   }
 
   return { elderId: fila.elder_id, nombre: fila.nombre };
+}
+
+const GRACIA_MIN_POPUP = 30; // mismo margen que el resto del dominio (notificaciones/nucleo.ts, modo-simple) — repetido a propósito, ver esos archivos.
+
+/**
+ * Dosis de hoy, ya vencidas (sin confirmar más allá del margen de
+ * gracia), de todos los elders vinculados a este cuidador — para el
+ * popup de alerta dentro de la app (pedido explícito del usuario: por
+ * ahora sin email, solo un aviso visible al entrar a /cuidar). Reutiliza
+ * `listarHoy`/`esDosisVencida`/`horaEnAR` sin cambios — la RLS aditiva de
+ * 008_cuidadores.sql ya resuelve qué filas puede leer este cuidador, así
+ * que un `listarHoy(supabase, elder.elderId)` por cada elder alcanza, sin
+ * necesitar el cliente `service_role` que sí usa el cron (ver
+ * notificaciones/nucleo.ts) — acá no se cruza a usuarios sin vínculo.
+ */
+export async function listarDosisVencidasDeMisElders(
+  supabase: Cliente,
+  elders: ElderVinculado[],
+  graciaMin: number = GRACIA_MIN_POPUP
+): Promise<DosisVencidaCuidador[]> {
+  const ahoraAR = horaEnAR();
+  const resultados: DosisVencidaCuidador[] = [];
+
+  for (const elder of elders) {
+    const hoy = await listarHoy(supabase, elder.elderId);
+    for (const m of hoy) {
+      if (!m.tomado && esDosisVencida(m.hora_programada, ahoraAR, graciaMin)) {
+        resultados.push({
+          elderId: elder.elderId,
+          elderNombre: elder.nombre,
+          medicamentoId: m.id,
+          nombre: m.nombre,
+          dosis: m.dosis,
+          unidad: m.unidad,
+          horaProgramada: m.hora_programada,
+        });
+      }
+    }
+  }
+
+  return resultados;
 }

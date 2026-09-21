@@ -44,3 +44,20 @@ export type MotivoReclamoRechazado =
 export type ResultadoReclamo =
   | { elderId: string; nombre: string }
   | { error: MotivoReclamoRechazado; mensaje: string };
+
+/**
+ * Una dosis vencida sin confirmar, ya resuelta con el nombre del elder —
+ * para el popup de alerta que ve el cuidador dentro de la app (ver
+ * `listarDosisVencidasDeMisElders` en nucleo.ts). No tiene relación con
+ * `alertas_dosis` (esa tabla es dedupe/log del cron de email, que por
+ * ahora está desactivado — este tipo es puramente de lectura en vivo).
+ */
+export type DosisVencidaCuidador = {
+  elderId: string;
+  elderNombre: string;
+  medicamentoId: string;
+  nombre: string;
+  dosis: string | null;
+  unidad: string;
+  horaProgramada: string;
+};
