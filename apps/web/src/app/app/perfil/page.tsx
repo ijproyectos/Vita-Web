@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
@@ -56,6 +57,18 @@ export default async function PerfilPage() {
         <ConexionRow icon="gmail" color="#EA4335" titulo="Gmail" sub="Detecto estudios automáticamente" />
         <ConexionRow icon="heart-plus" color="#FF3B30" titulo="Apple Health" sub="Métricas desde tu iPhone/Watch" />
         <ConexionRow icon="activity" color="#4285F4" titulo="Google Fit" sub="Métricas desde Wear OS / Android" ultimo />
+      </Grupo>
+
+      {/* Cuidado compartido — real, a diferencia de los grupos decorativos de abajo */}
+      <Grupo titulo="Cuidado compartido">
+        <NavLinkRow icon="users" label="Mis cuidadores" sub="Invitá a alguien para que vea tu adherencia" href="/app/perfil/cuidadores" />
+        <NavLinkRow
+          icon="bell"
+          label="Modo simple"
+          sub="Pantalla grande para confirmar tu medicación, sin menús"
+          ultimo
+          href="/app/modo-simple"
+        />
       </Grupo>
 
       {/* Notificaciones — decorativo, sin infraestructura de push conectada */}
@@ -133,6 +146,35 @@ function ConexionRow({
         Conectar
       </button>
     </div>
+  );
+}
+
+// A diferencia de LinkRow (decorativo, sin destino), esta navega de
+// verdad — usada por "Cuidado compartido", que sí es funcional.
+function NavLinkRow({
+  icon,
+  label,
+  sub,
+  ultimo,
+  href,
+}: {
+  icon: string;
+  label: string;
+  sub: string;
+  ultimo?: boolean;
+  href: string;
+}) {
+  return (
+    <Link href={href} className={`flex items-center gap-3 px-4.5 py-3.5 ${ultimo ? "" : "border-b"}`}>
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+        <VitaIcon name={icon} size={18} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold">{label}</div>
+        <div className="mt-0.5 text-[11.5px] text-muted-foreground">{sub}</div>
+      </div>
+      <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
+    </Link>
   );
 }
 
