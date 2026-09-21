@@ -61,7 +61,14 @@ export default async function PerfilPage() {
 
       {/* Cuidado compartido — real, a diferencia de los grupos decorativos de abajo */}
       <Grupo titulo="Cuidado compartido">
-        <NavLinkRow icon="users" label="Mis cuidadores" sub="Invitá a alguien para que vea tu adherencia" ultimo href="/app/perfil/cuidadores" />
+        <NavLinkRow icon="users" label="Mis cuidadores" sub="Invitá a alguien para que vea tu adherencia" href="/app/perfil/cuidadores" />
+        <NavLinkRow
+          icon="bell"
+          label="Modo simple"
+          sub="Pantalla grande para confirmar tu medicación, sin menús"
+          ultimo
+          href="/app/modo-simple"
+        />
       </Grupo>
 
       {/* Notificaciones — decorativo, sin infraestructura de push conectada */}
