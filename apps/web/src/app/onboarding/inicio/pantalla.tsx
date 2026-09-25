@@ -10,9 +10,17 @@ const ESTADO_INICIAL: EstadoReclamoCodigo = { status: "idle" };
 
 // "¿Alguien de tu familia te está ayudando con la app?" — si trae
 // `?codigo=` (del deep link del QR de /onboarding/vincular-cuidado), abre
-// directo la sub-vista de código con el campo pre-cargado.
-export function PantallaInicio({ codigoInicial }: { codigoInicial?: string }) {
-  const [mostrarCodigo, setMostrarCodigo] = useState(Boolean(codigoInicial));
+// directo la sub-vista de código con el campo pre-cargado. `abrirCodigoInicial`
+// (desde `?modo=codigo`, el link "Me invitó un familiar..." de /login) abre
+// la misma sub-vista pero sin pre-cargar nada.
+export function PantallaInicio({
+  codigoInicial,
+  abrirCodigoInicial,
+}: {
+  codigoInicial?: string;
+  abrirCodigoInicial?: boolean;
+}) {
+  const [mostrarCodigo, setMostrarCodigo] = useState(Boolean(codigoInicial) || Boolean(abrirCodigoInicial));
 
   return (
     <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-[#f8fbfc] to-white px-7 pb-8 pt-16">

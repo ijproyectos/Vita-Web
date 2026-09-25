@@ -168,11 +168,26 @@ export async function revocar(
  * sentido para esta dirección — se manda `""` explícito, nunca se lee de
  * vuelta para esta fila (ni `VinculoRow` ni ninguna pantalla de la
  * dirección (b) la muestran).
+ *
+ * `perfilPendienteId` (opcional, onboarding conversacional nuevo,
+ * 012_perfiles_y_medicamentos_pendientes.sql) — si se pasa, el código
+ * recién generado queda linkeado (`vinculo_id`) a ese perfil en borrador,
+ * para que `reclamar_vinculo_como_elder()` migre sus
+ * `medicamentos_pendientes` a `medicamentos` reales cuando la persona
+ * cuidada lo reclame. El UPDATE se apoya en `perfiles_pendientes_all_propio`
+ * (ya permite `cuidador_id = auth.uid()`, no hace falta policy nueva). Si
+ * el UPDATE falla, se lanza (igual criterio que el resto de este archivo
+ * para escritura plana sin RPC): un código generado pero desconectado de
+ * su borrador dejaría medicamentos huérfanos, es una anomalía real, no un
+ * resultado aceptable en silencio.
  */
 export async function crearVinculoComoCuidador(
   supabase: Cliente,
-  cuidadorId: string
+  cuidadorId: string,
+  perfilPendienteId?: string
 ): Promise<VinculoCuidador> {
+  let vinculo: VinculoCuidador | null = null;
+
   for (let intento = 0; intento < 2; intento++) {
     const { data, error } = await supabase
       .from("vinculos_cuidador")
@@ -186,7 +201,10 @@ export async function crearVinculoComoCuidador(
       .select()
       .single();
 
-    if (!error) return data as VinculoCuidador;
+    if (!error) {
+      vinculo = data as VinculoCuidador;
+      break;
+    }
 
     const esColisionDeCodigo = error.code === "23505"; // unique_violation
     if (!esColisionDeCodigo || intento === 1) {
@@ -194,8 +212,24 @@ export async function crearVinculoComoCuidador(
     }
   }
 
-  // Inalcanzable (el loop siempre retorna o lanza) — solo para conformar a TS.
-  throw new Error("No se pudo generar el código de vínculo.");
+  if (!vinculo) {
+    // Inalcanzable (el loop siempre asigna `vinculo` o lanza) — solo para conformar a TS.
+    throw new Error("No se pudo generar el código de vínculo.");
+  }
+
+  if (perfilPendienteId) {
+    const { error: errorLink } = await supabase
+      .from("perfiles_pendientes")
+      .update({ vinculo_id: vinculo.id })
+      .eq("id", perfilPendienteId)
+      .eq("cuidador_id", cuidadorId);
+
+    if (errorLink) {
+      throw new Error(`No se pudo vincular el código al perfil: ${errorLink.message}`);
+    }
+  }
+
+  return vinculo;
 }
 
 /**

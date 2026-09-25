@@ -14,7 +14,7 @@ import { generarVinculoAction, type EstadoVinculoGenerado } from "./actions";
 // pero eso también es cierto de cualquier deep link compartido).
 const URL_BASE = "https://vitappweb.netlify.app";
 
-export function PantallaVincularCuidado() {
+export function PantallaVincularCuidado({ perfilPendienteId }: { perfilPendienteId?: string }) {
   const [estado, setEstado] = useState<EstadoVinculoGenerado>({ status: "cargando" });
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   // Guarda "ya pedí el código" sin ser reactivo — no dispara
@@ -26,8 +26,8 @@ export function PantallaVincularCuidado() {
   useEffect(() => {
     if (yaPedidoRef.current) return;
     yaPedidoRef.current = true;
-    generarVinculoAction().then(setEstado);
-  }, []);
+    generarVinculoAction(perfilPendienteId).then(setEstado);
+  }, [perfilPendienteId]);
 
   useEffect(() => {
     if (estado.status !== "listo") return;

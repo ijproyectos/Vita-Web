@@ -25,14 +25,18 @@ export async function guardarNombreAction(nombre: string) {
 }
 
 // Paso "¿para quién vas a usar la app?" (app/onboarding/para-quien/) —
-// antes del nombre. Se guarda una sola vez; gatea, al final del
-// onboarding, si corresponde mandar a /onboarding/vincular-cuidado (ver
-// redirigirSegunUsoApp).
+// primer paso real del onboarding. Se guarda una sola vez; a partir de acá
+// el flujo por defecto es el conversacional nuevo (/onboarding/conversar),
+// que rama internamente según el valor guardado (tabs "persona"+"vos" para
+// cuido/ambos, un único tab "vos" para "yo"). El guion viejo
+// (/onboarding/nombre → /onboarding/chat, catálogo sin IA) sigue existiendo
+// como fallback manual — ver el link "Prefiero un formulario" dentro del
+// flujo conversacional.
 export async function guardarUsoAppAction(usoApp: UsoApp) {
   const usuario = await requireUser();
   const supabase = await createClient();
   await perfilNucleo.guardarUsoApp(supabase, usuario.id, usoApp);
-  redirect("/onboarding/nombre");
+  redirect("/onboarding/conversar");
 }
 
 // Después de completar (o saltear) el onboarding: si la persona dijo que

@@ -26,16 +26,23 @@ function GoogleLogo() {
   );
 }
 
+// Deep link de entrada para quien ya tiene un código de vínculo (lo generó
+// su cuidador desde /onboarding/vincular-cuidado) pero todavía no pasó por
+// Google — no se puede saltear la autenticación, así que el link igual
+// dispara el mismo signInWithOAuth, solo que apunta el `next` a la
+// sub-vista de código de /onboarding/inicio en vez del onboarding normal.
+const NEXT_CODIGO = "/onboarding/inicio?modo=codigo";
+
 export function LoginForm({ next }: { next?: string }) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<"google" | "codigo" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleGoogleLogin() {
+  async function iniciarSesionGoogle(destino: string, origen: "google" | "codigo") {
     setError(null);
-    setLoading(true);
+    setLoading(origen);
     const supabase = createClient();
     const callbackUrl = new URL("/auth/callback", window.location.origin);
-    if (next) callbackUrl.searchParams.set("next", next);
+    callbackUrl.searchParams.set("next", destino);
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -43,7 +50,7 @@ export function LoginForm({ next }: { next?: string }) {
     });
     if (error) {
       setError("No se pudo iniciar sesión con Google. Intentá de nuevo.");
-      setLoading(false);
+      setLoading(null);
     }
     // On success the browser navigates away to Google, so no further
     // state update is needed here.
@@ -57,12 +64,21 @@ export function LoginForm({ next }: { next?: string }) {
 
       <button
         type="button"
-        onClick={handleGoogleLogin}
-        disabled={loading}
+        onClick={() => iniciarSesionGoogle(next ?? "/app", "google")}
+        disabled={loading !== null}
         className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full bg-white font-heading text-[15px] font-bold text-foreground shadow-[0_2px_10px_rgba(15,33,54,0.06),inset_0_0_0_1px_rgba(15,33,54,0.06)] disabled:opacity-60"
       >
         <GoogleLogo />
-        {loading ? "Conectando…" : "Continuar con Google"}
+        {loading === "google" ? "Conectando…" : "Continuar con Google"}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => iniciarSesionGoogle(NEXT_CODIGO, "codigo")}
+        disabled={loading !== null}
+        className="text-center text-sm font-semibold text-primary disabled:opacity-60"
+      >
+        {loading === "codigo" ? "Conectando…" : "Me invitó un familiar, tengo un código"}
       </button>
     </div>
   );
