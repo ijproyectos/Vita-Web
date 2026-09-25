@@ -7,10 +7,18 @@ export type EstadoVinculo = "pendiente" | "aceptado" | "revocado";
 
 export type VinculoCuidador = {
   id: string;
-  elder_id: string;
-  cuidador_id: string | null; // null hasta que el cuidador reclama la invitación
+  // Nullable desde 010_onboarding_rol_y_vinculo_por_codigo.sql: null hasta
+  // que el elder reclama un vínculo iniciado por el cuidador (dirección b,
+  // por código/QR) — antes siempre venía set porque solo existía la
+  // dirección elder→cuidador (a, por link).
+  elder_id: string | null;
+  cuidador_id: string | null; // null hasta que el cuidador reclama la invitación (dirección a)
   email_invitado: string;
   token: string;
+  // Código numérico de 6 dígitos para la dirección (b) — null en filas de
+  // la dirección (a) (por link/email). Ver `crearVinculoComoCuidador` en
+  // nucleo.ts.
+  codigo: string | null;
   estado: EstadoVinculo;
   expira_at: string;
   aceptado_at: string | null;
@@ -44,6 +52,26 @@ export type MotivoReclamoRechazado =
 export type ResultadoReclamo =
   | { elderId: string; nombre: string }
   | { error: MotivoReclamoRechazado; mensaje: string };
+
+/** Motivo por el que `reclamar_vinculo_como_elder()` rechazó un reclamo —
+ * calca los `raise exception` de la RPC (ver
+ * 010_onboarding_rol_y_vinculo_por_codigo.sql). Simétrico a
+ * `MotivoReclamoRechazado`, dirección (b) — el elder reclama un vínculo
+ * que el cuidador inició por código/QR. */
+export type MotivoReclamoElderRechazado =
+  | "codigo_no_encontrado"
+  | "codigo_expirado"
+  | "ya_vinculado"
+  | "error_desconocido";
+
+/**
+ * Resultado de reclamar un vínculo por código — nunca lanza (ver
+ * `reclamarVinculoComoElder` en nucleo.ts), mismo criterio que
+ * `ResultadoReclamo`.
+ */
+export type ResultadoReclamoElder =
+  | { cuidadorId: string; nombre: string }
+  | { error: MotivoReclamoElderRechazado; mensaje: string };
 
 /**
  * Una dosis vencida sin confirmar, ya resuelta con el nombre del elder —

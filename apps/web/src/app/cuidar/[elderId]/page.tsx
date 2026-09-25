@@ -13,13 +13,16 @@ import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
 // del otro módulo.
 const GRACIA_MIN = 30;
 
-// Dashboard de solo lectura del elder seleccionado. Reutiliza sin cambios
-// `listarHoy`/`calcularAdherencia` de lib/medicamentos/nucleo.ts pasando
-// el `elderId` en vez del id del propio cuidador — funciona gracias a las
+// Dashboard mayormente de solo lectura del elder seleccionado — reutiliza
+// sin cambios `listarHoy`/`calcularAdherencia` de lib/medicamentos/nucleo.ts
+// pasando el `elderId` en vez del id del propio cuidador, gracias a las
 // policies aditivas de 008_cuidadores.sql (`medicamentos_select_cuidador`,
-// `medicamentos_tomas_select_cuidador`), no porque este archivo reimplemente
-// la lectura. No hay ningún botón/form/toggle que escriba: ni
-// marcarTomadoAction ni ninguna otra Server Action se importa acá.
+// `medicamentos_tomas_select_cuidador`). Única excepción real: "+ Agregar
+// medicamento" (abajo) navega a /cuidar/[elderId]/agregar-medicamento, que
+// SÍ escribe — apoyado en la policy aditiva `medicamentos_insert_cuidador`
+// (migración 010) y en la misma `agregarMultiMomento` que usa el propio
+// elder. Nada más en este archivo escribe: no hay marcarTomadoAction ni
+// ninguna otra Server Action de mutación importada acá.
 export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId]">) {
   const { elderId } = await props.params;
   const { elders } = await requireCuidador();
@@ -70,7 +73,12 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
       </div>
 
       <div>
-        <div className="px-1.5 pb-2.5 font-heading text-[15px] font-bold">Medicamentos de hoy</div>
+        <div className="flex items-center justify-between px-1.5 pb-2.5">
+          <div className="font-heading text-[15px] font-bold">Medicamentos de hoy</div>
+          <Link href={`/cuidar/${elderId}/agregar-medicamento`} className="text-xs font-semibold text-primary">
+            + Agregar medicamento
+          </Link>
+        </div>
         {medsHoy.length === 0 ? (
           <div className="rounded-[20px] bg-card p-5 text-center text-sm text-muted-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
             No tiene medicamentos programados para hoy.
@@ -112,7 +120,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
       )}
 
       <p className="px-1.5 text-center text-[11px] text-muted-foreground">
-        Vista de solo lectura — como cuidador no podés editar ni marcar tomas.
+        Como cuidador podés agregar medicamentos nuevos, pero no podés editar los existentes ni marcar tomas.
       </p>
     </div>
   );

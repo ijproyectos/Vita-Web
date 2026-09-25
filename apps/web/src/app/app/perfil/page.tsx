@@ -63,6 +63,12 @@ export default async function PerfilPage() {
       <Grupo titulo="Cuidado compartido">
         <NavLinkRow icon="users" label="Mis cuidadores" sub="Invitá a alguien para que vea tu adherencia" href="/app/perfil/cuidadores" />
         <NavLinkRow
+          icon="link"
+          label="Vincular a alguien"
+          sub="Ayudá a un familiar a cargar su celular con un código"
+          href="/onboarding/vincular-cuidado"
+        />
+        <NavLinkRow
           icon="bell"
           label="Modo simple"
           sub="Pantalla grande para confirmar tu medicación, sin menús"

@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
   // Onboarding (nombre + encuesta scripteada) se muestra una sola vez —
   // gatea toda /app/* acá, en el punto de entrada compartido.
   if (!perfil?.onboarding_completado_at) {
-    redirect("/onboarding/nombre");
+    redirect("/onboarding/inicio");
   }
 
   return (

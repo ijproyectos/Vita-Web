@@ -2,7 +2,13 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { esDosisVencida, horaEnAR, listarHoy } from "@/lib/medicamentos/nucleo";
-import type { DosisVencidaCuidador, ElderVinculado, ResultadoReclamo, VinculoCuidador } from "./tipos";
+import type {
+  DosisVencidaCuidador,
+  ElderVinculado,
+  ResultadoReclamo,
+  ResultadoReclamoElder,
+  VinculoCuidador,
+} from "./tipos";
 
 // Núcleo de lógica de vínculos cuidador↔elder — mismo criterio que
 // lib/medicamentos/nucleo.ts: funciones puras `(supabase, usuarioId, ...)`
@@ -22,6 +28,30 @@ function generarToken(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const MINUTOS_EXPIRACION_CODIGO = 30; // corto a propósito — ver comentario de crearVinculoComoCuidador
+
+/**
+ * Código numérico de 6 dígitos, uniforme, vía `crypto.getRandomValues` con
+ * rejection sampling — `Math.floor(100000 + Math.random() * 900000)` no
+ * alcanza (ni el generador ni la distribución) el rigor que necesita un
+ * código de vínculo: `Math.random()` no es criptográficamente seguro, y un
+ * `% 900000` directo sobre un uint32 sesga levemente los primeros valores
+ * del rango. Mismo nivel de cuidado que `generarToken()` de acá arriba,
+ * adaptado a un espacio de 6 dígitos en vez de 48 chars hex.
+ */
+function generarCodigo(): string {
+  const MIN = 100000;
+  const RANGO = 900000; // 100000..999999 inclusive
+  const LIMITE = Math.floor(0x100000000 / RANGO) * RANGO; // corta el resto sesgado del uint32
+  const buffer = new Uint32Array(1);
+  let n: number;
+  do {
+    crypto.getRandomValues(buffer);
+    n = buffer[0];
+  } while (n >= LIMITE);
+  return String(MIN + (n % RANGO));
 }
 
 /**
@@ -117,6 +147,118 @@ export async function revocar(
     .eq("elder_id", elderId);
 
   if (error) throw new Error(`No se pudo revocar el vínculo: ${error.message}`);
+}
+
+/**
+ * Dirección (b) — el cuidador inicia el vínculo ANTES de que el elder
+ * tenga nada cargado: crea una fila placeholder (`elder_id null`) con un
+ * código de 6 dígitos de vida corta (30 min, mucho más corto que los 7
+ * días de `invitar()` — un código numérico es fuerza-bruteable si queda
+ * abierto más tiempo; no hay infraestructura de rate-limit en este
+ * proyecto, documentado como límite conocido en la migración 010, no como
+ * olvido). Reintenta una vez ante una colisión de `codigo` (el índice
+ * único parcial `idx_vinculo_codigo_pendiente` existe justo para
+ * detectarla) — una colisión persistente después del reintento es una
+ * anomalía real, no un resultado esperado: acá sí se lanza, mismo
+ * criterio que el resto de los inserts de este archivo que no envuelven
+ * una RPC `security definer`.
+ *
+ * `email_invitado` es `not null` a nivel de columna (no se tocó en la
+ * migración 010, sigue siendo el shape de la dirección (a)) pero no tiene
+ * sentido para esta dirección — se manda `""` explícito, nunca se lee de
+ * vuelta para esta fila (ni `VinculoRow` ni ninguna pantalla de la
+ * dirección (b) la muestran).
+ */
+export async function crearVinculoComoCuidador(
+  supabase: Cliente,
+  cuidadorId: string
+): Promise<VinculoCuidador> {
+  for (let intento = 0; intento < 2; intento++) {
+    const { data, error } = await supabase
+      .from("vinculos_cuidador")
+      .insert({
+        cuidador_id: cuidadorId,
+        elder_id: null,
+        email_invitado: "",
+        codigo: generarCodigo(),
+        expira_at: new Date(Date.now() + MINUTOS_EXPIRACION_CODIGO * 60 * 1000).toISOString(),
+      })
+      .select()
+      .single();
+
+    if (!error) return data as VinculoCuidador;
+
+    const esColisionDeCodigo = error.code === "23505"; // unique_violation
+    if (!esColisionDeCodigo || intento === 1) {
+      throw new Error(`No se pudo generar el código de vínculo: ${error.message}`);
+    }
+  }
+
+  // Inalcanzable (el loop siempre retorna o lanza) — solo para conformar a TS.
+  throw new Error("No se pudo generar el código de vínculo.");
+}
+
+/**
+ * Reclama, para el usuario autenticado (el elder), un vínculo que un
+ * cuidador inició por código — envuelve la RPC `security definer`
+ * `reclamar_vinculo_como_elder`, simétrica a `reclamarInvitacion` de acá
+ * arriba (dirección a). Nunca deja escapar una excepción cruda de
+ * Postgres/RPC: se atrapa acá siempre.
+ */
+export async function reclamarVinculoComoElder(
+  supabase: Cliente,
+  codigo: string
+): Promise<ResultadoReclamoElder> {
+  const { data, error } = await supabase.rpc("reclamar_vinculo_como_elder", {
+    p_codigo: codigo,
+  });
+
+  if (error) {
+    const motivo = error.message;
+    if (motivo === "codigo_no_encontrado") {
+      return { error: "codigo_no_encontrado", mensaje: "Este código no existe o ya fue usado." };
+    }
+    if (motivo === "codigo_expirado") {
+      return { error: "codigo_expirado", mensaje: "Este código ya venció." };
+    }
+    if (motivo === "ya_vinculado") {
+      return { error: "ya_vinculado", mensaje: "Ya estás vinculado con esa persona." };
+    }
+    return {
+      error: "error_desconocido",
+      mensaje: `No se pudo procesar el código: ${error.message}`,
+    };
+  }
+
+  const fila = (data as { cuidador_id: string; nombre: string }[] | null)?.[0];
+  if (!fila) {
+    return { error: "error_desconocido", mensaje: "El código no devolvió datos del cuidador." };
+  }
+
+  return { cuidadorId: fila.cuidador_id, nombre: fila.nombre };
+}
+
+/**
+ * Todos los vínculos donde el usuario autenticado es cuidador (`cuidador_id`),
+ * en cualquier estado — a diferencia de `listarElders` (solo `aceptado`,
+ * vía RPC, para el árbol `/cuidar/*`), esta es para que el propio cuidador
+ * vea también sus códigos todavía pendientes (dirección b, con countdown
+ * de expiración) en `/cuidar` y `/app/perfil`. Lectura directa a la tabla
+ * (no una RPC): `vinculos_select_cuidador` (008_cuidadores.sql) ya permite
+ * `cuidador_id = auth.uid()` sin restricción de estado.
+ */
+export async function listarVinculosIniciadosPorMi(
+  supabase: Cliente,
+  cuidadorId: string
+): Promise<VinculoCuidador[]> {
+  const { data, error } = await supabase
+    .from("vinculos_cuidador")
+    .select("*")
+    .eq("cuidador_id", cuidadorId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(`No se pudieron leer los vínculos iniciados: ${error.message}`);
+  return data as VinculoCuidador[];
 }
 
 /**

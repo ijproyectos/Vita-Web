@@ -1,3 +1,8 @@
+// Respuesta al paso "¿para quién vas a usar la app?" del onboarding
+// (app/onboarding/para-quien/) — se pregunta una sola vez, gateada por
+// esta misma columna, no por onboarding_completado_at (ver migración 010).
+export type UsoApp = "yo" | "cuido" | "ambos";
+
 export type TipoCondicion = "permanente" | "temporal";
 
 export type Condicion = {
@@ -24,6 +29,7 @@ export type Perfil = {
   contacto_emergencia_nombre: string | null;
   contacto_emergencia_telefono: string | null;
   onboarding_completado_at: string | null;
+  uso_app: UsoApp | null;
 };
 
 // Subconjunto de campos editables inline desde Resumen de salud.

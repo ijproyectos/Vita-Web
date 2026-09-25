@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CambiosPerfil, Condicion, Perfil } from "./tipos";
+import type { CambiosPerfil, Condicion, Perfil, UsoApp } from "./tipos";
 
 type Cliente = SupabaseClient;
 
@@ -76,6 +76,17 @@ export async function quitarAlergia(
   const alergias = (perfil?.alergias ?? []).filter((a) => a !== alergia);
   await actualizarPerfilCrudo(supabase, usuarioId, { alergias });
   return alergias;
+}
+
+/**
+ * Guarda la respuesta al paso "¿para quién vas a usar la app?"
+ * (app/onboarding/para-quien/) — separada de `completarOnboarding` porque
+ * se escribe un paso antes (todavía no hay nombre/edad/condiciones), y no
+ * es un campo "editable inline desde Resumen de salud" (por eso tampoco
+ * entra en `CambiosPerfil`).
+ */
+export async function guardarUsoApp(supabase: Cliente, usuarioId: string, usoApp: UsoApp): Promise<void> {
+  await actualizarPerfilCrudo(supabase, usuarioId, { uso_app: usoApp });
 }
 
 /**
