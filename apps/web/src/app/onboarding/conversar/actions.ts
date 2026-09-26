@@ -30,8 +30,8 @@ export type ResultadoExtraerNombreEdad =
  * mini-form manual (nombre/edad) en vez de perder lo que la persona dijo.
  */
 export async function extraerNombreEdadAction(texto: string, relacion: string): Promise<ResultadoExtraerNombreEdad> {
-  await requireUser();
-  const resultado = await extraerNombreEdad(texto, relacion);
+  const usuario = await requireUser();
+  const resultado = await extraerNombreEdad(usuario.id, texto, relacion);
 
   if (!resultado.ok) {
     return { status: "error", message: resultado.error };
@@ -70,8 +70,8 @@ export type ResultadoExtraerMedicamentos =
   | { status: "error"; message: string };
 
 export async function extraerMedicamentosAction(texto: string): Promise<ResultadoExtraerMedicamentos> {
-  await requireUser();
-  const resultado = await extraerMedicamentos(texto);
+  const usuario = await requireUser();
+  const resultado = await extraerMedicamentos(usuario.id, texto);
 
   if (!resultado.ok) {
     return { status: "error", message: resultado.error };

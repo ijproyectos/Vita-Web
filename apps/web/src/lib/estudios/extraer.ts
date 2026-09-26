@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { DatosExtraidos } from "./tipos";
+import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 
 // Único punto de contacto con Anthropic para esto — mismo criterio que
 // generar-plan.ts de NutrIA (server-only, un archivo, salida estructurada
@@ -39,7 +40,11 @@ export type ExtraccionResultado =
  */
 const TIPOS_SOPORTADOS = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
 
-export async function extraerDatosEstudio(imagenBase64: string, mediaType: string): Promise<ExtraccionResultado> {
+export async function extraerDatosEstudio(
+  usuarioId: string,
+  imagenBase64: string,
+  mediaType: string
+): Promise<ExtraccionResultado> {
   // Antes esto caía a "image/jpeg" para cualquier tipo no soportado (ej.
   // HEIC, común en fotos de iPhone tomadas desde la galería) y mandaba los
   // bytes reales igual, etiquetados mal — la API podía "leer" una imagen
@@ -50,6 +55,15 @@ export async function extraerDatosEstudio(imagenBase64: string, mediaType: strin
       ok: false,
       error: `Formato de imagen no compatible para análisis automático (${mediaType || "desconocido"}). La foto se guarda igual.`,
     };
+  }
+
+  // Límite diario por usuario (lib/uso-ia/nucleo.ts) — chequeado ANTES de
+  // gastar nada: si ya lo superó, el estudio se guarda igual (mismo
+  // camino que cualquier otra falla de extracción), solo que sin
+  // consumir crédito de Anthropic para intentarlo.
+  const limite = await verificarLimiteDiario(usuarioId);
+  if (!limite.ok) {
+    return { ok: false, error: limite.mensaje };
   }
 
   try {
@@ -71,6 +85,11 @@ export async function extraerDatosEstudio(imagenBase64: string, mediaType: strin
         },
       ],
       output_config: { format: zodOutputFormat(EstudioExtraidoSchema) },
+    });
+
+    await registrarUsoIA(usuarioId, {
+      inputTokens: mensaje.usage.input_tokens,
+      outputTokens: mensaje.usage.output_tokens,
     });
 
     if (!mensaje.parsed_output) {

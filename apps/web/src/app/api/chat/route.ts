@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { TOOLS, ejecutarTool } from "@/lib/ai/tools";
 import * as chat from "@/lib/chat/nucleo";
+import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 
 export const runtime = "nodejs";
 
@@ -78,8 +79,20 @@ export async function POST(request: Request) {
 
       let textoAcumulado = ""; // se persiste como UN mensaje del asistente al final,
       // igual a como el cliente lo muestra en una sola burbuja.
+      let tokensInputAcumulados = 0;
+      let tokensOutputAcumulados = 0; // sumado por turno (lib/uso-ia/nucleo.ts) —
+      // el chat es el punto que más consume de los tres (loop de hasta
+      // MAX_TURNOS_TOOL_USE llamadas reales a Anthropic por mensaje del
+      // usuario), así que el límite diario se chequea acá antes de nada.
 
       try {
+        const limite = await verificarLimiteDiario(user.id);
+        if (!limite.ok) {
+          enviar({ error: limite.mensaje });
+          enviarFin();
+          return;
+        }
+
         // Un sesionId entrante solo se usa si de verdad es del usuario —
         // ver el comentario en sesionPerteneceAUsuario(). Si no matchea
         // (URL manipulada a mano, o la sesión ya no existe), se trata
@@ -118,6 +131,8 @@ export async function POST(request: Request) {
 
           const mensajeFinal = await respuesta.finalMessage();
           historial.push({ role: "assistant", content: mensajeFinal.content });
+          tokensInputAcumulados += mensajeFinal.usage.input_tokens;
+          tokensOutputAcumulados += mensajeFinal.usage.output_tokens;
 
           if (mensajeFinal.stop_reason !== "tool_use") break;
 
@@ -147,8 +162,13 @@ export async function POST(request: Request) {
           await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
         }
 
+        await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
         enviarFin();
       } catch (e) {
+        // Registra lo consumido hasta el turno que falló -- una excepción a
+        // mitad del loop no debe perder la contabilidad de los turnos que sí
+        // llegaron a completarse antes.
+        await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
         enviar({ error: e instanceof Error ? e.message : "Error desconocido." });
         enviarFin();
       } finally {

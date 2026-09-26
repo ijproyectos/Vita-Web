@@ -29,7 +29,7 @@ export async function subirEstudioAction(_prev: EstadoAccion, formData: FormData
 
     const bytes = await archivo.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
-    const resultado = await extraerDatosEstudio(base64, tipo);
+    const resultado = await extraerDatosEstudio(usuario.id, base64, tipo);
 
     await estudiosNucleo.agregar(supabase, usuario.id, {
       archivoPath: path,

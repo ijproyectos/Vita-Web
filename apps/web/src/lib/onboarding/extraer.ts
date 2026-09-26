@@ -3,6 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 
 // Único punto de contacto con Anthropic para el onboarding conversacional
 // nuevo — mismo criterio que lib/estudios/extraer.ts: server-only, un
@@ -43,10 +44,19 @@ export type ResultadoExtraccionNombreEdad = { ok: true; datos: NombreEdadExtraid
  * audio). `relacion` (ej. "Mamá") da contexto para desambiguar pronombres,
  * no se valida contra un catálogo cerrado. Nunca lanza.
  */
-export async function extraerNombreEdad(texto: string, relacion: string): Promise<ResultadoExtraccionNombreEdad> {
+export async function extraerNombreEdad(
+  usuarioId: string,
+  texto: string,
+  relacion: string
+): Promise<ResultadoExtraccionNombreEdad> {
   const textoLimpio = texto.trim();
   if (!textoLimpio) {
     return { ok: false, error: "No se recibió ningún texto para interpretar." };
+  }
+
+  const limite = await verificarLimiteDiario(usuarioId);
+  if (!limite.ok) {
+    return { ok: false, error: limite.mensaje };
   }
 
   try {
@@ -60,6 +70,11 @@ export async function extraerNombreEdad(texto: string, relacion: string): Promis
         },
       ],
       output_config: { format: zodOutputFormat(NombreEdadSchema) },
+    });
+
+    await registrarUsoIA(usuarioId, {
+      inputTokens: mensaje.usage.input_tokens,
+      outputTokens: mensaje.usage.output_tokens,
     });
 
     if (!mensaje.parsed_output) {
@@ -108,10 +123,15 @@ export type ResultadoExtraccionMedicamentos = { ok: true; datos: MedicamentoExtr
  * libre. Nunca lanza — degrada a `{ok:false}` para que la UI caiga a
  * carga manual en vez de perder lo que la persona dijo.
  */
-export async function extraerMedicamentos(texto: string): Promise<ResultadoExtraccionMedicamentos> {
+export async function extraerMedicamentos(usuarioId: string, texto: string): Promise<ResultadoExtraccionMedicamentos> {
   const textoLimpio = texto.trim();
   if (!textoLimpio) {
     return { ok: false, error: "No se recibió ningún texto para interpretar." };
+  }
+
+  const limite = await verificarLimiteDiario(usuarioId);
+  if (!limite.ok) {
+    return { ok: false, error: limite.mensaje };
   }
 
   try {
@@ -125,6 +145,11 @@ export async function extraerMedicamentos(texto: string): Promise<ResultadoExtra
         },
       ],
       output_config: { format: zodOutputFormat(MedicamentosExtraidosSchema) },
+    });
+
+    await registrarUsoIA(usuarioId, {
+      inputTokens: mensaje.usage.input_tokens,
+      outputTokens: mensaje.usage.output_tokens,
     });
 
     if (!mensaje.parsed_output) {
