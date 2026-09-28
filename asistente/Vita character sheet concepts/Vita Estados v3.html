@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vita — Estados v3</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<link rel="stylesheet" href="_ds/modernist-f84e54e0-9166-4d68-8aa6-79dadf8f402a/styles.css">
+<style>
+  three-d-stage:not(:defined){visibility:hidden}
+  html,body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)}
+  a{color:var(--color-text)} a:hover{color:var(--color-accent-700)}
+  .sheet{max-width:1680px;margin:0 auto;padding:48px 32px}
+  .head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:2px solid var(--color-divider)}
+  .head h1{margin:0;font-family:var(--font-heading);font-size:20px;font-weight:600;letter-spacing:-0.01em}
+  .seg{flex-wrap:wrap;background:#fff}
+  .seg-opt{font-size:15px;padding:10px 14px;min-height:44px;box-sizing:border-box}
+  .ctrls{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+  .ctrl{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .ctrl>span{font-family:var(--font-heading);font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;width:56px}
+  .shp{width:14px;height:18px;display:inline-block;background:currentColor}
+  .sw{width:16px;height:16px;display:inline-block;border:1px solid rgba(0,0,0,.25);position:relative;overflow:hidden}
+  .sw i{position:absolute;right:0;bottom:0;width:8px;height:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));border-left:2px solid var(--color-divider)}
+  .cell{display:flex;flex-direction:column;border-right:2px solid var(--color-divider);border-bottom:2px solid var(--color-divider)}
+  three-d-stage{height:auto;aspect-ratio:4/5;--stage-bg:#f3f2f2}
+  .label{display:flex;gap:12px;align-items:baseline;padding:14px 16px 18px;border-top:2px solid var(--color-divider);font-family:var(--font-heading)}
+  .label b{font-weight:700;font-size:13px;letter-spacing:.08em;color:var(--color-neutral-600,#777)}
+  .label span{font-weight:600;font-size:18px}
+</style>
+</head>
+<body>
+<main class="sheet">
+  <header class="head">
+    <h1>VITA — Estados · v3 color y forma</h1>
+    <div class="ctrls">
+      <div class="ctrl"><span>Color</span><div class="seg" id="palettes" role="radiogroup" aria-label="Color"></div></div>
+      <div class="ctrl"><span>Forma</span><div class="seg" id="shapes" role="radiogroup" aria-label="Forma"></div></div>
+    </div>
+  </header>
+  <section class="grid" id="grid"></section>
+</main>
+<script src="three-d-stage.js"></script>
+<script type="module">
+const PALETTES = [
+  { id: 'teal',    name: 'Teal',    body: '#0891b2', leaf: '#ffb547', eye: '#0b1a1f', spark: '#ffffff', blush: 0.35 },
+  { id: 'coral',   name: 'Coral',   body: '#f2785c', leaf: '#0e7490', eye: '#2a1512', spark: '#ffffff', blush: 0.5 },
+  { id: 'sol',     name: 'Sol',     body: '#f7c843', leaf: '#0e7490', eye: '#2a2208', spark: '#ffffff', blush: 0.7 },
+  { id: 'salvia',  name: 'Salvia',  body: '#5fae7e', leaf: '#fff3dc', eye: '#10261a', spark: '#ffffff', blush: 0.45 },
+  { id: 'lavanda', name: 'Lavanda', body: '#8c7ae6', leaf: '#ffd166', eye: '#17112e', spark: '#ffffff', blush: 0.45 },
+  { id: 'noche',   name: 'Noche',   body: '#1f3b5c', leaf: '#4fd1e8', eye: '#f7f3ea', spark: '#1f3b5c', blush: 0.3 },
+  { id: 'crema',   name: 'Crema (v2)', body: '#f1e2cd', leaf: '#0891b2', eye: '#1c2a2e', spark: '#ffffff', blush: 1 },
+];
+const SHAPES = [
+  { id: 'frijol', name: 'Frijol', top: 0.945, eyeY: 0.6, mouthY: 0.5, eyeX: 0.1, blushX: 0.155,
+    pts: [[0,0],[0.25,0.01],[0.33,0.08],[0.35,0.25],[0.345,0.5],[0.315,0.7],[0.245,0.84],[0.125,0.925],[0,0.945]] },
+  { id: 'pera', name: 'Cabezón', top: 0.94, eyeY: 0.62, mouthY: 0.52, eyeX: 0.12, blushX: 0.19,
+    pts: [[0,0],[0.2,0.01],[0.27,0.07],[0.29,0.2],[0.33,0.36],[0.38,0.52],[0.385,0.66],[0.33,0.8],[0.2,0.9],[0,0.94]] },
+  { id: 'bola', name: 'Bola', top: 0.82, eyeY: 0.47, mouthY: 0.375, eyeX: 0.12, blushX: 0.19,
+    pts: [[0,0],[0.22,0.02],[0.36,0.12],[0.42,0.3],[0.42,0.48],[0.36,0.66],[0.22,0.78],[0,0.82]] },
+  { id: 'gota', name: 'Gota', top: 1.0, eyeY: 0.43, mouthY: 0.33, eyeX: 0.105, blushX: 0.17,
+    pts: [[0,0],[0.27,0.02],[0.39,0.12],[0.425,0.28],[0.40,0.45],[0.32,0.61],[0.21,0.76],[0.11,0.89],[0.035,0.975],[0,1.0]] },
+  { id: 'piedra', name: 'Piedra', top: 0.68, eyeY: 0.42, mouthY: 0.325, eyeX: 0.125, blushX: 0.2,
+    pts: [[0,0],[0.36,0.005],[0.48,0.05],[0.52,0.15],[0.515,0.26],[0.47,0.40],[0.38,0.535],[0.24,0.635],[0.1,0.675],[0,0.68]] },
+];
+const STATES = [
+  { key: 'neutral',      label: 'Neutral' },
+  { key: 'escuchando',   label: 'Escuchando',   eyeScale: 1.08, arc: 1.05, mouthR: 0.052 },
+  { key: 'pensando',     label: 'Pensando',     eyeScale: 0.82, lookX: 0.022, lookY: 0.018, arc: 0.6, mouthR: 0.07, mouthX: 0.014 },
+  { key: 'hablando',     label: 'Hablando',     eyeScale: 0.94, talk: true },
+  { key: 'recordatorio', label: 'Recordatorio', eyeScale: 1.14, arc: 1.0, mouthR: 0.052 },
+  { key: 'felicitacion', label: 'Felicitación', happy: true, arc: 1.75, mouthR: 0.058 },
+  { key: 'preocupacion', label: 'Preocupación', eyeScale: 0.9, eyeTilt: 0.22, arc: 0.5, mouthR: 0.1, eyeY: -0.008 },
+];
+
+const grid = document.getElementById('grid');
+STATES.forEach((s, i) => {
+  grid.insertAdjacentHTML('beforeend', `<div class="cell" data-screen-label="${String(i + 1).padStart(2, '0')} ${s.label}">
+    <three-d-stage name="vita-03-${s.key}"></three-d-stage>
+    <div class="label"><b>${String(i + 1).padStart(2, '0')}</b><span>${s.label}</span></div></div>`);
+});
+const segEl = document.getElementById('palettes');
+const shpEl = document.getElementById('shapes');
+SHAPES.forEach(s => shpEl.insertAdjacentHTML('beforeend',
+  `<label class="seg-opt"><input type="radio" name="shp" value="${s.id}"><svg width="16" height="20" viewBox="-0.55 -1.02 1.1 1.04"><path fill="currentColor" d="M${s.pts.map(p=>p[0]+','+(-p[1])).join(' L')} L${s.pts.slice().reverse().map(p=>(-p[0])+','+(-p[1])).join(' L')}Z"/></svg>${s.name}</label>`));
+PALETTES.forEach(p => segEl.insertAdjacentHTML('beforeend',
+  `<label class="seg-opt"><input type="radio" name="pal" value="${p.id}"><span class="sw" style="background:${p.body}"><i style="background:${p.leaf}"></i></span>${p.name}</label>`));
+
+const stages = [...grid.querySelectorAll('three-d-stage')];
+const { THREE } = await stages[0].ready;
+await Promise.all(stages.map(s => s.ready));
+
+const bodyMat = new THREE.MeshPhysicalMaterial({ name: 'vita_body', color: '#fbf4ea', roughness: 0.82, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color('#ffffff') });
+const eyeMat = new THREE.MeshPhysicalMaterial({ name: 'vita_eye', color: '#1c2a2e', roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.2 });
+const sparkMat = new THREE.MeshBasicMaterial({ name: 'vita_eye_highlight', color: '#ffffff' });
+const leafMats = [];
+const FUR_LAYERS = 16, FUR_LEN = 0.026;
+const noiseData = new Uint8Array(256 * 256 * 4);
+for (let i = 0; i < 256 * 256; i++) { const v = Math.pow(Math.random(), 0.8) * 255; noiseData.set([v, v, v, 255], i * 4); }
+const noiseTex = new THREE.DataTexture(noiseData, 256, 256);
+noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping; noiseTex.magFilter = THREE.NearestFilter; noiseTex.needsUpdate = true;
+const furMats = [];
+for (let i = 1; i <= FUR_LAYERS; i++) {
+  const hgt = i / FUR_LAYERS;
+  const m = new THREE.MeshStandardMaterial({ name: 'vita_fuzz_' + i, color: '#fbf4ea', roughness: 0.95 });
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uH = { value: hgt }; sh.uniforms.uLen = { value: FUR_LEN }; sh.uniforms.uNoise = { value: noiseTex };
+    sh.vertexShader = 'uniform float uH; uniform float uLen; varying vec2 vFurUv;\n' + sh.vertexShader.replace('#include <begin_vertex>',
+      'vec3 transformed = position + normal * uH * uLen; transformed.y -= uH * uH * uLen * 0.35; vFurUv = uv;');
+    sh.fragmentShader = 'uniform float uH; uniform sampler2D uNoise; varying vec2 vFurUv;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+      '#include <map_fragment>\n float fn = texture2D(uNoise, vFurUv * vec2(150.0, 90.0)).r; if (fn < uH * 0.95 + 0.04) discard; diffuseColor.rgb *= mix(0.8, 1.04, uH);');
+  };
+  m.customProgramCacheKey = () => 'vitafur';
+  furMats.push(m);
+}
+const blushTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(236,140,128,0.75)'); gr.addColorStop(1, 'rgba(240,150,140,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const blushMat = new THREE.MeshBasicMaterial({ name: 'vita_blush', map: blushTex, transparent: true, depthWrite: false });
+
+let S, prof, bodyGeo, furGeo;
+function useShape(s) {
+  S = s;
+  const c = new THREE.SplineCurve(s.pts.map(p => new THREE.Vector2(p[0], p[1])));
+  prof = c.getSpacedPoints(120); prof[0].set(0, 0); prof[prof.length - 1].set(0, s.top);
+  bodyGeo?.dispose(); furGeo?.dispose();
+  bodyGeo = new THREE.LatheGeometry(prof, 128); furGeo = new THREE.LatheGeometry(prof, 96);
+}
+function rAt(y) {
+  for (let i = 0; i < prof.length - 1; i++) {
+    const a = prof[i], b = prof[i + 1];
+    if ((y >= a.y && y <= b.y) || (y <= a.y && y >= b.y)) return a.x + (b.x - a.x) * (b.y === a.y ? 0 : (y - a.y) / (b.y - a.y));
+  }
+  return 0;
+}
+function attach(parent, obj, x, y, inset = 0) {
+  const r = rAt(y), z = Math.sqrt(Math.max(r * r - x * x, 0));
+  const dr = (rAt(y + 0.004) - rAt(y - 0.004)) / 0.008;
+  const n = new THREE.Vector3(x, -r * dr, z).normalize();
+  const p = new THREE.Vector3(x, y, z).addScaledVector(n, -inset);
+  obj.position.copy(p); obj.lookAt(p.clone().add(n)); parent.add(obj);
+}
+
+function build(cfg) {
+  const root = new THREE.Group(); root.name = 'vita_03_' + cfg.key;
+  const pose = new THREE.Group(); pose.name = 'pose'; root.add(pose);
+  const body = new THREE.Mesh(bodyGeo, bodyMat); body.name = 'body'; pose.add(body);
+  furMats.forEach((m, i) => { const s = new THREE.Mesh(furGeo, m); s.name = 'fuzz_' + (i + 1); s.userData.fur = true; pose.add(s); });
+  [-1, 1].forEach(s => { const b = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.075), blushMat); b.name = s < 0 ? 'blush_L' : 'blush_R'; b.userData.fur = true; b.renderOrder = 2; attach(pose, b, s * S.blushX, (S.eyeY + S.mouthY) / 2 - 0.005, -FUR_LEN * 0.9); });
+
+  const leafMat = new THREE.MeshPhysicalMaterial({ name: 'vita_leaf', color: '#0891b2', roughness: 0.72, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color('#9be6f3'), emissive: '#0891b2', emissiveIntensity: 0 });
+  leafMats.push(leafMat);
+  const sprout = new THREE.Group(); sprout.name = 'sprout'; sprout.position.set(0, S.top + 0.003, 0);
+  const stem = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.06, 0), new THREE.Vector3(0.04, 0.09, 0)), 24, 0.011, 12), leafMat);
+  stem.name = 'stem';
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), leafMat);
+  leaf.name = 'leaf'; leaf.scale.set(0.105, 0.02, 0.055); leaf.position.set(0.12, 0.115, 0); leaf.rotation.z = 0.5;
+  sprout.add(stem, leaf); pose.add(sprout);
+
+  const es = cfg.eyeScale ?? 1, eyes = [];
+  [-1, 1].forEach(s => {
+    const e = new THREE.Group(); e.name = s < 0 ? 'eye_L' : 'eye_R';
+    if (cfg.happy) {
+      const arc = 2.3, a = new THREE.Mesh(new THREE.TorusGeometry(0.044, 0.012, 12, 40, arc), eyeMat);
+      a.name = e.name + '_happy'; a.rotation.z = Math.PI / 2 - arc / 2; a.position.y = -0.018; e.add(a);
+    } else {
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28), eyeMat);
+      ball.name = e.name + '_ball'; ball.scale.set(0.045 * (0.7 + 0.3 * es), 0.056 * es, 0.026);
+      const sp = new THREE.Mesh(new THREE.SphereGeometry(0.0105, 16, 12), sparkMat);
+      sp.name = e.name + '_highlight'; sp.position.set(0.015, 0.02 * es, 0.024);
+      e.add(ball, sp);
+    }
+    attach(pose, e, s * S.eyeX + (cfg.lookX ?? 0), S.eyeY + (cfg.lookY ?? 0) + (cfg.eyeY ?? 0), -FUR_LEN * 1.0);
+    if (cfg.eyeTilt) e.rotateZ(s * cfg.eyeTilt);
+    eyes.push(e);
+  });
+
+  const mouth = new THREE.Group(); mouth.name = 'mouth';
+  let disc = null;
+  if (cfg.talk) {
+    disc = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), eyeMat);
+    disc.name = 'mouth_open'; disc.scale.set(0.038, 0.025, 0.014); mouth.add(disc);
+    attach(pose, mouth, 0, S.mouthY + 0.005, -FUR_LEN * 1.05);
+  } else {
+    const arc = cfg.arc ?? 1.25, r = (cfg.mouthR ?? 0.05) * 1.25;
+    const t = new THREE.Mesh(new THREE.TorusGeometry(r, 0.0105, 12, 48, arc), eyeMat);
+    t.name = 'mouth_curve'; t.rotation.z = -Math.PI / 2 - arc / 2; t.position.y = r;
+    mouth.add(t); attach(pose, mouth, cfg.mouthX ?? 0, S.mouthY, -FUR_LEN * 1.05);
+  }
+  return { root, pose, sprout, eyes, leafMat, disc };
+}
+
+const noise = t => Math.sin(t * 7.1) * 0.5 + Math.sin(t * 11.3 + 1) * 0.3 + Math.sin(t * 17.7 + 2) * 0.2;
+const blink = (eyes, t, ph) => { const c = (t + ph) % 4.8; const k = c < 0.16 ? 1 - Math.sin(c / 0.16 * Math.PI) * 0.9 : 1; eyes.forEach(e => e.scale.y = k); };
+const breathe = (p, t, ph, amt = 1) => { const s = Math.sin(t * 1.3 + ph) * amt; p.scale.set(1 - 0.006 * s, 1 + 0.014 * s, 1 - 0.006 * s); };
+
+const ANIM = {
+  neutral: (v, t) => { breathe(v.pose, t, 0); blink(v.eyes, t, 0); v.sprout.rotation.z = Math.sin(t * 0.9) * 0.06; v.leafMat.emissiveIntensity = 0.05; },
+  escuchando: (v, t) => {
+    breathe(v.pose, t, 1); blink(v.eyes, t, 1.6);
+    v.pose.rotation.z = 0.06 + Math.sin(t * 0.7) * 0.01;
+    const lvl = Math.max(0, noise(t)) ;
+    v.sprout.rotation.z = 0.18 + lvl * 0.08; v.leafMat.emissiveIntensity = 0.2 + lvl * 0.7;
+  },
+  pensando: (v, t) => {
+    breathe(v.pose, t, 2, 0.7); blink(v.eyes, t, 3.1);
+    v.pose.rotation.z = -0.05 + Math.sin(t * 0.4) * 0.012;
+    v.sprout.rotation.z = Math.sin(t * 0.5) * 0.14 - 0.05;
+    v.leafMat.emissiveIntensity = 0.15 + 0.35 * (0.5 + 0.5 * Math.sin(t * 0.8));
+  },
+  hablando: (v, t) => {
+    breathe(v.pose, t, 3); blink(v.eyes, t, 0.9);
+    const m = Math.max(0, noise(t * 0.9) * 0.5 + 0.5);
+    v.disc.scale.set(0.038 + m * 0.008, 0.01 + m * 0.026, 0.014);
+    v.sprout.rotation.z = 0.05 + m * 0.07; v.leafMat.emissiveIntensity = 0.15 + m * 0.5;
+    v.pose.rotation.z = Math.sin(t * 0.8) * 0.015;
+  },
+  recordatorio: (v, t) => {
+    breathe(v.pose, t, 4); blink(v.eyes, t, 2.2);
+    v.pose.rotation.x = 0.04;
+    const c = t % 2.4, tap = c < 0.9 ? Math.sin(c / 0.45 * Math.PI) ** 2 : 0;
+    v.sprout.rotation.z = 0.12 + tap * 0.14; v.leafMat.emissiveIntensity = 0.25 + tap * 0.9;
+  },
+  felicitacion: (v, t) => {
+    const c = t % 2.6, hop = c < 0.5 ? Math.sin(c / 0.5 * Math.PI) : 0;
+    v.root.position.y = hop * 0.035;
+    v.pose.scale.set(1 + (c < 0.08 ? 0.02 : 0), 1 + hop * 0.02, 1);
+    v.pose.rotation.z = Math.sin(t * 1.1) * 0.02;
+    v.sprout.rotation.z = 0.2 + hop * 0.15; v.leafMat.emissiveIntensity = 0.45 + hop * 0.4;
+  },
+  preocupacion: (v, t) => {
+    breathe(v.pose, t, 5, 0.8); blink(v.eyes, t, 4);
+    v.pose.rotation.x = 0.07; v.pose.rotation.z = 0.04;
+    v.sprout.rotation.z = -0.35 + Math.sin(t * 0.6) * 0.03; v.leafMat.emissiveIntensity = 0.12;
+  },
+};
+
+let vitas = [], curPal;
+function buildAll() {
+  leafMats.length = 0;
+  vitas = STATES.map((cfg, i) => { const v = build(cfg); stages[i].setObject(v.root); v.root.traverse(o => { if (o.userData.fur) o.castShadow = false; }); v.cfg = cfg; return v; });
+  if (curPal) applyPalette(curPal);
+}
+function applyShape(id) {
+  const s = SHAPES.find(x => x.id === id) || SHAPES[0];
+  useShape(s); buildAll();
+  shpEl.querySelector(`input[value="${s.id}"]`).checked = true;
+  localStorage.setItem('vita_v3_shape', s.id);
+}
+shpEl.addEventListener('change', e => applyShape(e.target.value));
+
+function applyPalette(id) {
+  const p = PALETTES.find(x => x.id === id) || PALETTES[0];
+  curPal = p.id;
+  bodyMat.color.set(p.body); furMats.forEach(m => m.color.set(p.body));
+  eyeMat.color.set(p.eye); sparkMat.color.set(p.spark); blushMat.opacity = p.blush;
+  leafMats.forEach(m => { m.color.set(p.leaf); m.emissive.set(p.leaf); });
+  segEl.querySelector(`input[value="${p.id}"]`).checked = true;
+  localStorage.setItem('vita_v3_palette', p.id);
+}
+segEl.addEventListener('change', e => applyPalette(e.target.value));
+curPal = localStorage.getItem('vita_v3_palette') || 'teal';
+applyShape(localStorage.getItem('vita_v3_shape') || 'frijol');
+
+const t0 = performance.now();
+(function loop() { const t = (performance.now() - t0) / 1000; vitas.forEach(v => ANIM[v.cfg.key](v, t)); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>

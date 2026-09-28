@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { VitaAvatar } from "@/components/vita/v-mark";
+import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { VitaIcon } from "@/lib/vita-icons";
 import { HistorialDrawer } from "./historial-drawer";
 import { listarSesionesAction, listarMensajesAction } from "./chat-actions";
@@ -16,6 +17,21 @@ import type { EstadoVoz } from "@/lib/voz/tipos";
 type ItemHabla = { texto: string; audioPromise: Promise<Blob | null> };
 
 const SUGERENCIAS_INICIALES = ["Contame mi día", "Agregar medicamento", "Agendar turno"];
+
+// Mapea el mood decidido por la tool set_avatar_mood (lib/ai/tools.ts) al
+// subconjunto "emocional" de EstadoAvatar — nunca listening/thinking/
+// speaking, esos los decide este overlay en base al estado real de la
+// conversación (ver estadoAvatarHeader más abajo), no el modelo.
+const MOOD_A_ESTADO: Record<string, EstadoAvatar> = {
+  neutral: "idle",
+  happy: "happy",
+  empathetic: "empathetic",
+  calm: "calm",
+  alert: "alert",
+};
+function moodValido(mood: unknown): EstadoAvatar {
+  return MOOD_A_ESTADO[typeof mood === "string" ? mood : "neutral"] ?? "idle";
+}
 
 function mensajeBienvenida(): MensajeChatUI {
   return {
@@ -55,6 +71,11 @@ export function VitaChatOverlay() {
   const [historialAbierto, setHistorialAbierto] = useState(false);
   const [modoVoz, setModoVoz] = useState(false);
   const [hablando, setHablando] = useState(false);
+  // Último mood que decidió vita (set_avatar_mood) — no se toca por
+  // escuchar/pensar/hablar, solo lo actualiza cada respuesta nueva del
+  // asistente; el estado final del avatar (más abajo) le da prioridad a
+  // listening/thinking/speaking, que reflejan la conversación en curso.
+  const [moodAvatar, setMoodAvatar] = useState<EstadoAvatar>("idle");
   const finRef = useRef<HTMLDivElement>(null);
   const ultimoNonceInicial = useRef<number | null>(null);
   const modoVozRef = useRef(false); // valor fresco de modoVoz para leer dentro del callback async de la voz
@@ -284,6 +305,13 @@ export function VitaChatOverlay() {
               frases.forEach(encolarFraseVoz);
             }
           } else if ("action" in evento) {
+            // avatar_mood es puramente visual (no una tarjeta de acción) —
+            // se maneja aparte para no pisar el `accion` real de la burbuja
+            // cuando el modelo llama las dos tools en el mismo turno.
+            if (evento.action.type === "avatar_mood") {
+              setMoodAvatar(moodValido(evento.action.mood));
+              continue;
+            }
             setMensajes((prev) => {
               const copia = [...prev];
               copia[copia.length - 1] = { ...copia[copia.length - 1], accion: evento.action };
@@ -332,6 +360,18 @@ export function VitaChatOverlay() {
     }
   }
 
+  // Prioridad: lo que está pasando AHORA en la conversación (hablando >
+  // escuchando > pensando) siempre gana sobre el mood — un "feliz" viejo no
+  // debe taparse la voz/escucha real, y tampoco tiene sentido mostrarlo
+  // mientras vita todavía está pensando la respuesta que lo va a decidir.
+  const estadoAvatarHeader: EstadoAvatar = hablando
+    ? "speaking"
+    : estadoVoz === "grabando"
+      ? "listening"
+      : estadoVoz === "procesando" || enviando
+        ? "thinking"
+        : moodAvatar;
+
   return (
     <>
       <div
@@ -342,7 +382,7 @@ export function VitaChatOverlay() {
         aria-hidden={!abierto}
       >
         <div className="flex items-center gap-3 border-b px-5 pb-3.5 pt-[max(18px,env(safe-area-inset-top))] shadow-sm">
-          <VitaAvatar size={42} />
+          <VitaAvatar size={42} estado={estadoAvatarHeader} />
           <div className="min-w-0 flex-1">
             <div className="font-heading text-[16px] font-bold">vita</div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

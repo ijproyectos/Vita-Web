@@ -48,7 +48,13 @@ Reglas:
   por texto sin guardarlo.
 - Para agendar un turno necesitás al menos especialidad, fecha y hora — si
   falta algo, preguntalo antes de llamar a add_appointment.
-- No uses markdown ni listas largas — es un chat, respondé en prosa corta.`;
+- No uses markdown ni listas largas — es un chat, respondé en prosa corta.
+- Además de cualquier otra tool, llamá SIEMPRE a set_avatar_mood en cada
+  respuesta (podés combinarla con otras tools en el mismo turno) para que
+  el avatar de vita muestre la expresión adecuada. Elegí el mood por el
+  contenido/tono de tu respuesta, nunca por una palabra clave suelta, y no
+  lo menciones ni lo narres — es un efecto puramente visual que el usuario
+  no debe ver en el texto.`;
 
 function eventoSSE(data: unknown): string {
   return `data: ${JSON.stringify(data)}\n\n`;

@@ -26,6 +26,50 @@ const AUDIO_SILENCIO =
 let audioActual: HTMLAudioElement | null = null;
 let resolverActual: (() => void) | null = null;
 
+// Analizador de amplitud del audio de SALIDA (lo que vita dice), para el
+// lip-sync básico del avatar (VitaAvatar, ver estados-avatar.ts) — mismo
+// principio que el análisis de amplitud que ya hace useGrabacionVoz sobre
+// el micrófono, acá aplicado al <audio> que reproduce la respuesta.
+// AudioContext separado del de la grabación (son streams distintos,
+// entrada vs. salida) — se crea una sola vez y se reusa.
+let audioCtx: AudioContext | null = null;
+let elementoConAnalizador: HTMLAudioElement | null = null;
+let analizadorActual: AnalyserNode | null = null;
+
+/**
+ * Devuelve un AnalyserNode enganchado al `<audio>` que está sonando ahora
+ * mismo (o null si no hay nada reproduciéndose). `createMediaElementSource`
+ * solo se puede llamar UNA vez por elemento — por eso se cachea por
+ * elemento, no globalmente: cada frase de reproducirBlob() crea un
+ * `<audio>` nuevo. Reconecta a `destination` explícito, si no la salida
+ * quedaría muda (crear el source node redirige el audio por el grafo de
+ * Web Audio).
+ */
+export function obtenerAnalizadorDeVoz(): AnalyserNode | null {
+  if (typeof window === "undefined" || !audioActual) return null;
+  if (elementoConAnalizador === audioActual && analizadorActual) return analizadorActual;
+
+  try {
+    audioCtx ??= new AudioContext();
+    if (audioCtx.state === "suspended") void audioCtx.resume();
+
+    const source = audioCtx.createMediaElementSource(audioActual);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    elementoConAnalizador = audioActual;
+    analizadorActual = analyser;
+    return analyser;
+  } catch {
+    // Un elemento ya conectado en otro contexto, Web Audio no disponible,
+    // etc. — el lip-sync es un detalle visual, nunca debe romper la
+    // reproducción real de la voz.
+    return null;
+  }
+}
+
 export function desbloquearVoz(): void {
   if (typeof window === "undefined") return;
   const audio = new Audio(AUDIO_SILENCIO);

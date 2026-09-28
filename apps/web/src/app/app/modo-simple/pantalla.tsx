@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VitaAvatar } from "@/components/vita/v-mark";
+import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { cn } from "@/lib/utils";
 import { desbloquearVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
@@ -70,6 +71,10 @@ export function Pantalla({
   const fase: Fase = confirmadoLocal ? "confirmado" : !proxima ? "descanso" : vencida ? "alertado" : "esperando";
   const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
   const [pendiente, startTransition] = useTransition();
+  // Para que el avatar muestre "speaking" mientras suena el anuncio por voz
+  // — reproducirAnuncio ya esperaba el audio entero, esto solo expone esa
+  // ventana como estado visible.
+  const [reproduciendoAudio, setReproduciendoAudio] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), INTERVALO_REFRESCO_MS);
@@ -78,8 +83,13 @@ export function Pantalla({
 
   async function reproducirAnuncio() {
     if (!proxima) return;
-    const blob = await obtenerAudioBlob(fraseAnuncio(proxima));
-    await reproducirBlob(blob);
+    setReproduciendoAudio(true);
+    try {
+      const blob = await obtenerAudioBlob(fraseAnuncio(proxima));
+      await reproducirBlob(blob);
+    } finally {
+      setReproduciendoAudio(false);
+    }
   }
 
   function alDesbloquear() {
@@ -140,11 +150,30 @@ export function Pantalla({
     }
   }
 
+  // Prioridad igual que en el chat (vita-chat-overlay.tsx): lo que está
+  // pasando AHORA (hablando el anuncio > escuchando la confirmación por
+  // voz) le gana a la fase de fondo. "alertado" usa "alert" — es
+  // literalmente el caso que el brief define como esa expresión ("existe
+  // información que requiere especial atención"), una dosis vencida.
+  const estadoAvatar: EstadoAvatar = reproduciendoAudio
+    ? "speaking"
+    : estadoVoz === "grabando" || estadoVoz === "escuchando"
+      ? "listening"
+      : estadoVoz === "procesando"
+        ? "thinking"
+        : fase === "alertado"
+          ? "alert"
+          : fase === "confirmado"
+            ? "happy"
+            : fase === "descanso"
+              ? "calm"
+              : "idle";
+
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-background">
       <BotonSalir />
 
-      {fase === "descanso" && <FaseDescanso />}
+      {fase === "descanso" && <FaseDescanso estado={estadoAvatar} />}
 
       {fase === "confirmado" && proxima && <FaseConfirmado nombre={proxima.nombre} />}
 
@@ -159,6 +188,7 @@ export function Pantalla({
           faltanMinutos={faltanMinutos}
           confirmando={pendiente}
           escuchandoVoz={estadoVoz !== "inactivo"}
+          estado={estadoAvatar}
           onConfirmar={confirmar}
           onReescuchar={reproducirAnuncio}
           onAlternarVoz={alternarEscuchaVoz}
@@ -207,6 +237,7 @@ function FaseDosisPendiente({
   faltanMinutos,
   confirmando,
   escuchandoVoz,
+  estado,
   onConfirmar,
   onReescuchar,
   onAlternarVoz,
@@ -216,6 +247,7 @@ function FaseDosisPendiente({
   faltanMinutos: number;
   confirmando: boolean;
   escuchandoVoz: boolean;
+  estado: EstadoAvatar;
   onConfirmar: () => void;
   onReescuchar: () => void;
   onAlternarVoz: () => void;
@@ -223,6 +255,7 @@ function FaseDosisPendiente({
   return (
     <>
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+        <VitaAvatar size={56} estado={estado} />
         <div
           className={cn(
             "flex size-24 items-center justify-center rounded-full",
@@ -294,10 +327,10 @@ function FaseConfirmado({ nombre }: { nombre: string }) {
   );
 }
 
-function FaseDescanso() {
+function FaseDescanso({ estado }: { estado: EstadoAvatar }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-      <VitaAvatar size={64} />
+      <VitaAvatar size={64} estado={estado} />
       <div className="font-heading text-[24px] font-extrabold">Por ahora no tenés medicación pendiente</div>
       <div className="text-[15px] text-muted-foreground">Te vamos a avisar cuando sea la hora.</div>
     </div>

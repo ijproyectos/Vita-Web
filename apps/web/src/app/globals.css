@@ -160,6 +160,33 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Animaciones del avatar de vita (VitaAvatar, components/vita/v-mark.tsx)
+   — todas sutiles a propósito (pedido explícito: "no exagerar", pensado
+   para adultos mayores): transform/opacity nomás, nunca color ni layout,
+   así que no compiten con prefers-reduced-motion en accesibilidad — ese
+   media query directamente pone animation:none en el componente, estos
+   keyframes ni se evalúan en ese caso. */
+@keyframes vita-respirar {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.015) translateY(-1.5%); }
+}
+@keyframes vita-escuchar {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.02) rotate(-1deg); }
+}
+@keyframes vita-pensar {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1%) rotate(1.2deg); }
+}
+@keyframes vita-feliz {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4%); }
+}
+@keyframes vita-alerta {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

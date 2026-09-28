@@ -190,6 +190,22 @@ export const TOOLS: Anthropic.Tool[] = [
       "No consulta datos — le indica a la interfaz que muestre el widget con todos los medicamentos. Usar cuando el usuario pida ver la lista completa.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "set_avatar_mood",
+    description:
+      "No consulta ni cambia datos — le indica a la interfaz qué expresión mostrar en el avatar de vita mientras responde. Llamala SIEMPRE, en cada respuesta, además de cualquier otra tool que uses. Elegí el mood según el CONTENIDO de tu respuesta, nunca por palabras clave sueltas: 'happy' para buenas noticias, felicitaciones o logros del usuario; 'empathetic' si el usuario expresa preocupación, tristeza, dolor o dificultad; 'alert' SOLO si hay algo que de verdad requiere atención especial (una dosis vencida hace rato, un dato de salud que suena serio) — no lo uses para avisos triviales; 'calm' cuando estés acompañando o tranquilizando al usuario; 'neutral' para el resto (información de rutina, confirmaciones simples). No exageres: la mayoría de las respuestas son 'neutral'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        mood: {
+          type: "string",
+          enum: ["neutral", "happy", "empathetic", "calm", "alert"],
+          description: "La expresión que mejor representa el tono de ESTA respuesta puntual.",
+        },
+      },
+      required: ["mood"],
+    },
+  },
 ];
 
 export type AccionUI = { type: string; [clave: string]: unknown };
@@ -383,6 +399,13 @@ export async function ejecutarTool(
 
     case "show_all_medications":
       return { contenido: "Mostrado.", accionUI: { type: "show_all_medications" } };
+
+    case "set_avatar_mood": {
+      const mood = String(input.mood ?? "neutral");
+      // "Ok." nunca se narra — el chat solo muestra accionUI vía SSE, no
+      // el contenido de esta tool (mismo mecanismo que show_today_medications).
+      return { contenido: "Ok.", accionUI: { type: "avatar_mood", mood } };
+    }
 
     default:
       return { contenido: `Tool desconocida: ${nombre}` };

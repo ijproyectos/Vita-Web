@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vita — Exploración de personaje</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+    "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js",
+    "three/addons/exporters/OBJExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js",
+    "three/addons/exporters/GLTFExporter.js": "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js"
+  },
+  "integrity": {
+    "https://unpkg.com/three@0.184.0/build/three.module.js": "sha384-8FCZ1eVO6it4+pbec2aDtnTrwjWXZLJRC+MAGCIPDgsYnUrl/E0A2YlF8ioMKI/J",
+    "https://unpkg.com/three@0.184.0/build/three.core.js": "sha384-dw2ooPewaEIrAgl6oFDBmmBWCE9oW9LxRGcfwZ0hLvEprzo202wXl7vCYHRlSnOT",
+    "https://unpkg.com/three@0.184.0/examples/jsm/controls/OrbitControls.js": "sha384-4rziNxOBZKQ69i+w+f89KJ55TCYquwchVbByQwmaOeIOXdOU2PLDn3kOfXHwIJC9",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/OBJExporter.js": "sha384-nbwtoZENJD3Vq+ACK0CuGQdPMuDWHkamC2KJD70EV5nfg6jQjfppKOea07YJN+N3",
+    "https://unpkg.com/three@0.184.0/examples/jsm/exporters/GLTFExporter.js": "sha384-VofkvpG6HERhFCYbsUOHeNXBCqID2nfqkQqnVzE1jc/oPcz+qJ13ADdXH08hE+cQ"
+  }
+}
+</script>
+<link rel="stylesheet" href="_ds/modernist-f84e54e0-9166-4d68-8aa6-79dadf8f402a/styles.css">
+<style>
+  three-d-stage:not(:defined){visibility:hidden}
+  html,body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)}
+  a{color:var(--color-text)} a:hover{color:var(--color-accent-700)}
+  .sheet{max-width:1680px;margin:0 auto;padding:var(--space-8, 48px) var(--space-6, 32px)}
+  .head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:2px solid var(--color-divider)}
+  .head h1{margin:0;font-family:var(--font-heading);font-size:20px;font-weight:600;letter-spacing:-0.01em}
+  .head span{font-size:14px;color:var(--color-neutral-700, #555)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));border-bottom:2px solid var(--color-divider)}
+  .cell{display:flex;flex-direction:column;border-right:2px solid var(--color-divider)}
+  .cell:last-child{border-right:none}
+  three-d-stage{height:auto;aspect-ratio:4/5;--stage-bg:#f3f2f2}
+  .label{padding:16px 0 20px 16px;border-top:2px solid var(--color-divider);font-family:var(--font-heading);font-weight:700;font-size:18px;letter-spacing:0.08em}
+</style>
+</head>
+<body>
+<main class="sheet">
+  <header class="head">
+    <h1>Vita — Exploración de personaje</h1>
+    <span>Etapa 1 · Identidad visual</span>
+  </header>
+  <section class="grid">
+    <div class="cell"><three-d-stage id="v1" name="vita-01"></three-d-stage><div class="label">VITA 01</div></div>
+    <div class="cell"><three-d-stage id="v2" name="vita-02"></three-d-stage><div class="label">VITA 02</div></div>
+    <div class="cell"><three-d-stage id="v3" name="vita-03"></three-d-stage><div class="label">VITA 03</div></div>
+    <div class="cell"><three-d-stage id="v4" name="vita-04"></three-d-stage><div class="label">VITA 04</div></div>
+  </section>
+</main>
+<script src="three-d-stage.js"></script>
+<script type="module">
+const stages = [...document.querySelectorAll('three-d-stage')];
+const { THREE } = await stages[0].ready;
+await Promise.all(stages.map(s => s.ready));
+
+const TEAL = '#0891b2';
+const velvet = (name, color, sheen, rough = 0.82) => new THREE.MeshPhysicalMaterial({
+  name, color, roughness: rough, metalness: 0, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color(sheen)
+});
+const glow = (name, i = 1.4) => new THREE.MeshStandardMaterial({ name, color: '#3fb8d2', emissive: TEAL, emissiveIntensity: i, roughness: 0.45 });
+const eyeMat = new THREE.MeshPhysicalMaterial({ name: 'vita_eye', color: '#1c2a2e', roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.2 });
+const sparkMat = new THREE.MeshBasicMaterial({ name: 'vita_eye_highlight', color: '#ffffff' });
+const cream = velvet('vita_cream', '#fbf4ea', '#ffffff');
+const tealVelvet = velvet('vita_teal', TEAL, '#9be6f3', 0.75);
+
+function profile(pts, n = 120) {
+  const c = new THREE.SplineCurve(pts.map(p => new THREE.Vector2(p[0], p[1])));
+  const out = c.getSpacedPoints(n);
+  out[0].set(0, pts[0][1]); out[out.length - 1].set(0, pts[pts.length - 1][1]);
+  return out;
+}
+function rAt(prof, y) {
+  for (let i = 0; i < prof.length - 1; i++) {
+    const a = prof[i], b = prof[i + 1];
+    if ((y >= a.y && y <= b.y) || (y <= a.y && y >= b.y)) {
+      const t = b.y === a.y ? 0 : (y - a.y) / (b.y - a.y);
+      return a.x + (b.x - a.x) * t;
+    }
+  }
+  return 0;
+}
+function attach(parent, obj, prof, x, y, inset = 0) {
+  const r = rAt(prof, y), z = Math.sqrt(Math.max(r * r - x * x, 0));
+  const dr = (rAt(prof, y + 0.004) - rAt(prof, y - 0.004)) / 0.008;
+  const n = new THREE.Vector3(x, -r * dr, z).normalize();
+  const p = new THREE.Vector3(x, y, z).addScaledVector(n, -inset);
+  obj.position.copy(p); obj.lookAt(p.clone().add(n)); parent.add(obj);
+  return obj;
+}
+function body(name, pts, mat) {
+  const prof = profile(pts);
+  const m = new THREE.Mesh(new THREE.LatheGeometry(prof, 128), mat);
+  m.name = name;
+  return { mesh: m, prof };
+}
+function face(g, prof, { eyeX, eyeY, mouthY, eyeH = 0.05, eyeW = 0.029, mouthR = 0.05, arc = 1.25 }) {
+  const eyes = [];
+  [-1, 1].forEach(s => {
+    const e = new THREE.Group(); e.name = s < 0 ? 'eye_L' : 'eye_R';
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28), eyeMat);
+    ball.name = e.name + '_ball'; ball.scale.set(eyeW, eyeH, 0.02);
+    const sp = new THREE.Mesh(new THREE.SphereGeometry(0.0075, 16, 12), sparkMat);
+    sp.name = e.name + '_highlight'; sp.position.set(eyeW * 0.35, eyeH * 0.38, 0.019);
+    e.add(ball, sp);
+    attach(g, e, prof, s * eyeX, eyeY, 0.007);
+    eyes.push(e);
+  });
+  const m = new THREE.Group(); m.name = 'mouth';
+  const t = new THREE.Mesh(new THREE.TorusGeometry(mouthR, 0.0075, 12, 48, arc), eyeMat);
+  t.name = 'mouth_curve'; t.rotation.z = -Math.PI / 2 - arc / 2; t.position.y = mouthR;
+  m.add(t); attach(g, m, prof, 0, mouthY, 0.004);
+  return eyes;
+}
+
+const anim = [];
+
+// VITA 01 — Gota: teardrop with a teal-lit crown (vertex gradient)
+{
+  const g = new THREE.Group(); g.name = 'vita_01';
+  const mat = velvet('vita_cream_gradient', '#ffffff', '#ffffff');
+  mat.vertexColors = true;
+  const { mesh, prof } = body('body', [[0,0],[0.27,0.02],[0.39,0.12],[0.425,0.28],[0.40,0.45],[0.32,0.61],[0.21,0.76],[0.11,0.89],[0.035,0.975],[0,1.0]], mat);
+  const pos = mesh.geometry.attributes.position, cols = [];
+  const c0 = new THREE.Color('#fbf4ea'), c1 = new THREE.Color(TEAL), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i), t = THREE.MathUtils.smoothstep(y, 0.66, 0.97);
+    c.copy(c0).lerp(c1, t); cols.push(c.r, c.g, c.b);
+  }
+  mesh.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.add(mesh);
+  const eyes = face(g, prof, { eyeX: 0.105, eyeY: 0.43, mouthY: 0.33 });
+  stages[0].setObject(g);
+  anim.push(t => { breathe(g, t, 0); blink(eyes, t, 0.3); g.rotation.z = Math.sin(t * 0.6) * 0.015; });
+}
+
+// VITA 02 — Piedra: wide pebble with a luminous breathing seam
+{
+  const g = new THREE.Group(); g.name = 'vita_02';
+  const { mesh, prof } = body('body', [[0,0],[0.36,0.005],[0.48,0.05],[0.52,0.15],[0.515,0.26],[0.47,0.40],[0.38,0.535],[0.24,0.635],[0.1,0.675],[0,0.68]], cream);
+  g.add(mesh);
+  const seamMat = glow('vita_glow_seam', 1.2);
+  const y = 0.19, seam = new THREE.Mesh(new THREE.TorusGeometry(rAt(prof, y) - 0.003, 0.014, 20, 160), seamMat);
+  seam.name = 'seam'; seam.rotation.x = Math.PI / 2; seam.position.y = y; g.add(seam);
+  const eyes = face(g, prof, { eyeX: 0.125, eyeY: 0.42, mouthY: 0.325, mouthR: 0.055 });
+  stages[1].setObject(g);
+  anim.push(t => { breathe(g, t, 1.1); blink(eyes, t, 1.7); seamMat.emissiveIntensity = 0.9 + 0.6 * (0.5 + 0.5 * Math.sin(t * 1.3 + 1.1)); });
+}
+
+// VITA 03 — Brote: tall bean with a single teal leaf
+{
+  const g = new THREE.Group(); g.name = 'vita_03';
+  const { mesh, prof } = body('body', [[0,0],[0.25,0.01],[0.33,0.08],[0.35,0.25],[0.345,0.5],[0.315,0.7],[0.245,0.84],[0.125,0.925],[0,0.945]], cream);
+  g.add(mesh);
+  const sprout = new THREE.Group(); sprout.name = 'sprout'; sprout.position.set(0, 0.935, 0);
+  const stem = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.06, 0), new THREE.Vector3(0.04, 0.09, 0)), 24, 0.011, 12), tealVelvet);
+  stem.name = 'stem';
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), tealVelvet);
+  leaf.name = 'leaf'; leaf.scale.set(0.105, 0.02, 0.055); leaf.position.set(0.12, 0.115, 0); leaf.rotation.z = 0.5;
+  sprout.add(stem, leaf); g.add(sprout);
+  const eyes = face(g, prof, { eyeX: 0.1, eyeY: 0.6, mouthY: 0.5 });
+  stages[2].setObject(g);
+  anim.push(t => { breathe(g, t, 2.2); blink(eyes, t, 3.1); sprout.rotation.z = Math.sin(t * 0.9) * 0.08; });
+}
+
+// VITA 04 — Abrazo: soft gourd holding a small light
+{
+  const g = new THREE.Group(); g.name = 'vita_04';
+  const { mesh, prof } = body('body', [[0,0],[0.26,0.01],[0.355,0.1],[0.375,0.22],[0.34,0.36],[0.285,0.45],[0.285,0.52],[0.315,0.62],[0.305,0.75],[0.235,0.86],[0.12,0.925],[0,0.94]], cream);
+  g.add(mesh);
+  const orbMat = glow('vita_glow_orb', 1.6);
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.075, 48, 32), orbMat);
+  orb.name = 'light'; orb.position.set(0, 0.25, 0.39); g.add(orb);
+  const pl = new THREE.PointLight(TEAL, 0.25, 0.9, 2); pl.name = 'light_glow'; pl.position.copy(orb.position).add(new THREE.Vector3(0, 0, 0.05)); g.add(pl);
+  [-1, 1].forEach(s => {
+    const arm = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28), cream);
+    arm.name = s < 0 ? 'arm_L' : 'arm_R';
+    arm.scale.set(0.065, 0.15, 0.07);
+    arm.position.set(s * 0.2, 0.26, 0.29);
+    arm.rotation.set(0.2, -s * 0.7, s * 1.05);
+    g.add(arm);
+  });
+  const eyes = face(g, prof, { eyeX: 0.1, eyeY: 0.72, mouthY: 0.63, eyeH: 0.046, eyeW: 0.027, mouthR: 0.045 });
+  stages[3].setObject(g);
+  anim.push(t => { breathe(g, t, 3.3); blink(eyes, t, 2.4); const k = 0.5 + 0.5 * Math.sin(t * 1.3 + 3.3); orbMat.emissiveIntensity = 1.1 + 0.8 * k; pl.intensity = 0.15 + 0.2 * k; });
+}
+
+function breathe(g, t, ph) {
+  const s = Math.sin(t * 1.3 + ph);
+  g.scale.set(1 - 0.006 * s, 1 + 0.014 * s, 1 - 0.006 * s);
+}
+function blink(eyes, t, ph) {
+  const cyc = (t + ph) % 4.6, k = cyc < 0.16 ? 1 - Math.sin((cyc / 0.16) * Math.PI) * 0.9 : 1;
+  eyes.forEach(e => e.scale.y = k);
+}
+const t0 = performance.now();
+(function loop() { const t = (performance.now() - t0) / 1000; anim.forEach(f => f(t)); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>
