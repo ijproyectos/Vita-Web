@@ -382,7 +382,7 @@ export function VitaChatOverlay() {
         aria-hidden={!abierto}
       >
         <div className="flex items-center gap-3 border-b px-5 pb-3.5 pt-[max(18px,env(safe-area-inset-top))] shadow-sm">
-          <VitaAvatar size={42} estado={estadoAvatarHeader} />
+          <VitaAvatar size={54} estado={estadoAvatarHeader} />
           <div className="min-w-0 flex-1">
             <div className="font-heading text-[16px] font-bold">vita</div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

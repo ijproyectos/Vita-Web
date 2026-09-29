@@ -255,7 +255,7 @@ function FaseDosisPendiente({
   return (
     <>
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <VitaAvatar size={56} estado={estado} />
+        <VitaAvatar size={72} estado={estado} />
         <div
           className={cn(
             "flex size-24 items-center justify-center rounded-full",
@@ -330,7 +330,7 @@ function FaseConfirmado({ nombre }: { nombre: string }) {
 function FaseDescanso({ estado }: { estado: EstadoAvatar }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-      <VitaAvatar size={64} estado={estado} />
+      <VitaAvatar size={88} estado={estado} />
       <div className="font-heading text-[24px] font-extrabold">Por ahora no tenés medicación pendiente</div>
       <div className="text-[15px] text-muted-foreground">Te vamos a avisar cuando sea la hora.</div>
     </div>

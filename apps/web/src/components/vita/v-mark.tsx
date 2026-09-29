@@ -2,8 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { ANIMACION_POR_ESTADO, assetPorEstado, type EstadoAvatar } from "./estados-avatar";
+import {
+  ANIMACION_POR_ESTADO,
+  assetIdle,
+  assetPorEstado,
+  CUADROS_IDLE,
+  INTERVALO_IDLE_MS,
+  INTERVALO_IDLE_MS_CALM,
+  type EstadoAvatar,
+} from "./estados-avatar";
 import { useCuadroHabla } from "./usar-cuadro-habla";
+import { useCuadroIdle } from "./usar-cuadro-idle";
 
 // Marca "v" geométrica de vita.ia — se mantiene tal cual para los lugares
 // que todavía necesitan el ícono chico plano (favicon-like), no el
@@ -28,18 +37,25 @@ export function VMark({ size = 30, color = "#fff" }: { size?: number; color?: st
 
 /**
  * El personaje de vita — 8 estados (EstadoAvatar, estados-avatar.ts),
- * ninguno exagerado: un solo frame estático + una animación CSS sutil
- * (respirar/mecerse) por estado, más lip-sync básico real (3 frames de
- * boca, elegidos por la amplitud del audio, no al azar) mientras
- * `estado === "speaking"`. Crossfade simple entre estados (nunca un corte
- * duro) y `prefers-reduced-motion` apaga toda animación de movimiento —
- * el estado se sigue viendo (cambia la expresión), solo no respira/mece.
+ * ninguno exagerado. "idle"/"calm" reproducen el loop real de 30 frames
+ * capturado del character sheet (respira + parpadea + mece la hoja, no una
+ * aproximación CSS); el resto es un frame estático + animación CSS sutil,
+ * salvo `estado === "speaking"` que tiene lip-sync básico real (3 frames de
+ * boca elegidos por la amplitud del audio, no al azar). Crossfade simple
+ * entre estados (nunca un corte duro) y `prefers-reduced-motion` congela el
+ * loop idle en su primer frame y apaga la animación CSS del resto — el
+ * estado se sigue viendo (cambia la expresión), solo no se mueve.
  *
  * Reemplaza el círculo con la V que tenía antes — mismo nombre/prop
  * `size`, así que los 8 call sites existentes (chat, modo simple,
  * onboarding, burbujas de mensaje) no necesitan tocarse salvo los que
  * quieran empezar a pasar `estado` de verdad.
  */
+// Módulo-level, no por instancia — varios <VitaAvatar> pueden montarse en la
+// misma pantalla (ver call sites) y la precarga del loop idle solo necesita
+// dispararse una vez por carga de página.
+let precargaIdleHecha = false;
+
 export function VitaAvatar({ size = 36, estado = "idle" }: { size?: number; estado?: EstadoAvatar }) {
   const hablando = estado === "speaking";
   const cuadroHabla = useCuadroHabla(hablando);
@@ -60,7 +76,26 @@ export function VitaAvatar({ size = 36, estado = "idle" }: { size?: number; esta
     return () => mq.removeEventListener("change", escuchar);
   }, []);
 
-  const src = assetPorEstado(estado, cuadroHabla);
+  const enIdle = estado === "idle" || estado === "calm";
+  const cuadroIdle = useCuadroIdle(
+    enIdle && !prefiereMenosMovimiento,
+    estado === "calm" ? INTERVALO_IDLE_MS_CALM : INTERVALO_IDLE_MS
+  );
+
+  // Precarga los 30 frames del loop idle una sola vez por sesión de
+  // navegador (no por cada avatar montado) — si no, la primera vez que se
+  // ve "idle" el loop tartamudea pidiendo cada frame nuevo recién cuando le
+  // toca mostrarse; después queda en la cache HTTP del navegador.
+  useEffect(() => {
+    if (precargaIdleHecha) return;
+    precargaIdleHecha = true;
+    for (let f = 0; f < CUADROS_IDLE; f++) {
+      const img = new window.Image();
+      img.src = assetIdle(f);
+    }
+  }, []);
+
+  const src = assetPorEstado(estado, cuadroHabla, cuadroIdle);
 
   return (
     <div
@@ -82,11 +117,13 @@ export function VitaAvatar({ size = 36, estado = "idle" }: { size?: number; esta
           height={600}
           unoptimized
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
-          // El cambio de estado reemplaza el <img> (key nueva) — la
-          // transición de opacidad la da la propia carga de la imagen
-          // (decode async) más el fade CSS del contenedor padre si el
-          // caller lo envuelve; acá alcanza con no cortar duro el layout.
-          key={src}
+          // key por ESTADO, no por src: un cambio de estado real (idle →
+          // speaking, etc.) sí remonta el <img> (la transición la da el
+          // decode async de la imagen nueva); pero dentro del mismo estado
+          // — cada frame del loop idle, cada frame de boca al hablar — es
+          // solo un cambio de `src` en el mismo nodo, sin re-montar 30
+          // veces por loop.
+          key={estado}
           priority
         />
       </div>

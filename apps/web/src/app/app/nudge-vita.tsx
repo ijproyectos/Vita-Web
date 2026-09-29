@@ -15,7 +15,7 @@ export function NudgeVita() {
       onClick={() => abrir("¿Cómo te sentís hoy? Contame y lo registro en tu historial.")}
       className="flex items-center gap-3 rounded-[20px] bg-secondary p-3.5 text-left"
     >
-      <VitaAvatar size={36} />
+      <VitaAvatar size={44} />
       <div className="flex-1">
         <div className="font-heading text-[14px] font-bold">¿Cómo te sentís hoy?</div>
         <div className="text-xs text-muted-foreground">Contame y lo registro en tu historial.</div>
