@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { VMark } from "@/components/vita/v-mark";
+import { VitaAvatar } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,13 @@ export function BottomNav() {
           aria-label="Abrir chat con vita"
           className="absolute -top-7 flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] shadow-[0_14px_28px_rgba(8,145,178,0.35),0_6px_12px_rgba(8,145,178,0.22)] transition-transform active:scale-95"
         >
-          <VMark size={30} />
+          {/* El personaje, no el ícono plano — pedido explícito: el mismo
+              avatar del chat también presente acá, en el botón central que
+              abre la conversación desde cualquier pantalla. "idle" porque
+              acá no hay una conversación en curso todavía (es el gesto que
+              la arranca), mismo criterio que el resto de los call sites
+              estáticos de VitaAvatar. */}
+          <VitaAvatar size={48} />
         </button>
         <span className="absolute bottom-[10px] font-heading text-[11px] font-bold tracking-tight text-primary">
           vita
