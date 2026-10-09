@@ -156,6 +156,23 @@ export function VitaChatOverlay() {
     cerrar();
   }
 
+  // Escape cierra el chat. Se lee cerrarChat vía ref (actualizada en un
+  // efecto, nunca durante el render) para no re-suscribir el listener en
+  // cada render. Con el drawer de historial abierto, Escape lo cierra a él
+  // (lo maneja el propio Sheet) y no al chat entero.
+  const cerrarChatRef = useRef(cerrarChat);
+  useEffect(() => {
+    cerrarChatRef.current = cerrarChat;
+  });
+  useEffect(() => {
+    if (!abierto || historialAbierto) return;
+    function alPresionar(e: KeyboardEvent) {
+      if (e.key === "Escape") cerrarChatRef.current();
+    }
+    window.addEventListener("keydown", alPresionar);
+    return () => window.removeEventListener("keydown", alPresionar);
+  }, [abierto, historialAbierto]);
+
   async function alternarModoVoz() {
     if (modoVoz) {
       detenerVoz();
@@ -374,19 +391,25 @@ export function VitaChatOverlay() {
 
   return (
     <>
+      {/* Cerrado: `inert` saca todo el subárbol del foco/teclado/lectores
+          de pantalla, y `invisible` lo oculta de verdad (no solo fuera de
+          pantalla) — con un delay igual a la animación para que el slide
+          de salida se vea completo antes de ocultarse. */}
       <div
         className={
-          "fixed inset-0 z-40 flex flex-col bg-background transition-transform duration-300 ease-out " +
-          (abierto ? "translate-y-0" : "pointer-events-none translate-y-full")
+          "fixed inset-0 z-40 flex flex-col bg-background " +
+          (abierto
+            ? "visible translate-y-0 [transition:transform_300ms_ease-out,visibility_0s]"
+            : "invisible pointer-events-none translate-y-full [transition:transform_300ms_ease-out,visibility_0s_300ms]")
         }
-        aria-hidden={!abierto}
+        inert={!abierto}
       >
         <div className="flex items-center gap-3 border-b px-5 pb-3.5 pt-[max(18px,env(safe-area-inset-top))] shadow-sm">
           <VitaAvatar size={54} estado={estadoAvatarHeader} />
           <div className="min-w-0 flex-1">
             <div className="font-heading text-[16px] font-bold">vita</div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="size-1.5 rounded-full bg-emerald-500" />
+              <span className="size-1.5 rounded-full bg-online" />
               {modoVoz ? etiquetaEstadoVoz(estadoVoz, hablando) : "en línea · siempre disponible"}
             </div>
           </div>
@@ -436,7 +459,7 @@ export function VitaChatOverlay() {
           }}
           className="px-3.5 pb-[max(14px,env(safe-area-inset-bottom))] pt-2.5"
         >
-          <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4 pr-1.5 shadow-[0_8px_24px_rgba(15,33,54,0.08)]">
+          <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4 pr-1.5 shadow-float">
             <input
               value={entrada}
               onChange={(e) => setEntrada(e.target.value)}
@@ -452,7 +475,7 @@ export function VitaChatOverlay() {
               className={
                 "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors " +
                 (modoVoz
-                  ? "bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white " +
+                  ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground " +
                     (estadoVoz === "grabando" || hablando ? "animate-pulse" : "")
                   : "bg-muted text-foreground")
               }
@@ -463,7 +486,7 @@ export function VitaChatOverlay() {
               type="submit"
               disabled={!entrada.trim() || enviando}
               aria-label="Enviar"
-              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white transition-opacity disabled:from-muted disabled:to-muted disabled:text-muted-foreground"
+              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground transition-opacity disabled:from-muted disabled:to-muted disabled:text-muted-foreground"
             >
               <VitaIcon name="send" size={18} />
             </button>

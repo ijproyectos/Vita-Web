@@ -53,6 +53,10 @@
   --color-chip-violet-ink: var(--chip-violet-ink);
   --color-chip-slate-bg: var(--chip-slate-bg);
   --color-chip-slate-ink: var(--chip-slate-ink);
+  --color-brand-from: var(--brand-from);
+  --color-brand-to: var(--brand-to);
+  --color-online: var(--online);
+  --shadow-float: var(--elevation-float);
   --radius-sm: calc(var(--radius) * 0.7);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) * 1.4);
@@ -104,6 +108,14 @@
   --chat-sent-foreground: #ffffff;
   --chat-received: #ffffff;
   --chat-received-foreground: #0b1522;
+
+  /* Gradiente teal de marca (logo, botones de acción principales del chat). */
+  --brand-from: #22d3ee;
+  --brand-to: #0e7490;
+  /* Indicador "en línea". */
+  --online: #10b981;
+  /* Sombra suave para barras flotantes (input del chat). */
+  --elevation-float: 0 8px 24px rgba(15, 33, 54, 0.08);
 
   /* Paletas de chips (tonos apagados, mismo criterio que el original). */
   --chip-teal-bg: #ecfeff;
