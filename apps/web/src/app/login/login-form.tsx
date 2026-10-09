@@ -33,6 +33,67 @@ function GoogleLogo() {
 // sub-vista de código de /onboarding/inicio en vez del onboarding normal.
 const NEXT_CODIGO = "/onboarding/inicio?modo=codigo";
 
+// Login por email/contraseña SOLO para pruebas automatizadas (TestSprite) —
+// Google OAuth no se puede automatizar. Se activa con
+// NEXT_PUBLIC_ENABLE_TEST_LOGIN=true en .env.local; Netlify no la define,
+// así que en producción este bloque ni se renderiza.
+const LOGIN_DE_PRUEBA = process.env.NEXT_PUBLIC_ENABLE_TEST_LOGIN === "true";
+
+function LoginDePrueba({ next }: { next?: string }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enviar(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setCargando(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setError("Email o contraseña incorrectos.");
+      setCargando(false);
+      return;
+    }
+    window.location.assign(next ?? "/app");
+  }
+
+  return (
+    <form onSubmit={enviar} className="flex flex-col gap-2 rounded-[20px] border border-dashed border-primary/40 p-3.5">
+      <p className="text-xs font-semibold text-muted-foreground">Login de prueba (solo local)</p>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <input
+        type="email"
+        name="email"
+        aria-label="Email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="h-11 rounded-full bg-card px-4 text-sm shadow-outline-soft"
+        required
+      />
+      <input
+        type="password"
+        name="password"
+        aria-label="Contraseña"
+        placeholder="Contraseña"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className="h-11 rounded-full bg-card px-4 text-sm shadow-outline-soft"
+        required
+      />
+      <button
+        type="submit"
+        disabled={cargando}
+        className="h-11 rounded-full bg-primary text-sm font-bold text-primary-foreground disabled:opacity-60"
+      >
+        {cargando ? "Ingresando…" : "Ingresar"}
+      </button>
+    </form>
+  );
+}
+
 export function LoginForm({ next }: { next?: string }) {
   const [loading, setLoading] = useState<"google" | "codigo" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +127,7 @@ export function LoginForm({ next }: { next?: string }) {
         type="button"
         onClick={() => iniciarSesionGoogle(next ?? "/app", "google")}
         disabled={loading !== null}
-        className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full bg-white font-heading text-[15px] font-bold text-foreground shadow-[0_2px_10px_rgba(15,33,54,0.06),inset_0_0_0_1px_rgba(15,33,54,0.06)] disabled:opacity-60"
+        className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full bg-card font-heading text-[15px] font-bold text-foreground shadow-raised-outline disabled:opacity-60"
       >
         <GoogleLogo />
         {loading === "google" ? "Conectando…" : "Continuar con Google"}
@@ -80,6 +141,8 @@ export function LoginForm({ next }: { next?: string }) {
       >
         {loading === "codigo" ? "Conectando…" : "Me invitó un familiar, tengo un código"}
       </button>
+
+      {LOGIN_DE_PRUEBA && <LoginDePrueba next={next} />}
     </div>
   );
 }
