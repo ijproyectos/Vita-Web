@@ -18,8 +18,8 @@ export function AlertaDosisPopup({ dosis }: { dosis: DosisVencidaCuidador[] }) {
   if (!abierto || dosis.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-5">
-      <div className="w-full max-w-sm rounded-[20px] bg-card p-5 shadow-[0_20px_50px_rgba(15,33,54,0.25)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 px-5">
+      <div className="w-full max-w-sm rounded-[20px] bg-card p-5 shadow-[0_20px_50px_color-mix(in_srgb,var(--ink)_25%,transparent)]">
         <div className="flex items-center gap-3">
           <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-chip-rose-bg text-chip-rose-ink">
             <VitaIcon name="alert-triangle" size={22} />

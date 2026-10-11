@@ -117,7 +117,7 @@ export function FormularioAgregarMedicamentoElder({ elderId }: { elderId: string
               onClick={() => setFrecuencia(f)}
               className={cn(
                 "rounded-full px-3.5 py-2 text-[12.5px] font-semibold transition-all",
-                frecuencia === f ? "bg-primary text-primary-foreground shadow-[0_6px_14px_rgba(8,145,178,0.25)]" : "bg-secondary text-foreground"
+                frecuencia === f ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-secondary text-foreground"
               )}
             >
               {f}
@@ -141,18 +141,18 @@ export function FormularioAgregarMedicamentoElder({ elderId }: { elderId: string
                 className={cn(
                   "flex items-center gap-2.5 rounded-[20px] p-3.5 text-left transition-all",
                   sel
-                    ? "bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(8,145,178,0.25)]"
-                    : "bg-card text-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+                    ? "bg-primary text-primary-foreground shadow-[0_8px_18px_color-mix(in_srgb,var(--primary)_25%,transparent)]"
+                    : "bg-card text-foreground shadow-card"
                 )}
               >
-                <VitaIcon name={m.icon} size={18} color={sel ? "#fff" : "var(--primary)"} />
+                <VitaIcon name={m.icon} size={18} color={sel ? "var(--primary-foreground)" : "var(--primary)"} />
                 <div className="flex-1">
                   <div className="font-heading text-[13.5px] font-bold">{m.label}</div>
-                  <div className={cn("text-[11.5px] font-medium", sel ? "opacity-85 text-white" : "text-muted-foreground")}>
+                  <div className={cn("text-[11.5px] font-medium", sel ? "opacity-85 text-primary-foreground" : "text-muted-foreground")}>
                     {m.hora} hs
                   </div>
                 </div>
-                {sel && <VitaIcon name="check" size={16} color="#fff" />}
+                {sel && <VitaIcon name="check" size={16} color="var(--primary-foreground)" />}
               </button>
             );
           })}
@@ -172,7 +172,7 @@ export function FormularioAgregarMedicamentoElder({ elderId }: { elderId: string
               onClick={() => setConComida(c.v)}
               className={cn(
                 "rounded-full px-3.5 py-2 text-[12.5px] font-semibold",
-                conComida === c.v ? "bg-primary text-primary-foreground shadow-[0_6px_14px_rgba(8,145,178,0.25)]" : "bg-secondary text-foreground"
+                conComida === c.v ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-secondary text-foreground"
               )}
             >
               {c.label}
@@ -192,7 +192,7 @@ export function FormularioAgregarMedicamentoElder({ elderId }: { elderId: string
               onClick={() => setDuracion(d)}
               className={cn(
                 "rounded-full px-3.5 py-2 text-[12.5px] font-semibold",
-                duracion === d ? "bg-primary text-primary-foreground shadow-[0_6px_14px_rgba(8,145,178,0.25)]" : "bg-secondary text-foreground"
+                duracion === d ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-secondary text-foreground"
               )}
             >
               {d}
@@ -234,7 +234,7 @@ export function FormularioAgregarMedicamentoElder({ elderId }: { elderId: string
           className={cn(
             "flex-1 rounded-full py-3.5 font-heading text-sm font-extrabold transition-all",
             puedeGuardar && !pendiente
-              ? "bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white shadow-[0_10px_24px_rgba(8,145,178,0.35)]"
+              ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
               : "bg-secondary text-muted-foreground"
           )}
         >

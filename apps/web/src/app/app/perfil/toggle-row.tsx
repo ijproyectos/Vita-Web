@@ -18,10 +18,10 @@ export function ToggleRow({ label, sub, defaultOn, ultimo }: { label: string; su
       <button
         type="button"
         onClick={() => setOn((v) => !v)}
-        className={cn("relative h-[26px] w-11 shrink-0 rounded-full transition-colors", on ? "bg-primary" : "bg-black/15")}
+        className={cn("relative h-[26px] w-11 shrink-0 rounded-full transition-colors", on ? "bg-primary" : "bg-foreground/15")}
         aria-pressed={on}
       >
-        <span className={cn("absolute top-[3px] size-5 rounded-full bg-white shadow transition-all", on ? "left-[21px]" : "left-[3px]")} />
+        <span className={cn("absolute top-[3px] size-5 rounded-full bg-card shadow transition-all", on ? "left-[21px]" : "left-[3px]")} />
       </button>
     </div>
   );

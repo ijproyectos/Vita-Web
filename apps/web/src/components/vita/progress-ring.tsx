@@ -7,12 +7,12 @@ export function ProgressRing({ pct, size = 68 }: { pct: number; size?: number })
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.25)" strokeWidth={6} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="color-mix(in srgb, var(--primary-foreground) 25%, transparent)" strokeWidth={6} fill="none" />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke="#fff"
+          stroke="var(--primary-foreground)"
           strokeWidth={6}
           fill="none"
           strokeLinecap="round"
@@ -22,7 +22,7 @@ export function ProgressRing({ pct, size = 68 }: { pct: number; size?: number })
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center font-heading text-[18px] font-extrabold tracking-tight text-white">
+      <div className="absolute inset-0 flex items-center justify-center font-heading text-[18px] font-extrabold tracking-tight text-primary-foreground">
         {pct}%
       </div>
     </div>

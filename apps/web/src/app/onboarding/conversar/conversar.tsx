@@ -429,7 +429,7 @@ function FormularioNombreEdadManual({
   const [edad, setEdad] = useState("");
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-card">
       <input
         value={nombre}
         onChange={(e) => setNombre(e.target.value)}
@@ -467,7 +467,7 @@ function TarjetaConsentimiento({
   onConfirmar: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[20px] bg-card p-4 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+    <div className="flex flex-col gap-3 rounded-[20px] bg-card p-4 shadow-card">
       <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Perfil de {nombre}</div>
       <label className="flex items-start gap-2.5">
         <input type="checkbox" checked={autorizado} onChange={(e) => onToggle(e.target.checked)} className="mt-0.5 size-5 shrink-0 accent-primary" />
@@ -514,7 +514,7 @@ function TarjetaMedicamento({
   }
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-card">
       {item.editando ? (
         <>
           <input
@@ -588,17 +588,17 @@ function TarjetaMedicamento({
 function TarjetaResumenPersona({ nombre, edad, cantidad }: { nombre: string | null; edad: number | null; cantidad: number }) {
   const inicial = (nombre ?? "?").trim().charAt(0).toUpperCase() || "?";
   return (
-    <div className="flex flex-col gap-3 rounded-[22px] p-4 text-white" style={{ background: "linear-gradient(135deg, #7c3aed, #5b21b6)" }}>
+    <div className="flex flex-col gap-3 rounded-[22px] p-4 text-primary-foreground" style={{ background: "linear-gradient(135deg, var(--violet), var(--chip-violet-ink))" }}>
       <div className="flex items-center gap-3">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/20 font-heading text-[18px] font-extrabold">{inicial}</div>
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-foreground/20 font-heading text-[18px] font-extrabold">{inicial}</div>
         <div>
           <div className="font-heading text-[16px] font-extrabold">{nombre ?? "Persona"}</div>
-          {edad !== null && <div className="text-[12.5px] text-white/80">{edad} años</div>}
+          {edad !== null && <div className="text-[12.5px] text-primary-foreground/80">{edad} años</div>}
         </div>
       </div>
-      <div className="rounded-[16px] bg-white/15 px-4 py-3 text-center">
+      <div className="rounded-[16px] bg-primary-foreground/15 px-4 py-3 text-center">
         <div className="font-heading text-[22px] font-extrabold">{cantidad}</div>
-        <div className="text-[11.5px] text-white/80">{cantidad === 1 ? "remedio" : "remedios"}</div>
+        <div className="text-[11.5px] text-primary-foreground/80">{cantidad === 1 ? "remedio" : "remedios"}</div>
       </div>
     </div>
   );

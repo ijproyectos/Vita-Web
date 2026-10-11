@@ -280,7 +280,7 @@ export function EncuestaOnboarding() {
         Podés completar esto después desde tu perfil
       </div>
       <div className="px-3.5 pb-7.5 pt-2.5">
-        <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4.5 shadow-[0_8px_24px_rgba(15,33,54,0.08)]">
+        <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4.5 shadow-float">
           <span className="flex-1 py-2 text-[15px] text-muted-foreground">
             {escribiendo ? "vita está escribiendo…" : "Elegí una opción arriba"}
           </span>
@@ -297,7 +297,7 @@ function BurbujaMensaje({ m }: { m: MensajeEncuesta }) {
   if (m.from === "user") {
     return (
       <div className="mb-2.5 flex justify-end">
-        <div className="max-w-[78%] whitespace-pre-line rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-[#22d3ee] to-[#0e7490] px-3.5 py-2.5 text-[14.5px] text-white">
+        <div className="max-w-[78%] whitespace-pre-line rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-brand-from to-brand-to px-3.5 py-2.5 text-[14.5px] text-primary-foreground">
           {m.texto}
         </div>
       </div>
@@ -307,7 +307,7 @@ function BurbujaMensaje({ m }: { m: MensajeEncuesta }) {
   return (
     <div className="mb-2.5 flex items-end gap-2">
       <VitaAvatar size={26} />
-      <div className="max-w-[80%] whitespace-pre-line rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="max-w-[80%] whitespace-pre-line rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug shadow-card">
         {m.texto}
       </div>
     </div>
@@ -457,7 +457,7 @@ function PasoMedicamentoFormBloque({
   const [frecuencia, setFrecuencia] = useState(FRECUENCIAS_MICROFORM[0]);
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-card">
       <input
         value={dosis}
         onChange={(e) => setDosis(e.target.value)}
@@ -515,7 +515,7 @@ function PuntosEscribiendo() {
   return (
     <div className="flex items-end gap-2">
       <VitaAvatar size={26} />
-      <div className="flex gap-1 rounded-[20px] rounded-bl-[6px] bg-card px-4 py-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="flex gap-1 rounded-[20px] rounded-bl-[6px] bg-card px-4 py-3 shadow-card">
         {[0, 1, 2].map((i) => (
           <span key={i} className="size-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: `${i * 0.15}s` }} />
         ))}

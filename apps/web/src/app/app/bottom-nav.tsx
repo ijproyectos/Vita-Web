@@ -39,7 +39,7 @@ export function BottomNav() {
 
   return (
     <div
-      className="fixed inset-x-3 z-30 mx-auto grid h-[76px] max-w-md grid-cols-[1fr_1fr_88px_1fr_1fr] items-center rounded-[32px] bg-card px-1.5 shadow-[0_12px_36px_rgba(15,33,54,0.12)]"
+      className="fixed inset-x-3 z-30 mx-auto grid h-[76px] max-w-md grid-cols-[1fr_1fr_88px_1fr_1fr] items-center rounded-[32px] bg-card px-1.5 shadow-[0_12px_36px_color-mix(in_srgb,var(--ink)_12%,transparent)]"
       style={{ bottom: "var(--safe-bottom-nav)" }}
     >
       {izquierda.map((item) => (
@@ -51,16 +51,17 @@ export function BottomNav() {
           type="button"
           onClick={() => abrir()}
           aria-label="Abrir chat con vita"
-          className="absolute -top-9 flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] shadow-[0_14px_28px_rgba(8,145,178,0.35),0_6px_12px_rgba(8,145,178,0.22)] transition-transform active:scale-95"
+          className="absolute -top-12 flex size-[92px] items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to shadow-[0_14px_28px_color-mix(in_srgb,var(--primary)_35%,transparent),0_6px_12px_color-mix(in_srgb,var(--primary)_22%,transparent)] transition-transform active:scale-95"
         >
           {/* El personaje, no el ícono plano — pedido explícito: el mismo
               avatar del chat también presente acá, en el botón central que
               abre la conversación desde cualquier pantalla, con más
-              presencia ("más entidad") — botón y avatar agrandados a pedido
-              explícito. "idle" porque acá no hay una conversación en curso
+              presencia — botón de 92px que sobresale de la barra y avatar
+              3D de 84px, a pedido explícito ("una de las partes más usadas,
+              debe estar visible"). "idle" porque acá no hay una conversación en curso
               todavía (es el gesto que la arranca), mismo criterio que el
               resto de los call sites estáticos de VitaAvatar. */}
-          <VitaAvatar size={62} />
+          <VitaAvatar size={84} />
         </button>
         <span className="absolute bottom-[10px] font-heading text-[11px] font-bold tracking-tight text-primary">
           vita
@@ -89,7 +90,7 @@ function NavItem({
     <Link
       href={href}
       className={cn(
-        "flex flex-col items-center gap-1 rounded-[18px] px-1 py-2 font-body text-[11px] font-semibold transition-colors",
+        "flex flex-col items-center gap-1 rounded-[18px] px-1 py-2 font-sans text-[11px] font-semibold transition-colors",
         activo ? "text-primary" : "text-muted-foreground"
       )}
     >

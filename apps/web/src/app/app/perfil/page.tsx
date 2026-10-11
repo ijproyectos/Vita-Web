@@ -6,6 +6,7 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VitaWordmark } from "@/components/vita/v-mark";
 import { ToggleRow } from "./toggle-row";
+import { EliminarCuenta } from "./eliminar-cuenta";
 
 export default async function PerfilPage() {
   const usuario = await requireUser();
@@ -33,11 +34,11 @@ export default async function PerfilPage() {
 
       {/* Hero */}
       <div
-        className="relative overflow-hidden rounded-[20px] p-5 text-white shadow-[0_14px_36px_rgba(8,145,178,0.28)]"
-        style={{ background: "linear-gradient(135deg, #0891b2 0%, #0e7490 100%)" }}
+        className="relative overflow-hidden rounded-[20px] p-5 text-primary-foreground shadow-[0_14px_36px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
+        style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
       >
         <div className="flex items-center gap-3">
-          <div className="flex size-16 items-center justify-center rounded-full bg-white/20 font-heading text-2xl font-extrabold backdrop-blur">
+          <div className="flex size-16 items-center justify-center rounded-full bg-primary-foreground/20 font-heading text-2xl font-extrabold backdrop-blur">
             {(perfil?.nombre ?? "?").charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
@@ -51,13 +52,6 @@ export default async function PerfilPage() {
           <MiniStat label="Racha" valor={`${adherencia.rachaDias}d`} divisor />
         </div>
       </div>
-
-      {/* Conexiones — decorativo, sin integraciones reales conectadas */}
-      <Grupo titulo="Conexiones" subtitulo="Integraciones para traer data automáticamente">
-        <ConexionRow icon="gmail" color="#EA4335" titulo="Gmail" sub="Detecto estudios automáticamente" />
-        <ConexionRow icon="heart-plus" color="#FF3B30" titulo="Apple Health" sub="Métricas desde tu iPhone/Watch" />
-        <ConexionRow icon="activity" color="#4285F4" titulo="Google Fit" sub="Métricas desde Wear OS / Android" ultimo />
-      </Grupo>
 
       {/* Cuidado compartido — real, a diferencia de los grupos decorativos de abajo */}
       <Grupo titulo="Cuidado compartido">
@@ -81,15 +75,21 @@ export default async function PerfilPage() {
       <Grupo titulo="Notificaciones">
         <ToggleRow label="Recordatorios de rutina" sub="Medicamentos y monitoreo" defaultOn />
         <ToggleRow label="Próximos turnos" sub="24 h antes" defaultOn />
-        <ToggleRow label="vita te escribe" sub="Si olvidás marcar una toma" defaultOn />
-        <ToggleRow label="Estudios detectados en Gmail" sub="Confirmación antes de guardar" ultimo />
+        <ToggleRow label="vita te escribe" sub="Si olvidás marcar una toma" defaultOn ultimo />
       </Grupo>
 
-      {/* Privacidad y datos — decorativo */}
+      {/* Privacidad y datos — todo real */}
       <Grupo titulo="Privacidad y datos">
-        <LinkRow icon="doc" label="Exportar mi historial" sub="PDF con todo tu timeline" />
-        <LinkRow icon="upload" label="Compartir con profesional" sub="Link temporal con tu médico" />
-        <LinkRow icon="settings" label="Privacidad" sub="Qué usa vita de tu data" ultimo />
+        <NavLinkRow icon="doc" label="Exportar mi historial" sub="PDF o JSON con todos tus datos" href="/app/perfil/historial" />
+        <NavLinkRow
+          icon="upload"
+          label="Compartir con profesional"
+          sub="Link temporal con tu médico"
+          href="/app/perfil/compartir"
+        />
+        <NavLinkRow icon="settings" label="Privacidad" sub="Qué usa vita de tu data" href="/legal/privacidad" />
+        <NavLinkRow icon="doc" label="Términos y condiciones" sub="Las reglas de uso de vita" href="/legal/terminos" />
+        <EliminarCuenta />
       </Grupo>
 
       <div className="flex flex-col items-center gap-3 py-4 text-center">
@@ -107,7 +107,7 @@ export default async function PerfilPage() {
 
 function MiniStat({ label, valor, divisor }: { label: string; valor: string; divisor?: boolean }) {
   return (
-    <div className={`text-center px-2 py-1 ${divisor ? "border-l border-white/20" : ""}`}>
+    <div className={`text-center px-2 py-1 ${divisor ? "border-l border-primary-foreground/20" : ""}`}>
       <div className="font-heading text-[20px] font-extrabold tracking-tight">{valor}</div>
       <div className="mt-0.5 text-[10.5px] font-medium uppercase tracking-wide opacity-85">{label}</div>
     </div>
@@ -121,42 +121,12 @@ function Grupo({ titulo, subtitulo, children }: { titulo: string; subtitulo?: st
         <div className="font-heading text-[15px] font-bold">{titulo}</div>
         {subtitulo && <div className="mt-0.5 text-xs text-muted-foreground">{subtitulo}</div>}
       </div>
-      <div className="rounded-[20px] bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">{children}</div>
+      <div className="rounded-[20px] bg-card shadow-card">{children}</div>
     </div>
   );
 }
 
-function ConexionRow({
-  icon,
-  color,
-  titulo,
-  sub,
-  ultimo,
-}: {
-  icon: string;
-  color: string;
-  titulo: string;
-  sub: string;
-  ultimo?: boolean;
-}) {
-  return (
-    <div className={`flex items-center gap-3 px-4.5 py-3.5 ${ultimo ? "" : "border-b"}`}>
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl" style={{ background: `${color}15`, color }}>
-        <VitaIcon name={icon} size={20} color={color} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="font-heading text-[14.5px] font-bold">{titulo}</div>
-        <div className="truncate text-xs text-muted-foreground">{sub}</div>
-      </div>
-      <button type="button" className="rounded-full bg-secondary px-3.5 py-1.5 text-xs font-bold text-primary">
-        Conectar
-      </button>
-    </div>
-  );
-}
-
-// A diferencia de LinkRow (decorativo, sin destino), esta navega de
-// verdad — usada por "Cuidado compartido", que sí es funcional.
+// Fila de grupo que navega a una pantalla real.
 function NavLinkRow({
   icon,
   label,
@@ -181,20 +151,5 @@ function NavLinkRow({
       </div>
       <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
     </Link>
-  );
-}
-
-function LinkRow({ icon, label, sub, ultimo }: { icon: string; label: string; sub: string; ultimo?: boolean }) {
-  return (
-    <div className={`flex items-center gap-3 px-4.5 py-3.5 ${ultimo ? "" : "border-b"}`}>
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
-        <VitaIcon name={icon} size={18} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold">{label}</div>
-        <div className="mt-0.5 text-[11.5px] text-muted-foreground">{sub}</div>
-      </div>
-      <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
-    </div>
   );
 }

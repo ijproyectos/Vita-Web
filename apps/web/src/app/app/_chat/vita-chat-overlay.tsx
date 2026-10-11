@@ -389,6 +389,8 @@ export function VitaChatOverlay() {
         ? "thinking"
         : moodAvatar;
 
+  const vacio = mensajes.length <= 1 && !enviando;
+
   return (
     <>
       {/* Cerrado: `inert` saca todo el subárbol del foco/teclado/lectores
@@ -405,7 +407,9 @@ export function VitaChatOverlay() {
         inert={!abierto}
       >
         <div className="flex items-center gap-3 border-b px-5 pb-3.5 pt-[max(18px,env(safe-area-inset-top))] shadow-sm">
-          <VitaAvatar size={54} estado={estadoAvatarHeader} />
+          {/* Con conversación en curso: avatar de 76px en el header. En el
+              estado vacío el protagonista es el hero de abajo (170px). */}
+          {!vacio && <VitaAvatar size={76} estado={estadoAvatarHeader} activo={abierto} />}
           <div className="min-w-0 flex-1">
             <div className="font-heading text-[16px] font-bold">vita</div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -432,10 +436,15 @@ export function VitaChatOverlay() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
+          {vacio && (
+            <div className="flex justify-center pb-2 pt-2">
+              <VitaAvatar size={170} estado={estadoAvatarHeader} activo={abierto} />
+            </div>
+          )}
           {mensajes.map((m, i) => (
             <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} />
           ))}
-          {mensajes.length <= 1 && !enviando && (
+          {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">
               {SUGERENCIAS_INICIALES.map((s) => (
                 <button

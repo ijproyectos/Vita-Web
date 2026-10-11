@@ -3,7 +3,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { diaYMes } from "@/lib/rutina/formato";
 import type { Turno } from "@/lib/turnos/tipos";
 
-const TINTES = ["#0891b2", "#7c3aed", "#f59e0b"];
+const TINTES = ["var(--primary)", "var(--violet)", "var(--amber)"];
 
 // Tarjeta de turno para el scroll horizontal de Home — porta TurnoCard de
 // HomeScreen.jsx.
@@ -14,7 +14,7 @@ export function TurnoCard({ turno, indice }: { turno: Turno; indice: number }) {
   return (
     <Link
       href="/app/rutina"
-      className="relative w-[200px] shrink-0 rounded-[20px] bg-card p-3.5 pl-[18px] shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+      className="relative w-[200px] shrink-0 rounded-[20px] bg-card p-3.5 pl-[18px] shadow-card"
     >
       <span className="absolute inset-y-4 left-2 w-[3px] rounded-full" style={{ background: tinte }} />
       <div className="font-heading text-[15px] font-bold">{turno.especialidad}</div>

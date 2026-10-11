@@ -4,13 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
+import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import type { ResumenStock } from "@/lib/inventario/tipos";
+import { AvisoStockBajo } from "@/components/vita/aviso-stock-bajo";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Chip } from "@/components/vita/chip";
 import { ProgressRing } from "@/components/vita/progress-ring";
 import { MedRow } from "./rutina/med-row";
 import { TurnoCard, AgregarTurnoCard } from "./rutina/turno-card";
-import { NudgeVita } from "./nudge-vita";
+import { HeroVita } from "./hero-vita";
 
 function saludo(): string {
   const h = new Date().getHours();
@@ -23,12 +26,18 @@ export default async function HomePage() {
   const usuario = await requireUser();
   const supabase = await createClient();
 
-  const [perfil, medsHoy, adherencia, turnosProximos] = await Promise.all([
+  const [perfil, medsHoy, adherencia, turnosProximos, inventarios] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, usuario.id),
     medicamentos.listarHoy(supabase, usuario.id),
     medicamentos.calcularAdherencia(supabase, usuario.id),
     turnosNucleo.listarProximos(supabase, usuario.id, 5),
+    inventarioNucleo.listarSeguro(supabase, usuario.id),
   ]);
+
+  const stockPorId = new Map<string, ResumenStock>(
+    inventarios.map((i) => [i.id, { stock: i.stock, umbral: i.umbral_alerta }])
+  );
+  const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
 
   const nombre = perfil?.nombre?.split(" ")[0] ?? "Ahí vamos";
   const tomados = medsHoy.filter((m) => m.tomado).length;
@@ -48,17 +57,19 @@ export default async function HomePage() {
             {nombre} <span className="font-normal">👋</span>
           </div>
         </div>
-        <div className="relative flex size-10 items-center justify-center rounded-full bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+        <div className="relative flex size-10 items-center justify-center rounded-full bg-card shadow-card">
           <VitaIcon name="bell" size={20} />
           <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-primary ring-2 ring-card" />
         </div>
       </div>
 
+      <HeroVita />
+
       {/* Profile summary card */}
-      <Link href="/app/resumen-salud" className="rounded-[20px] bg-card p-4 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <Link href="/app/resumen-salud" className="rounded-[20px] bg-card p-4 shadow-card">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex size-[54px] items-center justify-center rounded-full bg-gradient-to-br from-[#e6f7fb] to-[#d1eef4] font-heading text-xl font-bold text-[#0e7490]">
+            <div className="flex size-[54px] items-center justify-center rounded-full bg-gradient-to-br from-chip-teal-bg to-chip-teal-bg font-heading text-xl font-bold text-chip-teal-ink">
               {(perfil?.nombre ?? "?").charAt(0).toUpperCase()}
             </div>
             <div>
@@ -91,11 +102,13 @@ export default async function HomePage() {
         )}
       </Link>
 
+      <AvisoStockBajo items={stockBajo} href="/app/pastillas" />
+
       {/* Today progress card */}
       <Link
         href="/app/rutina"
-        className="relative overflow-hidden rounded-[20px] p-4.5 text-white shadow-[0_14px_36px_rgba(8,145,178,0.28)]"
-        style={{ background: "linear-gradient(135deg, #0891b2 0%, #0e7490 60%, #155e75 100%)" }}
+        className="relative overflow-hidden rounded-[20px] p-4.5 text-primary-foreground shadow-[0_14px_36px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
+        style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
       >
         <div className="flex items-center justify-between">
           <div>
@@ -139,19 +152,24 @@ export default async function HomePage() {
           </Link>
         </div>
         {medsHoy.length === 0 ? (
-          <div className="rounded-[20px] bg-card p-4 text-sm text-muted-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card p-4 text-sm text-muted-foreground shadow-card">
             No tenés medicamentos programados para hoy.
           </div>
         ) : (
-          <div className="rounded-[20px] bg-card p-1.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card p-1.5 shadow-card">
             {medsHoy.map((m, i) => (
-              <MedRow key={m.id} med={m} color={colorChipPorIndice(i)} divider={i < medsHoy.length - 1} />
+              <MedRow
+                key={m.id}
+                med={m}
+                color={colorChipPorIndice(i)}
+                divider={i < medsHoy.length - 1}
+                stock={m.inventario_id ? (stockPorId.get(m.inventario_id) ?? null) : null}
+              />
             ))}
           </div>
         )}
       </div>
 
-      <NudgeVita />
     </div>
   );
 }
@@ -168,7 +186,7 @@ function Estadistica({
   divisor?: boolean;
 }) {
   return (
-    <div className={`px-3 py-1.5 text-center ${divisor ? "border-l border-black/[0.06]" : ""}`}>
+    <div className={`px-3 py-1.5 text-center ${divisor ? "border-l border-foreground/[0.06]" : ""}`}>
       <div className="font-heading text-[20px] font-extrabold tracking-tight">
         {valor}
         {unidad && <span className="ml-0.5 text-xs font-semibold text-muted-foreground">{unidad}</span>}

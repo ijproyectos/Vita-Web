@@ -3,6 +3,10 @@ import Link from "next/link";
 import { requireCuidador } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
+import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import type { ResumenStock } from "@/lib/inventario/tipos";
+import { BadgeStock } from "@/components/vita/badge-stock";
+import { AvisoStockBajo } from "@/components/vita/aviso-stock-bajo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
@@ -33,10 +37,17 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
   }
 
   const supabase = await createClient();
-  const [medsHoy, adherencia] = await Promise.all([
+  const [medsHoy, adherencia, inventarios] = await Promise.all([
     medicamentos.listarHoy(supabase, elderId),
     medicamentos.calcularAdherencia(supabase, elderId),
+    // Lectura permitida por inventario_pastillas_select_cuidador (migración 014).
+    // Degrada a "sin datos de stock" si la lectura falla.
+    inventarioNucleo.listarSeguro(supabase, elderId),
   ]);
+  const stockPorId = new Map<string, ResumenStock>(
+    inventarios.map((i) => [i.id, { stock: i.stock, umbral: i.umbral_alerta }])
+  );
+  const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
 
   const ahoraAR = medicamentos.horaEnAR();
 
@@ -46,7 +57,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
         <Link
           href="/cuidar"
           aria-label="Volver"
-          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-card"
         >
           <VitaIcon name="chevron-left" size={18} />
         </Link>
@@ -57,20 +68,22 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
       </div>
 
       <div
-        className="rounded-[20px] p-5 text-white shadow-[0_14px_36px_rgba(8,145,178,0.28)]"
-        style={{ background: "linear-gradient(135deg, #0891b2 0%, #0e7490 100%)" }}
+        className="rounded-[20px] p-5 text-primary-foreground shadow-[0_14px_36px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
+        style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
       >
         <div className="grid grid-cols-2">
           <div className="text-center">
             <div className="font-heading text-[26px] font-extrabold tracking-tight">{adherencia.porcentaje}%</div>
             <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wide opacity-85">Adherencia 7 días</div>
           </div>
-          <div className="border-l border-white/20 text-center">
+          <div className="border-l border-primary-foreground/20 text-center">
             <div className="font-heading text-[26px] font-extrabold tracking-tight">{adherencia.rachaDias}d</div>
             <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wide opacity-85">Racha actual</div>
           </div>
         </div>
       </div>
+
+      <AvisoStockBajo items={stockBajo} titulo={`A ${elder.nombre} le quedan pocas pastillas`} />
 
       <div>
         <div className="flex items-center justify-between px-1.5 pb-2.5">
@@ -80,17 +93,18 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
           </Link>
         </div>
         {medsHoy.length === 0 ? (
-          <div className="rounded-[20px] bg-card p-5 text-center text-sm text-muted-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card p-5 text-center text-sm text-muted-foreground shadow-card">
             No tiene medicamentos programados para hoy.
           </div>
         ) : (
-          <div className="rounded-[20px] bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card shadow-card">
             {medsHoy.map((med, i) => (
               <FilaMedicamentoSoloLectura
                 key={med.id}
                 med={med}
                 divider={i < medsHoy.length - 1}
                 ahoraAR={ahoraAR}
+                stock={med.inventario_id ? (stockPorId.get(med.inventario_id) ?? null) : null}
               />
             ))}
           </div>
@@ -100,7 +114,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
       {adherencia.medicamentos.length > 0 && (
         <div>
           <div className="px-1.5 pb-2.5 font-heading text-[15px] font-bold">Adherencia por medicamento</div>
-          <div className="rounded-[20px] bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card shadow-card">
             {adherencia.medicamentos.map((m, i) => (
               <div
                 key={m.medicamentoId}
@@ -130,10 +144,12 @@ function FilaMedicamentoSoloLectura({
   med,
   divider,
   ahoraAR,
+  stock,
 }: {
   med: MedicamentoConToma;
   divider: boolean;
   ahoraAR: string;
+  stock: ResumenStock | null;
 }) {
   const atrasada = !med.tomado && medicamentosEsDosisVencida(med.hora_programada, ahoraAR);
 
@@ -155,6 +171,7 @@ function FilaMedicamentoSoloLectura({
           {med.dosis ? `${med.dosis} · ` : ""}
           {med.hora_programada} hs
         </div>
+        {stock && <BadgeStock stock={stock} className="mt-1" />}
       </div>
       <span
         className={cn(

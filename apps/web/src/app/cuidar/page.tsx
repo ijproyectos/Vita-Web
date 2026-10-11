@@ -56,7 +56,7 @@ export default async function CuidarPage() {
             <Link
               key={elder.elderId}
               href={`/cuidar/${elder.elderId}`}
-              className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+              className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-card"
             >
               <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary font-heading text-base font-extrabold text-primary">
                 {elder.nombre.charAt(0).toUpperCase()}
@@ -74,7 +74,7 @@ export default async function CuidarPage() {
       {pendientes.length > 0 && (
         <div>
           <div className="px-1.5 pb-2.5 font-heading text-[15px] font-bold">Códigos pendientes</div>
-          <div className="rounded-[20px] bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card shadow-card">
             {pendientes.map((v, i) => (
               <FilaCodigoPendiente key={v.id} vinculo={v} divider={i < pendientes.length - 1} />
             ))}

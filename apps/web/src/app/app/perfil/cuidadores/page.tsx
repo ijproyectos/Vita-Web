@@ -19,7 +19,7 @@ export default async function CuidadoresPage() {
       <TopBar eyebrow="Perfil" title="Mis cuidadores" />
 
       <p className="-mt-2 text-[13px] text-muted-foreground">
-        Invitá a alguien de confianza para que vea tus medicamentos y si los tomaste, pueda marcar una toma cuando te ayuda y cargarte un medicamento nuevo.
+        Invitá a alguien de confianza para que vea tus medicamentos y si los tomaste, y pueda cargarte un medicamento nuevo.
       </p>
 
       <InvitarCuidadorForm />

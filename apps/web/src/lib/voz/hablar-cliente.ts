@@ -27,7 +27,7 @@ let audioActual: HTMLAudioElement | null = null;
 let resolverActual: (() => void) | null = null;
 
 // Analizador de amplitud del audio de SALIDA (lo que vita dice), para el
-// lip-sync básico del avatar (VitaAvatar, ver estados-avatar.ts) — mismo
+// lip-sync básico del avatar (VitaAvatar 3D, ver vita-3d/motor.ts) — mismo
 // principio que el análisis de amplitud que ya hace useGrabacionVoz sobre
 // el micrófono, acá aplicado al <audio> que reproduce la respuesta.
 // AudioContext separado del de la grabación (son streams distintos,

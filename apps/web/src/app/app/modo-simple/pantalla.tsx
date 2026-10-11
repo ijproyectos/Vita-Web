@@ -178,7 +178,7 @@ export function Pantalla({
       {fase === "confirmado" && proxima && <FaseConfirmado nombre={proxima.nombre} />}
 
       {(fase === "esperando" || fase === "alertado") && proxima && !audioDesbloqueado && (
-        <FaseGesto onTocar={alDesbloquear} />
+        <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
       )}
 
       {(fase === "esperando" || fase === "alertado") && proxima && audioDesbloqueado && (
@@ -215,15 +215,20 @@ function BotonSalir() {
   );
 }
 
-function FaseGesto({ onTocar }: { onTocar: () => void }) {
+// vita protagonista también acá (es la primera pantalla que ve la persona
+// mayor), con un parlante chico como pista de que al tocar va a hablar.
+function FaseGesto({ onTocar, estado }: { onTocar: () => void; estado: EstadoAvatar }) {
   return (
     <button
       type="button"
       onClick={onTocar}
       className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center"
     >
-      <div className="flex size-24 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
-        <VitaIcon name="volume" size={44} />
+      <div className="relative">
+        <VitaAvatar size={180} estado={estado} />
+        <div className="absolute -bottom-1 right-2 flex size-14 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink shadow-card">
+          <VitaIcon name="volume" size={26} />
+        </div>
       </div>
       <div className="font-heading text-[26px] font-extrabold">Tocá para escuchar</div>
       <div className="text-[15px] text-muted-foreground">vita te va a leer tu medicación</div>
@@ -255,14 +260,14 @@ function FaseDosisPendiente({
   return (
     <>
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <VitaAvatar size={72} estado={estado} />
+        <VitaAvatar size={180} estado={estado} />
         <div
           className={cn(
-            "flex size-24 items-center justify-center rounded-full",
+            "flex size-16 items-center justify-center rounded-full",
             alertado ? "bg-chip-amber-bg text-chip-amber-ink" : "bg-chip-teal-bg text-chip-teal-ink"
           )}
         >
-          <VitaIcon name={alertado ? "alert-triangle" : "bell"} size={44} />
+          <VitaIcon name={alertado ? "alert-triangle" : "bell"} size={32} />
         </div>
         <div className="text-[17px] font-semibold text-muted-foreground">
           {alertado
@@ -281,7 +286,7 @@ function FaseDosisPendiente({
           type="button"
           onClick={onReescuchar}
           aria-label="Escuchar de nuevo"
-          className="mt-1 flex size-[52px] items-center justify-center rounded-full bg-card text-primary shadow-[0_8px_24px_rgba(15,33,54,0.1)]"
+          className="mt-1 flex size-[52px] items-center justify-center rounded-full bg-card text-primary shadow-[0_8px_24px_color-mix(in_srgb,var(--ink)_10%,transparent)]"
         >
           <VitaIcon name="volume" size={24} />
         </button>
@@ -292,7 +297,7 @@ function FaseDosisPendiente({
           type="button"
           onClick={onConfirmar}
           disabled={confirmando}
-          className="h-[76px] rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-[22px] font-extrabold text-white shadow-[0_14px_28px_rgba(8,145,178,0.35)] disabled:opacity-70"
+          className="h-[76px] rounded-full bg-gradient-to-br from-brand-from to-brand-to text-[22px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:opacity-70"
         >
           SÍ, YA LA TOMÉ
         </button>
@@ -300,7 +305,7 @@ function FaseDosisPendiente({
           type="button"
           onClick={onAlternarVoz}
           className={cn(
-            "flex h-[60px] items-center justify-center gap-2 rounded-full bg-card text-[16px] font-semibold text-primary shadow-[0_2px_10px_rgba(15,33,54,0.06)]",
+            "flex h-[60px] items-center justify-center gap-2 rounded-full bg-card text-[16px] font-semibold text-primary shadow-[0_2px_10px_color-mix(in_srgb,var(--ink)_6%,transparent)]",
             escuchandoVoz && "bg-chip-teal-bg"
           )}
         >
@@ -315,11 +320,11 @@ function FaseDosisPendiente({
 function FaseConfirmado({ nombre }: { nombre: string }) {
   return (
     <div
-      className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-white"
-      style={{ background: "linear-gradient(135deg, #0891b2 0%, #0e7490 60%, #155e75 100%)" }}
+      className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-primary-foreground"
+      style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
     >
-      <div className="flex size-24 items-center justify-center rounded-full bg-white/20">
-        <VitaIcon name="check" size={44} color="#fff" />
+      <div className="flex size-24 items-center justify-center rounded-full bg-primary-foreground/20">
+        <VitaIcon name="check" size={44} color="var(--primary-foreground)" />
       </div>
       <div className="font-heading text-[30px] font-extrabold">¡Muy bien!</div>
       <div className="text-[17px] opacity-90">Registramos que tomaste {nombre}</div>
@@ -330,7 +335,7 @@ function FaseConfirmado({ nombre }: { nombre: string }) {
 function FaseDescanso({ estado }: { estado: EstadoAvatar }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-      <VitaAvatar size={88} estado={estado} />
+      <VitaAvatar size={180} estado={estado} />
       <div className="font-heading text-[24px] font-extrabold">Por ahora no tenés medicación pendiente</div>
       <div className="text-[15px] text-muted-foreground">Te vamos a avisar cuando sea la hora.</div>
     </div>

@@ -11,6 +11,8 @@ import { AgregarSheet } from "./agregar-sheet";
 import { ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_MOMENTO } from "@/lib/rutina/momento";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import { diaYMes, formatoFechaCorta } from "@/lib/rutina/formato";
+import { BadgeStock } from "@/components/vita/badge-stock";
+import type { ResumenStock } from "@/lib/inventario/tipos";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
 import type { Medicamento, MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import type { Turno } from "@/lib/turnos/tipos";
@@ -34,12 +36,14 @@ export function RutinaView({
   turnosHoy,
   turnosProximos,
   adherencia,
+  stockPorInventario,
 }: {
   medsHoy: MedicamentoConToma[];
   todosLosMeds: Medicamento[];
   turnosHoy: Turno[];
   turnosProximos: Turno[];
   adherencia: ResumenAdherencia;
+  stockPorInventario: Record<string, ResumenStock>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,7 +69,7 @@ export function RutinaView({
           type="button"
           onClick={() => setShowAdd(true)}
           aria-label="Agregar"
-          className="flex size-10 items-center justify-center rounded-full bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+          className="flex size-10 items-center justify-center rounded-full bg-card shadow-card"
         >
           <VitaIcon name="plus" size={20} />
         </button>
@@ -79,7 +83,7 @@ export function RutinaView({
             onClick={() => cambiarVista(v)}
             className={
               "flex-1 rounded-full py-2.5 font-heading text-[13.5px] font-bold transition-all " +
-              (vista === v ? "bg-card text-primary shadow-[0_2px_6px_rgba(15,33,54,0.06)]" : "text-muted-foreground")
+              (vista === v ? "bg-card text-primary shadow-[0_2px_6px_color-mix(in_srgb,var(--ink)_6%,transparent)]" : "text-muted-foreground")
             }
           >
             {v === "hoy" ? "Hoy" : "Próximos días"}
@@ -90,8 +94,8 @@ export function RutinaView({
       {vista === "hoy" ? (
         <>
           <div
-            className="relative overflow-hidden rounded-[20px] p-4.5 text-white shadow-[0_14px_36px_rgba(8,145,178,0.28)]"
-            style={{ background: "linear-gradient(135deg, #0891b2 0%, #0e7490 60%, #155e75 100%)" }}
+            className="relative overflow-hidden rounded-[20px] p-4.5 text-primary-foreground shadow-[0_14px_36px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
+            style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
           >
             <div className="flex items-center justify-between">
               <div>
@@ -117,7 +121,11 @@ export function RutinaView({
 
           {tomados < total && <MarcarTodosButton />}
 
-          <TimelineHoy medsHoy={medsHoy} turnosHoy={turnosHoy} onAgregar={() => setShowAdd(true)} />
+          <TimelineHoy
+            medsHoy={medsHoy}
+            turnosHoy={turnosHoy}
+            stockPorInventario={stockPorInventario}
+            onAgregar={() => setShowAdd(true)} />
         </>
       ) : (
         <ProximosDias turnos={turnosProximos} todosLosMeds={todosLosMeds} />
@@ -131,10 +139,12 @@ export function RutinaView({
 function TimelineHoy({
   medsHoy,
   turnosHoy,
+  stockPorInventario,
   onAgregar,
 }: {
   medsHoy: MedicamentoConToma[];
   turnosHoy: Turno[];
+  stockPorInventario: Record<string, ResumenStock>;
   onAgregar: () => void;
 }) {
   return (
@@ -179,7 +189,12 @@ function TimelineHoy({
             <div className="relative flex flex-col gap-2 pl-3.5">
               <div className="absolute inset-y-2.5 left-1 w-0.5 rounded-full bg-secondary" />
               {meds.map((m, i) => (
-                <MedItem key={m.id} med={m} color={colorChipPorIndice(i)} />
+                <MedItem
+                  key={m.id}
+                  med={m}
+                  color={colorChipPorIndice(i)}
+                  stock={m.inventario_id ? (stockPorInventario[m.inventario_id] ?? null) : null}
+                />
               ))}
               {turnos.map((t) => (
                 <AptItem key={t.id} turno={t} />
@@ -192,7 +207,15 @@ function TimelineHoy({
   );
 }
 
-function MedItem({ med, color }: { med: MedicamentoConToma; color: ReturnType<typeof colorChipPorIndice> }) {
+function MedItem({
+  med,
+  color,
+  stock,
+}: {
+  med: MedicamentoConToma;
+  color: ReturnType<typeof colorChipPorIndice>;
+  stock: ResumenStock | null;
+}) {
   const TINTE_BG = {
     teal: "bg-chip-teal-bg text-chip-teal-ink",
     violet: "bg-chip-violet-bg text-chip-violet-ink",
@@ -208,7 +231,7 @@ function MedItem({ med, color }: { med: MedicamentoConToma; color: ReturnType<ty
           (med.tomado ? "bg-primary" : "bg-card")
         }
       />
-      <div className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-card">
         <div className={`flex size-10 shrink-0 items-center justify-center rounded-full ${TINTE_BG[color]}`}>
           <VitaIcon name="pill" size={18} />
         </div>
@@ -220,6 +243,7 @@ function MedItem({ med, color }: { med: MedicamentoConToma; color: ReturnType<ty
             {med.dosis ? `${med.dosis} · ` : ""}
             {med.hora_programada} hs
           </div>
+          {stock && <BadgeStock stock={stock} className="mt-1" />}
         </div>
         <div className="flex flex-col items-center gap-1">
           <CheckToggle medicamentoId={med.id} tomadoInicial={med.tomado} />
@@ -234,9 +258,9 @@ function AptItem({ turno }: { turno: Turno }) {
   return (
     <div className="relative">
       <span className="absolute -left-[15px] top-[22px] size-2.5 rounded-full bg-primary/60 ring-4 ring-primary/15" />
-      <div className="relative flex items-center gap-3 rounded-[20px] bg-card py-3 pl-4 pr-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="relative flex items-center gap-3 rounded-[20px] bg-card py-3 pl-4 pr-3 shadow-card">
         <span className="absolute inset-y-3.5 left-1.5 w-[3px] rounded-full bg-primary" />
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#ecfeff] text-[#155e75]">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
           <VitaIcon name="stethoscope" size={18} />
         </div>
         <div className="min-w-0 flex-1">
@@ -288,9 +312,9 @@ function ProximosDias({ turnos, todosLosMeds }: { turnos: Turno[]; todosLosMeds:
               return (
                 <div
                   key={t.id}
-                  className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+                  className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-card"
                 >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#ecfeff] text-[#155e75]">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
                     <VitaIcon name="stethoscope" size={18} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -315,7 +339,7 @@ function ProximosDias({ turnos, todosLosMeds }: { turnos: Turno[]; todosLosMeds:
             {medsConDiasLimitados.map((m) => (
               <div
                 key={m.id}
-                className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+                className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-card"
               >
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
                   <VitaIcon name="pill" size={18} />

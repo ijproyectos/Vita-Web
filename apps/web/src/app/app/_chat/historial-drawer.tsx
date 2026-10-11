@@ -13,7 +13,7 @@ import { eliminarHistorialAction } from "./chat-actions";
 import type { SesionChat } from "@/lib/chat/tipos";
 
 // Drawer de sesiones pasadas — se mantiene como funcionalidad real aunque
-// el diseño vita.ia no lo muestre (decisión ya tomada: no sacar algo real
+// el diseño vita no lo muestre (decisión ya tomada: no sacar algo real
 // ya construido). Ahora controlado 100% en cliente (el chat es un overlay,
 // no una ruta), sin navegación — cambiar de sesión carga sus mensajes vía
 // Server Action en vez de un `router.push`.
@@ -48,7 +48,7 @@ export function HistorialDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-72 p-0 sm:max-w-72">
         <SheetHeader className="bg-primary text-primary-foreground">
-          <SheetTitle className="text-primary-foreground">vita.ia</SheetTitle>
+          <SheetTitle className="text-primary-foreground">vita</SheetTitle>
         </SheetHeader>
 
         <button

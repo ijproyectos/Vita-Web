@@ -70,11 +70,11 @@ export function FormularioAgregarTurno() {
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-[20px] px-1.5 pb-2.5 pt-3.5 transition-all",
                   sel
-                    ? "bg-primary text-primary-foreground shadow-[0_8px_18px_rgba(8,145,178,0.25)]"
-                    : "bg-card text-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+                    ? "bg-primary text-primary-foreground shadow-[0_8px_18px_color-mix(in_srgb,var(--primary)_25%,transparent)]"
+                    : "bg-card text-foreground shadow-card"
                 )}
               >
-                <VitaIcon name={ICONO_ESPECIALIDAD[e] ?? "plus"} size={20} color={sel ? "#fff" : "var(--primary)"} />
+                <VitaIcon name={ICONO_ESPECIALIDAD[e] ?? "plus"} size={20} color={sel ? "var(--primary-foreground)" : "var(--primary)"} />
                 <span className="text-center text-[10.5px] font-semibold leading-tight">{e}</span>
               </button>
             );
@@ -109,7 +109,7 @@ export function FormularioAgregarTurno() {
                 key={label as string}
                 type="button"
                 onClick={() => setFecha(fechaConOffset(offset as number))}
-                className="rounded-full px-2.5 py-1 text-[11.5px] font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(8,145,178,0.2)]"
+                className="rounded-full px-2.5 py-1 text-[11.5px] font-semibold text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_20%,transparent)]"
               >
                 {label}
               </button>
@@ -134,7 +134,7 @@ export function FormularioAgregarTurno() {
                 key={h}
                 type="button"
                 onClick={() => setHora(h)}
-                className="rounded-full px-2.5 py-1 text-[11.5px] font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(8,145,178,0.2)]"
+                className="rounded-full px-2.5 py-1 text-[11.5px] font-semibold text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_20%,transparent)]"
               >
                 {h}
               </button>
@@ -156,7 +156,7 @@ export function FormularioAgregarTurno() {
               onClick={() => setRecordatorio(r.v)}
               className={cn(
                 "rounded-full px-3.5 py-2 text-[12.5px] font-semibold",
-                recordatorio === r.v ? "bg-primary text-primary-foreground shadow-[0_6px_14px_rgba(8,145,178,0.25)]" : "bg-secondary text-foreground"
+                recordatorio === r.v ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-secondary text-foreground"
               )}
             >
               {r.label}
@@ -166,7 +166,7 @@ export function FormularioAgregarTurno() {
         <input type="hidden" name="recordatorio" value={RECORDATORIOS.find((r) => r.v === recordatorio)?.label} />
       </div>
 
-      <label className="flex cursor-pointer items-center gap-3 rounded-[20px] bg-card p-3.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <label className="flex cursor-pointer items-center gap-3 rounded-[20px] bg-card p-3.5 shadow-card">
         <VitaIcon name="user" size={18} color="var(--primary)" />
         <div className="flex-1">
           <div className="font-heading text-[13.5px] font-bold">Voy a ir acompañado</div>
@@ -182,12 +182,12 @@ export function FormularioAgregarTurno() {
         <span
           className={cn(
             "relative h-6 w-[42px] shrink-0 rounded-full transition-colors",
-            acompanado ? "bg-primary" : "bg-black/15"
+            acompanado ? "bg-primary" : "bg-foreground/15"
           )}
         >
           <span
             className={cn(
-              "absolute top-0.5 size-5 rounded-full bg-white shadow transition-all",
+              "absolute top-0.5 size-5 rounded-full bg-card shadow transition-all",
               acompanado ? "left-[20px]" : "left-0.5"
             )}
           />
@@ -227,7 +227,7 @@ export function FormularioAgregarTurno() {
           className={cn(
             "flex-1 rounded-full py-3.5 font-heading text-sm font-extrabold transition-all",
             puedeGuardar && !pendiente
-              ? "bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white shadow-[0_10px_24px_rgba(8,145,178,0.35)]"
+              ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
               : "bg-secondary text-muted-foreground"
           )}
         >

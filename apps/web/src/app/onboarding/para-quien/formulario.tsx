@@ -28,10 +28,10 @@ export function FormularioParaQuien() {
   }
 
   return (
-    <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-[#f8fbfc] to-white px-7 pb-8 pt-14">
+    <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-background to-card px-7 pb-8 pt-14">
       <div
         className="pointer-events-none absolute left-1/2 top-[-140px] size-[340px] -translate-x-1/2 rounded-full"
-        style={{ background: "radial-gradient(circle, rgba(8,145,178,0.12), transparent 60%)" }}
+        style={{ background: "radial-gradient(circle, color-mix(in srgb, var(--primary) 12%, transparent), transparent 60%)" }}
       />
 
       <div className="z-10 flex items-center justify-between">
@@ -46,11 +46,7 @@ export function FormularioParaQuien() {
       </div>
 
       <div className="z-10 mt-7 flex justify-center">
-        <div className="flex size-16 items-center justify-center overflow-hidden rounded-full shadow-[0_14px_36px_rgba(8,145,178,0.28)]">
-          <div className="flex size-full items-center justify-center" style={{ background: "linear-gradient(135deg, #22d3ee, #0e7490)" }}>
-            <VMark size={42} />
-          </div>
-        </div>
+        <VMark size={64} />
       </div>
 
       <div className="z-10 mt-7.5 text-center">
@@ -69,23 +65,23 @@ export function FormularioParaQuien() {
               className={cn(
                 "flex items-center gap-3 rounded-[20px] p-4 text-left transition-all",
                 sel
-                  ? "bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(8,145,178,0.3)]"
-                  : "bg-card text-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+                  ? "bg-primary text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_30%,transparent)]"
+                  : "bg-card text-foreground shadow-card"
               )}
             >
               <div
                 className={cn(
                   "flex size-11 shrink-0 items-center justify-center rounded-full",
-                  sel ? "bg-white/20" : "bg-secondary text-primary"
+                  sel ? "bg-primary-foreground/20" : "bg-secondary text-primary"
                 )}
               >
-                <VitaIcon name={op.icon} size={20} color={sel ? "#fff" : undefined} />
+                <VitaIcon name={op.icon} size={20} color={sel ? "var(--primary-foreground)" : undefined} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-heading text-[15px] font-bold">{op.titulo}</div>
-                <div className={cn("mt-0.5 text-[12.5px]", sel ? "text-white/85" : "text-muted-foreground")}>{op.sub}</div>
+                <div className={cn("mt-0.5 text-[12.5px]", sel ? "text-primary-foreground/85" : "text-muted-foreground")}>{op.sub}</div>
               </div>
-              {sel && <VitaIcon name="check" size={18} color="#fff" />}
+              {sel && <VitaIcon name="check" size={18} color="var(--primary-foreground)" />}
             </button>
           );
         })}
@@ -97,8 +93,8 @@ export function FormularioParaQuien() {
         type="button"
         onClick={continuar}
         disabled={!seleccion || pendiente}
-        className="z-10 h-14 w-full rounded-full font-heading text-[15px] font-bold text-white transition-opacity disabled:opacity-55"
-        style={{ background: "linear-gradient(135deg, var(--primary), #0e7490)" }}
+        className="z-10 h-14 w-full rounded-full font-heading text-[15px] font-bold text-primary-foreground transition-opacity disabled:opacity-55"
+        style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
       >
         Continuar
       </button>

@@ -3,6 +3,8 @@ import { CheckToggle } from "./check-toggle";
 import type { ColorChip } from "@/lib/perfil/tipos";
 import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import { cn } from "@/lib/utils";
+import { BadgeStock } from "@/components/vita/badge-stock";
+import type { ResumenStock } from "@/lib/inventario/tipos";
 
 const TINTE_BG: Record<ColorChip, string> = {
   teal: "bg-chip-teal-bg text-chip-teal-ink",
@@ -17,10 +19,12 @@ export function MedRow({
   med,
   color,
   divider,
+  stock,
 }: {
   med: MedicamentoConToma;
   color: ColorChip;
   divider: boolean;
+  stock?: ResumenStock | null;
 }) {
   return (
     <div className={cn("flex items-center gap-3 px-2.5 py-2.5", divider && "border-b")}>
@@ -41,6 +45,7 @@ export function MedRow({
           {med.hora_programada} hs
         </div>
       </div>
+      {stock && <BadgeStock stock={stock} />}
       <CheckToggle medicamentoId={med.id} tomadoInicial={med.tomado} />
     </div>
   );

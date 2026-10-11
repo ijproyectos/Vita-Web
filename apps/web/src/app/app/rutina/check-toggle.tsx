@@ -33,7 +33,7 @@ export function CheckToggle({ medicamentoId, tomadoInicial }: { medicamentoId: s
       className={cn(
         "flex size-7 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-60",
         tomado
-          ? "bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white shadow-[0_4px_10px_rgba(8,145,178,0.35)]"
+          ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground shadow-[0_4px_10px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
           : "bg-muted text-transparent"
       )}
     >

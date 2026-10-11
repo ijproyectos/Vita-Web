@@ -27,10 +27,17 @@ export function AgregarSheet({ open, onOpenChange }: { open: boolean; onOpenChan
           />
           <OpcionAgregar
             icon="stethoscope"
-            tinte="bg-[#ecfeff] text-[#155e75]"
+            tinte="bg-chip-teal-bg text-chip-teal-ink"
             titulo="Turno médico"
             sub="Especialidad, profesional, fecha"
             href="/app/agregar-turno"
+          />
+          <OpcionAgregar
+            icon="camera"
+            tinte="bg-chip-teal-bg text-chip-teal-ink"
+            titulo="Contar pastillas"
+            sub="Foto del blister y control de stock"
+            href="/app/pastillas/contar"
           />
           <button
             type="button"
@@ -38,9 +45,9 @@ export function AgregarSheet({ open, onOpenChange }: { open: boolean; onOpenChan
               onOpenChange(false);
               abrir();
             }}
-            className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 text-left shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+            className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 text-left shadow-card"
           >
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0891b2] to-[#0e7490] text-white">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground">
               <VitaIcon name="sparkle" size={20} />
             </div>
             <div className="min-w-0 flex-1">
@@ -73,7 +80,7 @@ function OpcionAgregar({
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+      className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 shadow-card"
     >
       <div className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${tinte}`}>
         <VitaIcon name={icon} size={20} />

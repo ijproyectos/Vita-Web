@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as cuidadoresNucleo from "@/lib/cuidadores/nucleo";
 import { enviarInvitacionPorMail } from "@/lib/cuidadores/correo";
-import type { VinculoCuidador } from "@/lib/cuidadores/tipos";
 import { emailValido, origenPublico } from "@/lib/email/origen";
 import { permitirEnvio } from "@/lib/email/limite";
 

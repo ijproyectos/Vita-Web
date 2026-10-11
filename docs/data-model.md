@@ -46,6 +46,29 @@ Single-tenant por usuario — cada fila de negocio lleva `usuario_id` referencia
 
 El form "Agregar medicamento" permite elegir varios momentos del día a la vez — al guardar se inserta **una fila por momento** (mismo dato compartido, hora default por momento vía `HORA_POR_MOMENTO` en `lib/medicamentos/tipos.ts`).
 
+Columna agregada por la migración 014 (aplicada 2026-10-11): `inventario_id uuid null references inventario_pastillas(id) on delete set null` — el stock compartido por todas las filas del mismo medicamento (ver `inventario_pastillas`).
+
+## `inventario_pastillas`
+
+Stock de pastillas por medicamento (migración 014, aplicada 2026-10-11). Una fila por medicamento real (usuario + nombre + dosis), compartida por todas sus filas de `medicamentos` vía `medicamentos.inventario_id`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| nombre | text | |
+| dosis | text | opcional |
+| stock | int | check >= 0 |
+| pastillas_por_toma | int | default 1, check > 0 |
+| umbral_alerta | int | default 5, check >= 0 — "poco stock" = `stock < umbral_alerta` |
+| updated_at / created_at | timestamptz | |
+
+Índice único `idx_inventario_unico` sobre `(usuario_id, lower(btrim(nombre)), lower(btrim(coalesce(dosis, ''))))`.
+
+**RLS**: `inventario_pastillas_all_self` (dueño, CRUD) + `inventario_pastillas_select_cuidador` (cuidador con vínculo `aceptado`, solo `select`).
+
+**RPC** `ajustar_stock_pastillas(p_inventario_id uuid, p_direccion int) returns int` — `security definer`, mueve UNA toma: `stock = greatest(0, stock + p_direccion * pastillas_por_toma)` atómico; `p_direccion` solo acepta -1/+1 (el cliente nunca manda una cantidad libre); solo actúa si `auth.uid()` es el dueño o un cuidador `aceptado` del dueño (si no, devuelve null sin tocar nada). Es la única vía de escritura de stock del cuidador. `execute` revocado a `public`/`anon`.
+
 ## `medicamentos_tomas`
 
 Adherencia — una fila por medicamento+fecha. Sin cambios respecto al pase anterior (booleano `tomado` alcanza; este diseño no tiene concepto de "sin confirmar"/alerta a un contacto).
@@ -83,6 +106,26 @@ Momento del día (para agrupar en la Rutina) se deriva de `hora` con `momentoDel
 ## `sesiones_chat` / `mensajes_chat`
 
 Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_chat_historial.sql`.
+
+## `enlaces_profesional`
+
+Links temporales de solo lectura para mostrarle un resumen de salud a un profesional (`/p/{token}`, sin login). **Migración 015 aplicada 2026-10-11** (psql + registro en `schema_migrations`; `supabase/tests/enlaces-profesional.sql` 17/17 PASS).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `usuario_id` | uuid FK `auth.users` on delete cascade | dueño |
+| `token_hash` | text unique not null | sha256 hex del token; el token crudo (32 bytes base64url) se muestra una vez y nunca se guarda |
+| `etiqueta` | text null | ej. "Dra. Pérez", solo la ve el dueño |
+| `expira_at` | timestamptz not null | 24 h / 7 d / 30 d |
+| `revocado_at` | timestamptz null | |
+| `created_at` | timestamptz | |
+| `ultimo_acceso_at` | timestamptz null | |
+| `accesos` | int default 0 | |
+
+**RLS**: `enlaces_profesional_all_self` (dueño, CRUD). Sin ninguna otra policy; `anon` sin privilegios de tabla.
+
+**RPC `resumen_profesional(p_token text) returns jsonb`** (`security definer`, grant a `anon` y `authenticated`): hashea el token en SQL (`sha256()` nativo), y si el link existe, no está revocado ni vencido, suma `accesos`/`ultimo_acceso_at` y devuelve el resumen (paciente con nombre de pila, condiciones, alergias, medicamentos con stock restante, adherencia de 14 días, próximos 5 turnos, 5 estudios recientes sin paths, contacto de emergencia). Si no, devuelve `null` sin distinguir el motivo. Nunca incluye email, chat, cuidadores, ids ni paths de archivos. Tests: `supabase/tests/enlaces-profesional.sql`.
 
 ## `estudios`
 

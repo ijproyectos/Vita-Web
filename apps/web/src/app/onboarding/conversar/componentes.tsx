@@ -29,9 +29,9 @@ export function Burbuja({ m }: { m: Mensaje }) {
   if (m.from === "user") {
     return (
       <div className="mb-2.5 flex justify-end">
-        <div className="max-w-[80%] whitespace-pre-line rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-[#22d3ee] to-[#0e7490] px-3.5 py-2.5 text-[14.5px] text-white">
+        <div className="max-w-[80%] whitespace-pre-line rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-brand-from to-brand-to px-3.5 py-2.5 text-[14.5px] text-primary-foreground">
           {typeof m.audioSeg === "number" && (
-            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-white/75">
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-primary-foreground/75">
               Audio · 0:{String(Math.min(59, m.audioSeg)).padStart(2, "0")}
             </div>
           )}
@@ -44,7 +44,7 @@ export function Burbuja({ m }: { m: Mensaje }) {
   return (
     <div className="mb-2.5 flex items-end gap-2">
       <VitaAvatar size={26} />
-      <div className="max-w-[82%] whitespace-pre-line rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="max-w-[82%] whitespace-pre-line rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug shadow-card">
         {m.texto}
       </div>
     </div>
@@ -55,7 +55,7 @@ export function PuntosEscribiendo() {
   return (
     <div className="flex items-end gap-2">
       <VitaAvatar size={26} />
-      <div className="flex gap-1 rounded-[20px] rounded-bl-[6px] bg-card px-4 py-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="flex gap-1 rounded-[20px] rounded-bl-[6px] bg-card px-4 py-3 shadow-card">
         {[0, 1, 2].map((i) => (
           <span key={i} className="size-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: `${i * 0.15}s` }} />
         ))}
@@ -113,7 +113,7 @@ export function EncabezadoConversar({
               key={t.label}
               className={cn(
                 "flex-1 rounded-full px-3 py-2 text-center text-[12.5px] font-bold transition-colors",
-                t.estado === "activo" && cn(FONDO_ACTIVO[t.color], "text-white"),
+                t.estado === "activo" && cn(FONDO_ACTIVO[t.color], "text-primary-foreground"),
                 t.estado === "completo" && FONDO_COMPLETO[t.color],
                 t.estado === "inactivo" && "bg-secondary text-muted-foreground"
               )}
@@ -193,7 +193,7 @@ export function CampoEntrada({
   const grabando = estado !== "inactivo";
 
   return (
-    <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4.5 shadow-[0_8px_24px_rgba(15,33,54,0.08)]">
+    <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4.5 shadow-float">
       <input
         value={texto}
         onChange={(e) => setTexto(e.target.value)}

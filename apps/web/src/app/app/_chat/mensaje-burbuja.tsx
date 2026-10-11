@@ -15,7 +15,7 @@ export function MensajeBurbuja({ m, cargando }: { m: MensajeChatUI; cargando: bo
   if (m.role === "user") {
     return (
       <div className="mb-2.5 flex justify-end">
-        <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-[#22d3ee] to-[#0e7490] px-3.5 py-2.5 text-[14.5px] leading-snug text-white shadow-[0_6px_14px_rgba(8,145,178,0.22)]">
+        <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-brand-from to-brand-to px-3.5 py-2.5 text-[14.5px] leading-snug text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_22%,transparent)]">
           {m.content}
         </div>
       </div>
@@ -26,7 +26,7 @@ export function MensajeBurbuja({ m, cargando }: { m: MensajeChatUI; cargando: bo
     <div className="mb-2.5 flex flex-col gap-2">
       <div className="flex items-end gap-2">
         <VitaAvatar size={26} />
-        <div className="max-w-[78%] rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug text-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+        <div className="max-w-[78%] rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug text-foreground shadow-card">
           {cargando ? <PuntosEscribiendo /> : m.content}
         </div>
       </div>
@@ -50,7 +50,7 @@ function PuntosEscribiendo() {
 }
 
 function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: unknown } }) {
-  const base = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-[0_8px_24px_rgba(15,33,54,0.06)]";
+  const base = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-card";
 
   switch (accion.type) {
     case "medication_added":

@@ -23,8 +23,8 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
   return (
     <div className="flex flex-col gap-4.5 pb-28">
       {/* Hero */}
-      <div className="rounded-[20px] bg-card p-5 text-center shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
-        <div className="mx-auto flex size-[72px] items-center justify-center rounded-full bg-gradient-to-br from-[#e6f7fb] to-[#d1eef4] font-heading text-2xl font-bold text-[#0e7490]">
+      <div className="rounded-[20px] bg-card p-5 text-center shadow-card">
+        <div className="mx-auto flex size-[72px] items-center justify-center rounded-full bg-gradient-to-br from-chip-teal-bg to-chip-teal-bg font-heading text-2xl font-bold text-chip-teal-ink">
           {(perfil.nombre ?? "?").charAt(0).toUpperCase()}
         </div>
         <div className="mt-3 font-heading text-[19px] font-bold">{perfil.nombre ?? "Sin nombre"}</div>
@@ -44,10 +44,10 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
       <button
         type="button"
         onClick={() => abrir("Contame qué cambió de tu perfil de salud y lo actualizo.")}
-        className="flex items-center gap-3 rounded-[20px] p-3.5 text-left shadow-[inset_0_0_0_1px_rgba(8,145,178,0.15)]"
-        style={{ background: "linear-gradient(135deg, rgba(8,145,178,0.08), rgba(14,116,144,0.04))" }}
+        className="flex items-center gap-3 rounded-[20px] p-3.5 text-left shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_15%,transparent)]"
+        style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--brand-to) 4%, transparent))" }}
       >
-        <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] text-white">
+        <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground">
           <VitaIcon name="sparkle" size={16} />
         </div>
         <div className="flex-1">
@@ -206,7 +206,7 @@ function FormularioPerfil({ perfil, email }: { perfil: Perfil; email: string }) 
         <button
           type="submit"
           disabled={pendiente}
-          className="w-full rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] py-3.5 font-heading text-[15px] font-extrabold text-white shadow-[0_10px_24px_rgba(8,145,178,0.35)] disabled:opacity-60"
+          className="w-full rounded-full bg-gradient-to-br from-brand-from to-brand-to py-3.5 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:opacity-60"
         >
           {pendiente ? "Guardando…" : "Guardar cambios"}
         </button>
@@ -230,7 +230,7 @@ function Seccion({
         <div className="font-heading text-[15px] font-bold">{titulo}</div>
         {subtitulo && <div className="mt-0.5 text-xs text-muted-foreground">{subtitulo}</div>}
       </div>
-      <div className="rounded-[20px] bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">{children}</div>
+      <div className="rounded-[20px] bg-card shadow-card">{children}</div>
     </div>
   );
 }
@@ -334,7 +334,7 @@ function Condiciones({ condiciones }: { condiciones: Perfil["condiciones"] }) {
           + Agregar
         </button>
       </div>
-      <div className="rounded-[20px] bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="rounded-[20px] bg-card shadow-card">
         {agregando && (
           <div className="flex gap-2 border-b p-3.5">
             <input
@@ -411,7 +411,7 @@ function Alergias({ alergias }: { alergias: string[] }) {
           + Agregar
         </button>
       </div>
-      <div className="rounded-[20px] bg-card p-3.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="rounded-[20px] bg-card p-3.5 shadow-card">
         <div className="flex flex-wrap gap-2">
           {alergias.map((a) => (
             <span key={a} className="inline-flex items-center gap-1.5 rounded-full bg-chip-rose-bg py-1.5 pl-3 pr-1.5 text-[12.5px] font-semibold text-chip-rose-ink">
@@ -425,7 +425,7 @@ function Alergias({ alergias }: { alergias: string[] }) {
                   })
                 }
                 aria-label={`Quitar ${a}`}
-                className="flex size-[18px] items-center justify-center rounded-full bg-black/[0.06]"
+                className="flex size-[18px] items-center justify-center rounded-full bg-foreground/[0.06]"
               >
                 <VitaIcon name="close" size={10} />
               </button>

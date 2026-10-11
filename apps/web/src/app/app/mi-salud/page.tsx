@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as estudiosNucleo from "@/lib/estudios/nucleo";
+import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Chip } from "@/components/vita/chip";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
@@ -12,10 +13,12 @@ import { EliminarEstudioButton } from "./eliminar-estudio-button";
 export default async function MiSaludPage() {
   const usuario = await requireUser();
   const supabase = await createClient();
-  const [perfil, estudios] = await Promise.all([
+  const [perfil, estudios, inventarios] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, usuario.id),
     estudiosNucleo.listar(supabase, usuario.id),
+    inventarioNucleo.listarSeguro(supabase, usuario.id),
   ]);
+  const pocoStock = inventarioNucleo.filtrarStockBajo(inventarios).length;
   const condiciones = perfil?.condiciones ?? [];
   const alergias = perfil?.alergias ?? [];
 
@@ -29,14 +32,14 @@ export default async function MiSaludPage() {
         <Link
           href="/app/resumen-salud"
           aria-label="Editar perfil de salud"
-          className="flex size-10 items-center justify-center rounded-full bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+          className="flex size-10 items-center justify-center rounded-full bg-card shadow-card"
         >
           <VitaIcon name="edit" size={18} />
         </Link>
       </div>
 
       {/* Mi estado */}
-      <div className="rounded-[20px] bg-card p-4.5 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+      <div className="rounded-[20px] bg-card p-4.5 shadow-card">
         <div className="font-heading text-[15px] font-bold">Mi estado</div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           {condiciones.length} condiciones · {alergias.length} alergias
@@ -73,6 +76,26 @@ export default async function MiSaludPage() {
         </Link>
       </div>
 
+      {/* Mis pastillas — conteo por foto del blister + control de stock */}
+      <Link href="/app/pastillas" className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-card">
+        <div
+          className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${
+            pocoStock > 0 ? "bg-chip-amber-bg text-chip-amber-ink" : "bg-chip-teal-bg text-chip-teal-ink"
+          }`}
+        >
+          <VitaIcon name="pill" size={20} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-heading text-[15px] font-bold">Mis pastillas</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {pocoStock > 0
+              ? `${pocoStock} ${pocoStock === 1 ? "medicamento con poco stock" : "medicamentos con poco stock"}`
+              : "Sacale una foto al blister y llevá la cuenta de lo que queda"}
+          </div>
+        </div>
+        <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
+      </Link>
+
       {/* Monitoreo activo — sin datos reales todavía, no se fabrican números */}
       <SeccionProximamente
         titulo="Monitoreo activo"
@@ -99,7 +122,7 @@ export default async function MiSaludPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {estudios.map((e) => (
-              <div key={e.id} className="flex gap-3 rounded-[20px] bg-card p-3 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+              <div key={e.id} className="flex gap-3 rounded-[20px] bg-card p-3 shadow-card">
                 {e.urlFirmada ? (
                   // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal de Storage privado, no un asset de Next
                   <img src={e.urlFirmada} alt="" className="size-14 shrink-0 rounded-[14px] object-cover" />

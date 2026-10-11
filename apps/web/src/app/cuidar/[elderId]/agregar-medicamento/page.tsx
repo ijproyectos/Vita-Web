@@ -25,7 +25,7 @@ export default async function AgregarMedicamentoElderPage(
         <Link
           href={`/cuidar/${elderId}`}
           aria-label="Volver"
-          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-card"
         >
           <VitaIcon name="chevron-left" size={18} />
         </Link>

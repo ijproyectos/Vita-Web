@@ -92,7 +92,7 @@ export function FormularioAgregarEstudio() {
       <button
         type="submit"
         disabled={!archivo || pendiente}
-        className="rounded-full bg-gradient-to-br from-[#22d3ee] to-[#0e7490] py-3.5 font-heading text-[15px] font-extrabold text-white shadow-[0_10px_24px_rgba(8,145,178,0.35)] disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:shadow-none"
+        className="rounded-full bg-gradient-to-br from-brand-from to-brand-to py-3.5 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:shadow-none"
       >
         {pendiente ? "Analizando…" : "Guardar estudio"}
       </button>
