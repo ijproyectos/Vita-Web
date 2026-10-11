@@ -35,6 +35,9 @@ export type Medicamento = {
   con_comida: ConComida;
   duracion: string | null;
   notas: string | null;
+  // Stock compartido entre todas las filas del mismo medicamento (migración
+  // 014, lib/inventario). null = sin control de pastillas.
+  inventario_id: string | null;
   created_at: string;
   updated_at: string;
 };

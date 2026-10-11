@@ -11,6 +11,7 @@ import type {
   ResumenAdherencia,
 } from "./tipos";
 import { HORA_POR_MOMENTO } from "./tipos";
+import { ajustarStock, buscarInventarioId } from "@/lib/inventario/nucleo";
 
 // Núcleo de lógica de medicamentos, sin acoplarse a Server Actions ni al
 // chat con IA — ambos llaman a estas mismas funciones (pasando el cliente
@@ -244,7 +245,13 @@ export async function agregarMultiMomento(
   usuarioId: string,
   datos: DatosNuevoMedicamentoMultiMomento
 ): Promise<Medicamento[]> {
+  // Si ese medicamento (nombre+dosis) ya tiene stock cargado, las filas
+  // nuevas nacen enganchadas a él (un solo stock compartido por medicamento).
+  const inventarioId = await buscarInventarioId(supabase, usuarioId, datos.nombre, datos.dosis);
+
   const filas = datos.momentos.map((momento) => ({
+    // Solo si hay uno: así el insert tampoco depende de que la columna exista.
+    ...(inventarioId ? { inventario_id: inventarioId } : {}),
     usuario_id: usuarioId,
     nombre: datos.nombre,
     dosis: datos.dosis ?? null,
@@ -322,18 +329,66 @@ export async function marcarTomado(
   medicamentoId: string,
   tomado = true
 ): Promise<void> {
-  const { error } = await supabase.from("medicamentos_tomas").upsert(
-    {
-      medicamento_id: medicamentoId,
-      usuario_id: usuarioId,
-      fecha: fechaDeHoy(),
-      tomado,
-      tomado_en: tomado ? new Date().toISOString() : null,
-    },
-    { onConflict: "medicamento_id,fecha" }
-  );
+  const fecha = fechaDeHoy();
+  const estadoNuevo = {
+    tomado,
+    tomado_en: tomado ? new Date().toISOString() : null,
+  };
 
-  if (error) throw new Error(`No se pudo registrar la toma: ${error.message}`);
+  // Transición atómica: el UPDATE condicionado al estado opuesto devuelve la
+  // fila SOLO si este request fue quien la cambió — dos clicks seguidos (o
+  // dos dispositivos) no pueden ambos "ganar", así que el stock de pastillas
+  // se mueve a lo sumo una vez por cambio real de estado.
+  const { data: actualizadas, error: errUpdate } = await supabase
+    .from("medicamentos_tomas")
+    .update(estadoNuevo)
+    .eq("medicamento_id", medicamentoId)
+    .eq("fecha", fecha)
+    .eq("tomado", !tomado)
+    .select("id");
+
+  if (errUpdate) throw new Error(`No se pudo registrar la toma: ${errUpdate.message}`);
+
+  let huboCambio = (actualizadas?.length ?? 0) > 0;
+
+  if (!huboCambio) {
+    // No había fila en el estado opuesto: o no existe (primer registro del
+    // día) o ya estaba en el estado pedido. `ignoreDuplicates` => ON
+    // CONFLICT DO NOTHING, y el select solo devuelve la fila si de verdad
+    // se insertó.
+    const { data: insertadas, error: errInsert } = await supabase
+      .from("medicamentos_tomas")
+      .upsert(
+        { medicamento_id: medicamentoId, usuario_id: usuarioId, fecha, ...estadoNuevo },
+        { onConflict: "medicamento_id,fecha", ignoreDuplicates: true }
+      )
+      .select("id");
+
+    if (errInsert) throw new Error(`No se pudo registrar la toma: ${errInsert.message}`);
+    // Desmarcar algo que nunca estuvo marcado inserta una fila en falso,
+    // pero no es un cambio de stock: no hubo toma que devolver.
+    huboCambio = tomado && (insertadas?.length ?? 0) > 0;
+  }
+
+  if (huboCambio) await moverStock(supabase, medicamentoId, tomado ? -1 : 1);
+}
+
+/**
+ * Descuenta (-1) o devuelve (+1) una toma del inventario del medicamento, si
+ * tiene uno — la RPC multiplica por `pastillas_por_toma` del lado de la DB.
+ * Nunca lanza (ver `ajustarStock`).
+ */
+async function moverStock(supabase: Cliente, medicamentoId: string, direccion: 1 | -1): Promise<void> {
+  const { data } = await supabase
+    .from("medicamentos")
+    .select("inventario_id")
+    .eq("id", medicamentoId)
+    .maybeSingle();
+
+  const inventarioId = data?.inventario_id as string | null | undefined;
+  if (!inventarioId) return;
+
+  await ajustarStock(supabase, inventarioId, direccion);
 }
 
 export async function marcarTodosTomados(
