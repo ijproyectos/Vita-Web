@@ -19,7 +19,7 @@ export default async function CuidadoresPage() {
       <TopBar eyebrow="Perfil" title="Mis cuidadores" />
 
       <p className="-mt-2 text-[13px] text-muted-foreground">
-        Invitá a alguien de confianza para que vea tu adherencia a los medicamentos, sin poder editar nada.
+        Invitá a alguien de confianza para que vea tus medicamentos y si los tomaste, pueda marcar una toma cuando te ayuda y cargarte un medicamento nuevo.
       </p>
 
       <InvitarCuidadorForm />
@@ -29,11 +29,11 @@ export default async function CuidadoresPage() {
           Invitaciones y vínculos
         </div>
         {vinculos.length === 0 ? (
-          <div className="rounded-[20px] bg-card p-5 text-center text-sm text-muted-foreground shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card p-5 text-center text-sm text-muted-foreground shadow-card">
             Todavía no invitaste a ningún cuidador.
           </div>
         ) : (
-          <div className="rounded-[20px] bg-card shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+          <div className="rounded-[20px] bg-card shadow-card">
             {vinculos.map((v) => (
               <VinculoRow key={v.id} vinculo={v} />
             ))}

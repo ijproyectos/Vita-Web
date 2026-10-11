@@ -63,10 +63,11 @@ function generarCodigo(): string {
  * vez reclamada), es una decisión de producto para no acumular
  * invitaciones pendientes duplicadas al mismo destinatario.
  *
- * No envía ningún email — la decisión confirmada con el usuario es que
- * la invitación es un link que el elder comparte a mano
- * (`/cuidar/invitacion/{token}`), Resend en este dominio se usa solo para
- * la alerta de dosis vencida (lib/notificaciones/nucleo.ts).
+ * Esta función solo persiste la invitación. El envío del mail (a pedido
+ * explícito del usuario, revierte la decisión anterior de "link a mano")
+ * lo hace la Server Action vía lib/cuidadores/correo.ts por SMTP; el link
+ * (`/cuidar/invitacion/{token}`) sigue copiable como fallback. Resend se
+ * usa solo para la alerta de dosis vencida (lib/notificaciones/nucleo.ts).
  */
 export async function invitar(
   supabase: Cliente,
@@ -405,4 +406,51 @@ export async function listarDosisVencidasDeMisElders(
   }
 
   return resultados;
+}
+
+/**
+ * Invitación por email que el elder todavía puede reenviar: propia,
+ * pendiente y no vencida. Devuelve null en cualquier otro caso (no existe,
+ * no es suya, ya se reclamó/revocó, o venció) — el llamador decide el
+ * mensaje. Usada por el reenvío del mail de invitación.
+ */
+export async function obtenerInvitacionReenviable(
+  supabase: Cliente,
+  elderId: string,
+  vinculoId: string
+): Promise<{ vinculo: VinculoCuidador | null; vencida: boolean }> {
+  const { data, error } = await supabase
+    .from("vinculos_cuidador")
+    .select("*")
+    .eq("id", vinculoId)
+    .eq("elder_id", elderId)
+    .eq("estado", "pendiente")
+    .maybeSingle();
+
+  if (error || !data) return { vinculo: null, vencida: false };
+  const vinculo = data as VinculoCuidador;
+  if (new Date(vinculo.expira_at).getTime() < new Date().getTime()) return { vinculo: null, vencida: true };
+  return { vinculo, vencida: false };
+}
+
+/**
+ * Código de vinculación vigente generado por este cuidador (dirección b):
+ * propio, pendiente y no vencido. No confía en nada del cliente salvo el
+ * código a buscar — la fila se relee bajo RLS. Null si no hay uno vigente.
+ */
+export async function obtenerCodigoVigente(
+  supabase: Cliente,
+  cuidadorId: string,
+  codigo: string
+): Promise<{ id: string; expiraAt: string } | null> {
+  const { data } = await supabase
+    .from("vinculos_cuidador")
+    .select("id, expira_at")
+    .eq("cuidador_id", cuidadorId)
+    .eq("codigo", codigo)
+    .eq("estado", "pendiente")
+    .maybeSingle();
+
+  if (!data || new Date(data.expira_at as string).getTime() < new Date().getTime()) return null;
+  return { id: data.id as string, expiraAt: data.expira_at as string };
 }

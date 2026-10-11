@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import type { VinculoCuidador } from "@/lib/cuidadores/tipos";
-import { revocarCuidadorAction } from "./actions";
+import { reenviarInvitacionAction, revocarCuidadorAction } from "./actions";
 
 const BADGE: Record<VinculoCuidador["estado"], { label: string; clases: string }> = {
   pendiente: { label: "Pendiente", clases: "bg-chip-amber-bg text-chip-amber-ink" },
@@ -17,8 +17,8 @@ const BADGE: Record<VinculoCuidador["estado"], { label: string; clases: string }
 // solo se muestra mientras el vínculo sigue `pendiente`; una vez aceptado o
 // revocado el token ya no sirve para nada. `window.location.origin` en vez
 // de una env var: mismo criterio que login-form.tsx (armar la URL de
-// callback de Google), acá no hay ningún flujo server-side que necesite
-// conocer el dominio de antemano.
+// callback de Google) para el link que se copia a mano; el mail de
+// invitación arma su propio link server-side con `origenPublico()`.
 export function VinculoRow({ vinculo }: { vinculo: VinculoCuidador }) {
   const [copiado, setCopiado] = useState(false);
   const [pendiente, startTransition] = useTransition();
@@ -36,10 +36,19 @@ export function VinculoRow({ vinculo }: { vinculo: VinculoCuidador }) {
     );
   }
 
+  function reenviar() {
+    startTransition(async () => {
+      const r = await reenviarInvitacionAction(vinculo.id);
+      if (r.status === "success") toast.success(`Le mandamos la invitación por mail a ${vinculo.email_invitado}`);
+      else toast.error(r.message);
+    });
+  }
+
   function revocar() {
     startTransition(async () => {
-      await revocarCuidadorAction(vinculo.id);
-      toast.success("Invitación revocada");
+      const resultado = await revocarCuidadorAction(vinculo.id);
+      if (resultado.status === "success") toast.success("Invitación revocada");
+      else toast.error(resultado.message);
     });
   }
 
@@ -72,6 +81,16 @@ export function VinculoRow({ vinculo }: { vinculo: VinculoCuidador }) {
           >
             <VitaIcon name={copiado ? "check" : "link"} size={15} />
             {copiado ? "Copiado" : "Copiar link de invitación"}
+          </button>
+          <button
+            type="button"
+            onClick={reenviar}
+            disabled={pendiente}
+            aria-label="Reenviar mail"
+            className="flex shrink-0 items-center gap-1.5 rounded-[14px] bg-secondary px-3 py-2 text-xs font-semibold text-primary disabled:opacity-50"
+          >
+            <VitaIcon name="send" size={15} />
+            Reenviar mail
           </button>
           <button
             type="button"

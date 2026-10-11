@@ -6,16 +6,20 @@ import { invitarCuidadorAction, type EstadoAccion } from "./actions";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
 
-// Form de invitación — un solo campo (email), sin envío de correo: la
-// decisión confirmada es que el elder comparte el link a mano (ver
-// `invitar()` en lib/cuidadores/nucleo.ts).
+// Form de invitación — un solo campo (email). Se manda la invitación por
+// mail; si el envío falla, la invitación igual queda creada y el link se
+// copia a mano desde la fila (ver `invitar()` en lib/cuidadores/nucleo.ts).
 export function InvitarCuidadorForm() {
   const [email, setEmail] = useState("");
 
   async function accion(prev: EstadoAccion, formData: FormData): Promise<EstadoAccion> {
     const resultado = await invitarCuidadorAction(prev, formData);
     if (resultado.status === "success") {
-      toast.success("Invitación creada");
+      if (resultado.emailEnviado) {
+        toast.success(`Le mandamos la invitación por mail a ${resultado.email}`);
+      } else {
+        toast.error("No pudimos mandar el mail — copiá el link y compartilo");
+      }
       setEmail("");
     }
     return resultado;
@@ -24,10 +28,10 @@ export function InvitarCuidadorForm() {
   const [estado, formAction, pendiente] = useActionState(accion, ESTADO_INICIAL);
 
   return (
-    <form action={formAction} className="flex flex-col gap-2.5 rounded-[20px] bg-card p-4 shadow-[var(--shadow-card,0_8px_24px_rgba(15,33,54,0.06))]">
+    <form action={formAction} className="flex flex-col gap-2.5 rounded-[20px] bg-card p-4 shadow-card">
       <div className="font-heading text-[15px] font-bold">Invitar a un cuidador</div>
       <p className="-mt-1 text-xs text-muted-foreground">
-        Le vas a poder compartir un link de invitación una vez creada.
+        Le mandamos la invitación por mail. Si no le llega, también podés copiar el link.
       </p>
       <div className="flex items-stretch gap-2">
         <input
