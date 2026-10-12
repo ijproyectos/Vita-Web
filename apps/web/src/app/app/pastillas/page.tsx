@@ -17,9 +17,16 @@ export default async function PastillasPage() {
       <TopBar eyebrow="Mi Salud" title="Mis pastillas" />
 
       <p className="px-0.5 text-sm text-muted-foreground">
-        Sacale una foto al blister, vita cuenta las pastillas y después va descontando cada toma que marques. Si quedan
+        Sacale una foto al frente y otra al dorso del blister: vita cuenta las pastillas, lee el nombre y después va descontando cada toma que marques. Si quedan
         pocas, te avisamos.
       </p>
+
+      <Link
+        href="/app/pastillas/contar"
+        className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-brand-from to-brand-to py-3.5 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
+      >
+        <VitaIcon name="camera" size={18} /> Agregar pastillas con foto
+      </Link>
 
       {grupos.length === 0 ? (
         <div className="rounded-[20px] bg-secondary p-5 text-center">

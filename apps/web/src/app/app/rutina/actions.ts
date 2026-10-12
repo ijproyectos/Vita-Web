@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
+import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import { PASTILLAS_POR_TOMA_MAXIMO, STOCK_MAXIMO } from "@/lib/inventario/tipos";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
 
@@ -69,8 +71,23 @@ export async function crearMedicamentoAction(
     return { status: "error", message: "Nombre, dosis y al menos un momento del día son obligatorios." };
   }
 
+  // Stock contado desde "Mis pastillas" (medicamento nuevo detectado en un
+  // blister): llega como campos ocultos y se valida acá, en el borde.
+  const stockCrudo = String(formData.get("stockInicial") ?? "").trim();
+  const porTomaCrudo = String(formData.get("pastillasPorToma") ?? "").trim();
+  const stockInicial = Number(stockCrudo);
+  const porToma = Number(porTomaCrudo || "1");
+  const hayStock =
+    stockCrudo !== "" &&
+    Number.isInteger(stockInicial) &&
+    stockInicial >= 0 &&
+    stockInicial <= STOCK_MAXIMO &&
+    Number.isInteger(porToma) &&
+    porToma >= 1 &&
+    porToma <= PASTILLAS_POR_TOMA_MAXIMO;
+
   try {
-    await medicamentos.agregarMultiMomento(supabase, usuario.id, {
+    const filas = await medicamentos.agregarMultiMomento(supabase, usuario.id, {
       nombre,
       dosis,
       unidad,
@@ -80,12 +97,27 @@ export async function crearMedicamentoAction(
       duracion: duracion || null,
       notas: notas || null,
     });
+
+    // Best-effort: el medicamento ya existe; si el stock no se pudo guardar
+    // (p. ej. migración 014 sin aplicar) se puede volver a contar desde Mis pastillas.
+    if (hayStock && filas[0]) {
+      try {
+        await inventarioNucleo.guardar(supabase, usuario.id, {
+          medicamentoId: filas[0].id,
+          stock: stockInicial,
+          pastillasPorToma: porToma,
+        });
+      } catch {
+        /* se ignora a propósito, ver comentario */
+      }
+    }
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
   }
 
   revalidatePath("/app");
   revalidatePath("/app/rutina");
+  revalidatePath("/app/pastillas");
   return { status: "success" };
 }
 

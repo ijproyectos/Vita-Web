@@ -37,11 +37,20 @@ const COMIDAS: { v: ConComida; label: string }[] = [
 
 const DURACIONES = ["7 días", "14 días", "30 días", "Indefinido"];
 
-export function FormularioAgregarMedicamento() {
+export type InicialMedicamento = {
+  nombre: string;
+  dosis: string;
+  unidad: string;
+  /** Stock contado por foto en "Mis pastillas"; "" si no viene de ahí. */
+  stockInicial: string;
+  pastillasPorToma: string;
+};
+
+export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMedicamento }) {
   const router = useRouter();
-  const [nombre, setNombre] = useState("");
-  const [dosis, setDosis] = useState("");
-  const [unidad, setUnidad] = useState("mg");
+  const [nombre, setNombre] = useState(inicial?.nombre ?? "");
+  const [dosis, setDosis] = useState(inicial?.dosis ?? "");
+  const [unidad, setUnidad] = useState(inicial?.unidad && UNIDADES.includes(inicial.unidad) ? inicial.unidad : "mg");
   const [frecuencia, setFrecuencia] = useState(FRECUENCIAS[0]);
   const [momentos, setMomentos] = useState<MomentoDia[]>([]);
   const [conComida, setConComida] = useState<ConComida>("no-importa");
@@ -66,6 +75,15 @@ export function FormularioAgregarMedicamento() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4.5 pb-24">
+      {inicial?.stockInicial && (
+        <>
+          <input type="hidden" name="stockInicial" value={inicial.stockInicial} />
+          <input type="hidden" name="pastillasPorToma" value={inicial.pastillasPorToma} />
+          <p className="rounded-[14px] bg-chip-teal-bg px-3.5 py-2.5 text-[13px] font-semibold text-chip-teal-ink">
+            Se guardan también las {inicial.stockInicial} pastillas que contaste en el blister.
+          </p>
+        </>
+      )}
       <Campo label="Nombre del medicamento" requerido>
         <input
           name="nombre"

@@ -35,6 +35,18 @@ const ConteoSchema = z.object({
     .string()
     .nullable()
     .describe("Aclaración breve en español sobre lo que dificulta el conteo, si aplica. null si no hay nada que aclarar."),
+  nombre_detectado: z
+    .string()
+    .nullable()
+    .describe(
+      "Nombre del medicamento (marca o droga) tal como está IMPRESO en el blister, ej. 'Metformina'. SOLO si se lee con claridad en alguna de las fotos. null si no se ve texto legible: nunca lo adivines por la forma o el color de las pastillas."
+    ),
+  dosis_detectada: z
+    .string()
+    .nullable()
+    .describe(
+      "Dosis impresa por pastilla con su unidad, ej. '500 mg'. SOLO si se lee con claridad. null si no se ve."
+    ),
 });
 
 export type ConteoPastillas = {
@@ -43,6 +55,8 @@ export type ConteoPastillas = {
   blistersDetectados: number;
   confianza: "alta" | "media" | "baja";
   nota: string | null;
+  nombreDetectado: string | null;
+  dosisDetectada: string | null;
 };
 
 export type ResultadoConteo = { ok: true; datos: ConteoPastillas } | { ok: false; error: string };
@@ -52,7 +66,16 @@ const TIPOS_SOPORTADOS = ["image/jpeg", "image/png", "image/gif", "image/webp"] 
 // La API de imágenes de Anthropic rechaza archivos de más de 5 MB.
 export const TAMANO_MAXIMO_BYTES = 5 * 1024 * 1024;
 
-const PROMPT = `Esta es una foto de uno o más blisters (planchas) de pastillas. Contá cuántas pastillas SIGUEN en el blister: cada alvéolo que todavía tiene su pastilla y no fue abierto ni perforado. No cuentes los alvéolos vacíos o rotos. Si hay varios blisters, sumá todos. Si la foto no muestra ningún blister, devolvé blisters_detectados = 0 y pastillas_restantes = 0. Sé honesto con la confianza: si algo está tapado, borroso o cortado, bajala y explicalo en la nota.`;
+const PROMPT_FRENTE = `Esta es una foto de uno o más blisters (planchas) de pastillas. Contá cuántas pastillas SIGUEN en el blister: cada alvéolo que todavía tiene su pastilla y no fue abierto ni perforado. No cuentes los alvéolos vacíos o rotos. Si hay varios blisters, sumá todos. Si la foto no muestra ningún blister, devolvé blisters_detectados = 0 y pastillas_restantes = 0. Sé honesto con la confianza: si algo está tapado, borroso o cortado, bajala y explicalo en la nota.
+
+Además, si en alguna foto se lee con claridad el nombre del medicamento y su dosis impresos en el blister (normalmente en el lado de aluminio), devolvelos en nombre_detectado y dosis_detectada. Si no hay texto legible, devolvé null en ambos: no adivines el nombre.`;
+
+const PROMPT_FRENTE_Y_DORSO = `Te paso DOS fotos del mismo medicamento. La PRIMERA es el frente del blister (el lado donde se ven las pastillas): usala para contar. La SEGUNDA es el dorso (el lado de aluminio con el nombre y la dosis impresos): usala para leer nombre_detectado y dosis_detectada. Contá cuántas pastillas SIGUEN en el blister: cada alvéolo que todavía tiene su pastilla y no fue abierto ni perforado; no cuentes los alvéolos vacíos o rotos, y sumá todos los blisters si hay varios. Si la primera foto no muestra ningún blister, devolvé blisters_detectados = 0 y pastillas_restantes = 0. Sé honesto con la confianza y explicá en la nota lo que dificulte el conteo. Si el nombre o la dosis no se leen con claridad en ninguna de las dos fotos, devolvé null: no los adivines.`;
+
+function limpiarTexto(valor: string | null | undefined, largoMax: number): string | null {
+  const t = typeof valor === "string" ? valor.trim().replace(/\s+/g, " ") : "";
+  return t ? t.slice(0, largoMax) : null;
+}
 
 function normalizar(crudo: z.infer<typeof ConteoSchema>): ConteoPastillas {
   const restantes = acotarEntero(crudo.pastillas_restantes, 0, STOCK_MAXIMO);
@@ -71,6 +94,8 @@ function normalizar(crudo: z.infer<typeof ConteoSchema>): ConteoPastillas {
     blistersDetectados: blisters,
     confianza: crudo.confianza,
     nota,
+    nombreDetectado: limpiarTexto(crudo.nombre_detectado, 80),
+    dosisDetectada: limpiarTexto(crudo.dosis_detectada, 40),
   };
 }
 
@@ -80,19 +105,23 @@ function normalizar(crudo: z.infer<typeof ConteoSchema>): ConteoPastillas {
  * soportado, límite diario, sin ANTHROPIC_API_KEY, error de red, foto sin
  * blister). La foto NO se guarda — solo se analiza.
  */
+export type ImagenBlister = { base64: string; mediaType: string };
+
 export async function contarPastillasEnFoto(
   usuarioId: string,
-  imagenBase64: string,
-  mediaType: string
+  frente: ImagenBlister,
+  dorso?: ImagenBlister | null
 ): Promise<ResultadoConteo> {
   // Mismo criterio que lib/estudios/extraer.ts: nunca asumir el mime real
   // (HEIC de iPhone, etc.) — declinar explícito en vez de mandarlo mal
   // etiquetado.
-  if (!(TIPOS_SOPORTADOS as readonly string[]).includes(mediaType)) {
-    return {
-      ok: false,
-      error: `No puedo leer fotos en formato ${mediaType || "desconocido"}. Probá con una JPG o PNG, o cargá la cantidad a mano.`,
-    };
+  for (const img of dorso ? [frente, dorso] : [frente]) {
+    if (!(TIPOS_SOPORTADOS as readonly string[]).includes(img.mediaType)) {
+      return {
+        ok: false,
+        error: `No puedo leer fotos en formato ${img.mediaType || "desconocido"}. Probá con una JPG o PNG, o cargá la cantidad a mano.`,
+      };
+    }
   }
 
   const limite = await verificarLimiteDiario(usuarioId);
@@ -101,7 +130,11 @@ export async function contarPastillasEnFoto(
   }
 
   try {
-    const tipoValido = mediaType as (typeof TIPOS_SOPORTADOS)[number];
+    const bloque = (img: ImagenBlister) =>
+      ({
+        type: "image",
+        source: { type: "base64", media_type: img.mediaType as (typeof TIPOS_SOPORTADOS)[number], data: img.base64 },
+      }) as const;
 
     const mensaje = await anthropic.messages.parse({
       model: MODEL,
@@ -110,8 +143,9 @@ export async function contarPastillasEnFoto(
         {
           role: "user",
           content: [
-            { type: "image", source: { type: "base64", media_type: tipoValido, data: imagenBase64 } },
-            { type: "text", text: PROMPT },
+            bloque(frente),
+            ...(dorso ? [bloque(dorso)] : []),
+            { type: "text", text: dorso ? PROMPT_FRENTE_Y_DORSO : PROMPT_FRENTE },
           ],
         },
       ],

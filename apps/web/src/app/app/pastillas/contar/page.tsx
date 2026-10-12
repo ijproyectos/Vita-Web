@@ -16,6 +16,7 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
 
   const opciones: OpcionMedicamento[] = grupos.map((g) => ({
     id: g.representanteId,
+    nombre: g.nombre,
     etiqueta: g.dosis ? `${g.nombre} · ${g.dosis}` : g.nombre,
     stockActual: g.inventario?.stock ?? null,
     pastillasPorToma: g.inventario?.pastillas_por_toma ?? 1,
@@ -28,7 +29,7 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
   return (
     <div className="flex flex-col gap-4.5 px-4 pt-2">
       <TopBar eyebrow="Mis pastillas" title="Contar pastillas" />
-      <FlujoContar opciones={opciones} inicialId={grupoPreseleccionado?.representanteId ?? opciones[0]?.id ?? ""} />
+      <FlujoContar opciones={opciones} inicialId={grupoPreseleccionado?.representanteId ?? ""} />
     </div>
   );
 }
