@@ -30,8 +30,10 @@ export type EstadoGuardado =
 // revise y lo edite — NO guarda nada (el guardado es una acción aparte y
 // explícita). La foto no se persiste. Nunca lanza.
 export async function contarFotoAction(_prev: EstadoConteo, formData: FormData): Promise<EstadoConteo> {
+  // requireUser fuera del try: su redirect("/login") lanza NEXT_REDIRECT y
+  // el catch lo convertiría en un mensaje en vez de redirigir.
+  const usuario = await requireUser();
   try {
-    const usuario = await requireUser();
 
     const frente = formData.get("frente");
     if (!(frente instanceof File) || frente.size === 0) {
@@ -71,8 +73,8 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
 //    agregar medicamento prellenado y con el stock contado, que se guarda recién
 //    cuando el medicamento exista (así no quedan inventarios huérfanos).
 export async function guardarInventarioAction(_prev: EstadoGuardado, formData: FormData): Promise<EstadoGuardado> {
+  const usuario = await requireUser(); // fuera del try, ver contarFotoAction
   try {
-    const usuario = await requireUser();
     const supabase = await createClient();
 
     let medicamentoId = String(formData.get("medicamentoId") ?? "").trim();
