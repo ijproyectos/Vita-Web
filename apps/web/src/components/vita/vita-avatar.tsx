@@ -15,6 +15,7 @@ import type { Instancia } from "./vita-3d/motor";
  * `interactivo` (default: size >= 56) activa mirada al puntero, hover, toque
  * (aplaste+saludo) y saltito de entrada; los avatares chicos inline se
  * renderizan a baja frecuencia y sin interacción.
+ * Con estado `thinking`/`typing` aparece una burbuja de tres puntos sobre la cabeza.
  * `activo=false` pausa el render (ej. overlay del chat cerrado pero montado).
  */
 export function VitaAvatar({
@@ -86,6 +87,7 @@ export function VitaAvatar({
       aria-label={ETIQUETA_ESTADO[estado]}
     >
       <Placeholder size={size} visible={!listo} />
+      {(estado === "thinking" || estado === "typing") && <BurbujaPuntos size={size} />}
       <canvas
         ref={canvasRef}
         aria-hidden
@@ -99,6 +101,49 @@ export function VitaAvatar({
           transition: "opacity 200ms ease-out",
         }}
       />
+    </div>
+  );
+}
+
+// Burbuja de "pensando / procesando": tres puntos que rebotan en secuencia
+// sobre la cabeza. HTML/CSS superpuesto al canvas (no es parte de la escena
+// WebGL) y escala con `size`. Animación en globals.css (.vita-burbuja /
+// .vita-punto), con variante estática + pulso lento para reduced-motion.
+function BurbujaPuntos({ size }: { size: number }) {
+  const alto = Math.round(Math.min(30, Math.max(14, size * 0.16)));
+  const punto = Math.max(3, Math.round(alto * 0.26));
+  return (
+    <div
+      aria-hidden
+      className="vita-burbuja shadow-card"
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: Math.max(0, size * 0.16 - alto),
+        height: alto,
+        paddingInline: alto * 0.5,
+        gap: punto * 0.8,
+        borderRadius: alto,
+        background: "var(--card)",
+        display: "flex",
+        alignItems: "center",
+        pointerEvents: "none",
+        zIndex: 1,
+      }}
+    >
+      {[0, 1, 2].map((n) => (
+        <span
+          key={n}
+          className="vita-punto"
+          style={{
+            width: punto,
+            height: punto,
+            borderRadius: "50%",
+            background: "var(--teal)",
+            animationDelay: `${n * 0.16}s`,
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -147,6 +192,7 @@ const ETIQUETA_ESTADO: Record<EstadoAvatar, string> = {
   calm: "vita, tranquila",
   listening: "vita, escuchando",
   thinking: "vita, pensando",
+  typing: "vita, atenta a lo que escribís",
   speaking: "vita, hablando",
   happy: "vita, contenta",
   empathetic: "vita, acompañándote",

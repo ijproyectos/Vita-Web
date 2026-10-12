@@ -40,7 +40,7 @@ import { obtenerAnalizadorDeVoz } from "@/lib/voz/hablar-cliente";
 
 export type Mood = "alegre" | "triste" | "enojo" | "seguimiento";
 const MOODS: Mood[] = ["alegre", "triste", "enojo", "seguimiento"];
-export type Mirada = "puntero" | "centro" | "arriba";
+export type Mirada = "puntero" | "centro" | "arriba" | "abajo";
 
 export interface Intencion {
   /** Pesos objetivo por mood (suman 1). null = conservar los actuales (speaking). */
@@ -584,6 +584,11 @@ function paso(i: Interno, now: number, dt: number) {
     if (intencion.mirada === "centro") {
       nx = 0;
       ny = 0.1;
+    } else if (intencion.mirada === "abajo") {
+      // Hacia el campo de texto, con una deriva lenta de lado a lado (como
+      // quien acompaña lo que se va escribiendo).
+      nx = Math.sin(tm * 0.6) * 0.3;
+      ny = 0.7;
     } else if (intencion.mirada === "arriba") {
       nx = Math.sin(tm * 0.5) * 0.5 + 0.2;
       ny = -0.5;

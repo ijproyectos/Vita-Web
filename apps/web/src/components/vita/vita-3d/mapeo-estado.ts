@@ -9,6 +9,8 @@ import type { Intencion } from "./motor";
 //   idle/calm  -> seguimiento (calm, algo más lento)
 //   listening  -> seguimiento, ojos más grandes, mirada al centro
 //   thinking   -> seguimiento, mirada arriba, más lento
+//   typing     -> seguimiento, mirada abajo (hacia el campo de texto), ojos
+//                 algo más grandes y velocidad levemente reducida
 //   speaking   -> conserva el mood actual (pesos null); la boca se abre con
 //                 el RMS del audio de salida
 const SEGUIMIENTO = { alegre: 0, triste: 0, enojo: 0, seguimiento: 1 };
@@ -28,6 +30,8 @@ export function intencionDe(estado: EstadoAvatar): Intencion {
       return { ...base, mirada: "centro", ojosExtra: 1.2 };
     case "thinking":
       return { ...base, mirada: "arriba", velocidad: 0.6 };
+    case "typing":
+      return { ...base, mirada: "abajo", ojosExtra: 1.12, velocidad: 0.85 };
     case "speaking":
       return { ...base, pesos: null, hablando: true };
     default:

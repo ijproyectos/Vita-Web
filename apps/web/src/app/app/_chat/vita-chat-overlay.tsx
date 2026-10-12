@@ -75,6 +75,10 @@ export function VitaChatOverlay() {
   // escuchar/pensar/hablar, solo lo actualiza cada respuesta nueva del
   // asistente; el estado final del avatar (más abajo) le da prioridad a
   // listening/thinking/speaking, que reflejan la conversación en curso.
+  // "Escribiendo": se prende en el onChange del input y se apaga con un
+  // timeout (ref) ~1.5 s después de la última tecla — nunca desde un efecto.
+  const [escribiendo, setEscribiendo] = useState(false);
+  const timeoutEscribiendoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [moodAvatar, setMoodAvatar] = useState<EstadoAvatar>("idle");
   const finRef = useRef<HTMLDivElement>(null);
   const ultimoNonceInicial = useRef<number | null>(null);
@@ -261,6 +265,8 @@ export function VitaChatOverlay() {
       { role: "assistant", content: "", timestamp: ahora },
     ]);
     setEntrada("");
+    if (timeoutEscribiendoRef.current) clearTimeout(timeoutEscribiendoRef.current);
+    setEscribiendo(false);
     setEnviando(true);
     scrollAlFinal();
 
@@ -377,8 +383,19 @@ export function VitaChatOverlay() {
     }
   }
 
+  function alCambiarEntrada(valor: string) {
+    setEntrada(valor);
+    if (timeoutEscribiendoRef.current) clearTimeout(timeoutEscribiendoRef.current);
+    if (valor.trim() === "") {
+      setEscribiendo(false);
+      return;
+    }
+    setEscribiendo(true);
+    timeoutEscribiendoRef.current = setTimeout(() => setEscribiendo(false), 1500);
+  }
+
   // Prioridad: lo que está pasando AHORA en la conversación (hablando >
-  // escuchando > pensando) siempre gana sobre el mood — un "feliz" viejo no
+  // escuchando > pensando > escribiendo) siempre gana sobre el mood — un "feliz" viejo no
   // debe taparse la voz/escucha real, y tampoco tiene sentido mostrarlo
   // mientras vita todavía está pensando la respuesta que lo va a decidir.
   const estadoAvatarHeader: EstadoAvatar = hablando
@@ -387,7 +404,9 @@ export function VitaChatOverlay() {
       ? "listening"
       : estadoVoz === "procesando" || enviando
         ? "thinking"
-        : moodAvatar;
+        : escribiendo && entrada.trim() !== ""
+          ? "typing"
+          : moodAvatar;
 
   const vacio = mensajes.length <= 1 && !enviando;
 
@@ -471,7 +490,7 @@ export function VitaChatOverlay() {
           <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4 pr-1.5 shadow-float">
             <input
               value={entrada}
-              onChange={(e) => setEntrada(e.target.value)}
+              onChange={(e) => alCambiarEntrada(e.target.value)}
               placeholder="Contame…"
               disabled={enviando}
               className="min-w-0 flex-1 bg-transparent py-2 text-[15px] outline-none disabled:opacity-60"

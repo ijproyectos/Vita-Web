@@ -275,3 +275,54 @@
     border: 1px solid var(--border);
   }
 }
+
+/* Burbuja de tres puntos sobre la cabeza de vita (pensando / escribiendo). */
+.vita-burbuja {
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  animation: vita-burbuja-in 180ms ease-out both;
+}
+.vita-punto {
+  display: block;
+  animation: vita-punto-rebote 1.2s ease-in-out infinite;
+}
+@keyframes vita-burbuja-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+@keyframes vita-punto-rebote {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-45%);
+    opacity: 1;
+  }
+}
+@keyframes vita-burbuja-pulso {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vita-burbuja {
+    animation: vita-burbuja-pulso 2.4s ease-in-out infinite;
+    transform: translateX(-50%);
+  }
+  .vita-punto {
+    animation: none;
+  }
+}
