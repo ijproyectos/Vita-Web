@@ -9,12 +9,23 @@ export type ResultadoEnvio = { ok: true } | { ok: false; motivo: "sin_configurac
 
 type ConfigSmtp = { host: string; port: number; user: string; pass: string; from: string };
 
+// Netlify guarda el valor de una env var tal cual se tipeó: si se cargó
+// `"vita <hola@...>"` con comillas (como en un .env, donde la shell sí las
+// saca), llegan literales y nodemailer arma un remitente inválido
+// (`"vita <hola"@dominio>`) que el servidor rechaza. Se quitan acá.
+function sinComillas(valor: string | undefined): string | undefined {
+  const v = valor?.trim();
+  if (!v) return v;
+  const m = v.match(/^(["'])([\s\S]*)\1$/);
+  return m ? m[2].trim() : v;
+}
+
 function leerConfig(): ConfigSmtp | null {
-  const host = process.env.SMTP_HOST?.trim();
-  const port = Number(process.env.SMTP_PORT?.trim() || "465");
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM?.trim() || user;
+  const host = sinComillas(process.env.SMTP_HOST);
+  const port = Number(sinComillas(process.env.SMTP_PORT) || "465");
+  const user = sinComillas(process.env.SMTP_USER);
+  const pass = sinComillas(process.env.SMTP_PASS);
+  const from = sinComillas(process.env.SMTP_FROM) || user;
   if (!host || !user || !pass || !from || !Number.isFinite(port)) return null;
   return { host, port, user, pass, from };
 }
