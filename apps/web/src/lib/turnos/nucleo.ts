@@ -2,14 +2,18 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DatosNuevoTurno, Turno } from "./tipos";
+import { fechaDeHoyISO } from "@/lib/rutina/formato";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts — funciones puras
 // (supabase, usuarioId, ...), consumidas tanto por Server Actions como por
 // una tool de chat (add_appointment en lib/ai/tools.ts).
 type Cliente = SupabaseClient;
 
+// `turnos.fecha` es fecha de pared en Argentina (la que eligió el usuario),
+// así que "hoy" se compara en hora AR — en UTC, entre las 21:00 y las 23:59
+// los turnos de hoy desaparecían de la Rutina.
 function fechaDeHoy(): string {
-  return new Date().toISOString().slice(0, 10);
+  return fechaDeHoyISO();
 }
 
 export async function listarProximos(

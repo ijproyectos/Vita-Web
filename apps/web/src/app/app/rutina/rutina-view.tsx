@@ -10,7 +10,7 @@ import { MarcarTodosButton } from "./marcar-todos-button";
 import { AgregarSheet } from "./agregar-sheet";
 import { ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_MOMENTO } from "@/lib/rutina/momento";
 import { momentoDelDia } from "@/lib/rutina/momento";
-import { diaYMes, formatoFechaCorta } from "@/lib/rutina/formato";
+import { diaYMes, fechaDeHoyISO, formatoFechaCorta } from "@/lib/rutina/formato";
 import { BadgeStock } from "@/components/vita/badge-stock";
 import type { ResumenStock } from "@/lib/inventario/tipos";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
@@ -100,7 +100,7 @@ export function RutinaView({
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[12.5px] font-semibold uppercase tracking-wide opacity-80">
-                  Hoy · {formatoFechaCorta(new Date().toISOString().slice(0, 10))}
+                  Hoy · {formatoFechaCorta(fechaDeHoyISO())}
                 </div>
                 <div className="mt-1 font-heading text-[22px] font-extrabold leading-tight">
                   {tomados}/{total} medicamentos

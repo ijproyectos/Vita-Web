@@ -9,6 +9,7 @@ import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
 import { GENEROS, GRUPOS_SANGUINEOS } from "@/lib/perfil/opciones";
 import { momentoDelDia } from "@/lib/rutina/momento";
+import { fechaDeHoyISO } from "@/lib/rutina/formato";
 import {
   diasAIngles,
   diasDesdeIngles,
@@ -323,6 +324,15 @@ export async function ejecutarTool(
     }
 
     case "add_appointment": {
+      // Red de seguridad además del contexto de fecha del system prompt: un
+      // turno con fecha inválida o ya pasada no se guarda — se le devuelve
+      // el error al modelo para que confirme la fecha con el usuario.
+      const fecha = String(input.date);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || fecha < fechaDeHoyISO()) {
+        return {
+          contenido: `ERROR: la fecha ${fecha} no es válida o ya pasó (hoy es ${fechaDeHoyISO()}). No se guardó el turno: confirmá la fecha con el usuario.`,
+        };
+      }
       const creado = await turnos.agregar(supabase, usuarioId, {
         especialidad: String(input.specialty),
         profesional: (input.professional as string) ?? null,

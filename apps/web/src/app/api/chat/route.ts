@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TOOLS, ejecutarTool } from "@/lib/ai/tools";
 import * as chat from "@/lib/chat/nucleo";
 import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
+import { descripcionAhoraEnAR, fechaDeHoyISO } from "@/lib/rutina/formato";
 
 export const runtime = "nodejs";
 
@@ -121,11 +122,18 @@ export async function POST(request: Request) {
           content: m.contenido,
         }));
 
+        // El modelo no sabe qué día es: sin esto resolvía "mañana" con su
+        // propio año de referencia y agendaba turnos un año en el pasado
+        // (que después no aparecían en la Rutina).
+        const systemConFecha = `${SYSTEM_PROMPT}
+
+Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDeHoyISO()}). Usá SIEMPRE esta fecha para resolver "hoy", "mañana", "el jueves", "el 15", etc., y pasá las fechas a las tools como YYYY-MM-DD. Un turno nunca puede quedar en una fecha que ya pasó.`;
+
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
           const respuesta = anthropic.messages.stream({
             model: MODEL,
             max_tokens: 1024,
-            system: SYSTEM_PROMPT,
+            system: systemConFecha,
             tools: TOOLS,
             messages: historial,
           });
