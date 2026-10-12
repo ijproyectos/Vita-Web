@@ -21,10 +21,10 @@ export async function actualizarPerfil(
   usuarioId: string,
   cambios: CambiosPerfil
 ): Promise<Perfil> {
+  // upsert, no update: ver el comentario en `actualizarPerfilCrudo`.
   const { data, error } = await supabase
     .from("perfiles")
-    .update(cambios)
-    .eq("id", usuarioId)
+    .upsert({ id: usuarioId, ...cambios }, { onConflict: "id" })
     .select()
     .single();
 
@@ -114,14 +114,21 @@ export async function completarOnboarding(
   await actualizarPerfilCrudo(supabase, usuarioId, cambios);
 }
 
-// Update genérico sin el tipado estricto de CambiosPerfil — usado
+// Escritura genérica sin el tipado estricto de CambiosPerfil — usada
 // internamente para condiciones/alergias/onboarding, que tocan columnas
 // fuera del subconjunto "editable inline" expuesto por CambiosPerfil.
+//
+// upsert y no update: la fila de `perfiles` solo se crea en el callback de
+// Google (auth/callback). Si falta (sesión abierta de antes, o la fila se
+// borró desde el panel), un update afecta 0 filas SIN error — el onboarding
+// "guardaba" uso_app/onboarding_completado_at en el vacío y la persona
+// quedaba en un loop en /onboarding/para-quien. Con upsert la fila se crea
+// (policy perfiles_upsert_self) y solo se pisan las columnas enviadas.
 async function actualizarPerfilCrudo(
   supabase: Cliente,
   usuarioId: string,
   cambios: Record<string, unknown>
 ): Promise<void> {
-  const { error } = await supabase.from("perfiles").update(cambios).eq("id", usuarioId);
+  const { error } = await supabase.from("perfiles").upsert({ id: usuarioId, ...cambios }, { onConflict: "id" });
   if (error) throw new Error(`No se pudo actualizar el perfil: ${error.message}`);
 }
