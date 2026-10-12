@@ -19,12 +19,15 @@ export type EstadoVinculoGenerado =
   | { status: "listo"; codigo: string; expiraAt: string }
   | { status: "error"; mensaje: string };
 
-export type EstadoEnvioCodigo = { status: "success" } | { status: "error"; mensaje: string };
+export type EstadoEnvioCodigo =
+  | { status: "success"; nuevoCodigo?: string; expiraAt?: string }
+  | { status: "error"; mensaje: string; puedeRegenerar?: boolean; nuevoCodigo?: string; expiraAt?: string };
 
-// Manda el código vigente por mail a la persona cuidada. No confía en el
-// código que manda el cliente: lo relee de la fila propia (RLS
-// `vinculos_select_cuidador`) pendiente y no vencida. Tope de 5 envíos por
-// código en memoria (best-effort, ver lib/email/limite.ts).
+// Manda el código por mail a la persona cuidada. No confía en el estado que
+// ve el cliente: relee la fila propia (RLS `vinculos_select_cuidador`). Si el
+// código venció, genera uno nuevo (conservando el perfil en borrador) y manda
+// ese; si ya se usó o no existe, devuelve un error con opción de regenerar.
+// Tope de 5 envíos por código en memoria (best-effort, ver lib/email/limite.ts).
 export async function enviarCodigoPorMailAction(codigo: string, email: string): Promise<EstadoEnvioCodigo> {
   const usuario = await requireUser();
   const supabase = await createClient();
@@ -32,11 +35,48 @@ export async function enviarCodigoPorMailAction(codigo: string, email: string): 
   const destino = email.trim().toLowerCase();
   if (!emailValido(destino)) return { status: "error", mensaje: "Ingresá un email válido." };
 
-  const vigente = await cuidadoresNucleo.obtenerCodigoVigente(supabase, usuario.id, codigo);
-  if (!vigente) {
-    return { status: "error", mensaje: "Este código ya venció. Volvé a generar uno." };
+  const consulta = await cuidadoresNucleo.obtenerCodigoVigente(supabase, usuario.id, codigo);
+  if (consulta.estado === "usado") {
+    return {
+      status: "error",
+      mensaje: "Este código ya se usó para vincular. Generá uno nuevo para otra persona.",
+      puedeRegenerar: true,
+    };
   }
-  if (!permitirEnvio(vigente.id)) {
+  if (consulta.estado === "no_encontrado") {
+    return {
+      status: "error",
+      mensaje: "No encontramos este código. Generá uno nuevo y probá de nuevo.",
+      puedeRegenerar: true,
+    };
+  }
+
+  let codigoAEnviar = codigo;
+  let vinculoId: string;
+  let expiraAt: string;
+  let nuevoCodigo: string | undefined;
+
+  if (consulta.estado === "vencido") {
+    try {
+      const perfilPendienteId = await cuidadoresNucleo.perfilPendienteDeVinculo(
+        supabase,
+        usuario.id,
+        consulta.id
+      );
+      const nuevo = await cuidadoresNucleo.crearVinculoComoCuidador(supabase, usuario.id, perfilPendienteId);
+      codigoAEnviar = nuevo.codigo ?? "";
+      vinculoId = nuevo.id;
+      expiraAt = nuevo.expira_at;
+      nuevoCodigo = codigoAEnviar;
+    } catch {
+      return { status: "error", mensaje: "El código venció y no pudimos generar uno nuevo.", puedeRegenerar: true };
+    }
+  } else {
+    vinculoId = consulta.id;
+    expiraAt = consulta.expiraAt;
+  }
+
+  if (!permitirEnvio(vinculoId)) {
     return { status: "error", mensaje: "Ya mandamos varios mails con este código. Compartilo por WhatsApp." };
   }
 
@@ -44,14 +84,23 @@ export async function enviarCodigoPorMailAction(codigo: string, email: string): 
     supabase,
     usuario.id,
     destino,
-    codigo,
-    vigente.expiraAt,
+    codigoAEnviar,
+    expiraAt,
     await origenPublico()
   );
   if (!envio.ok) {
-    return { status: "error", mensaje: "No pudimos mandar el mail. Compartí el código por WhatsApp." };
+    // El código nuevo (si se generó) igual existe: se devuelve para que la
+    // pantalla lo muestre aunque el mail haya fallado.
+    return {
+      status: "error",
+      mensaje: nuevoCodigo
+        ? "El código había vencido y generamos uno nuevo, pero no pudimos mandar el mail. Compartilo por WhatsApp."
+        : "No pudimos mandar el mail. Compartí el código por WhatsApp.",
+      nuevoCodigo,
+      expiraAt: nuevoCodigo ? expiraAt : undefined,
+    };
   }
-  return { status: "success" };
+  return nuevoCodigo ? { status: "success", nuevoCodigo, expiraAt } : { status: "success" };
 }
 
 // Reusable fuera del onboarding también (ver "+ Vincular a alguien" desde

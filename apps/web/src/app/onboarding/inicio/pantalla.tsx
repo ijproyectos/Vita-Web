@@ -9,7 +9,7 @@ import { reclamarCodigoAction, type EstadoReclamoCodigo } from "../actions";
 const ESTADO_INICIAL: EstadoReclamoCodigo = { status: "idle" };
 
 // "¿Alguien de tu familia te está ayudando con la app?" — si trae
-// `?codigo=` (del deep link del QR de /onboarding/vincular-cuidado), abre
+// `?codigo=` (del deep link compartido desde /onboarding/vincular-cuidado), abre
 // directo la sub-vista de código con el campo pre-cargado. `abrirCodigoInicial`
 // (desde `?modo=codigo`, el link "Me invitó un familiar..." de /login) abre
 // la misma sub-vista pero sin pre-cargar nada.
@@ -55,7 +55,7 @@ export function PantallaInicio({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-heading text-[15px] font-bold">Sí, tengo un código</div>
-                <div className="mt-0.5 text-[12.5px] text-muted-foreground">Me lo compartieron por WhatsApp o QR</div>
+                <div className="mt-0.5 text-[12.5px] text-muted-foreground">Me lo compartieron por WhatsApp o mail</div>
               </div>
               <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
             </button>

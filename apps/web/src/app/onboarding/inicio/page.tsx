@@ -8,7 +8,7 @@ import { PantallaInicio } from "./pantalla";
 // empezando por /onboarding/para-quien. `?modo=codigo` (nuevo — desde el
 // link "Me invitó un familiar, tengo un código" de /login) abre la misma
 // sub-vista de código, sin pre-cargar nada (a diferencia de `?codigo=`, el
-// deep link del QR, que sí trae el código ya escrito).
+// deep link compartido, que sí trae el código ya escrito).
 export default async function OnboardingInicioPage(props: PageProps<"/onboarding/inicio">) {
   await requireUser();
   const searchParams = await props.searchParams;

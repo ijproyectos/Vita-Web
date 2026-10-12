@@ -40,7 +40,7 @@ export async function enviarInvitacionPorMail(
 /**
  * Manda el código de 6 dígitos (dirección b) a la persona cuidada. El link
  * lleva a /login con `next` apuntando a /onboarding/inicio?codigo=XXXXXX,
- * el mismo deep link que usa el QR (ahí el código ya llega pre-cargado).
+ * el mismo deep link del mensaje de WhatsApp (ahí el código ya llega pre-cargado).
  */
 export async function enviarCodigoPorMail(
   supabase: SupabaseClient,

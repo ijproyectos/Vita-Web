@@ -9,7 +9,7 @@ export type VinculoCuidador = {
   id: string;
   // Nullable desde 010_onboarding_rol_y_vinculo_por_codigo.sql: null hasta
   // que el elder reclama un vínculo iniciado por el cuidador (dirección b,
-  // por código/QR) — antes siempre venía set porque solo existía la
+  // por código) — antes siempre venía set porque solo existía la
   // dirección elder→cuidador (a, por link).
   elder_id: string | null;
   cuidador_id: string | null; // null hasta que el cuidador reclama la invitación (dirección a)
@@ -57,11 +57,12 @@ export type ResultadoReclamo =
  * calca los `raise exception` de la RPC (ver
  * 010_onboarding_rol_y_vinculo_por_codigo.sql). Simétrico a
  * `MotivoReclamoRechazado`, dirección (b) — el elder reclama un vínculo
- * que el cuidador inició por código/QR. */
+ * que el cuidador inició por código. */
 export type MotivoReclamoElderRechazado =
   | "codigo_no_encontrado"
   | "codigo_expirado"
   | "ya_vinculado"
+  | "autovinculo_no_permitido"
   | "error_desconocido";
 
 /**

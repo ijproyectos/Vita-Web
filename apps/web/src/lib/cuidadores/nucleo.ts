@@ -259,6 +259,13 @@ export async function reclamarVinculoComoElder(
     if (motivo === "ya_vinculado") {
       return { error: "ya_vinculado", mensaje: "Ya estás vinculado con esa persona." };
     }
+    if (motivo === "autovinculo_no_permitido") {
+      return {
+        error: "autovinculo_no_permitido",
+        mensaje:
+          "No podés usar un código que generaste vos. Pasáselo a la persona que cuidás para que lo ingrese en su celular.",
+      };
+    }
     return {
       error: "error_desconocido",
       mensaje: `No se pudo procesar el código: ${error.message}`,
@@ -433,24 +440,54 @@ export async function obtenerInvitacionReenviable(
   return { vinculo, vencida: false };
 }
 
+export type ConsultaCodigo =
+  | { estado: "vigente"; id: string; expiraAt: string }
+  | { estado: "vencido"; id: string }
+  | { estado: "usado" }
+  | { estado: "no_encontrado" };
+
 /**
- * Código de vinculación vigente generado por este cuidador (dirección b):
- * propio, pendiente y no vencido. No confía en nada del cliente salvo el
- * código a buscar — la fila se relee bajo RLS. Null si no hay uno vigente.
+ * Estado de un código de vinculación generado por este cuidador (dirección
+ * b). No confía en nada del cliente salvo el código a buscar — la fila se
+ * relee bajo RLS (`vinculos_select_cuidador`). Distingue vigente / vencido
+ * (pendiente pero pasado de `expira_at`) / usado (ya reclamado o revocado) /
+ * no encontrado, para que el llamador pueda regenerar cuando corresponde.
  */
 export async function obtenerCodigoVigente(
   supabase: Cliente,
   cuidadorId: string,
   codigo: string
-): Promise<{ id: string; expiraAt: string } | null> {
+): Promise<ConsultaCodigo> {
   const { data } = await supabase
     .from("vinculos_cuidador")
-    .select("id, expira_at")
+    .select("id, expira_at, estado")
     .eq("cuidador_id", cuidadorId)
     .eq("codigo", codigo)
-    .eq("estado", "pendiente")
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  if (!data || new Date(data.expira_at as string).getTime() < new Date().getTime()) return null;
-  return { id: data.id as string, expiraAt: data.expira_at as string };
+  if (!data) return { estado: "no_encontrado" };
+  if (data.estado !== "pendiente") return { estado: "usado" };
+  if (new Date(data.expira_at as string).getTime() < new Date().getTime()) {
+    return { estado: "vencido", id: data.id as string };
+  }
+  return { estado: "vigente", id: data.id as string, expiraAt: data.expira_at as string };
+}
+
+/** Perfil en borrador linkeado a un vínculo (si lo hay) — para conservarlo
+ * al regenerar un código vencido. Lectura bajo RLS (`perfiles_pendientes_all_propio`). */
+export async function perfilPendienteDeVinculo(
+  supabase: Cliente,
+  cuidadorId: string,
+  vinculoId: string
+): Promise<string | undefined> {
+  const { data } = await supabase
+    .from("perfiles_pendientes")
+    .select("id")
+    .eq("vinculo_id", vinculoId)
+    .eq("cuidador_id", cuidadorId)
+    .eq("estado", "borrador")
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? undefined;
 }
