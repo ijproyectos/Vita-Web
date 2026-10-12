@@ -5,6 +5,8 @@ import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VitaWordmark } from "@/components/vita/v-mark";
+import { obtenerUsoHoy } from "@/lib/uso-ia/nucleo";
+import { BarraUso, textoRestante } from "@/components/uso-ia/barra-uso";
 import { ToggleRow } from "./toggle-row";
 import { EliminarCuenta } from "./eliminar-cuenta";
 
@@ -12,9 +14,10 @@ export default async function PerfilPage() {
   const usuario = await requireUser();
   const supabase = await createClient();
 
-  const [perfil, adherencia] = await Promise.all([
+  const [perfil, adherencia, uso] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, usuario.id),
     medicamentos.calcularAdherencia(supabase, usuario.id),
+    obtenerUsoHoy(usuario.id),
   ]);
 
   // new Date() en vez de Date.now() — el lint de pureza de Server
@@ -52,6 +55,18 @@ export default async function PerfilPage() {
           <MiniStat label="Racha" valor={`${adherencia.rachaDias}d`} divisor />
         </div>
       </div>
+
+      {uso && (
+        <Grupo titulo="Uso de vita hoy">
+          <div className="flex flex-col gap-2 px-4.5 py-4">
+            <BarraUso uso={uso} />
+            <div className="text-[13px] font-semibold">{textoRestante(uso)}</div>
+            <div className="text-[11.5px] text-muted-foreground">
+              {uso.usados.toLocaleString("es-AR")} de {uso.limite.toLocaleString("es-AR")} tokens usados hoy
+            </div>
+          </div>
+        </Grupo>
+      )}
 
       {/* Cuidado compartido — real, a diferencia de los grupos decorativos de abajo */}
       <Grupo titulo="Cuidado compartido">

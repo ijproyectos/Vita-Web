@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as chat from "@/lib/chat/nucleo";
+import { obtenerUsoHoy } from "@/lib/uso-ia/nucleo";
+import type { UsoDiarioConEstado } from "@/lib/uso-ia/tipos";
 import type { MensajeChat, SesionChat } from "@/lib/chat/tipos";
 
 // Server Actions consumidas por el overlay de chat (componente cliente,
@@ -27,4 +29,10 @@ export async function eliminarHistorialAction(): Promise<void> {
   const usuario = await requireUser();
   const supabase = await createClient();
   await chat.eliminarHistorial(supabase, usuario.id);
+}
+
+// Uso diario de IA para el indicador del chat. Nunca lanza: null = ocultar.
+export async function obtenerUsoHoyAction(): Promise<UsoDiarioConEstado | null> {
+  const usuario = await requireUser();
+  return obtenerUsoHoy(usuario.id);
 }

@@ -1,6 +1,8 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fechaISOEnAR } from "@/lib/rutina/formato";
+import { calcularUso, type UsoDiarioConEstado } from "./tipos";
 
 // Límite diario de tokens de Anthropic por usuario — pedido explícito del
 // usuario tras quedarse sin crédito, para que una sola cuenta no pueda
@@ -16,8 +18,32 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // código que lo aplica.
 export const LIMITE_TOKENS_DIARIO = 200_000;
 
-function fechaHoyUTC(): string {
-  return new Date().toISOString().slice(0, 10);
+// El "día" del contador es el calendario de Argentina, no UTC: con UTC el
+// contador se reseteaba a las 21:00 AR y "se renueva a la medianoche" (lo
+// que le decimos a la persona) sería mentira. `fecha` es una columna date,
+// solo cambia qué fecha se escribe y se lee.
+function fechaHoy(): string {
+  return fechaISOEnAR();
+}
+
+/**
+ * Uso del día para mostrar en la UI. Nunca lanza: si no se puede leer
+ * devuelve null y la UI simplemente oculta el indicador.
+ */
+export async function obtenerUsoHoy(usuarioId: string): Promise<UsoDiarioConEstado | null> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("uso_ia_diario")
+      .select("tokens_input, tokens_output")
+      .eq("usuario_id", usuarioId)
+      .eq("fecha", fechaHoy())
+      .maybeSingle();
+    if (error) return null;
+    return calcularUso((data?.tokens_input ?? 0) + (data?.tokens_output ?? 0), LIMITE_TOKENS_DIARIO);
+  } catch {
+    return null;
+  }
 }
 
 export type ResultadoVerificacionLimite = { ok: true } | { ok: false; mensaje: string };
@@ -39,7 +65,7 @@ export async function verificarLimiteDiario(usuarioId: string): Promise<Resultad
       .from("uso_ia_diario")
       .select("tokens_input, tokens_output")
       .eq("usuario_id", usuarioId)
-      .eq("fecha", fechaHoyUTC())
+      .eq("fecha", fechaHoy())
       .maybeSingle();
 
     if (error) return { ok: true };
@@ -68,10 +94,13 @@ export async function verificarLimiteDiario(usuarioId: string): Promise<Resultad
  * para que sea atómico de verdad. Nunca lanza — perder una fila de
  * contabilidad no debe romper la respuesta que la persona ya recibió.
  */
-export async function registrarUsoIA(usuarioId: string, uso: { inputTokens: number; outputTokens: number }): Promise<void> {
+export async function registrarUsoIA(
+  usuarioId: string,
+  uso: { inputTokens: number; outputTokens: number }
+): Promise<UsoDiarioConEstado | null> {
   try {
     const admin = createAdminClient();
-    const fecha = fechaHoyUTC();
+    const fecha = fechaHoy();
 
     const { data: existente } = await admin
       .from("uso_ia_diario")
@@ -80,15 +109,22 @@ export async function registrarUsoIA(usuarioId: string, uso: { inputTokens: numb
       .eq("fecha", fecha)
       .maybeSingle();
 
-    await admin.from("uso_ia_diario").upsert({
+    const tokensInput = (existente?.tokens_input ?? 0) + uso.inputTokens;
+    const tokensOutput = (existente?.tokens_output ?? 0) + uso.outputTokens;
+
+    const { error } = await admin.from("uso_ia_diario").upsert({
       usuario_id: usuarioId,
       fecha,
-      tokens_input: (existente?.tokens_input ?? 0) + uso.inputTokens,
-      tokens_output: (existente?.tokens_output ?? 0) + uso.outputTokens,
+      tokens_input: tokensInput,
+      tokens_output: tokensOutput,
       llamadas: (existente?.llamadas ?? 0) + 1,
       updated_at: new Date().toISOString(),
     });
+    if (error) return null;
+    // Devuelve el total nuevo para que el chat lo emita sin otra lectura.
+    return calcularUso(tokensInput + tokensOutput, LIMITE_TOKENS_DIARIO);
   } catch {
     // Silencioso a propósito — ver comentario de la función.
+    return null;
   }
 }

@@ -42,6 +42,7 @@ import {
   Trash2,
   AlertTriangle,
   Volume2,
+  VolumeX,
   type LucideProps,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -96,6 +97,7 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   // Agregado para modo simple (fase 3.5): botón "escuchar de nuevo" del
   // anuncio de voz — ningún ícono del set original cubría audio/parlante.
   volume: Volume2,
+  "volume-off": VolumeX,
 };
 
 export function VitaIcon({

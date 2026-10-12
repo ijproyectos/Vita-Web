@@ -8,7 +8,8 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { cn } from "@/lib/utils";
-import { desbloquearVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
+import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
+import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { marcarTomadoAction } from "../rutina/actions";
 
@@ -69,6 +70,7 @@ export function Pantalla({
   // puramente transitoria y nunca la manda el servidor.
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
   const fase: Fase = confirmadoLocal ? "confirmado" : !proxima ? "descanso" : vencida ? "alertado" : "esperando";
+  const { silenciada, alternar: alternarSilencio } = useSilencioVita();
   const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
   const [pendiente, startTransition] = useTransition();
   // Para que el avatar muestre "speaking" mientras suena el anuncio por voz
@@ -82,7 +84,7 @@ export function Pantalla({
   }, [router]);
 
   async function reproducirAnuncio() {
-    if (!proxima) return;
+    if (!proxima || silenciada) return;
     setReproduciendoAudio(true);
     try {
       const blob = await obtenerAudioBlob(fraseAnuncio(proxima));
@@ -135,7 +137,18 @@ export function Pantalla({
     },
   });
 
+  // Silenciar corta en el mismo click: audio en curso y micrófono.
+  function alternarSonido() {
+    if (!silenciada) {
+      cancelarVoz();
+      detenerVoz();
+      setReproduciendoAudio(false);
+    }
+    alternarSilencio();
+  }
+
   async function alternarEscuchaVoz() {
+    if (silenciada) return;
     if (estadoVoz !== "inactivo") {
       detenerVoz();
       return;
@@ -172,22 +185,24 @@ export function Pantalla({
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-background">
       <BotonSalir />
+      <BotonSonido silenciada={silenciada} onAlternar={alternarSonido} />
 
       {fase === "descanso" && <FaseDescanso estado={estadoAvatar} />}
 
       {fase === "confirmado" && proxima && <FaseConfirmado nombre={proxima.nombre} />}
 
-      {(fase === "esperando" || fase === "alertado") && proxima && !audioDesbloqueado && (
+      {(fase === "esperando" || fase === "alertado") && proxima && !silenciada && !audioDesbloqueado && (
         <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
       )}
 
-      {(fase === "esperando" || fase === "alertado") && proxima && audioDesbloqueado && (
+      {(fase === "esperando" || fase === "alertado") && proxima && (silenciada || audioDesbloqueado) && (
         <FaseDosisPendiente
           proxima={proxima}
           alertado={fase === "alertado"}
           faltanMinutos={faltanMinutos}
           confirmando={pendiente}
           escuchandoVoz={estadoVoz !== "inactivo"}
+          silenciada={silenciada}
           estado={estadoAvatar}
           onConfirmar={confirmar}
           onReescuchar={reproducirAnuncio}
@@ -212,6 +227,26 @@ function BotonSalir() {
     >
       Salir del modo simple
     </Link>
+  );
+}
+
+// Preferencia de sonido (compartida con el chat). Texto + ícono, nunca solo
+// color; objetivo táctil >= 44px porque esta pantalla la usan adultos mayores.
+function BotonSonido({ silenciada, onAlternar }: { silenciada: boolean; onAlternar: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onAlternar}
+      aria-pressed={silenciada}
+      className={cn(
+        "absolute right-4 z-10 flex min-h-11 items-center gap-2 rounded-full px-4 text-[14px] font-semibold",
+        silenciada ? "bg-chip-amber-bg text-chip-amber-ink" : "bg-chip-teal-bg text-chip-teal-ink"
+      )}
+      style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
+    >
+      <VitaIcon name={silenciada ? "volume-off" : "volume"} size={20} />
+      {silenciada ? "Sonido: desactivado" : "Sonido: activado"}
+    </button>
   );
 }
 
@@ -242,6 +277,7 @@ function FaseDosisPendiente({
   faltanMinutos,
   confirmando,
   escuchandoVoz,
+  silenciada,
   estado,
   onConfirmar,
   onReescuchar,
@@ -252,6 +288,7 @@ function FaseDosisPendiente({
   faltanMinutos: number;
   confirmando: boolean;
   escuchandoVoz: boolean;
+  silenciada: boolean;
   estado: EstadoAvatar;
   onConfirmar: () => void;
   onReescuchar: () => void;
@@ -282,6 +319,7 @@ function FaseDosisPendiente({
             {[proxima.dosis, proxima.unidad].filter(Boolean).join(" ")} · {proxima.horaProgramada} hs
           </span>
         )}
+        {!silenciada && (
         <button
           type="button"
           onClick={onReescuchar}
@@ -290,6 +328,7 @@ function FaseDosisPendiente({
         >
           <VitaIcon name="volume" size={24} />
         </button>
+        )}
       </div>
 
       <div className="flex flex-col gap-3 px-6" style={{ paddingBottom: "var(--safe-bottom)" }}>
@@ -301,6 +340,7 @@ function FaseDosisPendiente({
         >
           SÍ, YA LA TOMÉ
         </button>
+        {!silenciada && (
         <button
           type="button"
           onClick={onAlternarVoz}
@@ -312,6 +352,7 @@ function FaseDosisPendiente({
           <VitaIcon name="mic" size={19} />
           {escuchandoVoz ? "Escuchando…" : "Tocá y decí \"sí\""}
         </button>
+        )}
       </div>
     </>
   );

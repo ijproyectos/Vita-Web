@@ -7,9 +7,12 @@ import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { VitaIcon } from "@/lib/vita-icons";
 import { HistorialDrawer } from "./historial-drawer";
-import { listarSesionesAction, listarMensajesAction } from "./chat-actions";
+import { listarSesionesAction, listarMensajesAction, obtenerUsoHoyAction } from "./chat-actions";
+import { BarraUso, barraUsoTono, textoRestante } from "@/components/uso-ia/barra-uso";
+import type { UsoDiario } from "@/lib/uso-ia/tipos";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
+import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob, extraerFrasesListas } from "@/lib/voz/hablar-cliente";
 import type { EstadoVoz } from "@/lib/voz/tipos";
@@ -69,8 +72,10 @@ export function VitaChatOverlay() {
   const [entrada, setEntrada] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  const { silenciada, alternar: alternarSilencio } = useSilencioVita();
   const [modoVoz, setModoVoz] = useState(false);
   const [hablando, setHablando] = useState(false);
+  const [uso, setUso] = useState<UsoDiario | null>(null); // null = oculto (sin dato)
   // Último mood que decidió vita (set_avatar_mood) — no se toca por
   // escuchar/pensar/hablar, solo lo actualiza cada respuesta nueva del
   // asistente; el estado final del avatar (más abajo) le da prioridad a
@@ -177,7 +182,22 @@ export function VitaChatOverlay() {
     return () => window.removeEventListener("keydown", alPresionar);
   }, [abierto, historialAbierto]);
 
+  // Silenciar corta todo en el mismo click (nada de efectos): habla en
+  // curso, cola pendiente, modo voz y micrófono. Desilenciar NO reactiva la
+  // voz — el usuario la vuelve a prender a mano con el micrófono.
+  function alternarSilenciada() {
+    if (!silenciada) {
+      modoVozRef.current = false;
+      detenerVoz();
+      cortarHabla();
+      setModoVoz(false);
+      setHablando(false);
+    }
+    alternarSilencio();
+  }
+
   async function alternarModoVoz() {
+    if (silenciada) return;
     if (modoVoz) {
       detenerVoz();
       cortarHabla();
@@ -214,6 +234,9 @@ export function VitaChatOverlay() {
     cargadoRef.current = true;
     listarSesionesAction()
       .then(setSesiones)
+      .catch(() => {});
+    obtenerUsoHoyAction()
+      .then(setUso)
       .catch(() => {});
   }, [abierto]);
 
@@ -256,7 +279,7 @@ export function VitaChatOverlay() {
 
   async function enviar(texto: string) {
     const limpio = texto.trim();
-    if (!limpio || enviando) return;
+    if (!limpio || enviando || (uso && uso.restantes <= 0)) return;
 
     const ahora = new Date().toISOString();
     setMensajes((prev) => [
@@ -303,11 +326,14 @@ export function VitaChatOverlay() {
             | { chunk: string }
             | { action: { type: string; [clave: string]: unknown } }
             | { error: string }
-            | { session: string };
+            | { session: string }
+            | { uso: UsoDiario };
 
           if ("session" in evento) {
             sesionAsignada = evento.session;
             setSesionId(evento.session);
+          } else if ("uso" in evento) {
+            setUso(evento.uso);
           } else if ("chunk" in evento) {
             textoAcumulado += evento.chunk;
             setMensajes((prev) => {
@@ -408,6 +434,7 @@ export function VitaChatOverlay() {
           ? "typing"
           : moodAvatar;
 
+  const agotado = !!uso && uso.restantes <= 0;
   const vacio = mensajes.length <= 1 && !enviando;
 
   return (
@@ -433,9 +460,26 @@ export function VitaChatOverlay() {
             <div className="font-heading text-[16px] font-bold">vita</div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="size-1.5 rounded-full bg-online" />
-              {modoVoz ? etiquetaEstadoVoz(estadoVoz, hablando) : "en línea · siempre disponible"}
+              {silenciada
+                ? "silenciada · solo texto"
+                : modoVoz
+                  ? etiquetaEstadoVoz(estadoVoz, hablando)
+                  : "en línea · siempre disponible"}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={alternarSilenciada}
+            aria-pressed={silenciada}
+            aria-label={silenciada ? "Activar la voz de vita" : "Silenciar a vita"}
+            title={silenciada ? "Activar la voz de vita" : "Silenciar a vita"}
+            className={
+              "flex size-9 items-center justify-center rounded-full " +
+              (silenciada ? "bg-chip-amber-bg text-chip-amber-ink" : "bg-muted text-foreground")
+            }
+          >
+            <VitaIcon name={silenciada ? "volume-off" : "volume"} size={18} />
+          </button>
           <button
             type="button"
             onClick={() => setHistorialAbierto(true)}
@@ -470,7 +514,8 @@ export function VitaChatOverlay() {
                   key={s}
                   type="button"
                   onClick={() => enviar(s)}
-                  className="rounded-full bg-card px-3.5 py-2 text-[13px] font-semibold text-primary shadow-[inset_0_0_0_1px_var(--border)]"
+                  disabled={agotado}
+                  className="rounded-full bg-card px-3.5 py-2 text-[13px] font-semibold text-primary shadow-[inset_0_0_0_1px_var(--border)] disabled:opacity-50"
                 >
                   {s}
                 </button>
@@ -479,6 +524,24 @@ export function VitaChatOverlay() {
           )}
           <div ref={finRef} />
         </div>
+
+        {uso && (
+          <div className="px-5 pt-2">
+            <BarraUso uso={uso} />
+            <p
+              className={
+                "mt-1 text-center text-[11.5px] " +
+                (barraUsoTono(uso) === "agotado"
+                  ? "font-semibold text-destructive"
+                  : barraUsoTono(uso) === "poco"
+                    ? "text-chip-amber-ink"
+                    : "text-muted-foreground")
+              }
+            >
+              {textoRestante(uso)}
+            </p>
+          </div>
+        )}
 
         <form
           onSubmit={(e) => {
@@ -492,16 +555,24 @@ export function VitaChatOverlay() {
               value={entrada}
               onChange={(e) => alCambiarEntrada(e.target.value)}
               placeholder="Contame…"
-              disabled={enviando}
+              disabled={enviando || agotado}
               className="min-w-0 flex-1 bg-transparent py-2 text-[15px] outline-none disabled:opacity-60"
             />
             <button
               type="button"
               onClick={alternarModoVoz}
+              disabled={silenciada || (agotado && !modoVoz)}
               aria-pressed={modoVoz}
-              aria-label={modoVoz ? "Desactivar modo voz" : "Activar modo voz (manos libres)"}
+              aria-label={
+                silenciada
+                  ? "vita está silenciada"
+                  : modoVoz
+                    ? "Desactivar modo voz"
+                    : "Activar modo voz (manos libres)"
+              }
+              title={silenciada ? "vita está silenciada" : undefined}
               className={
-                "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors " +
+                "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 " +
                 (modoVoz
                   ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground " +
                     (estadoVoz === "grabando" || hablando ? "animate-pulse" : "")
@@ -512,7 +583,7 @@ export function VitaChatOverlay() {
             </button>
             <button
               type="submit"
-              disabled={!entrada.trim() || enviando}
+              disabled={!entrada.trim() || enviando || agotado}
               aria-label="Enviar"
               className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground transition-opacity disabled:from-muted disabled:to-muted disabled:text-muted-foreground"
             >

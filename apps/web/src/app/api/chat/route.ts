@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { TOOLS, ejecutarTool } from "@/lib/ai/tools";
 import * as chat from "@/lib/chat/nucleo";
-import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
+import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { descripcionAhoraEnAR, fechaDeHoyISO } from "@/lib/rutina/formato";
 
 export const runtime = "nodejs";
@@ -82,6 +82,8 @@ export async function POST(request: Request) {
       const enviar = (data: unknown) => controller.enqueue(encoder.encode(eventoSSE(data)));
       // "[DONE]" es un sentinel literal, no JSON — mismo contrato que el
       // agente original (`agent/README.md`: "data: [DONE]", sin comillas).
+      const enviarUso = (u: { usados: number; limite: number; restantes: number; porcentajeUsado: number }) =>
+        enviar({ uso: { usados: u.usados, limite: u.limite, restantes: u.restantes, porcentajeUsado: u.porcentajeUsado } });
       const enviarFin = () => controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 
       let textoAcumulado = ""; // se persiste como UN mensaje del asistente al final,
@@ -95,6 +97,8 @@ export async function POST(request: Request) {
       try {
         const limite = await verificarLimiteDiario(user.id);
         if (!limite.ok) {
+          const uso = await obtenerUsoHoy(user.id);
+          if (uso) enviarUso(uso);
           enviar({ error: limite.mensaje });
           enviarFin();
           return;
@@ -176,13 +180,15 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
           await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
         }
 
-        await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
+        const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
+        if (usoNuevo) enviarUso(usoNuevo);
         enviarFin();
       } catch (e) {
         // Registra lo consumido hasta el turno que falló -- una excepción a
         // mitad del loop no debe perder la contabilidad de los turnos que sí
         // llegaron a completarse antes.
-        await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
+        const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
+        if (usoNuevo) enviarUso(usoNuevo);
         enviar({ error: e instanceof Error ? e.message : "Error desconocido." });
         enviarFin();
       } finally {
