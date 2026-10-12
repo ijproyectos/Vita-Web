@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as estudiosNucleo from "@/lib/estudios/nucleo";
 import { extraerDatosEstudio } from "@/lib/estudios/extraer";
+import { TAMANIO_MAXIMO_BYTES } from "@/lib/estudios/tipos";
 
 export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
 
@@ -21,7 +22,10 @@ export async function subirEstudioAction(_prev: EstadoAccion, formData: FormData
 
   const archivo = formData.get("archivo");
   if (!(archivo instanceof File) || archivo.size === 0) {
-    return { status: "error", message: "Elegí o sacá una foto primero." };
+    return { status: "error", message: "Sacá una foto o elegí un archivo primero." };
+  }
+  if (archivo.size > TAMANIO_MAXIMO_BYTES) {
+    return { status: "error", message: "El archivo pesa más de 10 MB. Probá con una foto más liviana o un PDF más chico." };
   }
 
   try {
@@ -51,8 +55,10 @@ export async function subirEstudioAction(_prev: EstadoAccion, formData: FormData
 // haga se llevaría una excepción sin manejar en vez del {status,message}
 // que el resto del repo espera.
 export async function eliminarEstudioAction(estudioId: string): Promise<EstadoAccion> {
+  // requireUser fuera del try: su redirect("/login") lanza NEXT_REDIRECT y
+  // el catch lo convertiría en un mensaje de error en vez de redirigir.
+  const usuario = await requireUser();
   try {
-    const usuario = await requireUser();
     const supabase = await createClient();
     await estudiosNucleo.eliminar(supabase, usuario.id, estudioId);
     revalidatePath("/app/mi-salud");

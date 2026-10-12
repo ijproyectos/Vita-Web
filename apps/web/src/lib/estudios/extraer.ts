@@ -3,7 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import type { DatosExtraidos } from "./tipos";
+import { TIPO_PDF, type DatosExtraidos } from "./tipos";
 import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 
 // Único punto de contacto con Anthropic para esto — mismo criterio que
@@ -32,14 +32,16 @@ export type ExtraccionResultado =
   | { ok: true; datos: DatosExtraidos }
   | { ok: false; error: string };
 
-/**
- * Analiza la foto de un estudio médico y extrae tipo/fecha/resumen/valores.
- * Nunca lanza — quien llama siempre puede guardar el estudio igual (solo
- * con la foto) si esto falla, sea porque la imagen no es legible, porque
- * no hay ANTHROPIC_API_KEY configurada, o cualquier otro error de red.
- */
-const TIPOS_SOPORTADOS = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+const TIPOS_IMAGEN = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+export const TIPOS_SOPORTADOS: readonly string[] = [...TIPOS_IMAGEN, TIPO_PDF];
 
+/**
+ * Analiza la foto o el PDF de un estudio médico y extrae
+ * tipo/fecha/resumen/valores. Nunca lanza — quien llama siempre puede
+ * guardar el estudio igual (solo con el archivo) si esto falla, sea porque
+ * no es legible, porque no hay ANTHROPIC_API_KEY configurada, o cualquier
+ * otro error de red.
+ */
 export async function extraerDatosEstudio(
   usuarioId: string,
   imagenBase64: string,
@@ -50,10 +52,10 @@ export async function extraerDatosEstudio(
   // bytes reales igual, etiquetados mal — la API podía "leer" una imagen
   // rota sin avisar. Mejor declinar de entrada, explícito, que mandar un
   // tipo falso.
-  if (!(TIPOS_SOPORTADOS as readonly string[]).includes(mediaType)) {
+  if (!TIPOS_SOPORTADOS.includes(mediaType)) {
     return {
       ok: false,
-      error: `Formato de imagen no compatible para análisis automático (${mediaType || "desconocido"}). La foto se guarda igual.`,
+      error: `Formato no compatible para análisis automático (${mediaType || "desconocido"}). El archivo se guarda igual.`,
     };
   }
 
@@ -67,19 +69,32 @@ export async function extraerDatosEstudio(
   }
 
   try {
-    const tipoValido = mediaType as (typeof TIPOS_SOPORTADOS)[number];
+    // PDF va como bloque `document`; las fotos como `image`. El tipo ya se
+    // validó arriba contra la lista de soportados.
+    const esPdf = mediaType === TIPO_PDF;
+    const bloqueArchivo = esPdf
+      ? ({
+          type: "document",
+          source: { type: "base64", media_type: TIPO_PDF, data: imagenBase64 },
+        } as const)
+      : ({
+          type: "image",
+          source: { type: "base64", media_type: mediaType as (typeof TIPOS_IMAGEN)[number], data: imagenBase64 },
+        } as const);
 
     const mensaje = await anthropic.messages.parse({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [
         {
           role: "user",
           content: [
-            { type: "image", source: { type: "base64", media_type: tipoValido, data: imagenBase64 } },
+            bloqueArchivo,
             {
               type: "text",
-              text: "Esta es una foto de un estudio médico (análisis de laboratorio, radiografía, informe, etc.). Extraé la información visible.",
+              text: esPdf
+                ? "Este es un PDF de un estudio médico (análisis de laboratorio, informe, etc.). Extraé la información visible."
+                : "Esta es una foto de un estudio médico (análisis de laboratorio, radiografía, informe, etc.). Extraé la información visible.",
             },
           ],
         },

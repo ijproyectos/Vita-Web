@@ -23,3 +23,9 @@ export type DatosExtraidos = {
   resumen: string | null;
   valores: ValorEstudio[];
 };
+
+export const TIPO_PDF = "application/pdf";
+
+// Tope de tamaño del archivo (foto o PDF) — por debajo del bodySizeLimit de
+// Server Actions (next.config.ts) y de los 32 MB del request a Anthropic.
+export const TAMANIO_MAXIMO_BYTES = 10 * 1024 * 1024;

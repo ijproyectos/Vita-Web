@@ -8,6 +8,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { Chip } from "@/components/vita/chip";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
 import { formatoFechaCorta } from "@/lib/rutina/formato";
+import { TIPO_PDF } from "@/lib/estudios/tipos";
 import { EliminarEstudioButton } from "./eliminar-estudio-button";
 
 export default async function MiSaludPage() {
@@ -102,7 +103,7 @@ export default async function MiSaludPage() {
         descripcion="Presión, glucemia y peso — próximamente vas a poder registrarlos acá y ver su evolución."
       />
 
-      {/* Estudios — real: foto + extracción automática por IA
+      {/* Estudios — real: foto o PDF + extracción automática por IA
           (agregar-estudio/). Vacunas/consultas/mediciones siguen sin
           pantalla de alta en ningún lado del diseño, no se fabrican acá. */}
       <div>
@@ -116,50 +117,54 @@ export default async function MiSaludPage() {
         {estudios.length === 0 ? (
           <div className="rounded-[20px] bg-secondary p-5 text-center">
             <p className="text-sm text-muted-foreground">
-              Sacale una foto a un estudio (análisis, radiografía, informe) y vita completa los datos por vos.
+              Sacale una foto o subí el PDF de un estudio (análisis, radiografía, informe) y vita completa los datos por vos. Acá queda el registro de todo lo que te vas haciendo.
             </p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {estudios.map((e) => (
-              <div key={e.id} className="flex gap-3 rounded-[20px] bg-card p-3 shadow-card">
-                {e.urlFirmada ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal de Storage privado, no un asset de Next
-                  <img src={e.urlFirmada} alt="" className="size-14 shrink-0 rounded-[14px] object-cover" />
-                ) : (
-                  <div className="flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-chip-teal-bg text-chip-teal-ink">
-                    <VitaIcon name="camera" size={20} />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="truncate font-heading text-[14.5px] font-bold">
-                      {e.tipo ?? "Estudio sin identificar"}
+            {estudios.map((e) => {
+              const esPdf = e.archivo_tipo === TIPO_PDF;
+              return (
+                <div key={e.id} className="flex items-start gap-2 rounded-[20px] bg-card p-3 shadow-card">
+                  <Link href={`/app/mi-salud/estudios/${e.id}`} className="flex min-w-0 flex-1 gap-3">
+                    {!esPdf && e.urlFirmada ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal de Storage privado, no un asset de Next
+                      <img src={e.urlFirmada} alt="" className="size-14 shrink-0 rounded-[14px] object-cover" />
+                    ) : (
+                      <div className="flex size-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[14px] bg-chip-teal-bg text-chip-teal-ink">
+                        <VitaIcon name={esPdf ? "doc" : "camera"} size={20} />
+                        {esPdf && <span className="text-[9px] font-extrabold tracking-wide">PDF</span>}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-heading text-[14.5px] font-bold">
+                        {e.tipo ?? "Estudio sin identificar"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatoFechaCorta(e.fecha ?? e.created_at.slice(0, 10))}
+                        {!e.fecha && " (cargado)"}
+                      </div>
+                      {e.resumen && <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{e.resumen}</div>}
+                      {e.estado === "error" && (
+                        <div className="mt-1 text-[11px] font-semibold text-primary">
+                          vita no pudo leer los datos — el archivo quedó guardado igual.
+                        </div>
+                      )}
+                      {e.valores.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {e.valores.slice(0, 4).map((v) => (
+                            <span key={v.nombre} className="rounded-full bg-secondary px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                              {v.nombre}: {v.valor}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <EliminarEstudioButton estudioId={e.id} nombre={e.tipo ?? "este estudio"} />
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatoFechaCorta(e.fecha ?? e.created_at.slice(0, 10))}
-                    {!e.fecha && " (cargado)"}
-                  </div>
-                  {e.resumen && <div className="mt-1 text-xs text-muted-foreground">{e.resumen}</div>}
-                  {e.estado === "error" && (
-                    <div className="mt-1 text-[11px] font-semibold text-primary">
-                      vita no pudo leer los datos — la foto quedó guardada igual.
-                    </div>
-                  )}
-                  {e.valores.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {e.valores.slice(0, 4).map((v) => (
-                        <span key={v.nombre} className="rounded-full bg-secondary px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
-                          {v.nombre}: {v.valor}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  </Link>
+                  <EliminarEstudioButton estudioId={e.id} nombre={e.tipo ?? "este estudio"} />
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

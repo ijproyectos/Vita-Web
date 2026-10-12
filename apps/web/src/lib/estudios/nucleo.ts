@@ -1,16 +1,17 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Estudio, EstudioConUrl, DatosExtraidos } from "./tipos";
+import { TIPO_PDF, type Estudio, type EstudioConUrl, type DatosExtraidos } from "./tipos";
 
 type Cliente = SupabaseClient;
 
 const BUCKET = "estudios";
 const VENCIMIENTO_URL_SEGUNDOS = 3600; // 1 hora — suficiente para ver/revisar el estudio en la sesión actual
 
-function extensionDeArchivo(nombre: string): string {
+function extensionDeArchivo(nombre: string, tipo: string): string {
   const partes = nombre.split(".");
-  return partes.length > 1 ? partes[partes.length - 1].toLowerCase() : "jpg";
+  if (partes.length > 1) return partes[partes.length - 1].toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  return tipo === TIPO_PDF ? "pdf" : "jpg";
 }
 
 /**
@@ -22,7 +23,7 @@ export async function subirArchivo(
   usuarioId: string,
   archivo: File
 ): Promise<{ path: string; tipo: string }> {
-  const path = `${usuarioId}/${crypto.randomUUID()}.${extensionDeArchivo(archivo.name)}`;
+  const path = `${usuarioId}/${crypto.randomUUID()}.${extensionDeArchivo(archivo.name, archivo.type)}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, archivo, {
     contentType: archivo.type,
     upsert: false,
@@ -43,7 +44,10 @@ const FECHA_ISO_VALIDA = /^\d{4}-\d{2}-\d{2}$/;
 // solo la fecha si no es parseable como fecha real, no todo el estudio.
 function fechaValidaOnull(fecha: string | null): string | null {
   if (!fecha || !FECHA_ISO_VALIDA.test(fecha)) return null;
-  return isNaN(new Date(fecha).getTime()) ? null : fecha;
+  // Round-trip: `new Date("2026-02-31")` no es NaN (JS lo corre al 3 de
+  // marzo) pero Postgres rechaza ese `date` y se perdería toda la extracción.
+  const d = new Date(`${fecha}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === fecha ? fecha : null;
 }
 
 export async function agregar(
@@ -98,6 +102,28 @@ export async function listar(supabase: Cliente, usuarioId: string): Promise<Estu
   );
 
   return conUrl;
+}
+
+export async function obtener(
+  supabase: Cliente,
+  usuarioId: string,
+  estudioId: string
+): Promise<EstudioConUrl | null> {
+  const { data, error } = await supabase
+    .from("estudios")
+    .select("*")
+    .eq("id", estudioId)
+    .eq("usuario_id", usuarioId)
+    .maybeSingle();
+
+  if (error) throw new Error(`No se pudo leer el estudio: ${error.message}`);
+  if (!data) return null;
+  const estudio = data as Estudio;
+
+  const { data: firmada } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(estudio.archivo_path, VENCIMIENTO_URL_SEGUNDOS);
+  return { ...estudio, urlFirmada: firmada?.signedUrl ?? null };
 }
 
 export async function eliminar(supabase: Cliente, usuarioId: string, estudioId: string): Promise<void> {
