@@ -2,7 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireCuidador } from "@/lib/dal";
+import { requireCuidador, requireUser } from "@/lib/dal";
+import { recordarDosisAlElder, type ResultadoRecordatorio } from "@/lib/notificaciones/recordatorios";
+import { listarElders } from "@/lib/cuidadores/nucleo";
+import { generarCodigoAcceso } from "@/lib/acceso-codigo/nucleo";
+import type { ResultadoCodigoAcceso } from "@/lib/acceso-codigo/tipos";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
 
@@ -59,4 +63,41 @@ export async function crearMedicamentoParaElderAction(
   }
 
   redirect(`/cuidar/${elderId}`);
+}
+
+/**
+ * "Recordarle": push al elder por una dosis pendiente de hoy. Toda la
+ * autorización (vínculo aceptado, dosis del elder, rate-limit) la resuelve
+ * `recordarDosisAlElder` con el cliente de SESIÓN antes de tocar el admin
+ * client. Nunca lanza; `requireUser` queda fuera del try porque redirige.
+ */
+export async function recordarleAction(elderId: string, medicamentoId: string): Promise<ResultadoRecordatorio> {
+  const usuario = await requireUser();
+  if (typeof elderId !== "string" || typeof medicamentoId !== "string") {
+    return { status: "error", message: "Datos inválidos." };
+  }
+  const supabase = await createClient();
+  return recordarDosisAlElder(supabase, usuario.id, elderId, medicamentoId);
+}
+
+/**
+ * "Código para que entre de nuevo": código de acceso de un solo uso (15 min)
+ * para que la persona cuidada vuelva a entrar desde otro celular. La
+ * autorización final la da la RLS de `codigos_acceso` (vínculo aceptado);
+ * el chequeo previo es solo para devolver un mensaje claro. Nunca lanza;
+ * `requireUser` queda fuera del try porque redirige.
+ */
+export async function generarCodigoAccesoAction(elderId: string): Promise<ResultadoCodigoAcceso> {
+  const usuario = await requireUser();
+  if (typeof elderId !== "string") return { status: "error", message: "Datos inválidos." };
+  try {
+    const supabase = await createClient();
+    const elders = await listarElders(supabase, usuario.id);
+    if (!elders.some((e) => e.elderId === elderId)) {
+      return { status: "error", message: "No tenés acceso a esta persona." };
+    }
+    return await generarCodigoAcceso(supabase, usuario.id, elderId);
+  } catch {
+    return { status: "error", message: "No pudimos generar el código. Probá de nuevo." };
+  }
 }

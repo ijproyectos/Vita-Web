@@ -10,6 +10,8 @@ import { AvisoStockBajo } from "@/components/vita/aviso-stock-bajo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
+import { BotonRecordarle } from "./boton-recordarle";
+import { CodigoAcceso } from "./codigo-acceso";
 
 // Mismo margen de gracia que `notificaciones/nucleo.ts` (GRACIA_MIN_DEFAULT)
 // — acá es solo el umbral visual del badge "Atrasada", no dispara ningún
@@ -104,6 +106,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
                 med={med}
                 divider={i < medsHoy.length - 1}
                 ahoraAR={ahoraAR}
+                elderId={elderId}
                 stock={med.inventario_id ? (stockPorId.get(med.inventario_id) ?? null) : null}
               />
             ))}
@@ -133,8 +136,10 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
         </div>
       )}
 
+      <CodigoAcceso elderId={elderId} />
+
       <p className="px-1.5 text-center text-[11px] text-muted-foreground">
-        Como cuidador podés agregar medicamentos nuevos, pero no podés editar los existentes ni marcar tomas.
+        Como cuidador podés agregar medicamentos nuevos y recordarle una toma pendiente, pero no podés editar los existentes ni marcar tomas.
       </p>
     </div>
   );
@@ -144,11 +149,13 @@ function FilaMedicamentoSoloLectura({
   med,
   divider,
   ahoraAR,
+  elderId,
   stock,
 }: {
   med: MedicamentoConToma;
   divider: boolean;
   ahoraAR: string;
+  elderId: string;
   stock: ResumenStock | null;
 }) {
   const atrasada = !med.tomado && medicamentosEsDosisVencida(med.hora_programada, ahoraAR);
@@ -172,6 +179,10 @@ function FilaMedicamentoSoloLectura({
           {med.hora_programada} hs
         </div>
         {stock && <BadgeStock stock={stock} className="mt-1" />}
+        {/* Ya llegó su hora y sigue sin tomarse: se puede recordar. */}
+        {!med.tomado && med.hora_programada <= ahoraAR && (
+          <BotonRecordarle elderId={elderId} medicamentoId={med.id} />
+        )}
       </div>
       <span
         className={cn(

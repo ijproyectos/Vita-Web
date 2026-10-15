@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { listarElders } from "@/lib/cuidadores/nucleo";
 import type { Perfil } from "@/lib/perfil/tipos";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
@@ -240,7 +241,7 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
 
   return {
     generado_en: new Date().toISOString(),
-    cuenta: { email: authRes.data.user?.email ?? null },
+    cuenta: { email: esEmailDeCuentaPorCodigo(authRes.data.user?.email) ? null : (authRes.data.user?.email ?? null) },
     perfil: perfilExportado,
     medicamentos: medicamentos.map(({ usuario_id: _u, ...m }) => {
       void _u;

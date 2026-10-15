@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { VitaIcon } from "@/lib/vita-icons";
+import { entrarConCodigoAction, type EstadoEntrarConCodigo } from "./actions";
 
 function GoogleLogo() {
   return (
@@ -94,6 +96,69 @@ function LoginDePrueba({ next }: { next?: string }) {
   );
 }
 
+const ESTADO_CODIGO_INICIAL: EstadoEntrarConCodigo = { status: "idle" };
+
+// Entrada principal para quien no tiene cuenta de Google: el código de 6
+// dígitos que le pasó su familiar (primer acceso o "entrar de nuevo").
+function EntrarConCodigo() {
+  const [abierto, setAbierto] = useState(false);
+  const [codigo, setCodigo] = useState("");
+  const [estado, formAction, pendiente] = useActionState(entrarConCodigoAction, ESTADO_CODIGO_INICIAL);
+
+  if (!abierto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full font-heading text-[15px] font-bold text-primary-foreground"
+        style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
+      >
+        <VitaIcon name="link" size={18} />
+        Me dio un código mi familiar
+      </button>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex flex-col gap-3 rounded-[20px] bg-card p-4 shadow-card">
+      <label htmlFor="codigo-acceso" className="text-center text-sm font-semibold">
+        Escribí el código de 6 dígitos
+      </label>
+      <input
+        id="codigo-acceso"
+        name="codigo"
+        value={codigo}
+        onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        autoFocus
+        placeholder="000000"
+        className="h-16 w-full rounded-[20px] bg-secondary text-center font-heading text-[26px] font-extrabold tracking-[0.3em] outline-none"
+      />
+
+      {estado.status === "error" && (
+        <div role="alert" className="flex items-start gap-2.5 rounded-[16px] bg-destructive/10 px-3.5 py-3 text-sm text-destructive">
+          <VitaIcon name="alert-triangle" size={18} className="mt-0.5 shrink-0" />
+          <span>{estado.mensaje}</span>
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={codigo.length !== 6 || pendiente}
+        className="h-14 w-full rounded-full font-heading text-[15px] font-bold text-primary-foreground transition-opacity disabled:opacity-55"
+        style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
+      >
+        {pendiente ? "Entrando…" : "Entrar"}
+      </button>
+
+      <button type="button" onClick={() => setAbierto(false)} className="self-center text-sm font-semibold text-muted-foreground">
+        Volver
+      </button>
+    </form>
+  );
+}
+
 export function LoginForm({ next }: { next?: string }) {
   const [loading, setLoading] = useState<"google" | "codigo" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +188,13 @@ export function LoginForm({ next }: { next?: string }) {
         <p className="rounded-[14px] bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">{error}</p>
       )}
 
+      <EntrarConCodigo />
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />o
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
       <button
         type="button"
         onClick={() => iniciarSesionGoogle(next ?? "/app", "google")}
@@ -139,7 +211,7 @@ export function LoginForm({ next }: { next?: string }) {
         disabled={loading !== null}
         className="text-center text-sm font-semibold text-primary disabled:opacity-60"
       >
-        {loading === "codigo" ? "Conectando…" : "Me invitó un familiar, tengo un código"}
+        {loading === "codigo" ? "Conectando…" : "Tengo Google y un código de mi familiar"}
       </button>
 
       {LOGIN_DE_PRUEBA && <LoginDePrueba next={next} />}

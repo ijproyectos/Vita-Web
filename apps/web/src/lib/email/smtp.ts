@@ -1,5 +1,6 @@
 import "server-only";
 
+import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import nodemailer, { type Transporter } from "nodemailer";
 
 // Envío transaccional por SMTP (hosting propio, Ferozo/DonWeb, SSL 465).
@@ -57,6 +58,10 @@ export async function enviarEmail(args: {
   html: string;
   texto: string;
 }): Promise<ResultadoEnvio> {
+  // Las cuentas creadas por código (sin Gmail) tienen un email placeholder
+  // que no recibe correo: nunca se intenta enviar (evita rebotes que dañan
+  // la reputación del remitente).
+  if (esEmailDeCuentaPorCodigo(args.para)) return { ok: false, motivo: "sin_configuracion" };
   const t = obtenerTransporter();
   if (!t) return { ok: false, motivo: "sin_configuracion" };
   try {

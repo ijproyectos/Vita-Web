@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { TopBar } from "../top-bar";
 import { ResumenSaludView } from "./resumen-salud-view";
 
@@ -14,7 +15,7 @@ export default async function ResumenSaludPage() {
   return (
     <div className="flex flex-col gap-4.5 px-4 pt-2">
       <TopBar eyebrow="Perfil" title="Resumen de salud" />
-      <ResumenSaludView perfil={perfil} email={usuario.email ?? ""} />
+      <ResumenSaludView perfil={perfil} email={esEmailDeCuentaPorCodigo(usuario.email) ? "Cuenta vinculada con tu familiar" : (usuario.email ?? "")} />
     </div>
   );
 }

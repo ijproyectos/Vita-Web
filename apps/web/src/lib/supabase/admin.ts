@@ -11,8 +11,16 @@ import { createClient } from "@supabase/supabase-js";
  * este proyecto es siempre "solo mis propios datos" o "datos del elder
  * que vinculé como cuidador").
  *
- * Nunca importar este cliente desde código que atiende una request de un
- * usuario autenticado — para eso están `lib/supabase/{server,client}.ts`,
+ * Segundo uso SANCIONADO: el acceso por código sin cuenta de Google
+ * (`lib/acceso-codigo/nucleo.ts`, invocado solo desde `entrarConCodigoAction`
+ * de /login): quien entra todavía no tiene sesión, así que validar el
+ * código, crear la cuenta con email placeholder, abrir su sesión y llevar
+ * el throttling por IP no se puede hacer con RLS. Siempre detrás del
+ * throttling; nunca se loguean códigos ni emails.
+ *
+ * Fuera de esos dos usos (y de `lib/cuenta/nucleo.ts`, que borra la cuenta
+ * del usuario ya autenticado), nunca importar este cliente desde código que
+ * atiende una request de un usuario autenticado — para eso están `lib/supabase/{server,client}.ts`,
  * que sí respetan RLS.
  */
 export function createAdminClient() {

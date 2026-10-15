@@ -41,7 +41,7 @@ const MINUTOS_EXPIRACION_CODIGO = 30; // corto a propósito — ver comentario d
  * del rango. Mismo nivel de cuidado que `generarToken()` de acá arriba,
  * adaptado a un espacio de 6 dígitos en vez de 48 chars hex.
  */
-function generarCodigo(): string {
+export function generarCodigo(): string {
   const MIN = 100000;
   const RANGO = 900000; // 100000..999999 inclusive
   const LIMITE = Math.floor(0x100000000 / RANGO) * RANGO; // corta el resto sesgado del uint32

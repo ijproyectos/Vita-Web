@@ -185,8 +185,61 @@ Log + dedupe de alertas de dosis vencida (una fila por `(medicamento_id, fecha)`
 | destinatarios | int | cantidad de cuidadores notificados |
 | estado | text | check: enviado / error |
 | error | text | detalle si `estado = 'error'` |
+| push_enviados | int | push entregados a cuidadores (017) |
+| push_fallidos | int | push que fallaron por un motivo distinto de suscripción muerta (017) |
 
-unique `(medicamento_id, fecha)`.
+unique `(medicamento_id, fecha)`. Desde la 017 `fecha` es la fecha de pared **AR** de la dosis (no UTC), así una dosis sin tomar no vuelve a alertar al cruzar las 21:00 AR; `destinatarios` cuenta cuidadores.
+
+## `push_suscripciones`
+
+Una fila por navegador/dispositivo suscripto a Web Push. Ver `017_push_notificaciones.sql`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| endpoint | text | único |
+| p256dh, auth | text | claves de la suscripción |
+| user_agent | text | |
+| created_at, last_used_at | timestamptz | |
+
+**RLS**: owner-only (`select`/`insert`/`update`/`delete` con `usuario_id = auth.uid()`). El upsert por `endpoint` pasa por la RPC `registrar_push_suscripcion(...)` (`security definer`, siempre `auth.uid()`) porque un navegador compartido puede cambiar de cuenta y la fila vieja es de otro usuario. Enviar a OTRO usuario requiere `service_role` (cron, y `recordarDosisAlElder` después de validar el vínculo).
+
+## `recordatorios_dosis`
+
+"Recordarle" del cuidador al elder por una dosis pendiente. Sirve de rate-limit (1 por dosis cada 15 min) y de fuente del aviso dentro de la app. Ver `017_push_notificaciones.sql`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| medicamento_id | uuid | references medicamentos, on delete cascade |
+| elder_id | uuid | references auth.users, on delete cascade |
+| cuidador_id | uuid | references auth.users, on delete cascade |
+| fecha | date | fecha de pared AR de la dosis |
+| created_at | timestamptz | |
+
+**RLS**: insert del cuidador solo con `cuidador_id = auth.uid()`, vínculo `aceptado` hacia ese elder y medicamento que pertenece al elder; select de los cuidadores vinculados al elder (rate-limit por dosis) y del propio elder.
+
+## `codigos_acceso`
+
+Código de re-ingreso de un solo uso (15 min) que el cuidador genera para la persona cuidada (cuenta creada por código, o cuenta de Google que cambió de celular). Solo se guarda el hash. Ver `019_codigos_acceso.sql`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| elder_id | uuid | references auth.users, on delete cascade |
+| cuidador_id | uuid | references auth.users, on delete cascade; check `elder_id <> cuidador_id` |
+| codigo_hash | text | sha256 hex de `salt || código de 6 dígitos` |
+| salt | text | por fila |
+| expira_at | timestamptz | creación + 15 min |
+| usado_at | timestamptz | null hasta el canje |
+| created_at | timestamptz | |
+
+**RLS**: insert/select del cuidador solo con `cuidador_id = auth.uid()` y vínculo `aceptado` hacia ese elder. Sin policies de update/delete: el canje (`usado_at`, atómico con `where usado_at is null`) lo hace `service_role` desde la Server Action de /login.
+
+## `intentos_codigo`
+
+Throttling anti fuerza bruta de /login por código: `id` (identity), `ip_hash` (HMAC-SHA256 de la IP con secreto del servidor, nunca la IP cruda), `creado_at`. Máx. 10 intentos por IP en 15 min; limpieza oportunista de filas de más de 1 día. **RLS habilitada sin policies** y `revoke all` a `anon`/`authenticated`: solo `service_role`.
 
 ## Fuera de alcance (sin tabla, decisión — ver CLAUDE.md)
 

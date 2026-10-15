@@ -7,8 +7,10 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { VitaWordmark } from "@/components/vita/v-mark";
 import { obtenerUsoHoy } from "@/lib/uso-ia/nucleo";
 import { BarraUso, textoRestante } from "@/components/uso-ia/barra-uso";
+import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { ToggleRow } from "./toggle-row";
 import { EliminarCuenta } from "./eliminar-cuenta";
+import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 
 export default async function PerfilPage() {
   const usuario = await requireUser();
@@ -46,7 +48,7 @@ export default async function PerfilPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate font-heading text-[20px] font-extrabold leading-tight">{perfil?.nombre ?? "Tu cuenta"}</div>
-            <div className="mt-0.5 truncate text-[13px] opacity-88">{usuario.email}</div>
+            <div className="mt-0.5 truncate text-[13px] opacity-88">{esEmailDeCuentaPorCodigo(usuario.email) ? "Cuenta vinculada con tu familiar" : usuario.email}</div>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3">
@@ -86,8 +88,10 @@ export default async function PerfilPage() {
         />
       </Grupo>
 
-      {/* Notificaciones — decorativo, sin infraestructura de push conectada */}
+      {/* Notificaciones — la primera fila (avisos push en este celular) es
+          real; los tres toggles de abajo siguen siendo decorativos. */}
       <Grupo titulo="Notificaciones">
+        <ActivarNotificaciones variante="perfil" />
         <ToggleRow label="Recordatorios de rutina" sub="Medicamentos y monitoreo" defaultOn />
         <ToggleRow label="Próximos turnos" sub="24 h antes" defaultOn />
         <ToggleRow label="vita te escribe" sub="Si olvidás marcar una toma" defaultOn ultimo />
