@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { RegistrarServiceWorker } from "@/components/vita/registrar-service-worker";
 import "./globals.css";
 
 // Marca "vita." (Cuidado claro): Plus Jakarta Sans para todo, 500-800.
@@ -13,6 +14,9 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "vita",
   description: "Tu historial de salud, inteligente.",
+  // iOS: sin esto "Agregar a inicio" no abre vita como app independiente
+  // (requisito para recibir push en iPhone/iPad).
+  appleWebApp: { capable: true, title: "vita", statusBarStyle: "default" },
 };
 
 // viewportFit: "cover" es lo que hace que env(safe-area-inset-*) resuelva
@@ -34,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         {children}
         <Toaster />
+        <RegistrarServiceWorker />
       </body>
     </html>
   );

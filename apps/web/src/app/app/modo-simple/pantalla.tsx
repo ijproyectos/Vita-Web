@@ -12,6 +12,8 @@ import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { marcarTomadoAction } from "../rutina/actions";
+import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
+import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 
 // Coincide EXACTO con el regex del diseño — nunca se toca esta lista de
 // palabras sin actualizar también design/tasks.
@@ -55,10 +57,13 @@ export function Pantalla({
   proxima,
   vencida,
   faltanMinutos,
+  recordatorio = false,
 }: {
   proxima: ProximaDosis | null;
   vencida: boolean;
   faltanMinutos: number;
+  /** Un familiar le recordó esta dosis (aviso tranquilo, sin sonido). */
+  recordatorio?: boolean;
 }) {
   const router = useRouter();
   // esperando/alertado/descanso se derivan directo de las props en cada
@@ -186,6 +191,18 @@ export function Pantalla({
     <div className="fixed inset-0 z-30 flex flex-col bg-background">
       <BotonSalir />
       <BotonSonido silenciada={silenciada} onAlternar={alternarSonido} />
+
+      {/* Espacio bajo los botones de arriba: solo ocupa lugar si hay algo
+          que mostrar (botón de activar avisos o el recordatorio). */}
+      <ActivarNotificaciones variante="simple" />
+      {recordatorio && proxima && fase !== "confirmado" && (
+        <div className="px-6 pt-16">
+          <AvisoRecordatorio
+            grande
+            items={[{ medicamentoId: proxima.id, nombre: proxima.nombre, horaProgramada: proxima.horaProgramada }]}
+          />
+        </div>
+      )}
 
       {fase === "descanso" && <FaseDescanso estado={estadoAvatar} />}
 

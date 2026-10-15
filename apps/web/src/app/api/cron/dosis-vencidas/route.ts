@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { detectarDosisVencidas, enviarAlertaDosis } from "@/lib/notificaciones/nucleo";
+import { enviarPush } from "@/lib/notificaciones/push";
+import { payloadDosisVencida } from "@/lib/notificaciones/mensajes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -33,10 +35,11 @@ function secretoValido(recibido: string | null, esperado: string): boolean {
  * dosis. Si `detectarDosisVencidas` la sigue viendo vencida en el próximo
  * tick (porque el elder todavía no la confirmó), el insert ya no
  * devuelve fila — otro run se la quedó — y este run la salta. Así una
- * misma dosis vencida produce como máximo un email, incluso con ticks de
- * cron superpuestos o reintentos. Un fallo de envío marca
- * `estado='error'` y NO reintenta — proteger el cap diario de Resend
- * importa más que garantizar la entrega de una alerta puntual.
+ * misma dosis vencida produce como máximo una alerta, incluso con ticks de
+ * cron superpuestos o reintentos. Canales: push (web-push, a todas las
+ * suscripciones de cada cuidador aceptado) y, solo si hay RESEND_API_KEY,
+ * email. Un fallo de envío marca `estado='error'` y NO reintenta; si nadie
+ * era alcanzable se libera el claim (no salió nada) y se re-evalúa luego.
  */
 export async function POST(request: Request) {
   const secretoEsperado = process.env.CRON_SECRET;
@@ -52,15 +55,18 @@ export async function POST(request: Request) {
   let alertados = 0;
   let omitidos = 0;
   let errores = 0;
+  let sinCanal = 0;
+  let pushEnviados = 0;
 
   for (const dosis of dosisVencidas) {
+    // Dedupe por fecha de pared AR (no UTC): ver `fechaAR` en tipos.ts.
     const { data: reclamada, error: errorClaim } = await admin
       .from("alertas_dosis")
       .upsert(
         {
           medicamento_id: dosis.medicamentoId,
-          fecha: dosis.fecha,
-          destinatarios: dosis.destinatarios.length,
+          fecha: dosis.fechaAR,
+          destinatarios: dosis.cuidadorIds.length,
         },
         { onConflict: "medicamento_id,fecha", ignoreDuplicates: true }
       )
@@ -81,17 +87,55 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const resultado = await enviarAlertaDosis(dosis);
+    // Canal 1 — push a cada cuidador aceptado (funciona sin Resend).
+    const payload = payloadDosisVencida(dosis);
+    let enviadosPush = 0;
+    let fallidosPush = 0;
+    let suscripciones = 0;
+    for (const cuidadorId of dosis.cuidadorIds) {
+      const r = await enviarPush(admin, cuidadorId, payload);
+      enviadosPush += r.enviados;
+      fallidosPush += r.fallidos;
+      suscripciones += r.total;
+    }
+    pushEnviados += enviadosPush;
 
-    if ("error" in resultado) {
+    // Canal 2 — email, solo si Resend está configurado (hoy no lo está).
+    let emailEnviado = false;
+    let errorEmail: string | null = null;
+    if (process.env.RESEND_API_KEY && dosis.destinatarios.length > 0) {
+      const resultado = await enviarAlertaDosis(dosis);
+      if ("error" in resultado) errorEmail = resultado.error;
+      else emailEnviado = true;
+    }
+
+    if (enviadosPush === 0 && !emailEnviado) {
+      if (suscripciones === 0 && !errorEmail) {
+        // Nadie era alcanzable (ningún cuidador con avisos activados ni
+        // email): no se mandó nada, así que se libera el claim para que un
+        // tick posterior pueda avisar si alguien activa los avisos. No hay
+        // riesgo de duplicado porque no salió ninguna notificación.
+        await admin.from("alertas_dosis").delete().eq("id", reclamada.id);
+        sinCanal++;
+        continue;
+      }
+      // Hubo intento y falló: se marca y NO se reintenta (proteger cuotas).
       errores++;
       await admin
         .from("alertas_dosis")
-        .update({ estado: "error", error: resultado.error })
+        .update({
+          estado: "error",
+          error: errorEmail ?? "No se pudo entregar el push a ningún cuidador.",
+          push_fallidos: fallidosPush,
+        })
         .eq("id", reclamada.id);
       continue;
     }
 
+    await admin
+      .from("alertas_dosis")
+      .update({ push_enviados: enviadosPush, push_fallidos: fallidosPush })
+      .eq("id", reclamada.id);
     alertados++;
   }
 
@@ -100,5 +144,7 @@ export async function POST(request: Request) {
     alertados,
     omitidos,
     errores,
+    sinCanal,
+    pushEnviados,
   });
 }

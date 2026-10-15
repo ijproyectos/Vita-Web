@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
+import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { Pantalla } from "./pantalla";
 
 // Mismo margen de gracia que va a usar el cron de dosis vencidas (PR5,
@@ -45,6 +46,7 @@ export default async function ModoSimplePage() {
   const ahoraHHMM = medicamentos.horaEnAR();
   const vencida = medicamentos.esDosisVencida(pendiente.hora_programada, ahoraHHMM, GRACIA_MIN);
   const faltanMinutos = Math.max(0, minutosHasta(pendiente.hora_programada, ahoraHHMM));
+  const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, [pendiente]);
 
   return (
     <Pantalla
@@ -62,6 +64,7 @@ export default async function ModoSimplePage() {
       }}
       vencida={vencida}
       faltanMinutos={faltanMinutos}
+      recordatorio={recordatorios.length > 0}
     />
   );
 }

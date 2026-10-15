@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
 import type { DosisVencidaCuidador } from "@/lib/cuidadores/tipos";
+import { BotonRecordarle } from "./[elderId]/boton-recordarle";
 
 // Popup dentro de la app (pedido explícito del usuario: por ahora sin
 // email, solo un aviso al entrar a /cuidar) — se muestra abierto de
@@ -34,20 +35,24 @@ export function AlertaDosisPopup({ dosis }: { dosis: DosisVencidaCuidador[] }) {
 
         <div className="mt-4 flex flex-col gap-2">
           {dosis.map((d) => (
-            <Link
-              key={`${d.elderId}-${d.medicamentoId}`}
-              href={`/cuidar/${d.elderId}`}
-              onClick={() => setAbierto(false)}
-              className="flex items-center gap-2.5 rounded-2xl bg-chip-rose-bg px-3.5 py-3"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-chip-rose-ink">{d.elderNombre}</div>
-                <div className="truncate text-xs text-chip-rose-ink/80">
-                  {d.nombre} · programada {d.horaProgramada} hs
+            <div key={`${d.elderId}-${d.medicamentoId}`} className="flex flex-col gap-2 rounded-2xl bg-chip-rose-bg px-3.5 py-3">
+              <Link
+                href={`/cuidar/${d.elderId}`}
+                onClick={() => setAbierto(false)}
+                className="flex items-center gap-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-chip-rose-ink">{d.elderNombre}</div>
+                  <div className="truncate text-xs text-chip-rose-ink/80">
+                    {d.nombre} · programada {d.horaProgramada} hs
+                  </div>
                 </div>
-              </div>
-              <VitaIcon name="chevron-right" size={16} className="shrink-0 text-chip-rose-ink" />
-            </Link>
+                <VitaIcon name="chevron-right" size={16} className="shrink-0 text-chip-rose-ink" />
+              </Link>
+              {/* Recordarle desde el mismo aviso: es el momento en que el
+                  cuidador se entera, no tiene que ir a buscar la dosis. */}
+              <BotonRecordarle elderId={d.elderId} medicamentoId={d.medicamentoId} />
+            </div>
           ))}
         </div>
 

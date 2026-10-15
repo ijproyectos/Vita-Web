@@ -1,7 +1,8 @@
 import "server-only";
 
+import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { diaSemanaDe, esDosisVencida, fechaEnUTC, horaEnAR } from "@/lib/medicamentos/nucleo";
+import { diaSemanaDe, esDosisVencida, fechaEnAR, fechaEnUTC, horaEnAR } from "@/lib/medicamentos/nucleo";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
 import type { DosisVencida, ResultadoAlertaDosis } from "./tipos";
 
@@ -116,32 +117,54 @@ export async function detectarDosisVencidas(
   const vencidas = conCuidadores.filter((m) => !confirmadas.has(m.id));
   if (vencidas.length === 0) return [];
 
-  // Resuelve el email de cada cuidador involucrado una sola vez (no por
-  // cada dosis) — `auth.users` no es una tabla de `public`, así que se
-  // usa la API admin de auth en vez de un `select` directo.
-  const idsCuidadores = [
-    ...new Set(vencidas.flatMap((m) => cuidadoresPorElder.get(m.usuario_id) ?? [])),
-  ];
+  // Los emails solo hacen falta para el canal Resend (hoy apagado): sin
+  // RESEND_API_KEY se evita una llamada a la API admin de auth por cuidador.
+  // `auth.users` no es una tabla de `public`, así que se usa la API admin.
   const emailPorCuidador = new Map<string, string>();
-  await Promise.all(
-    idsCuidadores.map(async (id) => {
-      const { data, error: errorUsuario } = await admin.auth.admin.getUserById(id);
-      if (!errorUsuario && data?.user?.email) emailPorCuidador.set(id, data.user.email);
-    })
-  );
+  if (process.env.RESEND_API_KEY) {
+    const idsCuidadores = [
+      ...new Set(vencidas.flatMap((m) => cuidadoresPorElder.get(m.usuario_id) ?? [])),
+    ];
+    await Promise.all(
+      idsCuidadores.map(async (id) => {
+        const { data, error: errorUsuario } = await admin.auth.admin.getUserById(id);
+        if (!errorUsuario && data?.user?.email && !esEmailDeCuentaPorCodigo(data.user.email)) emailPorCuidador.set(id, data.user.email);
+      })
+    );
+  }
 
-  return vencidas.map((m) => ({
-    medicamentoId: m.id,
-    elderId: m.usuario_id,
-    nombre: m.nombre,
-    dosis: m.dosis,
-    unidad: m.unidad,
-    horaProgramada: m.hora_programada,
-    fecha: hoyUTC,
-    destinatarios: (cuidadoresPorElder.get(m.usuario_id) ?? [])
-      .map((id) => emailPorCuidador.get(id))
-      .filter((email): email is string => Boolean(email)),
-  }));
+  // Nombre de cada elder para el texto del push ("Elsa todavía no tomó…").
+  // `perfiles` solo es legible con service_role desde acá (RLS de fila).
+  const nombrePorElder = new Map<string, string>();
+  const { data: perfiles } = await admin
+    .from("perfiles")
+    .select("id, nombre")
+    .in("id", [...new Set(vencidas.map((m) => m.usuario_id))]);
+  for (const p of (perfiles ?? []) as { id: string; nombre: string | null }[]) {
+    const primero = p.nombre?.trim().split(/\s+/)[0];
+    if (primero) nombrePorElder.set(p.id, primero);
+  }
+
+  const hoyAR = fechaEnAR(ahora);
+
+  return vencidas.map((m) => {
+    const cuidadorIds = cuidadoresPorElder.get(m.usuario_id) ?? [];
+    return {
+      medicamentoId: m.id,
+      elderId: m.usuario_id,
+      nombre: m.nombre,
+      dosis: m.dosis,
+      unidad: m.unidad,
+      horaProgramada: m.hora_programada,
+      fecha: hoyUTC,
+      fechaAR: hoyAR,
+      elderNombre: nombrePorElder.get(m.usuario_id) ?? "Tu familiar",
+      cuidadorIds,
+      destinatarios: cuidadorIds
+        .map((id) => emailPorCuidador.get(id))
+        .filter((email): email is string => Boolean(email)),
+    };
+  });
 }
 
 // Vitapp todavía no tiene un dominio propio verificado en Resend — mismo

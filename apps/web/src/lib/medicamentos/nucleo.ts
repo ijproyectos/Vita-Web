@@ -76,6 +76,22 @@ export function fechaEnUTC(fecha: Date = new Date()): string {
   return fecha.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
+/**
+ * Fecha "YYYY-MM-DD" de pared en Argentina. A diferencia de `fechaEnUTC`
+ * (que solo existe por compatibilidad con `medicamentos_tomas.fecha`), esta
+ * es la que corresponde a "el día de la dosis" para el usuario: la usan los
+ * recordatorios y el dedupe de alertas push, que no deben duplicarse ni
+ * perderse al cruzar la medianoche UTC (21:00 AR).
+ */
+export function fechaEnAR(fecha: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(fecha);
+}
+
 function fechaDeHoy(): string {
   return fechaEnUTC();
 }

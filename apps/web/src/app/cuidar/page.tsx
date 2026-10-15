@@ -6,6 +6,7 @@ import * as cuidadoresNucleo from "@/lib/cuidadores/nucleo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VitaWordmark } from "@/components/vita/v-mark";
 import { cn } from "@/lib/utils";
+import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 
 // Selector de elder — si el cuidador solo tiene un vínculo aceptado, lo
 // muestra igual como una única tarjeta (en vez de saltar directo a
@@ -43,6 +44,8 @@ export default async function CuidarPage() {
           Modo cuidador
         </div>
       </div>
+
+      {elders.length > 0 && <ActivarNotificaciones variante="cuidador" />}
 
       <div>
         <div className="flex items-center justify-between px-1.5 pb-2.5">

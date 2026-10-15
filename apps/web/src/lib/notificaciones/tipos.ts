@@ -19,6 +19,14 @@ export type DosisVencida = {
   /** Fecha en UTC ("YYYY-MM-DD") — la misma que usa `alertas_dosis` para
    * el dedupe, ver el comentario sobre el desfase UTC/AR en nucleo.ts. */
   fecha: string;
+  /** Fecha de pared en Argentina ("YYYY-MM-DD") — clave de dedupe en
+   * `alertas_dosis`: a diferencia de `fecha` (UTC) no cambia a las 21:00 AR,
+   * así una dosis sin tomar no re-alerta al cruzar la medianoche UTC. */
+  fechaAR: string;
+  elderNombre: string;
+  /** Cuidadores `aceptado` del elder — destinatarios de la alerta push. */
+  cuidadorIds: string[];
+  /** Emails de esos cuidadores; solo se resuelven si hay RESEND_API_KEY. */
   destinatarios: string[];
 };
 

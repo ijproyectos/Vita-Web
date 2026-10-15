@@ -7,6 +7,8 @@ import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import type { ResumenStock } from "@/lib/inventario/tipos";
 import { AvisoStockBajo } from "@/components/vita/aviso-stock-bajo";
+import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
+import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Chip } from "@/components/vita/chip";
@@ -33,6 +35,8 @@ export default async function HomePage() {
     turnosNucleo.listarProximos(supabase, usuario.id, 5),
     inventarioNucleo.listarSeguro(supabase, usuario.id),
   ]);
+
+  const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy);
 
   const stockPorId = new Map<string, ResumenStock>(
     inventarios.map((i) => [i.id, { stock: i.stock, umbral: i.umbral_alerta }])
@@ -64,6 +68,8 @@ export default async function HomePage() {
       </div>
 
       <HeroVita />
+
+      <AvisoRecordatorio items={recordatorios} href="/app/modo-simple" />
 
       {/* Profile summary card */}
       <Link href="/app/resumen-salud" className="rounded-[20px] bg-card p-4 shadow-card">

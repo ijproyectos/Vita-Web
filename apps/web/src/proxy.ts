@@ -39,6 +39,6 @@ export const config = {
   matcher: [
     // Skip static assets, image optimization, vita avatar frames and the
     // cron endpoint (authenticated by x-cron-secret, not by session).
-    "/((?!_next/static|_next/image|favicon.ico|vita/|api/cron/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp3)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|vita/|api/cron/|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp3)$).*)",
   ],
 };
