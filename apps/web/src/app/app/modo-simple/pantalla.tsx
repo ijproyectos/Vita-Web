@@ -532,7 +532,7 @@ function TarjetaPospuesta({
         </div>
         <div>
           <div className="font-heading text-[24px] font-extrabold leading-tight tracking-[-0.03em]">
-            Te aviso de nuevo en {minutos} min
+            Te la muestro de nuevo en {minutos} min
           </div>
           <div className="mt-0.5 text-[15px] font-semibold text-subtle">{listaHablada(grupo.map((m) => m.nombre))}</div>
         </div>

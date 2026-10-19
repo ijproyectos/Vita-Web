@@ -147,7 +147,7 @@ export default async function PerfilPage() {
       <Grupo titulo="Cuenta">
         <FilaNav icon="help" label="Ayuda y soporte" sub="Preguntas frecuentes y contacto" href="/app/perfil/ayuda" />
         <form action="/auth/signout" method="post">
-          <FilaAccion icon="logout" label="Cerrar sesión" sub="Volvés a entrar con Google" />
+          <FilaAccion icon="logout" label="Cerrar sesión" sub={esEmailDeCuentaPorCodigo(usuario.email) ? "Volvés a entrar con el código de tu familiar" : "Volvés a entrar con Google"} />
         </form>
         <EliminarCuenta />
       </Grupo>

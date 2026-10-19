@@ -14,7 +14,7 @@ const GRUPOS: { titulo: string; items: Pregunta[] }[] = [
     items: [
       {
         q: "¿Qué pasa si no confirmo una toma?",
-        a: "Te aviso de nuevo. Si alguien te cuida, le aviso también cuando pasa un rato sin que la marques.",
+        a: "Si alguien te cuida, le aviso cuando pasa un rato sin que la marques, y te puede mandar un recordatorio a tu celular.",
       },
       {
         q: "¿Puedo cambiar el horario de un remedio?",
