@@ -1,22 +1,45 @@
 "use client";
 
 
-// Isotipo de vita. (manual de marca "Cuidado claro"): cuadrado teal con
-// radio 30%, "v" crema y punto ambar en la esquina superior derecha
-// (diametro 15%, a 20% del borde superior y derecho). Es el ícono plano
-// (app icon, pantallas de ingreso); VitaAvatar es el personaje.
-export function VMark({ size = 30 }: { size?: number }) {
+// Isotipo de vita (V7): "V" blanca redondeada sobre teal, con un punto ambar
+// (el "latido") y un punto menta. Trazado a partir de assets/vita-logo-teal.png
+// del diseño. Es el ícono plano (app icon, FAB del bottom nav, pantallas de
+// ingreso); VitaAvatar es el personaje.
+// `forma="cuadrado"` (default) es el app icon con radio 30%; `"circulo"` es la
+// variante del FAB central.
+export function VMark({
+  size = 30,
+  forma = "cuadrado",
+  className,
+}: {
+  size?: number;
+  forma?: "cuadrado" | "circulo";
+  className?: string;
+}) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" role="img" aria-label="vita">
-      <rect width="100" height="100" rx="30" fill="var(--teal)" />
-      <path
-        d="M30 44 L50 73 L70 44"
-        stroke="var(--cream)"
-        strokeWidth="11"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+    <svg
+      width={size}
+      height={size}
+      viewBox="144 160 965 965"
+      fill="none"
+      role="img"
+      aria-label="vita"
+      className={className}
+    >
+      <rect
+        x="144"
+        y="160"
+        width="965"
+        height="965"
+        rx={forma === "circulo" ? 482.5 : 290}
+        fill="var(--teal)"
       />
-      <circle cx="72.5" cy="27.5" r="7.5" fill="var(--amber)" />
+      <path
+        d="M410 395C445 395 470 415 487 440L612 696C640 745 695 785 775 742L720 840C690 890 650 915 608 915C560 915 520 890 497 840L335 520C318 485 322 405 410 395Z"
+        fill="var(--primary-foreground)"
+      />
+      <circle cx="722" cy="648" r="87" fill="var(--mint-soft)" />
+      <circle cx="837" cy="459" r="90" fill="var(--amber)" />
     </svg>
   );
 }

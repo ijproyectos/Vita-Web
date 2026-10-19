@@ -1,6 +1,7 @@
 "use client";
 
 import { VitaIcon } from "@/lib/vita-icons";
+import { VMark } from "@/components/vita/v-mark";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 
 // Botón redondo con gradiente que abre el chat — usado como acción del
@@ -17,9 +18,9 @@ export function VitaShortcutButton({ size = "icon" }: { size?: "icon" | "banner"
         type="button"
         onClick={() => abrir()}
         aria-label="Pedirle a vita"
-        className="flex size-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_30%,transparent)]"
+        className="flex size-10 items-center justify-center rounded-full shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_30%,transparent)]"
       >
-        <VitaIcon name="sparkle" size={16} />
+        <VMark size={40} forma="circulo" />
       </button>
     );
   }
@@ -28,17 +29,14 @@ export function VitaShortcutButton({ size = "icon" }: { size?: "icon" | "banner"
     <button
       type="button"
       onClick={() => abrir()}
-      className="flex items-center gap-3 rounded-[20px] p-3.5 text-left shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_15%,transparent)]"
-      style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--brand-to) 4%, transparent))" }}
+      className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 text-left shadow-card"
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground">
-        <VitaIcon name="sparkle" size={16} />
-      </div>
+      <VMark size={36} forma="circulo" className="shrink-0 rounded-full" />
       <div className="flex-1">
-        <div className="font-heading text-[14px] font-bold">Agregar por voz con vita</div>
-        <div className="text-xs text-muted-foreground">Contame con tus palabras y lo cargo por vos.</div>
+        <div className="font-heading text-sm font-extrabold tracking-[-0.02em]">Agregar por voz con vita</div>
+        <div className="text-xs font-medium text-subtle">Contame con tus palabras y lo cargo por vos.</div>
       </div>
-      <VitaIcon name="chevron-right" size={18} className="text-primary" />
+      <VitaIcon name="chevron-right" size={18} className="text-faint" />
     </button>
   );
 }

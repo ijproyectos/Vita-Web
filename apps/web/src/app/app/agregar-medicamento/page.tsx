@@ -20,7 +20,7 @@ export default async function AgregarMedicamentoPage(props: PageProps<"/app/agre
   const porToma = /^\d{1,2}$/.test(primero(sp.porToma)) ? primero(sp.porToma) : "1";
 
   return (
-    <div className="flex flex-col gap-4.5 px-4 pt-2">
+    <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <TopBar eyebrow="Rutina" title="Agregar medicamento" accionDerecha={<VitaShortcutButton />} />
       <VitaShortcutButton size="banner" />
       <FormularioAgregarMedicamento

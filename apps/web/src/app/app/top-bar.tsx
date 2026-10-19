@@ -25,13 +25,13 @@ export function TopBar({
           type="button"
           onClick={() => router.back()}
           aria-label="Volver"
-          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-card"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
         >
-          <VitaIcon name="chevron-left" size={18} />
+          <VitaIcon name="chevron-left" size={18} strokeWidth={2.2} />
         </button>
         <div>
-          {eyebrow && <div className="text-[12px] font-semibold uppercase tracking-wide text-primary">{eyebrow}</div>}
-          <div className="mt-0.5 font-heading text-[22px] font-extrabold tracking-tight">{title}</div>
+          {eyebrow && <div className="eyebrow text-primary">{eyebrow}</div>}
+          <h1 className="mt-0.5 font-heading text-[22px] font-extrabold tracking-[-0.02em]">{title}</h1>
         </div>
       </div>
       {accionDerecha}

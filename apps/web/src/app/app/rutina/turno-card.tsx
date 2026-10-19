@@ -1,29 +1,32 @@
 import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
-import { diaYMes } from "@/lib/rutina/formato";
+import { etiquetaDia } from "@/lib/rutina/formato";
+import { iconoDeEspecialidad, tonoDeTurno } from "@/lib/turnos/icono";
 import type { Turno } from "@/lib/turnos/tipos";
 
-const TINTES = ["var(--primary)", "var(--violet)", "var(--amber)"];
-
-// Tarjeta de turno para el scroll horizontal de Home — porta TurnoCard de
-// HomeScreen.jsx.
+// Tarjeta de turno para el scroll horizontal de Home (V7): borde izquierdo de
+// color, ícono de la especialidad, chip de día y hora.
 export function TurnoCard({ turno, indice }: { turno: Turno; indice: number }) {
-  const { dia, mes } = diaYMes(turno.fecha);
-  const tinte = TINTES[indice % TINTES.length];
+  const tono = tonoDeTurno(turno.especialidad, indice);
 
   return (
     <Link
-      href="/app/rutina"
-      className="relative w-[200px] shrink-0 rounded-[20px] bg-card p-3.5 pl-[18px] shadow-card"
+      href="/app/turnos"
+      className="relative w-[196px] shrink-0 rounded-[18px] bg-card py-3.5 pl-[18px] pr-3.5 shadow-card"
     >
-      <span className="absolute inset-y-4 left-2 w-[3px] rounded-full" style={{ background: tinte }} />
-      <div className="font-heading text-[15px] font-bold">{turno.especialidad}</div>
-      <div className="mt-0.5 text-xs text-muted-foreground">{turno.profesional ?? turno.lugar ?? ""}</div>
+      <span className="absolute inset-y-4 left-2 w-[3px] rounded-full" style={{ background: tono }} />
+      <span style={{ color: tono }}>
+        <VitaIcon name={iconoDeEspecialidad(turno.especialidad)} size={18} />
+      </span>
+      <div className="mt-2 truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{turno.especialidad}</div>
+      <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">
+        {turno.profesional ?? turno.lugar ?? " "}
+      </div>
       <div className="mt-2.5 flex items-center gap-2">
-        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
-          {dia} {mes}
+        <span className="rounded-full bg-canvas px-2.5 py-1 text-[11.5px] font-bold tabular-nums text-slate-brand">
+          {etiquetaDia(turno.fecha)}
         </span>
-        <span className="text-xs font-semibold text-muted-foreground">{turno.hora} hs</span>
+        <span className="text-[11.5px] font-bold tabular-nums text-subtle">{turno.hora} hs</span>
       </div>
     </Link>
   );
@@ -33,10 +36,10 @@ export function AgregarTurnoCard() {
   return (
     <Link
       href="/app/agregar-turno"
-      className="flex min-h-[86px] w-[120px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-[20px] bg-secondary text-muted-foreground"
+      className="flex min-h-[110px] w-[112px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-[18px] border-[1.5px] border-dashed border-foreground/15 text-subtle"
     >
-      <VitaIcon name="plus" size={22} />
-      <span className="text-xs font-semibold">Agregar</span>
+      <VitaIcon name="plus" size={20} />
+      <span className="text-[11.5px] font-bold">Agregar</span>
     </Link>
   );
 }

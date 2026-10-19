@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { VitaAvatar } from "@/components/vita/v-mark";
+import { VMark } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { href: "/app", icon: "home", label: "Inicio" },
   { href: "/app/rutina", icon: "routine", label: "Rutina" },
-  { href: "/app/mi-salud", icon: "heart-plus", label: "Mi Salud" },
+  { href: "/app/mi-salud", icon: "activity", label: "Mi Salud" },
   { href: "/app/perfil", icon: "user", label: "Perfil" },
 ];
 
@@ -38,41 +38,44 @@ export function BottomNav() {
   const derecha = ITEMS.slice(2);
 
   return (
-    <div
-      className="fixed inset-x-3 z-30 mx-auto grid h-[76px] max-w-md grid-cols-[1fr_1fr_88px_1fr_1fr] items-center rounded-[32px] bg-card px-1.5 shadow-[0_12px_36px_color-mix(in_srgb,var(--ink)_12%,transparent)]"
+    <nav
+      aria-label="Navegación principal"
+      className="fixed inset-x-3 z-30 mx-auto grid h-[74px] max-w-md grid-cols-[1fr_1fr_86px_1fr_1fr] items-center rounded-[30px] bg-card px-1.5 shadow-nav"
       style={{ bottom: "var(--safe-bottom-nav)" }}
     >
       {izquierda.map((item) => (
-        <NavItem key={item.href} {...item} activo={pathname === item.href} />
+        <NavItem key={item.href} {...item} activo={esActivo(pathname, item.href)} />
       ))}
 
-      <div className="relative flex h-full items-start justify-center">
+      <div className="relative flex h-full justify-center">
+        {/* V7: el FAB central muestra el isotipo (V sobre teal), no el
+            personaje. Mismo botón y misma función: abre el chat con vita. */}
         <button
           type="button"
           onClick={() => abrir()}
           aria-label="Abrir chat con vita"
-          className="absolute -top-12 flex size-[92px] items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to shadow-[0_14px_28px_color-mix(in_srgb,var(--primary)_35%,transparent),0_6px_12px_color-mix(in_srgb,var(--primary)_22%,transparent)] transition-transform active:scale-95"
+          className="absolute -top-[26px] flex size-16 items-center justify-center rounded-full shadow-[0_8px_20px_color-mix(in_srgb,var(--primary)_40%,transparent)] transition-transform active:scale-[0.93] motion-reduce:transition-none"
         >
-          {/* El personaje, no el ícono plano — pedido explícito: el mismo
-              avatar del chat también presente acá, en el botón central que
-              abre la conversación desde cualquier pantalla, con más
-              presencia — botón de 92px que sobresale de la barra y avatar
-              3D de 84px, a pedido explícito ("una de las partes más usadas,
-              debe estar visible"). "idle" porque acá no hay una conversación en curso
-              todavía (es el gesto que la arranca), mismo criterio que el
-              resto de los call sites estáticos de VitaAvatar. */}
-          <VitaAvatar size={84} />
+          <VMark size={64} forma="circulo" />
         </button>
-        <span className="absolute bottom-[10px] font-heading text-[11px] font-bold tracking-tight text-primary">
+        <span
+          aria-hidden
+          className="absolute bottom-[11px] font-heading text-[10.5px] font-extrabold tracking-[-0.02em] text-primary"
+        >
           vita
         </span>
       </div>
 
       {derecha.map((item) => (
-        <NavItem key={item.href} {...item} activo={pathname === item.href} />
+        <NavItem key={item.href} {...item} activo={esActivo(pathname, item.href)} />
       ))}
-    </div>
+    </nav>
   );
+}
+
+// "/app" solo es activo en Home; el resto también en sus subrutas.
+function esActivo(pathname: string, href: string): boolean {
+  return href === "/app" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function NavItem({
@@ -89,19 +92,14 @@ function NavItem({
   return (
     <Link
       href={href}
+      aria-current={activo ? "page" : undefined}
       className={cn(
-        "flex flex-col items-center gap-1 rounded-[18px] px-1 py-2 font-sans text-[11px] font-semibold transition-colors",
-        activo ? "text-primary" : "text-muted-foreground"
+        "flex flex-col items-center gap-[5px] rounded-[18px] px-0.5 py-2 font-sans text-[10.5px] font-bold tracking-[-0.01em] transition-colors",
+        activo ? "text-primary" : "text-subtle"
       )}
     >
-      <VitaIcon name={icon} size={22} />
+      <VitaIcon name={icon} size={21} strokeWidth={1.9} />
       <span>{label}</span>
-      <span
-        className={cn(
-          "h-1 w-1 rounded-full bg-primary transition-opacity",
-          activo ? "opacity-100" : "opacity-0"
-        )}
-      />
     </Link>
   );
 }

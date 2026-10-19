@@ -74,7 +74,7 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4.5 pb-24">
+    <form action={formAction} className="flex flex-col gap-[22px] pb-24">
       {inicial?.stockInicial && (
         <>
           <input type="hidden" name="stockInicial" value={inicial.stockInicial} />
@@ -90,32 +90,32 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Metformina, Losartán, Omeprazol…"
-          className="w-full rounded-[20px] bg-secondary px-3.5 py-3 text-sm font-medium outline-none"
+          className="w-full rounded-full bg-card px-[18px] py-3.5 text-[15px] font-semibold shadow-item outline-none placeholder:font-medium placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40"
         />
       </Campo>
 
       <div>
         <Etiqueta text="Dosis" requerido />
         <div className="flex items-stretch gap-2">
-          <div className="flex-1 rounded-[20px] bg-secondary">
+          <div className="flex-1 rounded-full bg-card shadow-item">
             <input
               name="dosis"
               value={dosis}
               onChange={(e) => setDosis(e.target.value)}
               placeholder="500"
               inputMode="decimal"
-              className="w-full bg-transparent px-3.5 py-3 text-sm font-semibold outline-none"
+              className="w-full bg-transparent px-[18px] py-3.5 text-[15px] font-semibold outline-none placeholder:text-faint"
             />
           </div>
-          <div className="flex gap-1 rounded-[20px] bg-secondary p-1">
+          <div className="flex gap-1 rounded-full bg-secondary p-1">
             {UNIDADES.map((u) => (
               <button
                 key={u}
                 type="button"
                 onClick={() => setUnidad(u)}
                 className={cn(
-                  "rounded-[10px] px-2.5 py-1.5 text-xs font-semibold",
-                  unidad === u ? "bg-card text-primary shadow-sm" : "text-muted-foreground"
+                  "rounded-full px-2.5 py-2 text-xs font-bold",
+                  unidad === u ? "bg-card text-foreground shadow-item" : "text-subtle"
                 )}
               >
                 {u}
@@ -135,8 +135,8 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
               type="button"
               onClick={() => setFrecuencia(f)}
               className={cn(
-                "rounded-full px-3.5 py-2 text-[12.5px] font-semibold transition-all",
-                frecuencia === f ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-secondary text-foreground"
+                "rounded-full px-[17px] py-[11px] text-[13.5px] font-bold transition-all",
+                frecuencia === f ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-card text-slate-brand shadow-item"
               )}
             >
               {f}
@@ -148,7 +148,7 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
 
       <div>
         <Etiqueta text="¿Cuándo tomarlo?" requerido />
-        <p className="-mt-1 mb-2.5 text-xs text-muted-foreground">Podés elegir más de uno</p>
+        <p className="-mt-1.5 mb-3 text-xs font-medium text-subtle">Podés elegir más de uno</p>
         <div className="grid grid-cols-2 gap-2">
           {MOMENTOS.map((m) => {
             const sel = momentos.includes(m.key);
@@ -158,10 +158,10 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
                 type="button"
                 onClick={() => alternarMomento(m.key)}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-[20px] p-3.5 text-left transition-all",
+                  "flex items-center gap-2.5 rounded-[var(--radius-item)] p-3.5 text-left transition-all motion-reduce:transition-none",
                   sel
                     ? "bg-primary text-primary-foreground shadow-[0_8px_18px_color-mix(in_srgb,var(--primary)_25%,transparent)]"
-                    : "bg-card text-foreground shadow-card"
+                    : "bg-card text-foreground shadow-item"
                 )}
               >
                 <VitaIcon name={m.icon} size={18} color={sel ? "var(--primary-foreground)" : "var(--primary)"} />
@@ -190,8 +190,8 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
               type="button"
               onClick={() => setConComida(c.v)}
               className={cn(
-                "rounded-full px-3.5 py-2 text-[12.5px] font-semibold",
-                conComida === c.v ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-secondary text-foreground"
+                "rounded-full px-[17px] py-[11px] text-[13.5px] font-bold",
+                conComida === c.v ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-card text-slate-brand shadow-item"
               )}
             >
               {c.label}
@@ -210,8 +210,8 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
               type="button"
               onClick={() => setDuracion(d)}
               className={cn(
-                "rounded-full px-3.5 py-2 text-[12.5px] font-semibold",
-                duracion === d ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-secondary text-foreground"
+                "rounded-full px-[17px] py-[11px] text-[13.5px] font-bold",
+                duracion === d ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-card text-slate-brand shadow-item"
               )}
             >
               {d}
@@ -228,7 +228,7 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
           onChange={(e) => setNotas(e.target.value)}
           placeholder="Recetado por Dr. Pérez, para hipertensión…"
           rows={3}
-          className="w-full resize-none rounded-[20px] bg-secondary px-3.5 py-3 text-sm outline-none"
+          className="w-full resize-none rounded-[20px] bg-card px-[18px] py-3.5 text-[15px] font-medium shadow-item outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40"
         />
       </Campo>
 
@@ -237,13 +237,13 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
       )}
 
       <div
-        className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-md gap-2.5 bg-gradient-to-t from-background from-70% to-transparent px-4 pt-4"
+        className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-md gap-2.5 bg-gradient-to-t from-background from-70% to-transparent px-[18px] pt-4"
         style={{ paddingBottom: "var(--safe-bottom)" }}
       >
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-full bg-secondary px-4.5 py-3.5 font-heading text-sm font-bold"
+          className="rounded-full border border-foreground/10 px-[22px] py-4 font-heading text-sm font-bold text-slate-brand"
         >
           Cancelar
         </button>
@@ -251,10 +251,10 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
           type="submit"
           disabled={!puedeGuardar || pendiente}
           className={cn(
-            "flex-1 rounded-full py-3.5 font-heading text-sm font-extrabold transition-all",
+            "flex-1 rounded-full py-4 font-heading text-sm font-extrabold tracking-[-0.01em] transition-all motion-reduce:transition-none",
             puedeGuardar && !pendiente
-              ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
-              : "bg-secondary text-muted-foreground"
+              ? "bg-primary text-primary-foreground shadow-[0_3px_10px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
+              : "bg-secondary text-subtle"
           )}
         >
           {pendiente ? "Guardando…" : "Guardar medicamento"}
@@ -266,7 +266,7 @@ export function FormularioAgregarMedicamento({ inicial }: { inicial?: InicialMed
 
 function Etiqueta({ text, requerido }: { text: string; requerido?: boolean }) {
   return (
-    <div className="mb-2 flex items-center gap-1 text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="eyebrow mb-3.5 flex items-center gap-1 border-b border-foreground/[0.07] pb-2.5 text-subtle">
       {text}
       {requerido && <span className="text-primary">•</span>}
     </div>

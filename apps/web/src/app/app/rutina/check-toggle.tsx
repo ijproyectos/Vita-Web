@@ -5,7 +5,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { marcarTomadoAction } from "./actions";
 
-// Círculo de check que se llena en gradiente teal al tocar — porta
+// Círculo de check que se llena de teal al tocar — porta
 // `.check`/`.check.on` de styles.css (usado en Home y Rutina).
 export function CheckToggle({ medicamentoId, tomadoInicial }: { medicamentoId: string; tomadoInicial: boolean }) {
   const [tomado, setTomado] = useState(tomadoInicial);
@@ -31,9 +31,9 @@ export function CheckToggle({ medicamentoId, tomadoInicial }: { medicamentoId: s
       aria-pressed={tomado}
       aria-label={tomado ? "Marcar como no tomado" : "Marcar como tomado"}
       className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-60",
+        "flex size-[30px] shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-60",
         tomado
-          ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground shadow-[0_4px_10px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
+          ? "bg-primary text-primary-foreground shadow-[0_4px_10px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
           : "bg-muted text-transparent"
       )}
     >

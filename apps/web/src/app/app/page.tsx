@@ -5,24 +5,14 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
-import type { ResumenStock } from "@/lib/inventario/tipos";
 import { AvisoStockBajo } from "@/components/vita/aviso-stock-bajo";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
+import { InstalarVita } from "@/components/vita/instalar-vita";
+import { NudgeVita } from "@/components/vita/nudge-vita";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
-import { colorChipPorIndice } from "@/lib/perfil/tipos";
+import { fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
-import { Chip } from "@/components/vita/chip";
-import { ProgressRing } from "@/components/vita/progress-ring";
-import { MedRow } from "./rutina/med-row";
 import { TurnoCard, AgregarTurnoCard } from "./rutina/turno-card";
-import { HeroVita } from "./hero-vita";
-
-function saludo(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Buen día";
-  if (h < 19) return "Hola";
-  return "Buenas noches";
-}
 
 export default async function HomePage() {
   const usuario = await requireUser();
@@ -37,111 +27,130 @@ export default async function HomePage() {
   ]);
 
   const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy);
-
-  const stockPorId = new Map<string, ResumenStock>(
-    inventarios.map((i) => [i.id, { stock: i.stock, umbral: i.umbral_alerta }])
-  );
   const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
 
   const nombre = perfil?.nombre?.split(" ")[0] ?? "Ahí vamos";
-  const tomados = medsHoy.filter((m) => m.tomado).length;
-  const total = medsHoy.length;
-  const pct = total === 0 ? 0 : Math.round((tomados / total) * 100);
+  const hayAvisos = recordatorios.length > 0 || stockBajo.length > 0;
 
-  const condiciones = perfil?.condiciones ?? [];
-  const alergias = perfil?.alergias ?? [];
+  // Adherencia de hoy: un segmento por toma, en orden horario. "Sigue" es la
+  // primera toma sin marcar.
+  const tomas = [...medsHoy].sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
+  const tomados = tomas.filter((m) => m.tomado).length;
+  const siguiente = tomas.find((m) => !m.tomado);
+  const textoSigue =
+    tomas.length === 0
+      ? "No tenés medicamentos programados para hoy."
+      : siguiente
+        ? `Sigue: ${siguiente.nombre} a las ${siguiente.hora_programada.slice(0, 5)}`
+        : "Listo por hoy. No queda nada pendiente.";
 
   return (
-    <div className="flex flex-col gap-5 px-4 pt-2">
-      {/* Top bar */}
-      <div className="mt-1.5 flex items-center justify-between">
+    <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
+      <InstalarVita />
+
+      {/* Saludo + selector de perfil (hoy solo vos) + avisos */}
+      <div className="mt-1.5 flex items-start justify-between">
         <div>
-          <div className="text-[13px] font-medium text-muted-foreground">{saludo()},</div>
-          <div className="mt-0.5 font-heading text-[26px] font-extrabold tracking-tight">
-            {nombre} <span className="font-normal">👋</span>
+          <div className="eyebrow text-subtle">{saludoEnAR()},</div>
+          <div className="mt-[5px] flex items-center gap-[9px]">
+            <h1 className="font-heading text-[28px] font-extrabold tracking-[-0.04em] text-teal-deep">{nombre}</h1>
+            {/* TODO(fase familia): acá va el selector de perfiles. Hoy es solo
+                la persona actual, así que el chevron es decorativo. */}
+            <span
+              aria-hidden
+              className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-persona-1-tint text-persona-1"
+            >
+              <VitaIcon name="chevron-down" size={14} strokeWidth={2.8} />
+            </span>
           </div>
         </div>
-        <div className="relative flex size-10 items-center justify-center rounded-full bg-card shadow-card">
-          <VitaIcon name="bell" size={20} />
-          <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-primary ring-2 ring-card" />
-        </div>
+        <Link
+          href="/app/avisos"
+          aria-label={hayAvisos ? "Avisos, hay novedades" : "Avisos"}
+          className="relative flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card text-slate-brand shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
+        >
+          <VitaIcon name="bell" size={19} strokeWidth={1.9} />
+          {hayAvisos && <span className="absolute right-[11px] top-2.5 size-2 rounded-full bg-primary ring-2 ring-card" />}
+        </Link>
       </div>
-
-      <HeroVita />
 
       <AvisoRecordatorio items={recordatorios} href="/app/modo-simple" />
 
-      {/* Profile summary card */}
-      <Link href="/app/resumen-salud" className="rounded-[20px] bg-card p-4 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex size-[54px] items-center justify-center rounded-full bg-gradient-to-br from-chip-teal-bg to-chip-teal-bg font-heading text-xl font-bold text-chip-teal-ink">
-              {(perfil?.nombre ?? "?").charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div className="font-heading text-[17px] font-bold">{perfil?.nombre ?? "Tu perfil"}</div>
-              <div className="text-xs text-muted-foreground">Resumen de salud</div>
-            </div>
+      {/* Tarjeta de perfil */}
+      <Link href="/app/resumen-salud" className="flex items-center justify-between rounded-[20px] bg-card p-[18px] shadow-card">
+        <div className="flex items-center gap-3">
+          <div className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-persona-1-tint font-heading text-xl font-extrabold text-persona-1-deep">
+            {(perfil?.nombre ?? "?").charAt(0).toUpperCase()}
           </div>
-          <VitaIcon name="chevron-right" size={18} className="text-muted-foreground" />
+          <div className="min-w-0">
+            <div className="truncate font-heading text-[16.5px] font-extrabold tracking-[-0.02em]">
+              {perfil?.nombre ?? "Tu perfil"}
+            </div>
+            <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Resumen de salud</div>
+          </div>
         </div>
+        <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
+      </Link>
 
-        <div className="mt-3.5 grid grid-cols-3 rounded-[20px] bg-secondary px-1 py-3">
-          <Estadistica etiqueta="Altura" valor={perfil?.altura_cm != null ? `${perfil.altura_cm}` : "—"} unidad="cm" />
-          <Estadistica etiqueta="Peso" valor={perfil?.peso_kg != null ? `${perfil.peso_kg}` : "—"} unidad="kg" divisor />
-          <Estadistica etiqueta="Grupo" valor={perfil?.grupo_sanguineo ?? "—"} unidad="" divisor />
+      {/* Adherencia de hoy */}
+      <Link
+        href="/app/rutina"
+        className="rounded-[20px] bg-teal-deep px-[18px] pb-4 pt-[18px] text-primary-foreground transition-transform active:scale-[0.99] motion-reduce:transition-none"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[13px] font-semibold">Hoy, {formatoFechaCorta(fechaDeHoyISO())}</div>
+          <div className="flex items-center gap-0.5 text-[13px] font-bold">
+            Rutina
+            <VitaIcon name="chevron-right" size={15} strokeWidth={2.4} />
+          </div>
         </div>
-
-        {(condiciones.length > 0 || alergias.length > 0) && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {condiciones.map((c, i) => (
-              <Chip key={c.label} color={colorChipPorIndice(i)}>
-                {c.label}
-              </Chip>
+        <div className="mt-2 font-heading text-2xl font-extrabold leading-[1.15] tracking-[-0.025em]">
+          {tomados} de {tomas.length} tomados
+        </div>
+        {tomas.length > 0 && (
+          <div className="mt-3.5 flex gap-1" aria-hidden>
+            {tomas.map((m) => (
+              <div key={m.id} className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div
+                  className={
+                    "h-1.5 rounded-[3px] " +
+                    (m.tomado ? "bg-primary-foreground" : "bg-primary-foreground/25")
+                  }
+                />
+                <div
+                  className={
+                    "text-[11px] font-bold tabular-nums " +
+                    (m.tomado ? "text-primary-foreground" : "text-primary-foreground/60")
+                  }
+                >
+                  {m.hora_programada.slice(0, 5)}
+                </div>
+              </div>
             ))}
-            {alergias.map((a) => (
-              <Chip key={a} color="rose">
-                {a}
-              </Chip>
-            ))}
+          </div>
+        )}
+        <div className="mt-3 border-t border-primary-foreground/[0.18] pt-3 text-[13.5px] font-semibold leading-[1.4]">
+          {textoSigue}
+        </div>
+        {adherencia.rachaDias > 0 && (
+          <div className="mt-1.5 flex items-center gap-1 text-[12px] font-medium text-primary-foreground/80">
+            <VitaIcon name="flame" size={12} /> Llevás {adherencia.rachaDias}{" "}
+            {adherencia.rachaDias === 1 ? "día" : "días"} sin saltarte ninguno
           </div>
         )}
       </Link>
 
       <AvisoStockBajo items={stockBajo} href="/app/pastillas" />
 
-      {/* Today progress card */}
-      <Link
-        href="/app/rutina"
-        className="relative overflow-hidden rounded-[20px] p-4.5 text-primary-foreground shadow-[0_14px_36px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
-        style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[12.5px] font-semibold uppercase tracking-wide opacity-80">Hoy</div>
-            <div className="mt-1 font-heading text-[22px] font-extrabold leading-tight">
-              {tomados} de {total} medicamentos
-            </div>
-            {adherencia.rachaDias > 0 && (
-              <div className="mt-1 flex items-center gap-1 text-[13px] opacity-85">
-                <VitaIcon name="flame" size={13} /> Llevás {adherencia.rachaDias}{" "}
-                {adherencia.rachaDias === 1 ? "día" : "días"} sin saltarte ninguno
-              </div>
-            )}
-          </div>
-          <ProgressRing pct={pct} />
-        </div>
-      </Link>
-
       {/* Próximos turnos */}
       <div>
-        <div className="flex items-center justify-between px-0.5 pb-2.5">
-          <div className="font-heading text-[15px] font-bold">Próximos turnos</div>
-          <Link href="/app/rutina" className="text-sm font-semibold text-primary">
+        <div className="flex items-baseline justify-between px-0.5 pb-[11px]">
+          <h2 className="font-heading text-base font-extrabold tracking-[-0.02em]">Próximos turnos</h2>
+          <Link href="/app/turnos" className="text-[13px] font-bold text-teal-deep">
             Ver todos →
           </Link>
         </div>
-        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
+        <div className="-mx-[18px] flex gap-2.5 overflow-x-auto px-[18px] pb-1 [scrollbar-width:none]">
           {turnosProximos.map((t, i) => (
             <TurnoCard key={t.id} turno={t} indice={i} />
           ))}
@@ -149,55 +158,7 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* Medicamentos de hoy */}
-      <div>
-        <div className="flex items-center justify-between px-0.5 pb-2.5">
-          <div className="font-heading text-[15px] font-bold">Medicamentos de hoy</div>
-          <Link href="/app/rutina" className="text-sm font-semibold text-primary">
-            Ver rutina →
-          </Link>
-        </div>
-        {medsHoy.length === 0 ? (
-          <div className="rounded-[20px] bg-card p-4 text-sm text-muted-foreground shadow-card">
-            No tenés medicamentos programados para hoy.
-          </div>
-        ) : (
-          <div className="rounded-[20px] bg-card p-1.5 shadow-card">
-            {medsHoy.map((m, i) => (
-              <MedRow
-                key={m.id}
-                med={m}
-                color={colorChipPorIndice(i)}
-                divider={i < medsHoy.length - 1}
-                stock={m.inventario_id ? (stockPorId.get(m.inventario_id) ?? null) : null}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-}
-
-function Estadistica({
-  etiqueta,
-  valor,
-  unidad,
-  divisor,
-}: {
-  etiqueta: string;
-  valor: string;
-  unidad: string;
-  divisor?: boolean;
-}) {
-  return (
-    <div className={`px-3 py-1.5 text-center ${divisor ? "border-l border-foreground/[0.06]" : ""}`}>
-      <div className="font-heading text-[20px] font-extrabold tracking-tight">
-        {valor}
-        {unidad && <span className="ml-0.5 text-xs font-semibold text-muted-foreground">{unidad}</span>}
-      </div>
-      <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{etiqueta}</div>
+      <NudgeVita />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { AgregarSheet } from "./agregar-sheet";
 import { ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_MOMENTO } from "@/lib/rutina/momento";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import { diaYMes, fechaDeHoyISO, formatoFechaCorta } from "@/lib/rutina/formato";
+import { iconoDeEspecialidad } from "@/lib/turnos/icono";
 import { BadgeStock } from "@/components/vita/badge-stock";
 import type { ResumenStock } from "@/lib/inventario/tipos";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
@@ -59,31 +60,34 @@ export function RutinaView({
   }
 
   return (
-    <div className="flex flex-col gap-4.5 px-4 pt-2">
-      <div className="mt-1.5 flex items-center justify-between">
+    <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
+      <div className="mt-1.5 flex items-start justify-between">
         <div>
-          <div className="text-[12px] font-semibold uppercase tracking-wide text-primary">Tu día de salud</div>
-          <div className="mt-0.5 font-heading text-[26px] font-extrabold tracking-tight">Rutina</div>
+          <div className="eyebrow text-primary">Tu día de salud</div>
+          <h1 className="mt-[5px] font-heading text-[28px] font-extrabold tracking-[-0.04em]">Mi Rutina</h1>
         </div>
         <button
           type="button"
           onClick={() => setShowAdd(true)}
-          aria-label="Agregar"
-          className="flex size-10 items-center justify-center rounded-full bg-card shadow-card"
+          aria-label="Agregar a tu rutina"
+          className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
         >
           <VitaIcon name="plus" size={20} />
         </button>
       </div>
 
-      <div className="flex rounded-full bg-secondary p-1">
+      {/* TODO(fase historial): V7 suma la pestaña "Historial". */}
+      <div role="tablist" aria-label="Vista de la rutina" className="flex rounded-full bg-secondary p-1">
         {(["hoy", "proximos"] as const).map((v) => (
           <button
             key={v}
             type="button"
+            role="tab"
+            aria-selected={vista === v}
             onClick={() => cambiarVista(v)}
             className={
-              "flex-1 rounded-full py-2.5 font-heading text-[13.5px] font-bold transition-all " +
-              (vista === v ? "bg-card text-primary shadow-[0_2px_6px_color-mix(in_srgb,var(--ink)_6%,transparent)]" : "text-muted-foreground")
+              "flex-1 rounded-full px-3 py-2.5 text-[13px] font-bold tracking-[-0.01em] transition-all motion-reduce:transition-none " +
+              (vista === v ? "bg-card text-foreground shadow-item" : "text-subtle")
             }
           >
             {v === "hoy" ? "Hoy" : "Próximos días"}
@@ -93,30 +97,23 @@ export function RutinaView({
 
       {vista === "hoy" ? (
         <>
-          <div
-            className="relative overflow-hidden rounded-[20px] p-4.5 text-primary-foreground shadow-[0_14px_36px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
-            style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[12.5px] font-semibold uppercase tracking-wide opacity-80">
-                  Hoy · {formatoFechaCorta(fechaDeHoyISO())}
-                </div>
-                <div className="mt-1 font-heading text-[22px] font-extrabold leading-tight">
-                  {tomados}/{total} medicamentos
-                </div>
-                <div className="mt-1 text-[13px] opacity-88">
-                  + {turnosHoy.length} turno{turnosHoy.length !== 1 ? "s" : ""} hoy
-                </div>
-                {adherencia.rachaDias > 0 && (
-                  <div className="mt-1.5 flex items-center gap-1 text-[12.5px] opacity-82">
-                    <VitaIcon name="flame" size={12} /> Llevás {adherencia.rachaDias}{" "}
-                    {adherencia.rachaDias === 1 ? "día" : "días"} sin saltarte ninguno
-                  </div>
-                )}
+          <div className="flex items-center gap-4 rounded-[20px] bg-card p-[18px] shadow-card">
+            <div className="min-w-0 flex-1">
+              <div className="eyebrow text-subtle">Hoy · {formatoFechaCorta(fechaDeHoyISO())}</div>
+              <div className="mt-2 font-heading text-[42px] font-bold leading-[0.95] tracking-[-0.04em] tabular-nums">
+                <span className="text-primary">{tomados}</span>/{total}
               </div>
-              <ProgressRing pct={pct} />
+              <div className="mt-1.5 text-[12.5px] font-semibold text-slate-brand">
+                medicamentos · {turnosHoy.length} turno{turnosHoy.length !== 1 ? "s" : ""}
+              </div>
+              {adherencia.rachaDias > 0 && (
+                <div className="mt-1.5 flex items-center gap-1 text-[12px] font-medium text-subtle">
+                  <VitaIcon name="flame" size={12} /> Llevás {adherencia.rachaDias}{" "}
+                  {adherencia.rachaDias === 1 ? "día" : "días"} sin saltarte ninguno
+                </div>
+              )}
             </div>
+            <ProgressRing pct={pct} size={74} tono="card" />
           </div>
 
           {tomados < total && <MarcarTodosButton />}
@@ -148,7 +145,7 @@ function TimelineHoy({
   onAgregar: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-4.5">
+    <div className="flex flex-col gap-5">
       {ORDEN_MOMENTOS.map((momento) => {
         const meds = medsHoy.filter((m) => m.momento_dia === momento).sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
         const turnos = turnosHoy
@@ -159,14 +156,14 @@ function TimelineHoy({
         if (total === 0) {
           return (
             <div key={momento} className="flex items-center gap-2.5">
-              <div className="flex size-8 items-center justify-center rounded-[10px] bg-secondary text-muted-foreground/60">
+              <div className="flex size-[34px] items-center justify-center rounded-[var(--radius-tile)] bg-card text-subtle shadow-item">
                 <VitaIcon name={ICONO_MOMENTO[momento]} size={17} />
               </div>
               <div className="flex-1">
-                <div className="font-heading text-[15px] font-bold text-muted-foreground">{ETIQUETA_MOMENTO[momento]}</div>
-                <div className="text-[11px] text-muted-foreground">{RANGO_MOMENTO[momento]} hs · sin items</div>
+                <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em] text-slate-brand">{ETIQUETA_MOMENTO[momento]}</div>
+                <div className="text-[11px] font-medium tabular-nums text-subtle">{RANGO_MOMENTO[momento]} hs · sin items</div>
               </div>
-              <button type="button" onClick={onAgregar} className="text-[13px] font-semibold text-primary">
+              <button type="button" onClick={onAgregar} className="text-[12.5px] font-bold text-teal-deep">
                 + Agregar
               </button>
             </div>
@@ -175,19 +172,19 @@ function TimelineHoy({
 
         return (
           <div key={momento}>
-            <div className="flex items-center gap-2.5 pb-2.5">
-              <div className="flex size-8 items-center justify-center rounded-[10px] bg-secondary text-muted-foreground">
+            <div className="flex items-center gap-[11px] pb-[11px] pl-0.5">
+              <div className="flex size-[34px] items-center justify-center rounded-[var(--radius-tile)] bg-card text-slate-brand shadow-item">
                 <VitaIcon name={ICONO_MOMENTO[momento]} size={17} />
               </div>
               <div className="flex-1">
-                <div className="font-heading text-[15px] font-bold">{ETIQUETA_MOMENTO[momento]}</div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{ETIQUETA_MOMENTO[momento]}</div>
+                <div className="text-[11px] font-medium tabular-nums text-subtle">
                   {RANGO_MOMENTO[momento]} hs · {total} item{total !== 1 ? "s" : ""}
                 </div>
               </div>
             </div>
-            <div className="relative flex flex-col gap-2 pl-3.5">
-              <div className="absolute inset-y-2.5 left-1 w-0.5 rounded-full bg-secondary" />
+            <div className="relative flex flex-col gap-2 pl-[15px]">
+              <div className="absolute inset-y-3 left-1 w-0.5 rounded-full bg-border" />
               {meds.map((m, i) => (
                 <MedItem
                   key={m.id}
@@ -227,27 +224,27 @@ function MedItem({
     <div className="relative">
       <span
         className={
-          "absolute -left-[15px] top-[22px] size-2.5 rounded-full ring-2 ring-border " +
-          (med.tomado ? "bg-primary" : "bg-card")
+          "absolute -left-[15px] top-6 size-2.5 rounded-full " +
+          (med.tomado ? "bg-primary" : "bg-card ring-2 ring-border")
         }
       />
-      <div className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-card">
-        <div className={`flex size-10 shrink-0 items-center justify-center rounded-full ${TINTE_BG[color]}`}>
+      <div className="flex items-center gap-3 rounded-[var(--radius-item)] bg-card p-3 shadow-item">
+        <div className={`flex size-10 shrink-0 items-center justify-center rounded-[13px] ${TINTE_BG[color]}`}>
           <VitaIcon name="pill" size={18} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className={"truncate font-heading text-[14.5px] font-bold " + (med.tomado ? "opacity-55 line-through" : "")}>
+          <div className={"truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em] " + (med.tomado ? "opacity-55 line-through" : "")}>
             {med.nombre}
           </div>
-          <div className={"text-xs text-muted-foreground " + (med.tomado ? "opacity-60" : "")}>
+          <div className={"mt-0.5 text-[11.5px] font-medium text-subtle " + (med.tomado ? "opacity-60" : "")}>
             {med.dosis ? `${med.dosis} · ` : ""}
             {med.hora_programada} hs
           </div>
           {stock && <BadgeStock stock={stock} className="mt-1" />}
         </div>
-        <div className="flex flex-col items-center gap-1">
-          <CheckToggle medicamentoId={med.id} tomadoInicial={med.tomado} />
+        <div className="flex items-center gap-1">
           <EliminarMedButton medicamentoId={med.id} nombre={med.nombre} />
+          <CheckToggle medicamentoId={med.id} tomadoInicial={med.tomado} />
         </div>
       </div>
     </div>
@@ -257,24 +254,18 @@ function MedItem({
 function AptItem({ turno }: { turno: Turno }) {
   return (
     <div className="relative">
-      <span className="absolute -left-[15px] top-[22px] size-2.5 rounded-full bg-primary/60 ring-4 ring-primary/15" />
-      <div className="relative flex items-center gap-3 rounded-[20px] bg-card py-3 pl-4 pr-3 shadow-card">
-        <span className="absolute inset-y-3.5 left-1.5 w-[3px] rounded-full bg-primary" />
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
-          <VitaIcon name="stethoscope" size={18} />
+      <span className="absolute -left-[15px] top-6 size-2.5 rounded-full bg-primary" />
+      <div className="flex items-center gap-3 rounded-[var(--radius-item)] bg-card p-3 shadow-item">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-persona-1-tint text-persona-1">
+          <VitaIcon name={iconoDeEspecialidad(turno.especialidad)} size={18} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <div className="truncate font-heading text-[14.5px] font-bold">{turno.especialidad}</div>
-            <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-              turno
-            </span>
+          <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{turno.especialidad}</div>
+          <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">
+            {[turno.profesional, turno.lugar].filter(Boolean).join(" · ") || "Turno médico"}
           </div>
-          <div className="truncate text-xs text-muted-foreground">
-            {[turno.profesional, `${turno.hora} hs`].filter(Boolean).join(" · ")}
-          </div>
-          {turno.lugar && <div className="mt-0.5 truncate text-[11px] text-muted-foreground opacity-80">{turno.lugar}</div>}
         </div>
+        <div className="text-[13px] font-bold tabular-nums">{turno.hora}</div>
       </div>
     </div>
   );
@@ -289,7 +280,7 @@ function ProximosDias({ turnos, todosLosMeds }: { turnos: Turno[]; todosLosMeds:
   const medsConDiasLimitados = todosLosMeds.filter((m) => m.dias_recurrentes.length > 0);
 
   if (turnos.length === 0 && medsConDiasLimitados.length === 0) {
-    return <div className="py-10 text-center text-sm text-muted-foreground">No tenés turnos agendados próximamente.</div>;
+    return <div className="py-10 text-center text-sm font-medium text-subtle">No tenés turnos agendados próximamente.</div>;
   }
 
   const porFecha = new Map<string, Turno[]>();
@@ -299,11 +290,11 @@ function ProximosDias({ turnos, todosLosMeds }: { turnos: Turno[]; todosLosMeds:
   }
 
   return (
-    <div className="flex flex-col gap-3.5">
-      <div className="px-0.5 text-xs text-muted-foreground">Turnos agendados próximamente.</div>
+    <div className="flex flex-col gap-4">
+      <div className="px-0.5 text-[11.5px] font-medium text-subtle">Turnos agendados próximamente.</div>
       {[...porFecha.entries()].map(([fecha, items]) => (
         <div key={fecha}>
-          <div className="px-0.5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="eyebrow px-0.5 pb-[9px] text-subtle">
             {formatoFechaCorta(fecha)}
           </div>
           <div className="flex flex-col gap-2">
@@ -312,14 +303,14 @@ function ProximosDias({ turnos, todosLosMeds }: { turnos: Turno[]; todosLosMeds:
               return (
                 <div
                   key={t.id}
-                  className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-card"
+                  className="flex items-center gap-3 rounded-[var(--radius-item)] bg-card p-3 shadow-item"
                 >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
-                    <VitaIcon name="stethoscope" size={18} />
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-persona-1-tint text-persona-1">
+                    <VitaIcon name={iconoDeEspecialidad(t.especialidad)} size={18} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-heading text-[14.5px] font-bold">{t.especialidad}</div>
-                    <div className="truncate text-xs text-muted-foreground">
+                    <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{t.especialidad}</div>
+                    <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">
                       {[t.profesional, `${dia} ${mes}`, `${t.hora} hs`].filter(Boolean).join(" · ")}
                     </div>
                   </div>
@@ -332,26 +323,26 @@ function ProximosDias({ turnos, todosLosMeds }: { turnos: Turno[]; todosLosMeds:
 
       {medsConDiasLimitados.length > 0 && (
         <div>
-          <div className="px-0.5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="eyebrow px-0.5 pb-[9px] text-subtle">
             Medicamentos de días puntuales
           </div>
           <div className="flex flex-col gap-2">
             {medsConDiasLimitados.map((m) => (
               <div
                 key={m.id}
-                className="flex items-center gap-3 rounded-[20px] bg-card p-3 shadow-card"
+                className="flex items-center gap-3 rounded-[var(--radius-item)] bg-card p-3 shadow-item"
               >
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-persona-1-tint text-persona-1">
                   <VitaIcon name="pill" size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-heading text-[14.5px] font-bold">{m.nombre}</div>
-                  <div className="truncate text-xs text-muted-foreground">
+                  <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{m.nombre}</div>
+                  <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">
                     {[m.dosis, `${m.hora_programada} hs`, ETIQUETA_MOMENTO_CORTA[m.momento_dia]].filter(Boolean).join(" · ")}
                   </div>
                   <div className="mt-1 flex gap-1">
                     {m.dias_recurrentes.map((d) => (
-                      <span key={d} className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                      <span key={d} className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-bold text-slate-brand">
                         {ETIQUETA_DIA_CORTA[d] ?? d}
                       </span>
                     ))}

@@ -7,7 +7,7 @@ export default async function AgregarTurnoPage() {
   await requireUser();
 
   return (
-    <div className="flex flex-col gap-4.5 px-4 pt-2">
+    <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <TopBar eyebrow="Rutina" title="Agregar turno" accionDerecha={<VitaShortcutButton />} />
       <VitaShortcutButton size="banner" />
       <FormularioAgregarTurno />

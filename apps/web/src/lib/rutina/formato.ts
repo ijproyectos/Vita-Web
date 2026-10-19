@@ -44,3 +44,24 @@ export function descripcionAhoraEnAR(fecha: Date = new Date()): string {
     minute: "2-digit",
   }).format(fecha);
 }
+
+// "Hoy" / "Mañana" / "Vie 06" — etiqueta corta del día de un turno (chip de
+// las tarjetas de Home). Compara en hora AR, igual que fechaDeHoyISO().
+export function etiquetaDia(fechaISO: string): string {
+  if (fechaISO === fechaConOffset(0)) return "Hoy";
+  if (fechaISO === fechaConOffset(1)) return "Mañana";
+  const d = new Date(`${fechaISO}T00:00:00`);
+  if (isNaN(d.getTime())) return fechaISO;
+  const dia = DIAS[d.getDay()];
+  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} ${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Saludo según la hora en Argentina ("BUENAS NOCHES," se pasa a mayúsculas por CSS).
+export function saludoEnAR(fecha: Date = new Date()): string {
+  const h = Number(
+    new Intl.DateTimeFormat("es-AR", { timeZone: ZONA_AR, hour: "2-digit", hour12: false }).format(fecha)
+  );
+  if (h < 12) return "Buen día";
+  if (h < 19) return "Buenas tardes";
+  return "Buenas noches";
+}

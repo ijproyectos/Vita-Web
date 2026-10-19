@@ -26,7 +26,7 @@ export function MarcarTodosButton() {
           }
         })
       }
-      className="flex items-center justify-center gap-1.5 rounded-full bg-secondary py-2.5 text-[13px] font-semibold text-primary disabled:opacity-60"
+      className="flex items-center justify-center gap-1.5 rounded-full bg-chip-teal-bg py-2.5 text-[13px] font-bold text-chip-teal-ink disabled:opacity-60"
     >
       <VitaIcon name="check" size={14} />
       {pendiente ? "Marcando…" : "Marcar todos como tomados"}

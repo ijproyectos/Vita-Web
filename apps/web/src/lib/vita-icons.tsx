@@ -1,5 +1,6 @@
 import {
   Pill,
+  Share,
   Stethoscope,
   Heart,
   HeartPulse,
@@ -98,6 +99,7 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   // anuncio de voz — ningún ícono del set original cubría audio/parlante.
   volume: Volume2,
   "volume-off": VolumeX,
+  share: Share,
 };
 
 export function VitaIcon({

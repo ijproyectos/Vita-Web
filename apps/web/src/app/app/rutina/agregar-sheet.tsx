@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { VitaIcon } from "@/lib/vita-icons";
+import { VMark } from "@/components/vita/v-mark";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 
 // "Agregar a tu rutina" — porta AddSheet de RutinaScreen.jsx (3 opciones:
@@ -47,14 +48,12 @@ export function AgregarSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             }}
             className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 text-left shadow-card"
           >
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground">
-              <VitaIcon name="sparkle" size={20} />
-            </div>
+            <VMark size={44} forma="circulo" className="shrink-0 rounded-full" />
             <div className="min-w-0 flex-1">
-              <div className="font-heading text-[15px] font-bold">
-                Pedírselo a vita <span className="ml-1 text-xs text-primary">✨</span>
+              <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">
+                Pedírselo a vita 
               </div>
-              <div className="mt-0.5 text-xs text-muted-foreground">Contame con tus palabras y lo agendo</div>
+              <div className="mt-0.5 text-xs font-medium text-subtle">Contame con tus palabras y lo agendo</div>
             </div>
             <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
           </button>
@@ -82,12 +81,12 @@ function OpcionAgregar({
       href={href}
       className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 shadow-card"
     >
-      <div className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${tinte}`}>
+      <div className={`flex size-11 shrink-0 items-center justify-center rounded-[13px] ${tinte}`}>
         <VitaIcon name={icon} size={20} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="font-heading text-[15px] font-bold">{titulo}</div>
-        <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>
+        <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{titulo}</div>
+        <div className="mt-0.5 text-xs font-medium text-subtle">{sub}</div>
       </div>
       <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
     </Link>
