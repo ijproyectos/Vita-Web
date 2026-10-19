@@ -44,6 +44,10 @@ import {
   AlertTriangle,
   Volume2,
   VolumeX,
+  Shield,
+  CircleHelp,
+  Lock,
+  Phone,
   type LucideProps,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -100,6 +104,12 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   volume: Volume2,
   "volume-off": VolumeX,
   share: Share,
+  // V7 Perfil: seguridad, ayuda, privacidad, contacto.
+  shield: Shield,
+  help: CircleHelp,
+  lock: Lock,
+  phone: Phone,
+  mail: Mail,
 };
 
 export function VitaIcon({

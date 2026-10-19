@@ -50,7 +50,7 @@ export function FormularioAgregarEstudio() {
 
   return (
     <form action={formAction} className="flex flex-col gap-4.5">
-      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-[20px] bg-secondary text-muted-foreground">
+      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-[20px] bg-card text-subtle shadow-card">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- preview local de un blob: URL, no un asset de Next
           <img src={previewUrl} alt="" className="size-full object-cover" />
@@ -117,7 +117,7 @@ export function FormularioAgregarEstudio() {
       <button
         type="submit"
         disabled={!archivo || pendiente}
-        className="rounded-full bg-gradient-to-br from-brand-from to-brand-to py-3.5 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:from-muted disabled:to-muted disabled:text-muted-foreground disabled:shadow-none"
+        className="rounded-full bg-primary py-3.5 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
       >
         {pendiente ? "Analizando…" : "Guardar estudio"}
       </button>

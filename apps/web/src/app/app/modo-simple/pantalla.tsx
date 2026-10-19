@@ -7,10 +7,15 @@ import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
+import { MINUTOS_POSPONER, usePosponer } from "@/lib/modo-simple/usar-posponer";
+import { useChatOverlay } from "@/lib/chat/overlay-context";
+import { horaCorta } from "@/lib/notificaciones/mensajes";
+import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import { marcarTomadoAction } from "../rutina/actions";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
@@ -22,16 +27,18 @@ const CONFIRMACION_POR_VOZ = /\b(s[ií]|tom[eé]|listo|ya est[aá])\b/i;
 // Fases del state machine (spec: waiting | confirmed | alerted | resting).
 // "confirmado" es transitoria (solo local, nunca viene del servidor): se
 // entra al confirmar y se sale sola a los ~2.4s pidiendo un refresh del
-// server component, que recalcula la próxima dosis pendiente (u ninguna).
+// server component, que recalcula el próximo grupo pendiente (u ninguno).
 type Fase = "esperando" | "alertado" | "confirmado" | "descanso";
 
-type ProximaDosis = {
+type Dosis = {
   id: string;
   nombre: string;
   dosis: string | null;
   unidad: string;
   horaProgramada: string;
 };
+
+type Siguiente = { id: string; nombre: string; horaProgramada: string; momento: MomentoDia };
 
 const UNIDAD_HABLADA: Record<string, string> = {
   mg: "miligramos",
@@ -41,10 +48,39 @@ const UNIDAD_HABLADA: Record<string, string> = {
   "comp.": "comprimidos",
 };
 
-function fraseAnuncio(p: ProximaDosis): string {
-  const unidadTexto = UNIDAD_HABLADA[p.unidad] ?? p.unidad;
-  const dosisTexto = p.dosis ? `, ${p.dosis} ${unidadTexto}` : "";
-  return `Es hora de tomar ${p.nombre}${dosisTexto}.`;
+const DEL_MOMENTO: Record<MomentoDia, string> = {
+  "mañana": "de la mañana",
+  mediodia: "del mediodía",
+  tarde: "de la tarde",
+  noche: "de la noche",
+};
+
+const ICONO_MOMENTO: Record<MomentoDia, string> = {
+  "mañana": "sunrise",
+  mediodia: "sun",
+  tarde: "sunset",
+  noche: "moon",
+};
+
+function listaHablada(nombres: string[]): string {
+  if (nombres.length <= 1) return nombres[0] ?? "";
+  return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
+
+function fraseAnuncio(grupo: Dosis[], momento: MomentoDia | null): string {
+  if (grupo.length === 1) {
+    const p = grupo[0];
+    const unidadTexto = UNIDAD_HABLADA[p.unidad] ?? p.unidad;
+    const dosisTexto = p.dosis ? `, ${p.dosis} ${unidadTexto}` : "";
+    return `Es hora de tomar ${p.nombre}${dosisTexto}.`;
+  }
+  const cuando = momento ? ` ${DEL_MOMENTO[momento]}` : "";
+  return `Es hora de tomar tus ${grupo.length} pastillas${cuando}: ${listaHablada(grupo.map((p) => p.nombre))}.`;
+}
+
+function tituloGrupo(n: number, momento: MomentoDia | null): string {
+  const cuando = momento ? ` ${DEL_MOMENTO[momento]}` : "";
+  return n === 1 ? `Tu pastilla${cuando}` : `Tus ${n} pastillas${cuando}`;
 }
 
 // Cada cuánto se pide un refresh del server component mientras la
@@ -54,29 +90,53 @@ function fraseAnuncio(p: ProximaDosis): string {
 const INTERVALO_REFRESCO_MS = 45_000;
 
 export function Pantalla({
-  proxima,
+  nombre,
+  saludo,
+  fechaTexto,
+  telefonoEmergencia,
+  nombreEmergencia,
+  grupo,
+  momento,
+  siguientes,
+  hayMedsHoy,
   vencida,
   faltanMinutos,
-  recordatorio = false,
+  recordatorios,
 }: {
-  proxima: ProximaDosis | null;
+  nombre: string;
+  saludo: string;
+  fechaTexto: string;
+  /** Teléfono del contacto de emergencia (perfiles), o null si no hay. */
+  telefonoEmergencia: string | null;
+  nombreEmergencia: string | null;
+  /** Dosis pendientes del momento actual — la tarjeta principal. */
+  grupo: Dosis[];
+  momento: MomentoDia | null;
+  siguientes: Siguiente[];
+  /** Había medicación programada hoy (distingue "todo tomado" de "nada cargado"). */
+  hayMedsHoy: boolean;
   vencida: boolean;
   faltanMinutos: number;
-  /** Un familiar le recordó esta dosis (aviso tranquilo, sin sonido). */
-  recordatorio?: boolean;
+  /** Un familiar le recordó estas dosis (aviso tranquilo, sin sonido). */
+  recordatorios: { medicamentoId: string; nombre: string; horaProgramada: string }[];
 }) {
   const router = useRouter();
   // esperando/alertado/descanso se derivan directo de las props en cada
   // render — nunca se guardan en useState, así el refresco periódico (que
-  // trae un nuevo `vencida` para la MISMA dosis; un cambio de dosis
-  // siempre remonta este componente entero vía key={pendiente.id} en el
-  // padre) se refleja solo, sin un efecto sincronizando estado derivado.
+  // trae un nuevo `vencida` para el MISMO grupo; un cambio de grupo
+  // siempre remonta este componente entero vía key en el padre) se
+  // refleja solo, sin un efecto sincronizando estado derivado.
   // "confirmado" es la única fase que sí necesita estado local: es
   // puramente transitoria y nunca la manda el servidor.
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
-  const fase: Fase = confirmadoLocal ? "confirmado" : !proxima ? "descanso" : vencida ? "alertado" : "esperando";
+  const hayGrupo = grupo.length > 0;
+  const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
+  const { abrir: abrirChat } = useChatOverlay();
+  const posponer = usePosponer(grupo.map((m) => m.id).join(","));
   const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
+  const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
+  const [ayudaAbierta, setAyudaAbierta] = useState(false);
   const [pendiente, startTransition] = useTransition();
   // Para que el avatar muestre "speaking" mientras suena el anuncio por voz
   // — reproducirAnuncio ya esperaba el audio entero, esto solo expone esa
@@ -89,10 +149,10 @@ export function Pantalla({
   }, [router]);
 
   async function reproducirAnuncio() {
-    if (!proxima || silenciada) return;
+    if (!hayGrupo || silenciada) return;
     setReproduciendoAudio(true);
     try {
-      const blob = await obtenerAudioBlob(fraseAnuncio(proxima));
+      const blob = await obtenerAudioBlob(fraseAnuncio(grupo, momento));
       await reproducirBlob(blob);
     } finally {
       setReproduciendoAudio(false);
@@ -109,11 +169,29 @@ export function Pantalla({
     void reproducirAnuncio();
   }
 
+  // "Escuchar" de la tarjeta: también es un gesto del usuario, así que
+  // vuelve a desbloquear antes de cualquier await.
+  function alEscuchar() {
+    desbloquearVoz();
+    setAudioDesbloqueado(true);
+    void reproducirAnuncio();
+  }
+
   function confirmar() {
-    if (!proxima || pendiente) return;
+    if (!hayGrupo || pendiente) return;
     startTransition(async () => {
       try {
-        await marcarTomadoAction(proxima.id, true);
+        // Cada dosis del grupo se marca con la misma acción de siempre
+        // (marcarTomado) — no hay un camino de escritura paralelo.
+        const resultados = await Promise.all(grupo.map((m) => marcarTomadoAction(m.id, true)));
+        if (resultados.some((r) => r.status === "error")) {
+          // Puede haberse registrado solo una parte: se vuelve a leer del
+          // servidor para que la pantalla muestre lo que realmente quedó.
+          toast.error("No se pudo registrar toda la toma. Probá de nuevo.");
+          router.refresh();
+          return;
+        }
+        posponer.cancelar();
         setConfirmadoLocal(true);
       } catch {
         toast.error("No se pudo registrar la toma. Probá de nuevo.");
@@ -187,83 +265,332 @@ export function Pantalla({
               ? "calm"
               : "idle";
 
+  const pendienteDeGesto = (fase === "esperando" || fase === "alertado") && !posponer.posponido && !silenciada && !audioDesbloqueado;
+  const mostrarTarjeta = (fase === "esperando" || fase === "alertado") && !pendienteDeGesto;
+
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-background">
-      <BotonSalir />
-      <BotonSonido silenciada={silenciada} onAlternar={alternarSonido} />
+    <div className="fixed inset-0 z-30 flex flex-col bg-cream">
+      {fase === "confirmado" ? (
+        <FaseConfirmado grupo={grupo} />
+      ) : pendienteDeGesto ? (
+        <>
+          <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
+          <BarraInferior estado={estadoAvatar} onHablar={() => abrirChat()} onAjustes={() => setAjustesAbiertos(true)} />
+        </>
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-[max(1.25rem,env(safe-area-inset-top))]">
+            <Cabecera
+              saludo={saludo}
+              nombre={nombre}
+              fechaTexto={fechaTexto}
+              onAyuda={() => setAyudaAbierta(true)}
+              telefono={telefonoEmergencia}
+              contacto={nombreEmergencia}
+            />
 
-      {/* Espacio bajo los botones de arriba: solo ocupa lugar si hay algo
-          que mostrar (botón de activar avisos o el recordatorio). */}
-      <ActivarNotificaciones variante="simple" />
-      {recordatorio && proxima && fase !== "confirmado" && (
-        <div className="px-6 pt-16">
-          <AvisoRecordatorio
-            grande
-            items={[{ medicamentoId: proxima.id, nombre: proxima.nombre, horaProgramada: proxima.horaProgramada }]}
-          />
-        </div>
+            <div className="mt-5 flex flex-col gap-4">
+              <ActivarNotificaciones variante="simple" />
+              {recordatorios.length > 0 && <AvisoRecordatorio grande items={recordatorios} />}
+
+              {fase === "descanso" && <TarjetaDescanso nombre={nombre} hayMedsHoy={hayMedsHoy} />}
+
+              {mostrarTarjeta && posponer.posponido && (
+                <TarjetaPospuesta
+                  grupo={grupo}
+                  minutos={posponer.minutosRestantes}
+                  confirmando={pendiente}
+                  onConfirmar={confirmar}
+                  onVolver={posponer.cancelar}
+                />
+              )}
+
+              {mostrarTarjeta && !posponer.posponido && (
+                <TarjetaGrupo
+                  grupo={grupo}
+                  momento={momento}
+                  alertado={fase === "alertado"}
+                  faltanMinutos={faltanMinutos}
+                  confirmando={pendiente}
+                  escuchandoVoz={estadoVoz !== "inactivo"}
+                  silenciada={silenciada}
+                  onConfirmar={confirmar}
+                  onEscuchar={alEscuchar}
+                  onPosponer={posponer.posponer}
+                  onAlternarVoz={alternarEscuchaVoz}
+                />
+              )}
+
+              {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} />}
+            </div>
+          </div>
+          <BarraInferior estado={estadoAvatar} onHablar={() => abrirChat()} onAjustes={() => setAjustesAbiertos(true)} />
+        </>
       )}
 
-      {fase === "descanso" && <FaseDescanso estado={estadoAvatar} />}
+      <SheetAjustes
+        open={ajustesAbiertos}
+        onOpenChange={setAjustesAbiertos}
+        silenciada={silenciada}
+        onAlternarSonido={alternarSonido}
+      />
+      <SheetAyudaSinContacto open={ayudaAbierta && !telefonoEmergencia} onOpenChange={setAyudaAbierta} />
+    </div>
+  );
+}
 
-      {fase === "confirmado" && proxima && <FaseConfirmado nombre={proxima.nombre} />}
+// Encabezado V7: fecha + "Buen día, {nombre}" y el botón rojo "Ayuda". Con
+// contacto de emergencia cargado es un link `tel:` (llama directo); sin él
+// abre una hoja que explica dónde cargarlo.
+function Cabecera({
+  saludo,
+  nombre,
+  fechaTexto,
+  telefono,
+  contacto,
+  onAyuda,
+}: {
+  saludo: string;
+  nombre: string;
+  fechaTexto: string;
+  telefono: string | null;
+  contacto: string | null;
+  onAyuda: () => void;
+}) {
+  const clasesAyuda =
+    "flex h-[58px] shrink-0 items-center gap-2 rounded-full bg-destructive px-5 text-[19px] font-extrabold text-primary-foreground shadow-[0_8px_20px_color-mix(in_srgb,var(--destructive)_32%,transparent)] transition-transform active:scale-[0.96] motion-reduce:transition-none";
+  const telLimpio = telefono?.replace(/[^\d+]/g, "");
 
-      {(fase === "esperando" || fase === "alertado") && proxima && !silenciada && !audioDesbloqueado && (
-        <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
-      )}
-
-      {(fase === "esperando" || fase === "alertado") && proxima && (silenciada || audioDesbloqueado) && (
-        <FaseDosisPendiente
-          proxima={proxima}
-          alertado={fase === "alertado"}
-          faltanMinutos={faltanMinutos}
-          confirmando={pendiente}
-          escuchandoVoz={estadoVoz !== "inactivo"}
-          silenciada={silenciada}
-          estado={estadoAvatar}
-          onConfirmar={confirmar}
-          onReescuchar={reproducirAnuncio}
-          onAlternarVoz={alternarEscuchaVoz}
-        />
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-[17px] font-semibold capitalize text-slate-brand">{fechaTexto}</div>
+        <h1 className="mt-1 font-heading text-[36px] font-extrabold leading-[1.05] tracking-[-0.04em]">
+          {saludo}
+          {nombre ? "," : ""}
+          {nombre && (
+            <>
+              <br />
+              {nombre}
+            </>
+          )}
+        </h1>
+      </div>
+      {telLimpio ? (
+        <a href={`tel:${telLimpio}`} aria-label={contacto ? `Pedir ayuda: llamar a ${contacto}` : "Pedir ayuda: llamar a tu contacto de emergencia"} className={clasesAyuda}>
+          <VitaIcon name="alert-triangle" size={24} strokeWidth={2.4} />
+          Ayuda
+        </a>
+      ) : (
+        <button type="button" onClick={onAyuda} className={clasesAyuda}>
+          <VitaIcon name="alert-triangle" size={24} strokeWidth={2.4} />
+          Ayuda
+        </button>
       )}
     </div>
   );
 }
 
-// Salida discreta, presente en TODAS las fases — el mock original solo la
-// mostraba en "descanso", pero dejar a alguien sin salida mientras hay una
-// dosis pendiente (que puede durar todo el día) convertiría esto en una
-// pantalla sin retorno real. Chica y en la esquina para no competir con el
-// botón principal.
-function BotonSalir() {
-  return (
-    <Link
-      href="/app/perfil"
-      className="absolute left-4 z-10 text-[12.5px] font-semibold text-muted-foreground underline"
-      style={{ top: "max(1rem, env(safe-area-inset-top))" }}
-    >
-      Salir del modo simple
-    </Link>
-  );
-}
-
-// Preferencia de sonido (compartida con el chat). Texto + ícono, nunca solo
-// color; objetivo táctil >= 44px porque esta pantalla la usan adultos mayores.
-function BotonSonido({ silenciada, onAlternar }: { silenciada: boolean; onAlternar: () => void }) {
+function BotonEscuchar({ onEscuchar }: { onEscuchar: () => void }) {
   return (
     <button
       type="button"
-      onClick={onAlternar}
-      aria-pressed={silenciada}
-      className={cn(
-        "absolute right-4 z-10 flex min-h-11 items-center gap-2 rounded-full px-4 text-[14px] font-semibold",
-        silenciada ? "bg-chip-amber-bg text-chip-amber-ink" : "bg-chip-teal-bg text-chip-teal-ink"
-      )}
-      style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
+      onClick={onEscuchar}
+      className="flex shrink-0 flex-col items-center gap-0.5 rounded-[var(--radius-item)] bg-persona-1-tint px-3.5 py-2.5 text-teal-deep transition-transform active:scale-[0.96] motion-reduce:transition-none"
     >
-      <VitaIcon name={silenciada ? "volume-off" : "volume"} size={20} />
-      {silenciada ? "Sonido: desactivado" : "Sonido: activado"}
+      <VitaIcon name="volume" size={26} strokeWidth={2.2} />
+      <span className="text-[14px] font-extrabold">Escuchar</span>
     </button>
+  );
+}
+
+// Slot de la foto de la pastilla — todavía no hay dónde guardarla, así que es
+// un placeholder (ícono) con el borde punteado del diseño.
+function SlotFoto() {
+  return (
+    <div
+      aria-hidden
+      className="flex size-[84px] shrink-0 items-center justify-center rounded-[var(--radius-item)] border border-dashed border-faint bg-secondary text-faint"
+    >
+      <VitaIcon name="pill" size={30} />
+    </div>
+  );
+}
+
+function TarjetaGrupo({
+  grupo,
+  momento,
+  alertado,
+  faltanMinutos,
+  confirmando,
+  escuchandoVoz,
+  silenciada,
+  onConfirmar,
+  onEscuchar,
+  onPosponer,
+  onAlternarVoz,
+}: {
+  grupo: Dosis[];
+  momento: MomentoDia | null;
+  alertado: boolean;
+  faltanMinutos: number;
+  confirmando: boolean;
+  escuchandoVoz: boolean;
+  silenciada: boolean;
+  onConfirmar: () => void;
+  onEscuchar: () => void;
+  onPosponer: () => void;
+  onAlternarVoz: () => void;
+}) {
+  const n = grupo.length;
+  return (
+    <div className="rounded-[28px] bg-card p-5 shadow-card">
+      {alertado ? (
+        <div className="eyebrow mb-1.5 flex items-center gap-1.5 text-aviso-ink">
+          <VitaIcon name="alert-triangle" size={14} strokeWidth={2.6} /> Todavía no confirmaste
+        </div>
+      ) : (
+        faltanMinutos > 0 && <div className="eyebrow mb-1.5 text-subtle">En {faltanMinutos} min</div>
+      )}
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="font-heading text-[28px] font-extrabold leading-[1.1] tracking-[-0.035em] text-balance">
+          {tituloGrupo(n, momento)}
+        </h2>
+        {!silenciada && <BotonEscuchar onEscuchar={onEscuchar} />}
+      </div>
+
+      <ul className="mt-4 flex flex-col gap-3">
+        {grupo.map((m) => (
+          <li key={m.id} className="flex items-center gap-4">
+            <SlotFoto />
+            <div className="min-w-0">
+              <div className="font-heading text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{m.nombre}</div>
+              <div className="mt-0.5 text-[15px] font-semibold text-subtle">
+                {[m.dosis && `${m.dosis} ${m.unidad}`, `${horaCorta(m.horaProgramada)} hs`].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        type="button"
+        onClick={onConfirmar}
+        disabled={confirmando}
+        className="mt-5 flex h-[76px] w-full items-center justify-center gap-3 rounded-full bg-teal-deep text-[24px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--teal-deep)_32%,transparent)] transition-transform active:scale-[0.98] disabled:opacity-70 motion-reduce:transition-none"
+      >
+        <VitaIcon name="check" size={32} strokeWidth={3} />
+        {n === 1 ? "Ya la tomé" : `Ya tomé las ${n}`}
+      </button>
+      <button
+        type="button"
+        onClick={onPosponer}
+        disabled={confirmando}
+        className="mt-3 flex h-[64px] w-full items-center justify-center gap-2.5 rounded-full border-2 border-foreground/10 bg-card text-[19px] font-extrabold transition-transform active:scale-[0.98] disabled:opacity-70 motion-reduce:transition-none"
+      >
+        <VitaIcon name="clock" size={24} strokeWidth={2.4} />
+        Más tarde · en {MINUTOS_POSPONER} min
+      </button>
+      {!silenciada && (
+        <button
+          type="button"
+          onClick={onAlternarVoz}
+          className={cn(
+            "mt-3 flex h-[56px] w-full items-center justify-center gap-2 rounded-full text-[16px] font-bold text-teal-deep",
+            escuchandoVoz ? "bg-persona-1-tint" : "bg-secondary"
+          )}
+        >
+          <VitaIcon name="mic" size={19} />
+          {escuchandoVoz ? "Escuchando…" : "Tocá y decí \"sí\""}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Tarjeta mientras la dosis está pospuesta: no se pierde, se puede confirmar
+// igual, y "Ver ahora" cancela la espera.
+function TarjetaPospuesta({
+  grupo,
+  minutos,
+  confirmando,
+  onConfirmar,
+  onVolver,
+}: {
+  grupo: Dosis[];
+  minutos: number;
+  confirmando: boolean;
+  onConfirmar: () => void;
+  onVolver: () => void;
+}) {
+  const n = grupo.length;
+  return (
+    <div className="rounded-[28px] bg-card p-5 shadow-card">
+      <div className="flex items-center gap-4">
+        <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep">
+          <VitaIcon name="clock" size={32} strokeWidth={2.4} />
+        </div>
+        <div>
+          <div className="font-heading text-[24px] font-extrabold leading-tight tracking-[-0.03em]">
+            Te aviso de nuevo en {minutos} min
+          </div>
+          <div className="mt-0.5 text-[15px] font-semibold text-subtle">{listaHablada(grupo.map((m) => m.nombre))}</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onConfirmar}
+        disabled={confirmando}
+        className="mt-5 flex h-[72px] w-full items-center justify-center gap-3 rounded-full bg-teal-deep text-[22px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--teal-deep)_32%,transparent)] disabled:opacity-70"
+      >
+        <VitaIcon name="check" size={30} strokeWidth={3} />
+        {n === 1 ? "Ya la tomé" : `Ya tomé las ${n}`}
+      </button>
+      <button
+        type="button"
+        onClick={onVolver}
+        className="mt-3 flex h-[52px] w-full items-center justify-center rounded-full bg-secondary text-[16px] font-bold text-slate-brand"
+      >
+        Verlas ahora
+      </button>
+    </div>
+  );
+}
+
+function TarjetaSiguientes({ siguientes }: { siguientes: Siguiente[] }) {
+  return (
+    <section>
+      <h2 className="eyebrow px-1 pb-2 text-subtle">Después</h2>
+      <ul className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-card">
+        {siguientes.map((s) => (
+          <li key={s.id} className="flex items-center gap-3.5 px-4 py-3.5 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-tile)] bg-persona-1-tint text-teal-deep">
+              <VitaIcon name={ICONO_MOMENTO[s.momento]} size={24} />
+            </div>
+            <div className="min-w-0">
+              <div className="font-heading text-[19px] font-extrabold tracking-[-0.025em]">{s.nombre}</div>
+              <div className="text-[14px] font-semibold text-subtle">
+                A las {horaCorta(s.horaProgramada)} {DEL_MOMENTO[s.momento]}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function TarjetaDescanso({ nombre, hayMedsHoy }: { nombre: string; hayMedsHoy: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-[28px] bg-card px-6 py-9 text-center shadow-card">
+      <div className="flex size-20 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep">
+        <VitaIcon name="check" size={40} strokeWidth={3} />
+      </div>
+      <div className="font-heading text-[26px] font-extrabold leading-tight tracking-[-0.035em]">
+        {hayMedsHoy ? `Tomaste todo hoy${nombre ? `, ${nombre}` : ""}` : "Hoy no tenés medicación pendiente"}
+      </div>
+      <div className="text-[16px] font-medium text-subtle">Te vamos a avisar cuando sea la hora.</div>
+    </div>
   );
 }
 
@@ -274,128 +601,149 @@ function FaseGesto({ onTocar, estado }: { onTocar: () => void; estado: EstadoAva
     <button
       type="button"
       onClick={onTocar}
-      className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center"
+      className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-28 text-center"
     >
       <div className="relative">
         <VitaAvatar size={180} estado={estado} />
-        <div className="absolute -bottom-1 right-2 flex size-14 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink shadow-card">
+        <div className="absolute -bottom-1 right-2 flex size-14 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep shadow-card">
           <VitaIcon name="volume" size={26} />
         </div>
       </div>
-      <div className="font-heading text-[26px] font-extrabold">Tocá para escuchar</div>
-      <div className="text-[15px] text-muted-foreground">vita te va a leer tu medicación</div>
+      <div className="font-heading text-[28px] font-extrabold tracking-[-0.03em]">Tocá para escuchar</div>
+      <div className="text-[16px] font-medium text-subtle">vita te va a leer tu medicación</div>
     </button>
   );
 }
 
-function FaseDosisPendiente({
-  proxima,
-  alertado,
-  faltanMinutos,
-  confirmando,
-  escuchandoVoz,
-  silenciada,
-  estado,
-  onConfirmar,
-  onReescuchar,
-  onAlternarVoz,
-}: {
-  proxima: ProximaDosis;
-  alertado: boolean;
-  faltanMinutos: number;
-  confirmando: boolean;
-  escuchandoVoz: boolean;
-  silenciada: boolean;
-  estado: EstadoAvatar;
-  onConfirmar: () => void;
-  onReescuchar: () => void;
-  onAlternarVoz: () => void;
-}) {
+function FaseConfirmado({ grupo }: { grupo: Dosis[] }) {
   return (
-    <>
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <VitaAvatar size={180} estado={estado} />
-        <div
-          className={cn(
-            "flex size-16 items-center justify-center rounded-full",
-            alertado ? "bg-chip-amber-bg text-chip-amber-ink" : "bg-chip-teal-bg text-chip-teal-ink"
-          )}
-        >
-          <VitaIcon name={alertado ? "alert-triangle" : "bell"} size={32} />
-        </div>
-        <div className="text-[17px] font-semibold text-muted-foreground">
-          {alertado
-            ? "Todavía no confirmaste"
-            : faltanMinutos > 0
-              ? `En ${faltanMinutos} min es hora de tomar`
-              : "Es hora de tomar"}
-        </div>
-        <div className="font-heading text-[38px] font-extrabold leading-tight">{proxima.nombre}</div>
-        {(proxima.dosis || proxima.unidad) && (
-          <span className="rounded-full bg-primary px-4.5 py-2 text-base font-bold text-primary-foreground">
-            {[proxima.dosis, proxima.unidad].filter(Boolean).join(" ")} · {proxima.horaProgramada} hs
-          </span>
-        )}
-        {!silenciada && (
-        <button
-          type="button"
-          onClick={onReescuchar}
-          aria-label="Escuchar de nuevo"
-          className="mt-1 flex size-[52px] items-center justify-center rounded-full bg-card text-primary shadow-[0_8px_24px_color-mix(in_srgb,var(--ink)_10%,transparent)]"
-        >
-          <VitaIcon name="volume" size={24} />
-        </button>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-3 px-6" style={{ paddingBottom: "var(--safe-bottom)" }}>
-        <button
-          type="button"
-          onClick={onConfirmar}
-          disabled={confirmando}
-          className="h-[76px] rounded-full bg-gradient-to-br from-brand-from to-brand-to text-[22px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:opacity-70"
-        >
-          SÍ, YA LA TOMÉ
-        </button>
-        {!silenciada && (
-        <button
-          type="button"
-          onClick={onAlternarVoz}
-          className={cn(
-            "flex h-[60px] items-center justify-center gap-2 rounded-full bg-card text-[16px] font-semibold text-primary shadow-[0_2px_10px_color-mix(in_srgb,var(--ink)_6%,transparent)]",
-            escuchandoVoz && "bg-chip-teal-bg"
-          )}
-        >
-          <VitaIcon name="mic" size={19} />
-          {escuchandoVoz ? "Escuchando…" : "Tocá y decí \"sí\""}
-        </button>
-        )}
-      </div>
-    </>
-  );
-}
-
-function FaseConfirmado({ nombre }: { nombre: string }) {
-  return (
-    <div
-      className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center text-primary-foreground"
-      style={{ background: "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)" }}
-    >
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-teal-deep px-8 text-center text-primary-foreground">
       <div className="flex size-24 items-center justify-center rounded-full bg-primary-foreground/20">
         <VitaIcon name="check" size={44} color="var(--primary-foreground)" />
       </div>
-      <div className="font-heading text-[30px] font-extrabold">¡Muy bien!</div>
-      <div className="text-[17px] opacity-90">Registramos que tomaste {nombre}</div>
+      <div className="font-heading text-[32px] font-extrabold tracking-[-0.03em]">¡Muy bien!</div>
+      <div className="text-[18px] opacity-90">
+        {grupo.length === 1
+          ? `Registramos que tomaste ${grupo[0].nombre}`
+          : `Registramos tus ${grupo.length} pastillas: ${listaHablada(grupo.map((m) => m.nombre))}`}
+      </div>
     </div>
   );
 }
 
-function FaseDescanso({ estado }: { estado: EstadoAvatar }) {
+// Barra inferior V7: "Ajustes" a la izquierda y, al centro, "Hablar con Vita"
+// con la mascota (abre el chat, que ya tiene el modo voz).
+function BarraInferior({
+  estado,
+  onHablar,
+  onAjustes,
+}: {
+  estado: EstadoAvatar;
+  onHablar: () => void;
+  onAjustes: () => void;
+}) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-      <VitaAvatar size={180} estado={estado} />
-      <div className="font-heading text-[24px] font-extrabold">Por ahora no tenés medicación pendiente</div>
-      <div className="text-[15px] text-muted-foreground">Te vamos a avisar cuando sea la hora.</div>
+    <div
+      className="absolute inset-x-3 bottom-0 z-10"
+      style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+    >
+      <div className="relative flex h-[88px] items-end justify-between rounded-[28px] bg-card px-5 pb-3 shadow-nav">
+        <button
+          type="button"
+          onClick={onAjustes}
+          className="flex flex-col items-center gap-1 transition-transform active:scale-[0.95] motion-reduce:transition-none"
+        >
+          <span className="flex size-11 items-center justify-center rounded-full bg-secondary text-slate-brand">
+            <VitaIcon name="settings" size={24} />
+          </span>
+          <span className="text-[13px] font-extrabold text-slate-brand">Ajustes</span>
+        </button>
+        <button
+          type="button"
+          onClick={onHablar}
+          className="absolute left-1/2 top-[-34px] flex -translate-x-1/2 flex-col items-center gap-1 transition-transform active:scale-[0.95] motion-reduce:transition-none"
+        >
+          <span className="flex size-[76px] items-center justify-center overflow-hidden rounded-full bg-card shadow-nav ring-[3px] ring-primary">
+            <VitaAvatar size={64} estado={estado} interactivo={false} />
+          </span>
+          <span className="whitespace-nowrap font-heading text-[17px] font-extrabold tracking-[-0.02em]">Hablar con Vita</span>
+        </button>
+        <span className="w-11" aria-hidden />
+      </div>
     </div>
+  );
+}
+
+function SheetAjustes({
+  open,
+  onOpenChange,
+  silenciada,
+  onAlternarSonido,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  silenciada: boolean;
+  onAlternarSonido: () => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-[28px] pb-8">
+        <SheetHeader>
+          <SheetTitle>Ajustes</SheetTitle>
+          <SheetDescription>Cómo querés que te hable vita.</SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-3 px-4">
+          {/* Preferencia de sonido (compartida con el chat). Texto + ícono,
+              nunca solo color; objetivo táctil >= 44px porque esta pantalla
+              la usan adultos mayores. */}
+          <button
+            type="button"
+            onClick={onAlternarSonido}
+            aria-pressed={silenciada}
+            className={cn(
+              "flex min-h-14 items-center gap-3 rounded-[var(--radius-item)] px-4 text-left text-[16px] font-extrabold",
+              silenciada ? "bg-aviso-tint text-aviso-ink" : "bg-persona-1-tint text-teal-deep"
+            )}
+          >
+            <VitaIcon name={silenciada ? "volume-off" : "volume"} size={24} />
+            {silenciada ? "Sonido: desactivado" : "Sonido: activado"}
+          </button>
+          {/* Salida presente siempre: dejar a alguien sin salida mientras hay
+              una dosis pendiente (que puede durar todo el día) convertiría
+              esto en una pantalla sin retorno real. */}
+          <Link
+            href="/app/perfil"
+            className="flex min-h-14 items-center gap-3 rounded-[var(--radius-item)] bg-secondary px-4 text-[16px] font-extrabold text-slate-brand"
+          >
+            <VitaIcon name="logout" size={24} />
+            Salir del modo simple
+          </Link>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function SheetAyudaSinContacto({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-[28px] pb-8">
+        <SheetHeader>
+          <SheetTitle>Todavía no cargaste a quién llamar</SheetTitle>
+          <SheetDescription>
+            Cargá el nombre y el teléfono de alguien de confianza en tu Resumen de salud, en Contacto de emergencia.
+            Después, el botón Ayuda lo llama directo.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-3 px-4">
+          <Link
+            href="/app/resumen-salud"
+            className="flex h-14 items-center justify-center rounded-full bg-primary text-[16px] font-extrabold text-primary-foreground"
+          >
+            Cargar contacto de emergencia
+          </Link>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

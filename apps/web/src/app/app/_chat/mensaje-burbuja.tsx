@@ -15,7 +15,7 @@ export function MensajeBurbuja({ m, cargando }: { m: MensajeChatUI; cargando: bo
   if (m.role === "user") {
     return (
       <div className="mb-2.5 flex justify-end">
-        <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-brand-from to-brand-to px-3.5 py-2.5 text-[14.5px] leading-snug text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_22%,transparent)]">
+        <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-primary px-3.5 py-2.5 text-[14.5px] font-medium leading-snug text-primary-foreground">
           {m.content}
         </div>
       </div>
@@ -26,7 +26,7 @@ export function MensajeBurbuja({ m, cargando }: { m: MensajeChatUI; cargando: bo
     <div className="mb-2.5 flex flex-col gap-2">
       <div className="flex items-end gap-2">
         <VitaAvatar size={26} />
-        <div className="max-w-[78%] rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug text-foreground shadow-card">
+        <div className="max-w-[78%] rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] font-medium leading-snug text-foreground shadow-item">
           {cargando ? <PuntosEscribiendo /> : m.content}
         </div>
       </div>
@@ -57,9 +57,9 @@ function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: un
       return (
         <div className={base}>
           <CabeceraTarjeta icon="pill" texto="Medicamento agregado" />
-          <div className="mt-2.5 rounded-[14px] bg-muted px-3.5 py-3">
-            <div className="font-heading text-[15px] font-bold">{String(accion.name)}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">
+          <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
+            <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.name)}</div>
+            <div className="mt-0.5 text-xs font-medium text-subtle">
               {[accion.dose, accion.time && `${accion.time} hs`].filter(Boolean).join(" · ")}
             </div>
           </div>
@@ -70,9 +70,9 @@ function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: un
       return (
         <div className={base}>
           <CabeceraTarjeta icon="stethoscope" texto="Turno agendado" />
-          <div className="mt-2.5 rounded-[14px] bg-muted px-3.5 py-3">
-            <div className="font-heading text-[15px] font-bold">{String(accion.specialty)}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">
+          <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
+            <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.specialty)}</div>
+            <div className="mt-0.5 text-xs font-medium text-subtle">
               {String(accion.date)} · {String(accion.time)} hs
             </div>
           </div>
@@ -83,7 +83,7 @@ function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: un
     case "show_all_medications":
       return (
         <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
-          <span className="text-[13.5px] text-muted-foreground">Tu rutina está actualizada.</span>
+          <span className="text-[13.5px] font-medium text-subtle">Tu rutina está actualizada.</span>
           <EnlaceTarjeta href="/app/rutina" texto="Ver rutina" inline />
         </div>
       );
@@ -95,7 +95,7 @@ function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: un
 function CabeceraTarjeta({ icon, texto }: { icon: string; texto: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="flex size-7 items-center justify-center rounded-full bg-chip-teal-bg text-chip-teal-ink">
+      <div className="flex size-7 items-center justify-center rounded-full bg-persona-1-tint text-persona-1-deep">
         <VitaIcon name={icon} size={15} />
       </div>
       <div className="font-heading text-[13px] font-bold">{texto}</div>
@@ -108,7 +108,7 @@ function EnlaceTarjeta({ href, texto, inline }: { href: string; texto: string; i
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full bg-muted px-3.5 py-2 font-heading text-[12.5px] font-bold text-foreground",
+        "inline-flex items-center gap-1 rounded-full bg-secondary px-3.5 py-2 font-heading text-[12.5px] font-bold text-teal-deep",
         !inline && "mt-2.5"
       )}
     >

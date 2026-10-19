@@ -24,7 +24,11 @@ export function EliminarMedButton({ medicamentoId, nombre }: { medicamentoId: st
         if (!window.confirm(`¿Eliminar "${nombre}"? Se borra también su historial de tomas.`)) return;
         startTransition(async () => {
           try {
-            await eliminarMedicamentoAction(medicamentoId);
+            const r = await eliminarMedicamentoAction(medicamentoId);
+            if (r.status === "error") {
+              toast.error(r.message);
+              return;
+            }
             router.refresh();
           } catch {
             toast.error("No se pudo eliminar el medicamento.");

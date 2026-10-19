@@ -65,3 +65,17 @@ export function saludoEnAR(fecha: Date = new Date()): string {
   if (h < 19) return "Buenas tardes";
   return "Buenas noches";
 }
+
+// "viernes 2 de mayo" — fecha larga en hora de Argentina (cabecera del modo
+// simple). Se arma con las partes para no depender de la coma que agregan
+// algunas versiones de ICU entre el día de la semana y el número.
+export function fechaLargaEnAR(fecha: Date = new Date()): string {
+  const partes = new Intl.DateTimeFormat("es-AR", {
+    timeZone: ZONA_AR,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).formatToParts(fecha);
+  const parte = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "";
+  return `${parte("weekday")} ${parte("day")} de ${parte("month")}`;
+}

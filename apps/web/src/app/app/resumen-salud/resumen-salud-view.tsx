@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Chip } from "@/components/vita/chip";
+import { VMark } from "@/components/vita/v-mark";
+import { edadTexto } from "@/lib/perfil/formato";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
 import { GENEROS, GRUPOS_SANGUINEOS, OTRA_PREPAGA, PREPAGAS_ARGENTINA } from "@/lib/perfil/opciones";
@@ -21,20 +23,23 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
   const { abrir } = useChatOverlay();
 
   return (
-    <div className="flex flex-col gap-4.5 pb-28">
+    <div className="flex flex-col gap-[22px] pb-28">
       {/* Hero */}
-      <div className="rounded-[20px] bg-card p-5 text-center shadow-card">
-        <div className="mx-auto flex size-[72px] items-center justify-center rounded-full bg-gradient-to-br from-chip-teal-bg to-chip-teal-bg font-heading text-2xl font-bold text-chip-teal-ink">
-          {(perfil.nombre ?? "?").charAt(0).toUpperCase()}
+      <div className="rounded-[20px] bg-card p-[18px] shadow-card">
+        <div className="flex items-center gap-3.5">
+          <div className="flex size-[60px] shrink-0 items-center justify-center rounded-full bg-persona-1-tint font-heading text-2xl font-extrabold text-persona-1-deep">
+            {(perfil.nombre ?? "?").charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-heading text-[18px] font-extrabold tracking-[-0.02em]">{perfil.nombre ?? "Sin nombre"}</div>
+            <div className="mt-0.5 text-[11.5px] font-medium leading-snug text-subtle">
+              {[edadTexto(perfil), perfil.genero, perfil.grupo_sanguineo && `Grupo ${perfil.grupo_sanguineo}`]
+                .filter(Boolean)
+                .join(" · ") || "Completá tus datos abajo"}
+            </div>
+          </div>
         </div>
-        <div className="mt-3 font-heading text-[19px] font-bold">{perfil.nombre ?? "Sin nombre"}</div>
-        <div className="mt-0.5 text-sm text-muted-foreground">
-          {[edadTexto(perfil), perfil.genero, perfil.grupo_sanguineo && `Grupo ${perfil.grupo_sanguineo}`]
-            .filter(Boolean)
-            .join(" · ")}
-        </div>
-        <div className="mt-3.5 flex flex-wrap justify-center gap-2">
-          <Chip color="teal">Perfil de salud</Chip>
+        <div className="mt-3.5 flex flex-wrap gap-2">
           <Chip color="violet">{perfil.condiciones.length} condiciones</Chip>
           <Chip color="rose">{perfil.alergias.length} alergias</Chip>
         </div>
@@ -44,17 +49,14 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
       <button
         type="button"
         onClick={() => abrir("Contame qué cambió de tu perfil de salud y lo actualizo.")}
-        className="flex items-center gap-3 rounded-[20px] p-3.5 text-left shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_15%,transparent)]"
-        style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--brand-to) 4%, transparent))" }}
+        className="flex items-center gap-3 rounded-[20px] bg-card p-[15px] text-left shadow-card transition-transform active:scale-[0.99] motion-reduce:transition-none"
       >
-        <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground">
-          <VitaIcon name="sparkle" size={16} />
+        <VMark size={40} forma="circulo" className="shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1">
+          <div className="font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">Actualizar con vita</div>
+          <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Contame qué cambió y lo actualizo.</div>
         </div>
-        <div className="flex-1">
-          <div className="font-heading text-[14px] font-bold">Actualizar con vita</div>
-          <div className="text-xs text-muted-foreground">Contame qué cambió y lo actualizo.</div>
-        </div>
-        <VitaIcon name="chevron-right" size={18} className="text-primary" />
+        <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
       </button>
 
       <FormularioPerfil perfil={perfil} email={email} />
@@ -63,15 +65,6 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
       <Alergias alergias={perfil.alergias} />
     </div>
   );
-}
-
-function edadTexto(perfil: Perfil): string | null {
-  if (perfil.fecha_nacimiento) {
-    const nacimiento = new Date(perfil.fecha_nacimiento);
-    const edad = Math.floor((new Date().getTime() - nacimiento.getTime()) / (365.25 * 24 * 3600 * 1000));
-    return `${edad} años`;
-  }
-  return perfil.edad_rango;
 }
 
 // Todo el form de campos escalares en un solo lugar, con un único botón de
@@ -116,14 +109,14 @@ function FormularioPerfil({ perfil, email }: { perfil: Perfil; email: string }) 
   }
 
   return (
-    <form onSubmit={guardar} className="flex flex-col gap-4.5">
+    <form onSubmit={guardar} className="flex flex-col gap-[22px]">
       <Seccion titulo="Datos personales">
-        <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-3.5">
           <Campo label="Nombre">
             <Input value={datos.nombre} onChange={(v) => campo("nombre", v)} />
           </Campo>
           <Campo label="Email">
-            <div className="rounded-[14px] bg-secondary px-3.5 py-3 text-sm text-muted-foreground">{email}</div>
+            <div className="flex h-12 items-center rounded-full bg-secondary px-4 text-[14.5px] font-semibold text-subtle">{email}</div>
           </Campo>
           <Campo label="Fecha de nacimiento">
             <Input tipo="date" value={datos.fechaNacimiento} onChange={(v) => campo("fechaNacimiento", v)} />
@@ -141,7 +134,7 @@ function FormularioPerfil({ perfil, email }: { perfil: Perfil; email: string }) 
       </Seccion>
 
       <Seccion titulo="Medidas">
-        <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-3.5">
           <div className="flex gap-3">
             <Campo label="Altura (cm)">
               <Input tipo="number" value={datos.alturaCm} onChange={(v) => campo("alturaCm", v)} />
@@ -163,7 +156,7 @@ function FormularioPerfil({ perfil, email }: { perfil: Perfil; email: string }) 
       </Seccion>
 
       <Seccion titulo="Cobertura médica">
-        <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-3.5">
           <Campo label="Obra social / prepaga">
             <Select
               value={datos.obraSocial}
@@ -185,7 +178,7 @@ function FormularioPerfil({ perfil, email }: { perfil: Perfil; email: string }) 
       </Seccion>
 
       <Seccion titulo="Contacto de emergencia" subtitulo="Alguien a quien llamar en caso de urgencia">
-        <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-3.5">
           <Campo label="Nombre y relación">
             <Input value={datos.contactoEmergenciaNombre} onChange={(v) => campo("contactoEmergenciaNombre", v)} />
           </Campo>
@@ -206,8 +199,9 @@ function FormularioPerfil({ perfil, email }: { perfil: Perfil; email: string }) 
         <button
           type="submit"
           disabled={pendiente}
-          className="w-full rounded-full bg-gradient-to-br from-brand-from to-brand-to py-3.5 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-4 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)] disabled:opacity-60"
         >
+          {!pendiente && <VitaIcon name="check" size={16} strokeWidth={2.6} />}
           {pendiente ? "Guardando…" : "Guardar cambios"}
         </button>
       </div>
@@ -225,20 +219,23 @@ function Seccion({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <div className="px-1.5 pb-2.5">
-        <div className="font-heading text-[15px] font-bold">{titulo}</div>
-        {subtitulo && <div className="mt-0.5 text-xs text-muted-foreground">{subtitulo}</div>}
+    <section>
+      <div className="px-0.5 pb-[9px]">
+        <h2 className="eyebrow text-primary">{titulo}</h2>
+        {subtitulo && <div className="mt-1 text-[11.5px] font-medium text-subtle">{subtitulo}</div>}
       </div>
-      <div className="rounded-[20px] bg-card shadow-card">{children}</div>
-    </div>
+      {children}
+    </section>
   );
 }
+
+const CLASE_CAMPO =
+  "h-12 w-full rounded-full bg-card px-4 text-[14.5px] font-semibold shadow-item outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex-1">
-      <div className="mb-1 text-[11.5px] text-muted-foreground">{label}</div>
+      <div className="eyebrow mb-1.5 px-1 text-subtle">{label}</div>
       {children}
     </div>
   );
@@ -261,7 +258,7 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-[14px] bg-secondary px-3.5 py-3 text-sm font-semibold outline-none"
+      className={CLASE_CAMPO}
     />
   );
 }
@@ -294,7 +291,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-[14px] bg-secondary px-3.5 py-3 text-sm font-semibold outline-none"
+      className={CLASE_CAMPO}
     >
       <option value="">{placeholder}</option>
       {todasLasOpciones.map((o) => (
@@ -328,13 +325,13 @@ function Condiciones({ condiciones }: { condiciones: Perfil["condiciones"] }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between px-1.5 pb-2.5">
-        <div className="font-heading text-[15px] font-bold">Condiciones</div>
-        <button type="button" onClick={() => setAgregando((v) => !v)} className="text-sm font-semibold text-primary">
+      <div className="flex items-center justify-between px-0.5 pb-[9px]">
+        <h2 className="eyebrow text-primary">Condiciones</h2>
+        <button type="button" onClick={() => setAgregando((v) => !v)} className="text-[13px] font-bold text-teal-deep">
           + Agregar
         </button>
       </div>
-      <div className="rounded-[20px] bg-card shadow-card">
+      <div className="overflow-hidden rounded-[20px] bg-card shadow-card">
         {agregando && (
           <div className="flex gap-2 border-b p-3.5">
             <input
@@ -343,25 +340,25 @@ function Condiciones({ condiciones }: { condiciones: Perfil["condiciones"] }) {
               onChange={(e) => setLabel(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && agregar()}
               placeholder="Ej. Hipertensión"
-              className="flex-1 rounded-[10px] bg-secondary px-3 py-2 text-sm outline-none"
+              className="h-10 min-w-0 flex-1 rounded-full bg-secondary px-4 text-sm font-semibold outline-none"
             />
             <button
               type="button"
               onClick={agregar}
               disabled={pendiente}
-              className="rounded-full bg-primary px-3.5 py-2 font-heading text-xs font-bold text-primary-foreground disabled:opacity-60"
+              className="rounded-full bg-primary px-4 py-2 font-heading text-xs font-extrabold text-primary-foreground disabled:opacity-60"
             >
               Agregar
             </button>
           </div>
         )}
         {condiciones.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">Sin condiciones cargadas.</p>
+          <p className="p-4 text-[13px] font-medium text-subtle">Sin condiciones cargadas.</p>
         ) : (
           condiciones.map((c, i) => (
             <div key={c.label} className={`flex items-center gap-3 p-3.5 ${i < condiciones.length - 1 ? "border-b" : ""}`}>
               <Chip color={colorChipPorIndice(i)}>{c.label}</Chip>
-              <div className="flex-1 text-[11.5px] capitalize text-muted-foreground">
+              <div className="flex-1 text-[11.5px] font-medium capitalize text-subtle">
                 {c.tipo} · desde {c.desde}
               </div>
               <button
@@ -374,7 +371,7 @@ function Condiciones({ condiciones }: { condiciones: Perfil["condiciones"] }) {
                 }
                 aria-label={`Quitar ${c.label}`}
               >
-                <VitaIcon name="close" size={14} className="text-muted-foreground" />
+                <VitaIcon name="close" size={14} className="text-faint" />
               </button>
             </div>
           ))
@@ -405,9 +402,9 @@ function Alergias({ alergias }: { alergias: string[] }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between px-1.5 pb-2.5">
-        <div className="font-heading text-[15px] font-bold">Alergias</div>
-        <button type="button" onClick={() => setAgregando((v) => !v)} className="text-sm font-semibold text-primary">
+      <div className="flex items-center justify-between px-0.5 pb-[9px]">
+        <h2 className="eyebrow text-primary">Alergias</h2>
+        <button type="button" onClick={() => setAgregando((v) => !v)} className="text-[13px] font-bold text-teal-deep">
           + Agregar
         </button>
       </div>
@@ -440,13 +437,13 @@ function Alergias({ alergias }: { alergias: string[] }) {
               onBlur={agregar}
               placeholder="Nueva alergia"
               disabled={pendiente}
-              className="rounded-full bg-secondary px-3 py-1.5 text-[12.5px] outline-none"
+              className="rounded-full bg-secondary px-3.5 py-1.5 text-[12.5px] font-semibold outline-none"
             />
           ) : (
             <button
               type="button"
               onClick={() => setAgregando(true)}
-              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]"
+              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-slate-brand shadow-[inset_0_0_0_1px_var(--border)]"
             >
               <VitaIcon name="plus" size={12} /> Agregar
             </button>

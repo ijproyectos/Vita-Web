@@ -13,7 +13,7 @@ export default async function ResumenSaludPage() {
   if (!perfil) return null; // requireUser ya garantiza sesión; perfiles se crea en el callback de auth
 
   return (
-    <div className="flex flex-col gap-4.5 px-4 pt-2">
+    <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <TopBar eyebrow="Perfil" title="Resumen de salud" />
       <ResumenSaludView perfil={perfil} email={esEmailDeCuentaPorCodigo(usuario.email) ? "Cuenta vinculada con tu familiar" : (usuario.email ?? "")} />
     </div>

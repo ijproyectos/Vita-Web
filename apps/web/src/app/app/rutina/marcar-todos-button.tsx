@@ -19,7 +19,11 @@ export function MarcarTodosButton() {
       onClick={() =>
         startTransition(async () => {
           try {
-            await marcarTodosTomadosAction();
+            const resultado = await marcarTodosTomadosAction();
+            if (resultado.status === "error") {
+              toast.error("No se pudo marcar todo como tomado.");
+              return;
+            }
             router.refresh();
           } catch {
             toast.error("No se pudo marcar todo como tomado.");

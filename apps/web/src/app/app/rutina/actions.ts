@@ -12,38 +12,54 @@ import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
 // Compartidas entre Home y Rutina — ambas pantallas muestran y togglean
 // los mismos medicamentos/turnos de hoy.
 
-export async function marcarTomadoAction(medicamentoId: string, tomado: boolean) {
+export async function marcarTomadoAction(medicamentoId: string, tomado: boolean): Promise<EstadoAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();
-  await medicamentos.marcarTomado(supabase, usuario.id, medicamentoId, tomado);
+  try {
+    await medicamentos.marcarTomado(supabase, usuario.id, medicamentoId, tomado);
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "No se pudo registrar la toma." };
+  }
   revalidatePath("/app");
   revalidatePath("/app/rutina");
   revalidatePath("/app/modo-simple");
+  return { status: "success" };
 }
 
 // Marcar todos los pendientes de hoy de una — el diálogo/botón viejo
 // (marcar-todos-button.tsx) se había perdido al migrar de Medicamentos a
 // Rutina; el hallazgo del review lo marcó como regresión real, no un
 // recorte de alcance deliberado.
-export async function marcarTodosTomadosAction() {
+export async function marcarTodosTomadosAction(): Promise<EstadoAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();
-  await medicamentos.marcarTodosTomados(supabase, usuario.id);
+  try {
+    await medicamentos.marcarTodosTomados(supabase, usuario.id);
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "No se pudo marcar todo como tomado." };
+  }
   revalidatePath("/app");
   revalidatePath("/app/rutina");
+  revalidatePath("/app/modo-simple");
+  return { status: "success" };
 }
 
 // Mismo motivo — no había ningún camino para borrar un medicamento
 // cargado por error desde que se retiró el módulo viejo de Medicamentos.
-export async function eliminarMedicamentoAction(medicamentoId: string) {
+export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
+
+export async function eliminarMedicamentoAction(medicamentoId: string): Promise<EstadoAccion> {
   const usuario = await requireUser();
-  const supabase = await createClient();
-  await medicamentos.eliminarHorario(supabase, usuario.id, medicamentoId);
+  try {
+    const supabase = await createClient();
+    await medicamentos.eliminarHorario(supabase, usuario.id, medicamentoId);
+  } catch {
+    return { status: "error", message: "No se pudo eliminar el medicamento. Probá de nuevo." };
+  }
   revalidatePath("/app");
   revalidatePath("/app/rutina");
+  return { status: "success" };
 }
-
-export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
 
 export async function crearMedicamentoAction(
   _prev: EstadoAccion,

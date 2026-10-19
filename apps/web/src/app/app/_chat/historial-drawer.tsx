@@ -7,7 +7,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
 import { VitaIcon } from "@/lib/vita-icons";
 import { eliminarHistorialAction } from "./chat-actions";
 import type { SesionChat } from "@/lib/chat/tipos";
@@ -47,14 +46,16 @@ export function HistorialDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-72 p-0 sm:max-w-72">
-        <SheetHeader className="bg-primary text-primary-foreground">
-          <SheetTitle className="text-primary-foreground">vita</SheetTitle>
+        <SheetHeader className="bg-card">
+          <SheetTitle className="font-heading text-[19px] font-extrabold tracking-[-0.05em]">
+            vi<span className="text-primary">ta</span>
+          </SheetTitle>
         </SheetHeader>
 
         <button
           type="button"
           onClick={onNuevoChat}
-          className="flex items-center gap-2 border-b px-4 py-3 text-left text-sm font-semibold text-primary hover:bg-muted"
+          className="flex items-center gap-2 border-b px-4 py-3 text-left text-sm font-bold text-teal-deep hover:bg-secondary"
         >
           <VitaIcon name="plus" size={16} />
           Nuevo chat
@@ -62,7 +63,7 @@ export function HistorialDrawer({
 
         <div className="flex-1 overflow-y-auto">
           {sesiones.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">Todavía no tenés chats.</p>
+            <p className="p-4 text-sm font-medium text-subtle">Todavía no tenés chats.</p>
           ) : (
             sesiones.map((s, i) => (
               <button
@@ -70,12 +71,12 @@ export function HistorialDrawer({
                 type="button"
                 onClick={() => onAbrirSesion(s.id)}
                 className={
-                  "flex w-full flex-col gap-0.5 border-b px-4 py-3 text-left transition-colors hover:bg-muted " +
-                  (s.id === sesionActivaId ? "bg-accent/10" : "")
+                  "flex w-full flex-col gap-0.5 border-b px-4 py-3 text-left transition-colors hover:bg-secondary " +
+                  (s.id === sesionActivaId ? "bg-persona-1-tint" : "")
                 }
               >
-                <span className="text-sm font-medium">Chat {i + 1}</span>
-                <span className="line-clamp-1 text-xs text-muted-foreground">
+                <span className="text-sm font-bold">Chat {i + 1}</span>
+                <span className="line-clamp-1 text-xs font-medium text-subtle">
                   {s.ultimoMensaje ?? "Chat vacío"}
                 </span>
               </button>
@@ -83,7 +84,7 @@ export function HistorialDrawer({
           )}
         </div>
 
-        <Separator />
+        <div className="border-t border-border" />
         <button
           type="button"
           onClick={borrarHistorial}

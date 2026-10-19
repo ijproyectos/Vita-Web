@@ -51,7 +51,7 @@ export function AgregarSheet({ open, onOpenChange }: { open: boolean; onOpenChan
             <VMark size={44} forma="circulo" className="shrink-0 rounded-full" />
             <div className="min-w-0 flex-1">
               <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">
-                Pedírselo a vita 
+                Pedírselo a vita
               </div>
               <div className="mt-0.5 text-xs font-medium text-subtle">Contame con tus palabras y lo agendo</div>
             </div>

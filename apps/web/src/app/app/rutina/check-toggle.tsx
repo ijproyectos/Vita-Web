@@ -16,7 +16,8 @@ export function CheckToggle({ medicamentoId, tomadoInicial }: { medicamentoId: s
     setTomado(nuevoValor);
     startTransition(async () => {
       try {
-        await marcarTomadoAction(medicamentoId, nuevoValor);
+        const resultado = await marcarTomadoAction(medicamentoId, nuevoValor);
+        if (resultado.status === "error") setTomado(!nuevoValor);
       } catch {
         setTomado(!nuevoValor);
       }

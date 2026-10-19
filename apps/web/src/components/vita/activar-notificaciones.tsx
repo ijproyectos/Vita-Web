@@ -137,12 +137,12 @@ export function ActivarNotificaciones({ variante }: { variante: Variante }) {
   if (variante === "simple") {
     if (estado === "inactivo") {
       return (
-        <div className="px-6 pt-16">
+        <div>
           <button
             type="button"
             onClick={activar}
             disabled={pendiente}
-            className="flex h-[60px] w-full items-center justify-center gap-2 rounded-full bg-chip-teal-bg text-[18px] font-bold text-chip-teal-ink disabled:opacity-60"
+            className="flex h-[60px] w-full items-center justify-center gap-2 rounded-full bg-persona-1-tint text-[18px] font-extrabold text-teal-deep disabled:opacity-60"
           >
             <VitaIcon name="bell" size={22} />
             {pendiente ? "Activando…" : "Activar avisos"}
@@ -151,7 +151,7 @@ export function ActivarNotificaciones({ variante }: { variante: Variante }) {
       );
     }
     if (estado === "ios-instalar") {
-      return <p className="px-6 pt-16 text-center text-[14px] text-muted-foreground">{TEXTO_IOS}</p>;
+      return <p className="rounded-[var(--radius-item)] bg-card p-4 text-center text-[15px] font-medium text-slate-brand shadow-card">{TEXTO_IOS}</p>;
     }
     return null;
   }
@@ -165,16 +165,16 @@ export function ActivarNotificaciones({ variante }: { variante: Variante }) {
   return (
     <div
       className={cn(
-        variante === "cuidador" ? "rounded-[20px] bg-card p-4 shadow-card" : "px-4.5 py-3.5 border-b"
+        variante === "cuidador" ? "rounded-[20px] bg-card p-4 shadow-card" : "px-4 py-3.5 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]"
       )}
     >
       <div className="flex items-center gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-tile)] bg-secondary text-primary">
           <VitaIcon name="bell" size={18} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">{titulo}</div>
-          <div className="mt-0.5 text-[11.5px] text-muted-foreground">{descripcion(estado, variante)}</div>
+          <div className="font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{titulo}</div>
+          <div className="mt-0.5 text-[11.5px] font-medium leading-snug text-subtle">{descripcion(estado, variante)}</div>
         </div>
         {estado === "inactivo" && (
           <button

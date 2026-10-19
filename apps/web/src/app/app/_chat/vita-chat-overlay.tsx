@@ -16,6 +16,7 @@ import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob, extraerFrasesListas } from "@/lib/voz/hablar-cliente";
 import type { EstadoVoz } from "@/lib/voz/tipos";
+import { fechaDeHoyISO, formatoFechaCorta } from "@/lib/rutina/formato";
 
 type ItemHabla = { texto: string; audioPromise: Promise<Blob | null> };
 
@@ -452,13 +453,15 @@ export function VitaChatOverlay() {
         }
         inert={!abierto}
       >
-        <div className="flex items-center gap-3 border-b px-5 pb-3.5 pt-[max(18px,env(safe-area-inset-top))] shadow-sm">
+        <div className="flex items-center gap-3 bg-card px-5 pb-3.5 pt-[max(18px,env(safe-area-inset-top))] shadow-item">
           {/* Con conversación en curso: avatar de 76px en el header. En el
               estado vacío el protagonista es el hero de abajo (170px). */}
           {!vacio && <VitaAvatar size={76} estado={estadoAvatarHeader} activo={abierto} />}
           <div className="min-w-0 flex-1">
-            <div className="font-heading text-[16px] font-bold">vita</div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="font-heading text-[19px] font-extrabold leading-none tracking-[-0.05em]">
+              vi<span className="text-primary">ta</span>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-[11.5px] font-medium text-subtle">
               <span className="size-1.5 rounded-full bg-online" />
               {silenciada
                 ? "silenciada · solo texto"
@@ -475,7 +478,7 @@ export function VitaChatOverlay() {
             title={silenciada ? "Activar la voz de vita" : "Silenciar a vita"}
             className={
               "flex size-9 items-center justify-center rounded-full " +
-              (silenciada ? "bg-chip-amber-bg text-chip-amber-ink" : "bg-muted text-foreground")
+              (silenciada ? "bg-aviso-tint text-aviso-ink" : "bg-secondary text-slate-brand")
             }
           >
             <VitaIcon name={silenciada ? "volume-off" : "volume"} size={18} />
@@ -483,7 +486,7 @@ export function VitaChatOverlay() {
           <button
             type="button"
             onClick={() => setHistorialAbierto(true)}
-            className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground"
+            className="flex size-9 items-center justify-center rounded-full bg-secondary text-slate-brand"
             aria-label="Historial de chats"
           >
             <VitaIcon name="clock" size={18} />
@@ -491,7 +494,7 @@ export function VitaChatOverlay() {
           <button
             type="button"
             onClick={cerrarChat}
-            className="flex size-9 items-center justify-center rounded-full bg-muted text-foreground"
+            className="flex size-9 items-center justify-center rounded-full bg-secondary text-slate-brand"
             aria-label="Cerrar chat"
           >
             <VitaIcon name="close" size={18} />
@@ -504,6 +507,9 @@ export function VitaChatOverlay() {
               <VitaAvatar size={170} estado={estadoAvatarHeader} activo={abierto} />
             </div>
           )}
+          <div className="eyebrow pb-3.5 text-center text-subtle" suppressHydrationWarning>
+            Hoy · {formatoFechaCorta(fechaDeHoyISO())}
+          </div>
           {mensajes.map((m, i) => (
             <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} />
           ))}
@@ -515,7 +521,7 @@ export function VitaChatOverlay() {
                   type="button"
                   onClick={() => enviar(s)}
                   disabled={agotado}
-                  className="rounded-full bg-card px-3.5 py-2 text-[13px] font-semibold text-primary shadow-[inset_0_0_0_1px_var(--border)] disabled:opacity-50"
+                  className="rounded-full bg-card px-3.5 py-2 text-[13px] font-bold text-teal-deep shadow-[inset_0_0_0_1px_var(--teal-100)] disabled:opacity-50"
                 >
                   {s}
                 </button>
@@ -554,7 +560,7 @@ export function VitaChatOverlay() {
             <input
               value={entrada}
               onChange={(e) => alCambiarEntrada(e.target.value)}
-              placeholder="Contame…"
+              placeholder="Escribí algo…"
               disabled={enviando || agotado}
               className="min-w-0 flex-1 bg-transparent py-2 text-[15px] outline-none disabled:opacity-60"
             />
@@ -574,9 +580,9 @@ export function VitaChatOverlay() {
               className={
                 "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 " +
                 (modoVoz
-                  ? "bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground " +
+                  ? "bg-primary text-primary-foreground " +
                     (estadoVoz === "grabando" || hablando ? "animate-pulse" : "")
-                  : "bg-muted text-foreground")
+                  : "bg-secondary text-slate-brand")
               }
             >
               <VitaIcon name="mic" size={18} />
@@ -585,7 +591,7 @@ export function VitaChatOverlay() {
               type="submit"
               disabled={!entrada.trim() || enviando || agotado}
               aria-label="Enviar"
-              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-from to-brand-to text-primary-foreground transition-opacity disabled:from-muted disabled:to-muted disabled:text-muted-foreground"
+              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors disabled:bg-secondary disabled:text-faint"
             >
               <VitaIcon name="send" size={18} />
             </button>

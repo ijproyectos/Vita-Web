@@ -24,16 +24,16 @@ export function EliminarCuenta() {
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="flex w-full items-center gap-3 px-4.5 py-3.5 text-left"
+        className="flex w-full items-center gap-3 border-t border-foreground/[0.06] px-4 py-3.5 text-left"
       >
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-tile)] bg-chip-rose-bg text-chip-rose-ink">
           <VitaIcon name="trash" size={18} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-destructive">Eliminar mi cuenta</div>
-          <div className="mt-0.5 text-[11.5px] text-muted-foreground">Borra tu perfil y todos tus datos</div>
+          <div className="font-heading text-[14.5px] font-extrabold tracking-[-0.02em] text-destructive">Eliminar mi cuenta</div>
+          <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Borra tu perfil y todos tus datos</div>
         </div>
-        <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
+        <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
       </button>
 
       <Sheet
