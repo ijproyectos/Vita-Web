@@ -128,11 +128,11 @@ export default async function PerfilPage() {
           href="/app/modo-simple"
         />
         <ActivarNotificaciones variante="perfil" />
-        <FilaInfo
+        <FilaNav
           icon="bell"
           label="Recordatorios"
-          sub="Elegir qué avisos recibir y cuándo"
-          etiqueta="Próximamente"
+          sub="Qué avisos recibir, esperas y silencio de noche"
+          href="/app/avisos/configuracion"
         />
         <FilaNav
           icon="user"

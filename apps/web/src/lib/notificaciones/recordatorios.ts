@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fechaEnAR, listarHoy } from "@/lib/medicamentos/nucleo";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { enviarPush } from "./push";
+import { entregarAviso } from "./avisos";
 import { payloadRecordatorio } from "./mensajes";
 
 type Cliente = SupabaseClient;
@@ -83,15 +83,17 @@ export async function recordarDosisAlElder(
     if (errorInsert) return { status: "error", message: "No pudimos enviar el recordatorio." };
 
     // Autorización ya resuelta: recién ahora se toca el cliente admin.
-    const resultado = await enviarPush(
+    const payload = payloadRecordatorio({
+      medicamentoId,
+      nombre: dosis.nombre,
+      horaProgramada: dosis.hora_programada,
+      fechaAR,
+    });
+    const { push: resultado } = await entregarAviso(
       createAdminClient(),
       elderId,
-      payloadRecordatorio({
-        medicamentoId,
-        nombre: dosis.nombre,
-        horaProgramada: dosis.hora_programada,
-        fechaAR,
-      })
+      { tipo: "recordatorio_familiar", titulo: payload.body, url: payload.url, datos: { medicamentoId } },
+      payload
     );
 
     return resultado.enviados > 0 ? { status: "enviado" } : { status: "sin-avisos" };

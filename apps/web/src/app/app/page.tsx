@@ -10,6 +10,7 @@ import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import { InstalarVita } from "@/components/vita/instalar-vita";
 import { NudgeVita } from "@/components/vita/nudge-vita";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
+import { contarNoLeidos } from "@/lib/notificaciones/avisos";
 import { fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TurnoCard, AgregarTurnoCard } from "./rutina/turno-card";
@@ -18,19 +19,21 @@ export default async function HomePage() {
   const usuario = await requireUser();
   const supabase = await createClient();
 
-  const [perfil, medsHoy, adherencia, turnosProximos, inventarios] = await Promise.all([
+  const [perfil, medsHoy, adherencia, turnosProximos, inventarios, noLeidos] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, usuario.id),
     medicamentos.listarHoy(supabase, usuario.id),
     medicamentos.calcularAdherencia(supabase, usuario.id),
     turnosNucleo.listarProximos(supabase, usuario.id, 5),
     inventarioNucleo.listarSeguro(supabase, usuario.id),
+    contarNoLeidos(supabase, usuario.id),
   ]);
 
   const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy);
   const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
 
   const nombre = perfil?.nombre?.split(" ")[0] ?? "Ahí vamos";
-  const hayAvisos = recordatorios.length > 0 || stockBajo.length > 0;
+  // El punto de la campana es la cuenta de avisos sin leer del centro (/app/avisos).
+  const hayAvisos = noLeidos > 0;
 
   // Adherencia de hoy: un segmento por toma, en orden horario. "Sigue" es la
   // primera toma sin marcar.

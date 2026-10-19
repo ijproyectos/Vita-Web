@@ -66,10 +66,26 @@ export async function detectarDosisVencidas(
 
   if (error) throw new Error(`No se pudieron leer los medicamentos: ${error.message}`);
 
+  // Espera antes de avisar al cuidador, por elder (preferencias_avisos, Fase 2
+  // V7): solo se leen las filas con un valor distinto del default — quien no
+  // tiene fila (o no la cambió) sigue con `graciaMin`, igual que antes. Si la
+  // tabla no existe todavía (migración 020 sin aplicar) degrada a "todos
+  // default".
+  const graciaPorElder = new Map<string, number>();
+  const { data: prefs, error: errorPrefs } = await admin
+    .from("preferencias_avisos")
+    .select("usuario_id, espera_cuidador_min")
+    .neq("espera_cuidador_min", graciaMin);
+  if (!errorPrefs) {
+    for (const p of (prefs ?? []) as { usuario_id: string; espera_cuidador_min: number }[]) {
+      graciaPorElder.set(p.usuario_id, p.espera_cuidador_min);
+    }
+  }
+
   const candidatos = ((medicamentos ?? []) as FilaMedicamento[]).filter((m) => {
     const dias = m.dias_recurrentes ?? [];
     const aplicaHoy = dias.length === 0 || dias.includes(diaHoy);
-    return aplicaHoy && esDosisVencida(m.hora_programada, horaAR, graciaMin);
+    return aplicaHoy && esDosisVencida(m.hora_programada, horaAR, graciaPorElder.get(m.usuario_id) ?? graciaMin);
   });
 
   if (candidatos.length === 0) return [];

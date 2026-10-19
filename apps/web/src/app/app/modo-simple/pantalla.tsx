@@ -15,6 +15,8 @@ import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { MINUTOS_POSPONER, usePosponer } from "@/lib/modo-simple/usar-posponer";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { horaCorta } from "@/lib/notificaciones/mensajes";
+import { cancelarPosposicionAction, posponerDosisAction } from "@/lib/notificaciones/actions";
+import { usePushActivo } from "@/lib/notificaciones/usar-push-activo";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import { marcarTomadoAction } from "../rutina/actions";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
@@ -134,6 +136,7 @@ export function Pantalla({
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
   const { abrir: abrirChat } = useChatOverlay();
   const posponer = usePosponer(grupo.map((m) => m.id).join(","));
+  const pushActivo = usePushActivo();
   const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
@@ -197,6 +200,19 @@ export function Pantalla({
         toast.error("No se pudo registrar la toma. Probá de nuevo.");
       }
     });
+  }
+
+  // "Más tarde" también se registra en el servidor: así el cron vuelve a mandar
+  // el aviso a los 15 min aunque esta pantalla ya no esté abierta. Si el
+  // registro falla, el posponer local sigue valiendo (la tarjeta reaparece).
+  function posponerAqui() {
+    posponer.posponer();
+    void posponerDosisAction(grupo.map((m) => m.id)).catch(() => {});
+  }
+
+  function verAhora() {
+    posponer.cancelar();
+    void cancelarPosposicionAction(grupo.map((m) => m.id)).catch(() => {});
   }
 
   useEffect(() => {
@@ -301,7 +317,8 @@ export function Pantalla({
                   minutos={posponer.minutosRestantes}
                   confirmando={pendiente}
                   onConfirmar={confirmar}
-                  onVolver={posponer.cancelar}
+                  onVolver={verAhora}
+                  conAviso={pushActivo}
                 />
               )}
 
@@ -316,7 +333,7 @@ export function Pantalla({
                   silenciada={silenciada}
                   onConfirmar={confirmar}
                   onEscuchar={alEscuchar}
-                  onPosponer={posponer.posponer}
+                  onPosponer={posponerAqui}
                   onAlternarVoz={alternarEscuchaVoz}
                 />
               )}
@@ -516,12 +533,15 @@ function TarjetaPospuesta({
   confirmando,
   onConfirmar,
   onVolver,
+  conAviso,
 }: {
   grupo: Dosis[];
   minutos: number;
   confirmando: boolean;
   onConfirmar: () => void;
   onVolver: () => void;
+  /** Hay un push activo en este celular: el aviso de nuevo llega de verdad. */
+  conAviso: boolean;
 }) {
   const n = grupo.length;
   return (
@@ -532,7 +552,7 @@ function TarjetaPospuesta({
         </div>
         <div>
           <div className="font-heading text-[24px] font-extrabold leading-tight tracking-[-0.03em]">
-            Te la muestro de nuevo en {minutos} min
+            {conAviso ? "Te aviso de nuevo" : "Te la muestro de nuevo"} en {minutos} min
           </div>
           <div className="mt-0.5 text-[15px] font-semibold text-subtle">{listaHablada(grupo.map((m) => m.nombre))}</div>
         </div>

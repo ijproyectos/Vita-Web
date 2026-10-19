@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { detectarDosisVencidas, enviarAlertaDosis } from "@/lib/notificaciones/nucleo";
-import { enviarPush } from "@/lib/notificaciones/push";
+import { entregarAviso } from "@/lib/notificaciones/avisos";
+import { procesarAvisosProgramados, type ResumenProgramados } from "@/lib/notificaciones/programados";
 import { payloadDosisVencida } from "@/lib/notificaciones/mensajes";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -23,11 +24,15 @@ function secretoValido(recibido: string | null, esperado: string): boolean {
 }
 
 /**
- * Endpoint invocado por Supabase Cron (`pg_cron`/`pg_net`, migración 009)
+ * Endpoint invocado por Supabase Cron (`pg_cron`/`pg_net`, migración 018)
  * cada 5 minutos (`*` `/` `5` en la expresión cron). Único punto de
  * entrada externo de este dominio — sin
  * sesión de usuario, autenticado solo por `x-cron-secret` (nunca expuesto
- * en un bundle de cliente).
+ * en un bundle de cliente). Hace DOS cosas en el mismo job: la alerta al
+ * cuidador por dosis vencida (abajo) y, después, los avisos programados de
+ * Fase 2 (`procesarAvisosProgramados`, lib/notificaciones/programados.ts).
+ * La espera previa a avisar al cuidador sale de `preferencias_avisos` del
+ * elder (30 min por defecto).
  *
  * Claim-before-send: el insert en `alertas_dosis` con
  * `on conflict (medicamento_id, fecha) do nothing` decide, antes de
@@ -50,7 +55,15 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const dosisVencidas = await detectarDosisVencidas(admin);
+  // Si la detección falla (ej. error transitorio de lectura) no se pierden los
+  // avisos programados de este tick: se sigue con una lista vacía.
+  let dosisVencidas: Awaited<ReturnType<typeof detectarDosisVencidas>> = [];
+  let errorDeteccion: string | undefined;
+  try {
+    dosisVencidas = await detectarDosisVencidas(admin);
+  } catch (e) {
+    errorDeteccion = e instanceof Error ? e.message : "Fallo la detección de dosis vencidas.";
+  }
 
   let alertados = 0;
   let omitidos = 0;
@@ -87,16 +100,24 @@ export async function POST(request: Request) {
       continue;
     }
 
-    // Canal 1 — push a cada cuidador aceptado (funciona sin Resend).
+    // Canal 1 — push a cada cuidador aceptado (funciona sin Resend) + el aviso
+    // en su centro de notificaciones (/app/avisos), que no depende del push.
     const payload = payloadDosisVencida(dosis);
     let enviadosPush = 0;
     let fallidosPush = 0;
     let suscripciones = 0;
+    let enFeed = 0;
     for (const cuidadorId of dosis.cuidadorIds) {
-      const r = await enviarPush(admin, cuidadorId, payload);
-      enviadosPush += r.enviados;
-      fallidosPush += r.fallidos;
-      suscripciones += r.total;
+      const r = await entregarAviso(
+        admin,
+        cuidadorId,
+        { tipo: "dosis_vencida_cuidador", titulo: payload.body, url: payload.url, datos: { elderId: dosis.elderId, medicamentoId: dosis.medicamentoId } },
+        payload
+      );
+      enviadosPush += r.push.enviados;
+      fallidosPush += r.push.fallidos;
+      suscripciones += r.push.total;
+      if (r.feed) enFeed++;
     }
     pushEnviados += enviadosPush;
 
@@ -109,12 +130,12 @@ export async function POST(request: Request) {
       else emailEnviado = true;
     }
 
-    if (enviadosPush === 0 && !emailEnviado) {
+    if (enviadosPush === 0 && !emailEnviado && enFeed === 0) {
       if (suscripciones === 0 && !errorEmail) {
-        // Nadie era alcanzable (ningún cuidador con avisos activados ni
-        // email): no se mandó nada, así que se libera el claim para que un
-        // tick posterior pueda avisar si alguien activa los avisos. No hay
-        // riesgo de duplicado porque no salió ninguna notificación.
+        // Nadie era alcanzable (ningún cuidador con avisos activados, ni
+        // email, ni se pudo escribir el aviso en su centro): no salió nada, así
+        // que se libera el claim para que un tick posterior pueda avisar. No
+        // hay riesgo de duplicado porque no salió ninguna notificación.
         await admin.from("alertas_dosis").delete().eq("id", reclamada.id);
         sinCanal++;
         continue;
@@ -139,6 +160,16 @@ export async function POST(request: Request) {
     alertados++;
   }
 
+  // Resto de los avisos (a la hora de la toma, segundo aviso, posposiciones,
+  // turnos, stock, "ya tomó"). Mismo job de cron: un fallo acá no tumba la
+  // respuesta de la alerta al cuidador.
+  let programados: ResumenProgramados | { error: string };
+  try {
+    programados = await procesarAvisosProgramados(admin);
+  } catch (e) {
+    programados = { error: e instanceof Error ? e.message : "Fallo en los avisos programados." };
+  }
+
   return NextResponse.json({
     detectadas: dosisVencidas.length,
     alertados,
@@ -146,5 +177,7 @@ export async function POST(request: Request) {
     errores,
     sinCanal,
     pushEnviados,
+    programados,
+    ...(errorDeteccion ? { errorDeteccion } : {}),
   });
 }

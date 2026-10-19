@@ -14,6 +14,21 @@ export type PayloadPush = {
   url: string;
   /** Agrupa/pisa notificaciones de la misma dosis en vez de apilarlas. */
   tag: string;
+  /**
+   * Botones de la notificación (sw.js los maneja en `notificationclick`).
+   * Ids conocidos: "tomada", "posponer" (llaman a /api/avisos/accion),
+   * "como-llegar" (abre `datos.mapsUrl`).
+   */
+  actions?: { action: string; title: string }[];
+  /**
+   * La notificación no se cierra sola hasta que la persona la toca. Es lo más
+   * cercano a una alarma que permite una PWA (ver sw.js).
+   */
+  requireInteraction?: boolean;
+  /** Vuelve a sonar/vibrar aunque reemplace una notificación con el mismo tag. */
+  renotify?: boolean;
+  /** Datos para el service worker (ej. `{ medicamentoId }`). */
+  datos?: Record<string, string>;
 };
 
 export type ResultadoPush = {

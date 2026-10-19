@@ -220,6 +220,54 @@ Una fila por navegador/dispositivo suscripto a Web Push. Ver `017_push_notificac
 
 **RLS**: insert del cuidador solo con `cuidador_id = auth.uid()`, vínculo `aceptado` hacia ese elder y medicamento que pertenece al elder; select de los cuidadores vinculados al elder (rate-limit por dosis) y del propio elder.
 
+## `avisos`
+
+Feed del centro de notificaciones (`/app/avisos`): una fila por aviso entregado a un usuario (con o sin push). Ver `020_avisos.sql`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | destinatario; references auth.users, on delete cascade |
+| tipo | text | `dosis`, `dosis_segundo`, `dosis_pospuesta`, `dosis_vencida_cuidador`, `dosis_resuelta_cuidador`, `recordatorio_familiar`, `turno_dia_antes`, `turno_2h`, `stock_bajo` |
+| titulo, cuerpo | text | |
+| url | text | ruta interna a abrir al tocar |
+| datos | jsonb | |
+| leido_at | timestamptz | null = sin leer |
+| created_at | timestamptz | índice `(usuario_id, created_at desc)` |
+
+**RLS**: select/update/delete owner-only; sin policy de insert (escribe solo `service_role`: cron y "Recordarle"). El único campo actualizable por el usuario es `leido_at` (column grant).
+
+## `preferencias_avisos`
+
+| columna | tipo | notas |
+|---|---|---|
+| usuario_id | uuid PK | references auth.users, on delete cascade; sin fila = defaults del código |
+| silencio_desde, silencio_hasta | time | ambos null = sin silencio; pueden cruzar la medianoche (check: ambos o ninguno) |
+| espera_cuidador_min | int | 30 / 60 / 120 (default 30); minutos antes de avisar al cuidador |
+| recordatorio_dosis, aviso_turnos, stock_bajo | boolean | default true |
+| updated_at | timestamptz | |
+
+**RLS**: owner-only (`for all`).
+
+## `posposiciones`
+
+"En 15 min" del lado del servidor (acción del push, modo simple). Cuando `hasta` pasa y la dosis sigue sin tomarse, el cron vuelve a avisar.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| medicamento_id | uuid | references medicamentos, on delete cascade |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| fecha | date | fecha de pared AR de la dosis |
+| hasta | timestamptz | |
+| created_at | timestamptz | |
+
+**RLS**: select/delete owner-only; insert exige `usuario_id = auth.uid()` y que el medicamento sea propio.
+
+## `envios_avisos`
+
+Dedupe claim-before-send de los avisos programados: `unique (tipo, ref_id, fecha)` (`ref_id` = medicamento, turno, inventario o posposición según `tipo`; `fecha` = fecha AR). Columnas: `id`, `tipo`, `ref_id`, `fecha`, `usuario_id`, `created_at`. **RLS** habilitada sin policies: solo `service_role`. El cron borra claims de más de 7 días. `alertas_dosis` suma `resuelta_at` (cuándo se avisó al cuidador que el elder ya tomó).
+
 ## `codigos_acceso`
 
 Código de re-ingreso de un solo uso (15 min) que el cuidador genera para la persona cuidada (cuenta creada por código, o cuenta de Google que cambió de celular). Solo se guarda el hash. Ver `019_codigos_acceso.sql`.
