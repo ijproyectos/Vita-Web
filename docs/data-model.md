@@ -25,6 +25,9 @@ Single-tenant por usuario — cada fila de negocio lleva `usuario_id` referencia
 | contacto_emergencia_nombre | text | |
 | contacto_emergencia_telefono | text | |
 | onboarding_completado_at | timestamptz | gatea si `/app/*` redirige a `/onboarding/nombre` |
+| color | text | `021_familia.sql` — clave de paleta (`teal`/`violeta`/`ambar`/`rosa`/`azul`, check), la UI la mapea a tokens `--persona-<clave>` (`lib/familia/colores.ts`). null = color por defecto |
+
+**Familia (021)**: además de las policies `_self`, `perfiles_select_cuidador` (`es_cuidador_de(id)`, cualquier rol) y `perfiles_update_cuidador` (`puede_editar_de(id)`). Sin policy de INSERT para el cuidador (un perfil ajeno nace solo desde el admin client — perfil gestionado — o en el login de su dueño), por eso `lib/perfil/nucleo.ts` hace update-primero y upsert solo como fallback. El trigger `perfiles_proteger_columnas_ajenas` rechaza (`columna_no_editable_por_cuidador`) que alguien que no es el dueño cambie `id`/`uso_app`/`onboarding_completado_at`/`avatar_url`/`created_at`; service_role no se restringe.
 
 ## `medicamentos`
 
@@ -171,6 +174,18 @@ unique parcial `(elder_id, cuidador_id) where cuidador_id is not null` — evita
 **RPCs** (`security definer`, `search_path` fijado, `execute` revocado de `public`/`anon` y otorgado solo a `authenticated`):
 - `reclamar_invitacion_cuidador(p_token text) returns table (elder_id uuid, nombre text)` — nunca recibe `cuidador_id` como parámetro, siempre usa `auth.uid()` internamente. Valida token existente + `estado = 'pendiente'`, no expirado, y `email_invitado` coincide (case-insensitive) con el email de la cuenta autenticada; si pasa, marca `cuidador_id = auth.uid()`, `estado = 'aceptado'`, `aceptado_at = now()`.
 - `listar_elders_vinculados() returns table (elder_id uuid, nombre text)` — elders con vínculo aceptado hacia el cuidador autenticado; única fuente de "nombre del elder" para el cuidador.
+
+### Familia (`021_familia.sql`)
+
+Columnas nuevas: `rol text not null default 'editar'` (check `editar`/`ver` — qué puede hacer el CUIDADOR; lo decide la persona cuidada) y `relacion text` (libre, "Mamá"). Los vínculos existentes quedaron `editar` (= comportamiento previo).
+
+Helpers `security definer stable` (search_path fijado, solo `authenticated`): `es_cuidador_de(p_elder)` (vínculo aceptado de `auth.uid()` hacia `p_elder`) y `puede_editar_de(p_elder)` (ídem + `rol = 'editar'`). Ambos ignoran explícitamente una fila autovinculada (016).
+
+RLS del cuidador (aditiva; las `_all_self` no se tocan; las de cuidador de 008/010/014 se reemplazaron porque no distinguían rol): lectura con `es_cuidador_de`, escritura con `puede_editar_de` en `medicamentos` (select/insert/update/delete), `medicamentos_tomas` (select/insert/update/delete), `turnos` (select/insert/update/delete), `inventario_pastillas` (select/insert/update/delete; `ajustar_stock_pastillas` ahora exige `editar` al cuidador), `estudios` (select/insert/delete) + `storage.objects` del bucket `estudios` bajo `{elder_id}/` (select/insert/delete), `perfiles` (ver arriba), `preferencias_avisos` (select/insert/update). `codigos_acceso_insert_cuidador` ahora exige `editar` (un código de acceso abre sesión COMO esa persona).
+
+RPCs nuevas (`returns table` con columnas calificadas): `listar_familia()` (personas que cuido: vínculo, nombre, color, rol, relación, `conectado` = `auth.users.last_sign_in_at is not null`), `listar_mis_cuidadores()` (quién me cuida, con nombre y rol), `cambiar_rol_cuidador(p_vinculo_id, p_rol)` (solo la persona cuidada; `vinculos_all_elder` bloquea el update directo de una fila aceptada), `dejar_de_cuidar(p_vinculo_id)` (el cuidador revoca su propio vínculo aceptado).
+
+**Perfil gestionado** (persona sin celular): cuenta real de `auth.users` con email placeholder `gestionado-<uuid>@usuarios.soyvita.com.ar`, creada por `crearPerfilGestionado` (`lib/familia/nucleo.ts`, admin client) junto con su `perfiles` y un vínculo ya `aceptado` con `rol = 'editar'`. Más adelante entra desde su celular con un código de `codigos_acceso`. Reemplaza `perfiles_pendientes` para flujos nuevos (el camino viejo sigue funcionando).
 
 ## `alertas_dosis`
 
