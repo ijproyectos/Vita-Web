@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { VitaIcon } from "@/lib/vita-icons";
 import { entrarConCodigoAction, type EstadoEntrarConCodigo } from "./actions";
+import { EntrarConEmail } from "./login-email";
 
 function GoogleLogo() {
   return (
@@ -159,11 +160,16 @@ function EntrarConCodigo() {
   );
 }
 
+// Apple (V7 Bienvenida): preparado pero apagado. Requiere una cuenta paga de
+// Apple Developer y configurar el provider "apple" en Supabase Auth; recién
+// ahí se activa con NEXT_PUBLIC_ENABLE_APPLE_LOGIN=true.
+const LOGIN_APPLE = process.env.NEXT_PUBLIC_ENABLE_APPLE_LOGIN === "true";
+
 export function LoginForm({ next }: { next?: string }) {
-  const [loading, setLoading] = useState<"google" | "codigo" | null>(null);
+  const [loading, setLoading] = useState<"google" | "codigo" | "apple" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function iniciarSesionGoogle(destino: string, origen: "google" | "codigo") {
+  async function iniciarSesionGoogle(destino: string, origen: "google" | "codigo" | "apple") {
     setError(null);
     setLoading(origen);
     const supabase = createClient();
@@ -171,11 +177,11 @@ export function LoginForm({ next }: { next?: string }) {
     callbackUrl.searchParams.set("next", destino);
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider: origen === "apple" ? "apple" : "google",
       options: { redirectTo: callbackUrl.toString() },
     });
     if (error) {
-      setError("No se pudo iniciar sesión con Google. Intentá de nuevo.");
+      setError(`No se pudo iniciar sesión con ${origen === "apple" ? "Apple" : "Google"}. Intentá de nuevo.`);
       setLoading(null);
     }
     // On success the browser navigates away to Google, so no further
@@ -204,6 +210,19 @@ export function LoginForm({ next }: { next?: string }) {
         <GoogleLogo />
         {loading === "google" ? "Conectando…" : "Continuar con Google"}
       </button>
+
+      {LOGIN_APPLE && (
+        <button
+          type="button"
+          onClick={() => iniciarSesionGoogle(next ?? "/app", "apple")}
+          disabled={loading !== null}
+          className="flex h-14 w-full items-center justify-center rounded-full bg-foreground font-heading text-[15px] font-bold text-background disabled:opacity-60"
+        >
+          {loading === "apple" ? "Conectando…" : "Continuar con Apple"}
+        </button>
+      )}
+
+      <EntrarConEmail next={next} />
 
       <button
         type="button"
