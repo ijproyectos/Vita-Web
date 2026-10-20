@@ -18,7 +18,14 @@ import { createClient } from "@supabase/supabase-js";
  * el throttling por IP no se puede hacer con RLS. Siempre detrás del
  * throttling; nunca se loguean códigos ni emails.
  *
- * Fuera de esos dos usos (y de `lib/cuenta/nucleo.ts`, que borra la cuenta
+ * Otro uso SANCIONADO: los "perfiles gestionados" de Familia
+ * (`crearPerfilGestionado` en `lib/familia/nucleo.ts`, invocado solo desde
+ * `crearPerfilGestionadoAction` de /app/familia): crear la cuenta de auth de
+ * una persona sin celular no se puede con RLS. Crea cuenta → perfil →
+ * vínculo aceptado con `cuidador_id` = el usuario ya autenticado por sesión,
+ * y borra la cuenta ante cualquier fallo. Nunca recibe ids ajenos del cliente.
+ *
+ * Fuera de esos usos (y de `lib/cuenta/nucleo.ts`, que borra la cuenta
  * del usuario ya autenticado), nunca importar este cliente desde código que
  * atiende una request de un usuario autenticado — para eso están `lib/supabase/{server,client}.ts`,
  * que sí respetan RLS.

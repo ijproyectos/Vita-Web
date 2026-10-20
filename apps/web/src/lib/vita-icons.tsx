@@ -49,6 +49,9 @@ import {
   Lock,
   Phone,
   type LucideProps,
+  Eye,
+  UserPlus,
+  Smartphone,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -110,6 +113,10 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   lock: Lock,
   phone: Phone,
   mail: Mail,
+  // V7 Familia: permiso "Lector", agregar persona, conectar su celular.
+  eye: Eye,
+  "user-plus": UserPlus,
+  smartphone: Smartphone,
 };
 
 export function VitaIcon({

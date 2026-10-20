@@ -30,6 +30,8 @@ export type Perfil = {
   contacto_emergencia_telefono: string | null;
   onboarding_completado_at: string | null;
   uso_app: UsoApp | null;
+  // Clave de paleta (021_familia.sql); ver lib/familia/tipos.ts.
+  color: string | null;
 };
 
 // Subconjunto de campos editables inline desde Resumen de salud.
@@ -46,6 +48,7 @@ export type CambiosPerfil = Partial<
     | "numero_afiliado"
     | "contacto_emergencia_nombre"
     | "contacto_emergencia_telefono"
+    | "color"
   >
 >;
 

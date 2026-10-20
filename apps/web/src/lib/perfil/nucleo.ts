@@ -21,7 +21,18 @@ export async function actualizarPerfil(
   usuarioId: string,
   cambios: CambiosPerfil
 ): Promise<Perfil> {
-  // upsert, no update: ver el comentario en `actualizarPerfilCrudo`.
+  // update primero (sirve también para un cuidador 'editar', que no tiene
+  // policy de INSERT y cuyo upsert fallaría); si no tocó ninguna fila, upsert
+  // (ver el comentario en `actualizarPerfilCrudo`).
+  const { data: actualizado, error: errorUpdate } = await supabase
+    .from("perfiles")
+    .update(cambios)
+    .eq("id", usuarioId)
+    .select()
+    .maybeSingle();
+  if (errorUpdate) throw new Error(`No se pudo actualizar el perfil: ${errorUpdate.message}`);
+  if (actualizado) return actualizado as Perfil;
+
   const { data, error } = await supabase
     .from("perfiles")
     .upsert({ id: usuarioId, ...cambios }, { onConflict: "id" })
@@ -129,6 +140,17 @@ async function actualizarPerfilCrudo(
   usuarioId: string,
   cambios: Record<string, unknown>
 ): Promise<void> {
+  // update primero: un cuidador 'editar' (021_familia.sql) puede actualizar el
+  // perfil de la persona que cuida pero no insertarlo, y un upsert exige
+  // ambas. Si el update no tocó ninguna fila (perfil propio sin fila), upsert.
+  const { data: actualizadas, error: errorUpdate } = await supabase
+    .from("perfiles")
+    .update(cambios)
+    .eq("id", usuarioId)
+    .select("id");
+  if (errorUpdate) throw new Error(`No se pudo actualizar el perfil: ${errorUpdate.message}`);
+  if ((actualizadas?.length ?? 0) > 0) return;
+
   const { error } = await supabase.from("perfiles").upsert({ id: usuarioId, ...cambios }, { onConflict: "id" });
   if (error) throw new Error(`No se pudo actualizar el perfil: ${error.message}`);
 }

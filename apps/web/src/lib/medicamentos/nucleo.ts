@@ -286,6 +286,22 @@ export async function agregarMultiMomento(
   return data as Medicamento[];
 }
 
+/**
+ * Dueño (usuario_id) de un medicamento visible para la sesión (propio o de
+ * alguien que cuida, por RLS), o null. Lo usan las acciones sobre una fila
+ * existente para escribir con el usuario_id correcto aunque el perfil activo
+ * sea otro (ej. Modo simple marca siempre lo propio).
+ */
+export async function duenioDeMedicamento(supabase: Cliente, medicamentoId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("medicamentos")
+    .select("usuario_id")
+    .eq("id", medicamentoId)
+    .maybeSingle();
+  if (error) throw new Error(`No se pudo leer el medicamento: ${error.message}`);
+  return (data?.usuario_id as string | undefined) ?? null;
+}
+
 export async function obtenerPorId(
   supabase: Cliente,
   usuarioId: string,

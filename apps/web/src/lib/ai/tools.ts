@@ -23,6 +23,10 @@ import {
 // `lib/medicamentos/nucleo.ts` en el mismo proceso — mismo resultado,
 // sin el subproceso ni el JWT intermedio (el `usuarioId` ya viene resuelto
 // de la sesión de Supabase, nunca del modelo).
+//
+// Familia (021): las tools actúan SIEMPRE sobre la cuenta logueada, nunca
+// sobre el perfil activo (cookie `vita_perfil`). Que vita cargue datos de
+// otra persona necesitaría un destino explícito por tool — decisión aparte.
 export const TOOLS: Anthropic.Tool[] = [
   {
     name: "list_today_medications",
