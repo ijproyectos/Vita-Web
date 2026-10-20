@@ -35,6 +35,21 @@
   --color-persona-3: var(--persona-3);
   --color-persona-3-deep: var(--persona-3-deep);
   --color-persona-3-tint: var(--persona-3-tint);
+  --color-persona-teal: var(--persona-teal);
+  --color-persona-teal-deep: var(--persona-teal-deep);
+  --color-persona-teal-tint: var(--persona-teal-tint);
+  --color-persona-violeta: var(--persona-violeta);
+  --color-persona-violeta-deep: var(--persona-violeta-deep);
+  --color-persona-violeta-tint: var(--persona-violeta-tint);
+  --color-persona-ambar: var(--persona-ambar);
+  --color-persona-ambar-deep: var(--persona-ambar-deep);
+  --color-persona-ambar-tint: var(--persona-ambar-tint);
+  --color-persona-rosa: var(--persona-rosa);
+  --color-persona-rosa-deep: var(--persona-rosa-deep);
+  --color-persona-rosa-tint: var(--persona-rosa-tint);
+  --color-persona-azul: var(--persona-azul);
+  --color-persona-azul-deep: var(--persona-azul-deep);
+  --color-persona-azul-tint: var(--persona-azul-tint);
   --shadow-card: var(--elevation-card);
   --shadow-item: var(--elevation-item);
   --shadow-nav: var(--elevation-nav);
@@ -141,6 +156,25 @@
   --persona-3: var(--aviso);
   --persona-3-deep: var(--aviso-ink);
   --persona-3-tint: var(--aviso-tint);
+
+  /* Color elegido por perfil (perfiles.color, Familia): claves de paleta que
+     lib/familia/colores.ts mapea a estas clases. teal/violeta/ambar calcan
+     persona-1..3; rosa y azul suman dos tonos más para familias grandes. */
+  --persona-teal: var(--persona-1);
+  --persona-teal-deep: var(--persona-1-deep);
+  --persona-teal-tint: var(--persona-1-tint);
+  --persona-violeta: var(--persona-2);
+  --persona-violeta-deep: var(--persona-2-deep);
+  --persona-violeta-tint: var(--persona-2-tint);
+  --persona-ambar: var(--persona-3);
+  --persona-ambar-deep: var(--persona-3-deep);
+  --persona-ambar-tint: var(--persona-3-tint);
+  --persona-rosa: #c2416b;
+  --persona-rosa-deep: #9e2f55;
+  --persona-rosa-tint: #fcedf2;
+  --persona-azul: #2f6fd0;
+  --persona-azul-deep: #2357a8;
+  --persona-azul-tint: #eaf1fc;
 
   /* Personaje 3D de vita (components/vita/vita-3d/): paleta "nube" del
      handoff (design_handoff_vita_avatar), con la hoja en el teal de la marca

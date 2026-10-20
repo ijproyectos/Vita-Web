@@ -7,6 +7,7 @@ import { recordarDosisAlElder, type ResultadoRecordatorio } from "@/lib/notifica
 import { listarElders } from "@/lib/cuidadores/nucleo";
 import { generarCodigoAcceso } from "@/lib/acceso-codigo/nucleo";
 import type { ResultadoCodigoAcceso } from "@/lib/acceso-codigo/tipos";
+import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
 
@@ -27,6 +28,10 @@ export async function crearMedicamentoParaElderAction(
   const { elders } = await requireCuidador();
   if (!elders.some((e) => e.elderId === elderId)) {
     return { status: "error", message: "No tenés acceso a esta persona." };
+  }
+  // 021: crear medicamentos exige permiso "editar" (la RLS lo hace cumplir).
+  if ((await rolSobre(elderId)) !== "editar") {
+    return { status: "error", message: MENSAJE_SOLO_LECTURA };
   }
 
   const supabase = await createClient();
@@ -95,6 +100,10 @@ export async function generarCodigoAccesoAction(elderId: string): Promise<Result
     const elders = await listarElders(supabase, usuario.id);
     if (!elders.some((e) => e.elderId === elderId)) {
       return { status: "error", message: "No tenés acceso a esta persona." };
+    }
+    // 021: un código de acceso abre sesión COMO esa persona → exige "editar".
+    if ((await rolSobre(elderId)) !== "editar") {
+      return { status: "error", message: MENSAJE_SOLO_LECTURA };
     }
     return await generarCodigoAcceso(supabase, usuario.id, elderId);
   } catch {

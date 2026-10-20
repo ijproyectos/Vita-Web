@@ -5,7 +5,15 @@ import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { generarCodigoAccesoAction } from "./actions";
 
-export function CodigoAcceso({ elderId }: { elderId: string }) {
+export function CodigoAcceso({
+  elderId,
+  titulo = "Código para que entre de nuevo",
+  descripcion = "Si cambió de celular o se cerró su sesión, generá un código y pasáselo.",
+}: {
+  elderId: string;
+  titulo?: string;
+  descripcion?: string;
+}) {
   const [pendiente, startTransition] = useTransition();
   const [codigo, setCodigo] = useState<string | null>(null);
 
@@ -26,10 +34,8 @@ export function CodigoAcceso({ elderId }: { elderId: string }) {
 
   return (
     <div className="rounded-[20px] bg-card p-4.5 shadow-card">
-      <div className="font-heading text-[15px] font-bold">Código para que entre de nuevo</div>
-      <p className="mt-1 text-[12.5px] text-muted-foreground">
-        Si cambió de celular o se cerró su sesión, generá un código y pasáselo.
-      </p>
+      <div className="font-heading text-[15px] font-bold">{titulo}</div>
+      <p className="mt-1 text-[12.5px] text-muted-foreground">{descripcion}</p>
 
       {codigo && (
         <div className="mt-3 rounded-[16px] bg-secondary px-4 py-4 text-center">

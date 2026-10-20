@@ -18,6 +18,9 @@ import { colorChipPorIndice } from "@/lib/perfil/tipos";
 import type { Medicamento, MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import type { Turno } from "@/lib/turnos/tipos";
 import type { ResumenAdherencia } from "@/lib/medicamentos/tipos";
+import type { OpcionPerfil, PerfilActivo } from "@/lib/familia/tipos";
+import { CLASES_COLOR } from "@/lib/familia/colores";
+import { SelectorPerfil } from "@/components/vita/selector-perfil";
 
 const ICONO_MOMENTO = { "mañana": "sunrise", mediodia: "sun", tarde: "sunset", noche: "moon" } as const;
 const ETIQUETA_MOMENTO_CORTA = { "mañana": "Mañana", mediodia: "Mediodía", tarde: "Tarde", noche: "Noche" } as const;
@@ -38,6 +41,8 @@ export function RutinaView({
   turnosProximos,
   adherencia,
   stockPorInventario,
+  perfil,
+  opciones,
 }: {
   medsHoy: MedicamentoConToma[];
   todosLosMeds: Medicamento[];
@@ -45,7 +50,12 @@ export function RutinaView({
   turnosProximos: Turno[];
   adherencia: ResumenAdherencia;
   stockPorInventario: Record<string, ResumenStock>;
+  perfil: PerfilActivo;
+  opciones: OpcionPerfil[];
 }) {
+  const puedeEditar = perfil.rol === "editar";
+  const color = CLASES_COLOR[perfil.color];
+  const primerNombre = perfil.nombre.split(" ")[0];
   const router = useRouter();
   const searchParams = useSearchParams();
   const vista = searchParams.get("vista") === "proximos" ? "proximos" : "hoy";
@@ -63,17 +73,30 @@ export function RutinaView({
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
       <div className="mt-1.5 flex items-start justify-between">
         <div>
-          <div className="eyebrow text-primary">Tu día de salud</div>
-          <h1 className="mt-[5px] font-heading text-[28px] font-extrabold tracking-[-0.04em]">Mi Rutina</h1>
+          <SelectorPerfil
+            opciones={opciones}
+            activoId={perfil.id}
+            ariaLabel={`Rutina de ${primerNombre}. Cambiar de perfil`}
+            className={`eyebrow flex items-center gap-1 ${color.texto}`}
+          >
+            Rutina de {primerNombre}
+            <VitaIcon name="chevron-down" size={13} strokeWidth={2.8} />
+          </SelectorPerfil>
+          <h1 className="mt-[5px] font-heading text-[28px] font-extrabold tracking-[-0.04em]">
+            {perfil.esPropio ? "Mi Rutina" : `Rutina de ${primerNombre}`}
+          </h1>
+          {!puedeEditar && <div className="mt-1 text-[12px] font-semibold text-subtle">Solo ver: no podés cambiar nada.</div>}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAdd(true)}
-          aria-label="Agregar a tu rutina"
-          className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
-        >
-          <VitaIcon name="plus" size={20} />
-        </button>
+        {puedeEditar && (
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            aria-label="Agregar a la rutina"
+            className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
+          >
+            <VitaIcon name="plus" size={20} />
+          </button>
+        )}
       </div>
 
       {/* TODO(fase historial): V7 suma la pestaña "Historial". */}
@@ -116,19 +139,20 @@ export function RutinaView({
             <ProgressRing pct={pct} size={74} tono="card" />
           </div>
 
-          {tomados < total && <MarcarTodosButton />}
+          {puedeEditar && tomados < total && <MarcarTodosButton />}
 
           <TimelineHoy
             medsHoy={medsHoy}
             turnosHoy={turnosHoy}
             stockPorInventario={stockPorInventario}
+            puedeEditar={puedeEditar}
             onAgregar={() => setShowAdd(true)} />
         </>
       ) : (
         <ProximosDias turnos={turnosProximos} todosLosMeds={todosLosMeds} />
       )}
 
-      <AgregarSheet open={showAdd} onOpenChange={setShowAdd} />
+      {puedeEditar && <AgregarSheet open={showAdd} onOpenChange={setShowAdd} />}
     </div>
   );
 }
@@ -137,11 +161,13 @@ function TimelineHoy({
   medsHoy,
   turnosHoy,
   stockPorInventario,
+  puedeEditar,
   onAgregar,
 }: {
   medsHoy: MedicamentoConToma[];
   turnosHoy: Turno[];
   stockPorInventario: Record<string, ResumenStock>;
+  puedeEditar: boolean;
   onAgregar: () => void;
 }) {
   return (
@@ -163,9 +189,11 @@ function TimelineHoy({
                 <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em] text-slate-brand">{ETIQUETA_MOMENTO[momento]}</div>
                 <div className="text-[11px] font-medium tabular-nums text-subtle">{RANGO_MOMENTO[momento]} hs · sin items</div>
               </div>
-              <button type="button" onClick={onAgregar} className="text-[12.5px] font-bold text-teal-deep">
-                + Agregar
-              </button>
+              {puedeEditar && (
+                <button type="button" onClick={onAgregar} className="text-[12.5px] font-bold text-teal-deep">
+                  + Agregar
+                </button>
+              )}
             </div>
           );
         }
@@ -191,6 +219,7 @@ function TimelineHoy({
                   med={m}
                   color={colorChipPorIndice(i)}
                   stock={m.inventario_id ? (stockPorInventario[m.inventario_id] ?? null) : null}
+                  puedeEditar={puedeEditar}
                 />
               ))}
               {turnos.map((t) => (
@@ -208,10 +237,12 @@ function MedItem({
   med,
   color,
   stock,
+  puedeEditar,
 }: {
   med: MedicamentoConToma;
   color: ReturnType<typeof colorChipPorIndice>;
   stock: ResumenStock | null;
+  puedeEditar: boolean;
 }) {
   const TINTE_BG = {
     teal: "bg-chip-teal-bg text-chip-teal-ink",
@@ -242,10 +273,18 @@ function MedItem({
           </div>
           {stock && <BadgeStock stock={stock} className="mt-1" />}
         </div>
-        <div className="flex items-center gap-1">
-          <EliminarMedButton medicamentoId={med.id} nombre={med.nombre} />
-          <CheckToggle medicamentoId={med.id} tomadoInicial={med.tomado} />
-        </div>
+        {puedeEditar ? (
+          <div className="flex items-center gap-1">
+            <EliminarMedButton medicamentoId={med.id} nombre={med.nombre} />
+            <CheckToggle medicamentoId={med.id} tomadoInicial={med.tomado} />
+          </div>
+        ) : (
+          med.tomado && (
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground" aria-label="Tomado">
+              <VitaIcon name="check" size={16} strokeWidth={3} />
+            </span>
+          )
+        )}
       </div>
     </div>
   );

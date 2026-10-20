@@ -6,34 +6,43 @@ import { esStockBajo, textoQuedan } from "@/lib/inventario/tipos";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { TopBar } from "../top-bar";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { BannerPerfil } from "@/components/vita/banner-perfil";
 
 export default async function PastillasPage() {
-  const usuario = await requireUser();
+  await requireUser();
   const supabase = await createClient();
-  const grupos = await inventarioNucleo.listarGrupos(supabase, usuario.id);
+  const activo = await obtenerPerfilActivo();
+  const puedeEditar = activo.rol === "editar";
+  const grupos = await inventarioNucleo.listarGrupos(supabase, activo.id);
 
   return (
     <div className="flex flex-col gap-4.5 px-4 pt-2">
-      <TopBar eyebrow="Mi Salud" title="Mis pastillas" />
+      <TopBar eyebrow="Mi Salud" title={activo.esPropio ? "Mis pastillas" : `Pastillas de ${activo.nombre.split(" ")[0]}`} />
+      <BannerPerfil perfil={activo} />
 
       <p className="px-0.5 text-sm text-muted-foreground">
         Sacale una foto al frente y otra al dorso del blister: vita cuenta las pastillas, lee el nombre y después va descontando cada toma que marques. Si quedan
         pocas, te avisamos.
       </p>
 
+      {puedeEditar && (
       <Link
         href="/app/pastillas/contar"
         className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-brand-from to-brand-to py-3.5 font-heading text-[15px] font-extrabold text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
       >
         <VitaIcon name="camera" size={18} /> Agregar pastillas con foto
       </Link>
+      )}
 
       {grupos.length === 0 ? (
         <div className="rounded-[20px] bg-secondary p-5 text-center">
-          <p className="text-sm text-muted-foreground">Todavía no cargaste medicamentos.</p>
-          <Link href="/app/agregar-medicamento" className="mt-2 inline-block text-sm font-semibold text-primary">
-            Agregar un medicamento →
-          </Link>
+          <p className="text-sm text-muted-foreground">Todavía no hay medicamentos cargados.</p>
+          {puedeEditar && (
+            <Link href="/app/agregar-medicamento" className="mt-2 inline-block text-sm font-semibold text-primary">
+              Agregar un medicamento →
+            </Link>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
@@ -95,21 +104,25 @@ export default async function PastillasPage() {
                           {dias === 0 ? "Alcanza para menos de un día" : `Te alcanza para ~${dias} ${dias === 1 ? "día" : "días"}`}
                         </span>
                       )}
-                      <Link
-                        href={`/app/pastillas/contar?medicamento=${g.representanteId}`}
-                        className="ml-auto text-sm font-semibold text-primary"
-                      >
-                        Volver a contar
-                      </Link>
+                      {puedeEditar && (
+                        <Link
+                          href={`/app/pastillas/contar?medicamento=${g.representanteId}`}
+                          className="ml-auto text-sm font-semibold text-primary"
+                        >
+                          Volver a contar
+                        </Link>
+                      )}
                     </div>
                   </>
                 ) : (
+                  puedeEditar && (
                   <Link
                     href={`/app/pastillas/contar?medicamento=${g.representanteId}`}
                     className="mt-3 flex items-center justify-center gap-2 rounded-full bg-secondary py-2.5 font-heading text-[13.5px] font-bold text-primary"
                   >
                     <VitaIcon name="camera" size={16} /> Contar pastillas
                   </Link>
+                  )
                 )}
               </div>
             );

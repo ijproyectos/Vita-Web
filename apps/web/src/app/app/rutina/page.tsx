@@ -3,19 +3,22 @@ import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
+import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { RutinaView } from "./rutina-view";
 
 export default async function RutinaPage() {
-  const usuario = await requireUser();
+  await requireUser();
   const supabase = await createClient();
+  const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
+  const pid = activo.id;
 
   const [medsHoy, todosLosMeds, turnosHoy, turnosProximos, adherencia, inventarios] = await Promise.all([
-    medicamentos.listarHoy(supabase, usuario.id),
-    medicamentos.listarTodos(supabase, usuario.id),
-    turnosNucleo.listarDeHoy(supabase, usuario.id),
-    turnosNucleo.listarProximos(supabase, usuario.id, 30),
-    medicamentos.calcularAdherencia(supabase, usuario.id),
-    inventarioNucleo.listarSeguro(supabase, usuario.id),
+    medicamentos.listarHoy(supabase, pid),
+    medicamentos.listarTodos(supabase, pid),
+    turnosNucleo.listarDeHoy(supabase, pid),
+    turnosNucleo.listarProximos(supabase, pid, 30),
+    medicamentos.calcularAdherencia(supabase, pid),
+    inventarioNucleo.listarSeguro(supabase, pid),
   ]);
 
   const stockPorInventario = Object.fromEntries(
@@ -30,6 +33,8 @@ export default async function RutinaPage() {
       turnosProximos={turnosProximos}
       adherencia={adherencia}
       stockPorInventario={stockPorInventario}
+      perfil={activo}
+      opciones={opciones}
     />
   );
 }

@@ -7,13 +7,16 @@ import { iconoDeEspecialidad, tonoDeTurno } from "@/lib/turnos/icono";
 import type { Turno } from "@/lib/turnos/tipos";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../top-bar";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { BannerPerfil } from "@/components/vita/banner-perfil";
 
 // Mis turnos (Home → "Ver todos"): próximos turnos agrupados por día.
 // Solo lectura: editar/eliminar un turno todavía no tiene acción de servidor.
 export default async function TurnosPage() {
-  const usuario = await requireUser();
+  await requireUser();
   const supabase = await createClient();
-  const turnos = await turnosNucleo.listarProximos(supabase, usuario.id, 50);
+  const activo = await obtenerPerfilActivo();
+  const turnos = await turnosNucleo.listarProximos(supabase, activo.id, 50);
 
   const porFecha = new Map<string, Turno[]>();
   for (const t of turnos) {
@@ -23,7 +26,8 @@ export default async function TurnosPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Mi salud" title="Mis turnos" />
+      <TopBar eyebrow="Mi salud" title={activo.esPropio ? "Mis turnos" : `Turnos de ${activo.nombre.split(" ")[0]}`} />
+      <BannerPerfil perfil={activo} />
 
       {turnos.length === 0 && (
         <div className="flex flex-col items-center gap-2 rounded-[20px] bg-card px-5 pb-[22px] pt-[26px] text-center shadow-card">
@@ -70,6 +74,7 @@ export default async function TurnosPage() {
         </section>
       ))}
 
+      {activo.rol === "editar" && (
       <Link
         href="/app/agregar-turno"
         className="flex items-center justify-center gap-2 rounded-full bg-primary py-[15px] font-heading text-sm font-extrabold text-primary-foreground shadow-[0_3px_10px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
@@ -77,6 +82,7 @@ export default async function TurnosPage() {
         <VitaIcon name="plus" size={16} strokeWidth={2.6} />
         Agregar turno
       </Link>
+      )}
     </div>
   );
 }

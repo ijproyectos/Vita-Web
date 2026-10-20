@@ -5,10 +5,21 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
+import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
 
 // Resultado — nunca lanza (mismo criterio que el resto del repo,
 // EstadoAccion en rutina/actions.ts).
 export type ResultadoEdicion = { ok: true } | { ok: false; message: string };
+
+// Familia (021): se edita el PERFIL ACTIVO (propio o de alguien que cuido con
+// permiso "editar"). requireUser y la resolución del perfil van FUERA del try:
+// requireUser redirige con una excepción que el catch no debe tragarse.
+async function destinoEditable(): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  await requireUser();
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return destino;
+  return { ok: true, id: destino.perfil.id };
+}
 
 // Todo el form de "Datos personales"/"Medidas"/"Cobertura médica"/
 // "Contacto de emergencia" se guarda de una — reemplaza el guardado
@@ -35,8 +46,9 @@ function numeroOnull(valor: string): number | null {
 }
 
 export async function actualizarPerfilCompletoAction(datos: DatosPerfilCompleto): Promise<ResultadoEdicion> {
+  const destino = await destinoEditable();
+  if (!destino.ok) return destino;
   try {
-    const usuario = await requireUser();
     const supabase = await createClient();
 
     const cambios: CambiosPerfil = {
@@ -52,7 +64,7 @@ export async function actualizarPerfilCompletoAction(datos: DatosPerfilCompleto)
       contacto_emergencia_telefono: datos.contactoEmergenciaTelefono.trim() || null,
     };
 
-    await perfilNucleo.actualizarPerfil(supabase, usuario.id, cambios);
+    await perfilNucleo.actualizarPerfil(supabase, destino.id, cambios);
     revalidatePath("/app/resumen-salud");
     revalidatePath("/app");
     revalidatePath("/app/mi-salud");
@@ -67,10 +79,11 @@ export async function agregarCondicionAction(
   tipo: "permanente" | "temporal",
   desde: string
 ): Promise<ResultadoEdicion> {
+  const destino = await destinoEditable();
+  if (!destino.ok) return destino;
   try {
-    const usuario = await requireUser();
     const supabase = await createClient();
-    await perfilNucleo.agregarCondicion(supabase, usuario.id, { label, tipo, desde });
+    await perfilNucleo.agregarCondicion(supabase, destino.id, { label, tipo, desde });
     revalidatePath("/app/resumen-salud");
     revalidatePath("/app");
     revalidatePath("/app/mi-salud");
@@ -81,10 +94,11 @@ export async function agregarCondicionAction(
 }
 
 export async function quitarCondicionAction(label: string): Promise<ResultadoEdicion> {
+  const destino = await destinoEditable();
+  if (!destino.ok) return destino;
   try {
-    const usuario = await requireUser();
     const supabase = await createClient();
-    await perfilNucleo.quitarCondicion(supabase, usuario.id, label);
+    await perfilNucleo.quitarCondicion(supabase, destino.id, label);
     revalidatePath("/app/resumen-salud");
     revalidatePath("/app");
     revalidatePath("/app/mi-salud");
@@ -95,10 +109,11 @@ export async function quitarCondicionAction(label: string): Promise<ResultadoEdi
 }
 
 export async function agregarAlergiaAction(alergia: string): Promise<ResultadoEdicion> {
+  const destino = await destinoEditable();
+  if (!destino.ok) return destino;
   try {
-    const usuario = await requireUser();
     const supabase = await createClient();
-    await perfilNucleo.agregarAlergia(supabase, usuario.id, alergia);
+    await perfilNucleo.agregarAlergia(supabase, destino.id, alergia);
     revalidatePath("/app/resumen-salud");
     revalidatePath("/app");
     revalidatePath("/app/mi-salud");
@@ -109,10 +124,11 @@ export async function agregarAlergiaAction(alergia: string): Promise<ResultadoEd
 }
 
 export async function quitarAlergiaAction(alergia: string): Promise<ResultadoEdicion> {
+  const destino = await destinoEditable();
+  if (!destino.ok) return destino;
   try {
-    const usuario = await requireUser();
     const supabase = await createClient();
-    await perfilNucleo.quitarAlergia(supabase, usuario.id, alergia);
+    await perfilNucleo.quitarAlergia(supabase, destino.id, alergia);
     revalidatePath("/app/resumen-salud");
     revalidatePath("/app");
     revalidatePath("/app/mi-salud");

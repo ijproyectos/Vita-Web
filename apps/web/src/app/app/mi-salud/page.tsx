@@ -9,6 +9,8 @@ import { diaYMes } from "@/lib/rutina/formato";
 import { TIPO_PDF } from "@/lib/estudios/tipos";
 import { cn } from "@/lib/utils";
 import { EliminarEstudioButton } from "./eliminar-estudio-button";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { CLASES_COLOR } from "@/lib/familia/colores";
 
 type Filtro = "todo" | "estudios" | "consultas" | "mediciones";
 
@@ -25,26 +27,32 @@ function filtroDe(valor: string | string[] | undefined): Filtro {
 }
 
 export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
-  const usuario = await requireUser();
+  await requireUser();
   const supabase = await createClient();
   const filtro = filtroDe((await props.searchParams)?.f);
+  // Familia: Mi Salud muestra la salud del perfil activo.
+  const activo = await obtenerPerfilActivo();
+  const puedeEditar = activo.rol === "editar";
+  const color = CLASES_COLOR[activo.color];
   const [perfil, estudios, inventarios] = await Promise.all([
-    perfilNucleo.obtenerPerfil(supabase, usuario.id),
-    estudiosNucleo.listar(supabase, usuario.id),
-    inventarioNucleo.listarSeguro(supabase, usuario.id),
+    perfilNucleo.obtenerPerfil(supabase, activo.id),
+    estudiosNucleo.listar(supabase, activo.id),
+    inventarioNucleo.listarSeguro(supabase, activo.id),
   ]);
   const pocoStock = inventarioNucleo.filtrarStockBajo(inventarios).length;
   const condiciones = perfil?.condiciones ?? [];
   const alergias = perfil?.alergias ?? [];
-  const nombre = perfil?.nombre?.trim() || "Vos";
+  const nombre = perfil?.nombre?.trim() || activo.nombre;
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <div className="mt-1.5 flex items-start justify-between">
         <div>
           <div className="eyebrow text-primary">Salud de</div>
-          <h1 className="mt-[5px] font-heading text-[28px] font-extrabold tracking-[-0.04em] text-teal-deep">{nombre}</h1>
+          <h1 className={`mt-[5px] font-heading text-[28px] font-extrabold tracking-[-0.04em] ${color.tinta}`}>{nombre}</h1>
+          {!puedeEditar && <div className="mt-1 text-[12px] font-semibold text-subtle">Solo ver: no podés cambiar nada.</div>}
         </div>
+        {puedeEditar && (
         <Link
           href="/app/mi-salud/agregar-estudio"
           aria-label="Agregar un estudio"
@@ -52,13 +60,16 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
         >
           <VitaIcon name="plus" size={20} strokeWidth={2} />
         </Link>
+        )}
       </div>
 
       {/* Mi estado — colapsable (details nativo: sin JS ni estado de cliente) */}
       <details className="group rounded-[20px] bg-card shadow-card">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-[18px] [&::-webkit-details-marker]:hidden">
           <div>
-            <div className="font-heading text-[16.5px] font-extrabold tracking-[-0.02em]">Mi estado</div>
+            <div className="font-heading text-[16.5px] font-extrabold tracking-[-0.02em]">
+              {activo.esPropio ? "Mi estado" : "Su estado"}
+            </div>
             <div className="mt-0.5 text-[11.5px] font-medium text-subtle">
               {condiciones.length} {condiciones.length === 1 ? "condición" : "condiciones"} · {alergias.length}{" "}
               {alergias.length === 1 ? "alergia" : "alergias"}
@@ -100,7 +111,7 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
           </div>
           <div className="mt-3 flex justify-end">
             <Link href="/app/resumen-salud" className="flex items-center gap-0.5 text-[13px] font-bold text-teal-deep">
-              Editar
+              {puedeEditar ? "Editar" : "Ver todo"}
               <VitaIcon name="chevron-right" size={15} strokeWidth={2.4} />
             </Link>
           </div>
@@ -121,7 +132,9 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
           <VitaIcon name="pill" size={20} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">Mis pastillas</div>
+          <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">
+            {activo.esPropio ? "Mis pastillas" : "Sus pastillas"}
+          </div>
           <div className="mt-0.5 text-[11.5px] font-medium text-subtle">
             {pocoStock > 0
               ? `${pocoStock} ${pocoStock === 1 ? "medicamento con poco stock" : "medicamentos con poco stock"}`
@@ -178,12 +191,14 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
               <div className="max-w-[290px] text-[12.5px] font-medium leading-[1.45] text-subtle text-balance">
                 Sacale una foto o subí el PDF de un estudio y vita completa los datos por vos.
               </div>
+              {puedeEditar && (
               <Link
                 href="/app/mi-salud/agregar-estudio"
                 className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 font-heading text-[13px] font-extrabold text-primary-foreground"
               >
                 <VitaIcon name="plus" size={14} strokeWidth={2.4} /> Agregar estudio
               </Link>
+              )}
             </div>
           ) : (
             <ul className="flex flex-col gap-2.5">
@@ -231,7 +246,7 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
                         </div>
                       </div>
                     </Link>
-                    <EliminarEstudioButton estudioId={e.id} nombre={e.tipo ?? "este estudio"} />
+                    {puedeEditar && <EliminarEstudioButton estudioId={e.id} nombre={e.tipo ?? "este estudio"} />}
                   </li>
                 );
               })}

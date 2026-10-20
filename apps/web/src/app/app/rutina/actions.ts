@@ -8,15 +8,36 @@ import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { PASTILLAS_POR_TOMA_MAXIMO, STOCK_MAXIMO } from "@/lib/inventario/tipos";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
+import { MENSAJE_SOLO_LECTURA, perfilActivoEditable, rolSobre } from "@/lib/familia/perfil-activo";
 
 // Compartidas entre Home y Rutina — ambas pantallas muestran y togglean
 // los mismos medicamentos/turnos de hoy.
+//
+// Familia (021): las altas escriben sobre el PERFIL ACTIVO; las acciones
+// sobre una fila existente (marcar toma, borrar) escriben sobre el DUEÑO de
+// esa fila (Modo simple marca siempre lo propio aunque el perfil activo sea
+// otro). En ambos casos un permiso 'ver' devuelve un error amable; la RLS
+// (puede_editar_de) es la autoridad final.
+
+/** Dueño del medicamento + permiso de escritura, o mensaje de error. */
+async function duenioEditable(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  medicamentoId: string
+): Promise<{ ok: true; usuarioId: string } | { ok: false; message: string }> {
+  const duenio = await medicamentos.duenioDeMedicamento(supabase, medicamentoId);
+  if (!duenio) return { ok: false, message: "No encontramos ese medicamento." };
+  const rol = await rolSobre(duenio);
+  if (rol !== "editar") return { ok: false, message: MENSAJE_SOLO_LECTURA };
+  return { ok: true, usuarioId: duenio };
+}
 
 export async function marcarTomadoAction(medicamentoId: string, tomado: boolean): Promise<EstadoAccion> {
-  const usuario = await requireUser();
+  await requireUser();
   const supabase = await createClient();
   try {
-    await medicamentos.marcarTomado(supabase, usuario.id, medicamentoId, tomado);
+    const objetivo = await duenioEditable(supabase, medicamentoId);
+    if (!objetivo.ok) return { status: "error", message: objetivo.message };
+    await medicamentos.marcarTomado(supabase, objetivo.usuarioId, medicamentoId, tomado);
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "No se pudo registrar la toma." };
   }
@@ -31,10 +52,12 @@ export async function marcarTomadoAction(medicamentoId: string, tomado: boolean)
 // Rutina; el hallazgo del review lo marcó como regresión real, no un
 // recorte de alcance deliberado.
 export async function marcarTodosTomadosAction(): Promise<EstadoAccion> {
-  const usuario = await requireUser();
+  await requireUser();
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
   try {
-    await medicamentos.marcarTodosTomados(supabase, usuario.id);
+    await medicamentos.marcarTodosTomados(supabase, destino.perfil.id);
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "No se pudo marcar todo como tomado." };
   }
@@ -49,10 +72,12 @@ export async function marcarTodosTomadosAction(): Promise<EstadoAccion> {
 export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
 
 export async function eliminarMedicamentoAction(medicamentoId: string): Promise<EstadoAccion> {
-  const usuario = await requireUser();
+  await requireUser();
   try {
     const supabase = await createClient();
-    await medicamentos.eliminarHorario(supabase, usuario.id, medicamentoId);
+    const objetivo = await duenioEditable(supabase, medicamentoId);
+    if (!objetivo.ok) return { status: "error", message: objetivo.message };
+    await medicamentos.eliminarHorario(supabase, objetivo.usuarioId, medicamentoId);
   } catch {
     return { status: "error", message: "No se pudo eliminar el medicamento. Probá de nuevo." };
   }
@@ -65,7 +90,10 @@ export async function crearMedicamentoAction(
   _prev: EstadoAccion,
   formData: FormData
 ): Promise<EstadoAccion> {
-  const usuario = await requireUser();
+  await requireUser();
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "error", message: destino.message };
+  const usuarioId = destino.perfil.id;
   const supabase = await createClient();
 
   const nombre = String(formData.get("nombre") ?? "").trim();
@@ -103,7 +131,7 @@ export async function crearMedicamentoAction(
     porToma <= PASTILLAS_POR_TOMA_MAXIMO;
 
   try {
-    const filas = await medicamentos.agregarMultiMomento(supabase, usuario.id, {
+    const filas = await medicamentos.agregarMultiMomento(supabase, usuarioId, {
       nombre,
       dosis,
       unidad,
@@ -118,7 +146,7 @@ export async function crearMedicamentoAction(
     // (p. ej. migración 014 sin aplicar) se puede volver a contar desde Mis pastillas.
     if (hayStock && filas[0]) {
       try {
-        await inventarioNucleo.guardar(supabase, usuario.id, {
+        await inventarioNucleo.guardar(supabase, usuarioId, {
           medicamentoId: filas[0].id,
           stock: stockInicial,
           pastillasPorToma: porToma,
@@ -141,7 +169,9 @@ export async function crearTurnoAction(
   _prev: EstadoAccion,
   formData: FormData
 ): Promise<EstadoAccion> {
-  const usuario = await requireUser();
+  await requireUser();
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
 
   const especialidad = String(formData.get("especialidad") ?? "").trim();
@@ -159,7 +189,7 @@ export async function crearTurnoAction(
   }
 
   try {
-    await turnosNucleo.agregar(supabase, usuario.id, {
+    await turnosNucleo.agregar(supabase, destino.perfil.id, {
       especialidad,
       profesional: profesional || null,
       lugar: lugar || null,

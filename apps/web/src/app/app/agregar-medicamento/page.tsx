@@ -1,4 +1,7 @@
 import { requireUser } from "@/lib/dal";
+import { redirect } from "next/navigation";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { TopBar } from "../top-bar";
 import { VitaShortcutButton } from "../vita-shortcut-button";
 import { FormularioAgregarMedicamento } from "./formulario";
@@ -9,6 +12,9 @@ function primero(v: string | string[] | undefined): string {
 
 export default async function AgregarMedicamentoPage(props: PageProps<"/app/agregar-medicamento">) {
   await requireUser();
+  // Familia: se carga para el perfil activo; con permiso "ver" no hay alta.
+  const activo = await obtenerPerfilActivo();
+  if (activo.rol !== "editar") redirect("/app");
 
   // Prellenado desde "Mis pastillas" (blister de un medicamento nuevo). Todo
   // es texto de la URL: se acota acá y el form/acción vuelven a validar.
@@ -21,8 +27,9 @@ export default async function AgregarMedicamentoPage(props: PageProps<"/app/agre
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
-      <TopBar eyebrow="Rutina" title="Agregar medicamento" accionDerecha={<VitaShortcutButton />} />
-      <VitaShortcutButton size="banner" />
+      <TopBar eyebrow="Rutina" title="Agregar medicamento" accionDerecha={activo.esPropio ? <VitaShortcutButton /> : undefined} />
+      {/* El chat con vita actúa sobre la cuenta logueada: para otra persona no se ofrece. */}
+      {activo.esPropio ? <VitaShortcutButton size="banner" /> : <BannerPerfil perfil={activo} accion="cargar" />}
       <FormularioAgregarMedicamento
         inicial={{ nombre, dosis, unidad, stockInicial: stock, pastillasPorToma: porToma }}
       />

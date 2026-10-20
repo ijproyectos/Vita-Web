@@ -13,25 +13,36 @@ import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorio
 import { contarNoLeidos } from "@/lib/notificaciones/avisos";
 import { fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
+import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { CLASES_COLOR } from "@/lib/familia/colores";
+import { SelectorPerfil } from "@/components/vita/selector-perfil";
+import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { TurnoCard, AgregarTurnoCard } from "./rutina/turno-card";
 
 export default async function HomePage() {
   const usuario = await requireUser();
   const supabase = await createClient();
+  // Familia: los datos son del perfil activo (propio o de alguien que cuido);
+  // los avisos y el nudge a vita son siempre de la cuenta logueada.
+  const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
+  const pid = activo.id;
+  const puedeEditar = activo.rol === "editar";
+  const color = CLASES_COLOR[activo.color];
 
   const [perfil, medsHoy, adherencia, turnosProximos, inventarios, noLeidos] = await Promise.all([
-    perfilNucleo.obtenerPerfil(supabase, usuario.id),
-    medicamentos.listarHoy(supabase, usuario.id),
-    medicamentos.calcularAdherencia(supabase, usuario.id),
-    turnosNucleo.listarProximos(supabase, usuario.id, 5),
-    inventarioNucleo.listarSeguro(supabase, usuario.id),
+    perfilNucleo.obtenerPerfil(supabase, pid),
+    medicamentos.listarHoy(supabase, pid),
+    medicamentos.calcularAdherencia(supabase, pid),
+    turnosNucleo.listarProximos(supabase, pid, 5),
+    inventarioNucleo.listarSeguro(supabase, pid),
     contarNoLeidos(supabase, usuario.id),
   ]);
 
-  const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy);
+  // Los recordatorios ("te recordó X") son para la persona logueada.
+  const recordatorios = activo.esPropio ? await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy) : [];
   const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
 
-  const nombre = perfil?.nombre?.split(" ")[0] ?? "Ahí vamos";
+  const nombre = perfil?.nombre?.split(" ")[0] ?? activo.nombre.split(" ")[0] ?? "Ahí vamos";
   // El punto de la campana es la cuenta de avisos sin leer del centro (/app/avisos).
   const hayAvisos = noLeidos > 0;
 
@@ -42,7 +53,7 @@ export default async function HomePage() {
   const siguiente = tomas.find((m) => !m.tomado);
   const textoSigue =
     tomas.length === 0
-      ? "No tenés medicamentos programados para hoy."
+      ? activo.esPropio ? "No tenés medicamentos programados para hoy." : `${nombre} no tiene medicamentos programados para hoy.`
       : siguiente
         ? `Sigue: ${siguiente.nombre} a las ${siguiente.hora_programada.slice(0, 5)}`
         : "Listo por hoy. No queda nada pendiente.";
@@ -55,17 +66,20 @@ export default async function HomePage() {
       <div className="mt-1.5 flex items-start justify-between">
         <div>
           <div className="eyebrow text-subtle">{saludoEnAR()},</div>
-          <div className="mt-[5px] flex items-center gap-[9px]">
-            <h1 className="font-heading text-[28px] font-extrabold tracking-[-0.04em] text-teal-deep">{nombre}</h1>
-            {/* TODO(fase familia): acá va el selector de perfiles. Hoy es solo
-                la persona actual, así que el chevron es decorativo. */}
+          <SelectorPerfil
+            opciones={opciones}
+            activoId={pid}
+            ariaLabel={`Perfil de ${nombre}. Cambiar de perfil`}
+            className="mt-[5px] flex items-center gap-[9px] text-left"
+          >
+            <span className={`font-heading text-[28px] font-extrabold tracking-[-0.04em] ${color.tinta}`}>{nombre}</span>
             <span
               aria-hidden
-              className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-persona-1-tint text-persona-1"
+              className={`flex size-[26px] shrink-0 items-center justify-center rounded-full ${color.fondo} ${color.texto}`}
             >
               <VitaIcon name="chevron-down" size={14} strokeWidth={2.8} />
             </span>
-          </div>
+          </SelectorPerfil>
         </div>
         <Link
           href="/app/avisos"
@@ -82,14 +96,14 @@ export default async function HomePage() {
       {/* Tarjeta de perfil */}
       <Link href="/app/resumen-salud" className="flex items-center justify-between rounded-[20px] bg-card p-[18px] shadow-card">
         <div className="flex items-center gap-3">
-          <div className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-persona-1-tint font-heading text-xl font-extrabold text-persona-1-deep">
-            {(perfil?.nombre ?? "?").charAt(0).toUpperCase()}
-          </div>
+          <AvatarPersona nombre={perfil?.nombre ?? activo.nombre} color={activo.color} size={52} />
           <div className="min-w-0">
             <div className="truncate font-heading text-[16.5px] font-extrabold tracking-[-0.02em]">
-              {perfil?.nombre ?? "Tu perfil"}
+              {perfil?.nombre ?? activo.nombre}
             </div>
-            <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Resumen de salud</div>
+            <div className="mt-0.5 text-[11.5px] font-medium text-subtle">
+              {activo.esPropio ? "Resumen de salud" : puedeEditar ? "A tu cargo · Resumen de salud" : "Solo ver · Resumen de salud"}
+            </div>
           </div>
         </div>
         <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
@@ -137,7 +151,7 @@ export default async function HomePage() {
         </div>
         {adherencia.rachaDias > 0 && (
           <div className="mt-1.5 flex items-center gap-1 text-[12px] font-medium text-primary-foreground/80">
-            <VitaIcon name="flame" size={12} /> Llevás {adherencia.rachaDias}{" "}
+            <VitaIcon name="flame" size={12} /> {activo.esPropio ? "Llevás" : "Lleva"} {adherencia.rachaDias}{" "}
             {adherencia.rachaDias === 1 ? "día" : "días"} sin saltarte ninguno
           </div>
         )}
@@ -157,11 +171,11 @@ export default async function HomePage() {
           {turnosProximos.map((t, i) => (
             <TurnoCard key={t.id} turno={t} indice={i} />
           ))}
-          <AgregarTurnoCard />
+          {puedeEditar && <AgregarTurnoCard />}
         </div>
       </div>
 
-      <NudgeVita />
+      {activo.esPropio && <NudgeVita />}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/dal";
 import * as estudiosNucleo from "@/lib/estudios/nucleo";
 import { extraerDatosEstudio } from "@/lib/estudios/extraer";
 import { TAMANIO_MAXIMO_BYTES } from "@/lib/estudios/tipos";
+import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
 
 export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
 
@@ -18,6 +19,11 @@ export type EstadoAccion = { status: "idle" } | { status: "success" } | { status
 // datos a mano después si hace falta.
 export async function subirEstudioAction(_prev: EstadoAccion, formData: FormData): Promise<EstadoAccion> {
   const usuario = await requireUser();
+  // Familia: el estudio es del perfil activo (carpeta `{id}/` del bucket); el
+  // límite diario de IA lo consume la cuenta logueada, que es quien lo sube.
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "error", message: destino.message };
+  const pid = destino.perfil.id;
   const supabase = await createClient();
 
   const archivo = formData.get("archivo");
@@ -29,13 +35,13 @@ export async function subirEstudioAction(_prev: EstadoAccion, formData: FormData
   }
 
   try {
-    const { path, tipo } = await estudiosNucleo.subirArchivo(supabase, usuario.id, archivo);
+    const { path, tipo } = await estudiosNucleo.subirArchivo(supabase, pid, archivo);
 
     const bytes = await archivo.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
     const resultado = await extraerDatosEstudio(usuario.id, base64, tipo);
 
-    await estudiosNucleo.agregar(supabase, usuario.id, {
+    await estudiosNucleo.agregar(supabase, pid, {
       archivoPath: path,
       archivoTipo: tipo,
       extraccion: resultado.ok ? resultado.datos : null,
@@ -57,10 +63,12 @@ export async function subirEstudioAction(_prev: EstadoAccion, formData: FormData
 export async function eliminarEstudioAction(estudioId: string): Promise<EstadoAccion> {
   // requireUser fuera del try: su redirect("/login") lanza NEXT_REDIRECT y
   // el catch lo convertiría en un mensaje de error en vez de redirigir.
-  const usuario = await requireUser();
+  await requireUser();
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "error", message: destino.message };
   try {
     const supabase = await createClient();
-    await estudiosNucleo.eliminar(supabase, usuario.id, estudioId);
+    await estudiosNucleo.eliminar(supabase, destino.perfil.id, estudioId);
     revalidatePath("/app/mi-salud");
     return { status: "success" };
   } catch (e) {

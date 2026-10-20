@@ -73,6 +73,8 @@ export async function POST(request: Request) {
     if (!propia) return NextResponse.json({ error: "Dosis no encontrada." }, { status: 404 });
 
     if (accion === "tomada") {
+      // marcarTomado devuelve void y LANZA ante cualquier error de DB: el catch
+      // de abajo responde 500, así el service worker nunca muestra "Listo".
       await marcarTomado(supabase, user.id, medicamentoId, true);
     } else {
       const r = await posponerDosis(supabase, user.id, [medicamentoId]);

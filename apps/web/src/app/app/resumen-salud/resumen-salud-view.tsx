@@ -10,6 +10,8 @@ import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
 import { GENEROS, GRUPOS_SANGUINEOS, OTRA_PREPAGA, PREPAGAS_ARGENTINA } from "@/lib/perfil/opciones";
 import type { Perfil } from "@/lib/perfil/tipos";
+import type { ColorPerfil } from "@/lib/familia/tipos";
+import { AvatarPersona } from "@/components/vita/avatar-persona";
 import {
   actualizarPerfilCompletoAction,
   agregarAlergiaAction,
@@ -19,7 +21,19 @@ import {
   type DatosPerfilCompleto,
 } from "./actions";
 
-export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: string }) {
+export function ResumenSaludView({
+  perfil,
+  email,
+  color,
+  esPropio,
+  soloLectura,
+}: {
+  perfil: Perfil;
+  email: string;
+  color: ColorPerfil;
+  esPropio: boolean;
+  soloLectura: boolean;
+}) {
   const { abrir } = useChatOverlay();
 
   return (
@@ -27,9 +41,7 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
       {/* Hero */}
       <div className="rounded-[20px] bg-card p-[18px] shadow-card">
         <div className="flex items-center gap-3.5">
-          <div className="flex size-[60px] shrink-0 items-center justify-center rounded-full bg-persona-1-tint font-heading text-2xl font-extrabold text-persona-1-deep">
-            {(perfil.nombre ?? "?").charAt(0).toUpperCase()}
-          </div>
+          <AvatarPersona nombre={perfil.nombre ?? "?"} color={color} size={60} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-heading text-[18px] font-extrabold tracking-[-0.02em]">{perfil.nombre ?? "Sin nombre"}</div>
             <div className="mt-0.5 text-[11.5px] font-medium leading-snug text-subtle">
@@ -45,7 +57,9 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
         </div>
       </div>
 
-      {/* vita shortcut */}
+      {/* vita shortcut — el chat actúa sobre la cuenta logueada, así que solo
+          se ofrece en el propio perfil (Familia). */}
+      {esPropio && (
       <button
         type="button"
         onClick={() => abrir("Contame qué cambió de tu perfil de salud y lo actualizo.")}
@@ -58,11 +72,15 @@ export function ResumenSaludView({ perfil, email }: { perfil: Perfil; email: str
         </div>
         <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
       </button>
+      )}
 
-      <FormularioPerfil perfil={perfil} email={email} />
+      {/* Permiso "ver": todo el formulario queda deshabilitado (fieldset nativo). */}
+      <fieldset disabled={soloLectura} className="contents">
+        <FormularioPerfil perfil={perfil} email={email} />
 
-      <Condiciones condiciones={perfil.condiciones} />
-      <Alergias alergias={perfil.alergias} />
+        <Condiciones condiciones={perfil.condiciones} />
+        <Alergias alergias={perfil.alergias} />
+      </fieldset>
     </div>
   );
 }

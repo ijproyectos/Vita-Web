@@ -6,13 +6,16 @@ import { TIPO_PDF } from "@/lib/estudios/tipos";
 import { formatoFechaCorta } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../../../top-bar";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { BannerPerfil } from "@/components/vita/banner-perfil";
 
 export default async function EstudioDetallePage(props: PageProps<"/app/mi-salud/estudios/[id]">) {
-  const usuario = await requireUser();
+  await requireUser();
   const supabase = await createClient();
   const { id } = await props.params;
+  const activo = await obtenerPerfilActivo();
 
-  const estudio = await estudiosNucleo.obtener(supabase, usuario.id, id).catch(() => null);
+  const estudio = await estudiosNucleo.obtener(supabase, activo.id, id).catch(() => null);
   if (!estudio) notFound();
 
   const esPdf = estudio.archivo_tipo === TIPO_PDF;
@@ -20,6 +23,7 @@ export default async function EstudioDetallePage(props: PageProps<"/app/mi-salud
   return (
     <div className="flex flex-col gap-4.5 px-4 pt-2">
       <TopBar eyebrow="Estudio" title={estudio.tipo ?? "Estudio sin identificar"} />
+      <BannerPerfil perfil={activo} />
 
       <div className="rounded-[20px] bg-card p-4.5 shadow-card">
         <div className="text-xs text-muted-foreground">

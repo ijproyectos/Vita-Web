@@ -85,6 +85,20 @@ export default async function CuidarPage() {
         </div>
       )}
 
+      <Link
+        href="/app/familia"
+        className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-card"
+      >
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+          <VitaIcon name="users" size={19} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-heading text-[15px] font-bold">Familia y permisos</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">Crear perfiles, ver su rutina y cambiar permisos</div>
+        </div>
+        <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
+      </Link>
+
       <form action="/auth/signout" method="post" className="flex justify-center py-4">
         <button type="submit" className="text-sm font-semibold text-destructive">
           Cerrar sesión

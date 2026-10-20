@@ -11,6 +11,7 @@ import {
   claveMedicamento,
   separarDosis,
 } from "@/lib/inventario/tipos";
+import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
 
 export type EstadoConteo =
   | { status: "idle" }
@@ -73,7 +74,11 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
 //    agregar medicamento prellenado y con el stock contado, que se guarda recién
 //    cuando el medicamento exista (así no quedan inventarios huérfanos).
 export async function guardarInventarioAction(_prev: EstadoGuardado, formData: FormData): Promise<EstadoGuardado> {
-  const usuario = await requireUser(); // fuera del try, ver contarFotoAction
+  await requireUser(); // fuera del try, ver contarFotoAction
+  // Familia: el stock es del perfil activo (permiso "editar").
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "error", message: destino.message };
+  const pid = destino.perfil.id;
   try {
     const supabase = await createClient();
 
@@ -98,7 +103,7 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
     if (!medicamentoId) {
       if (!nombre) return { status: "error", message: "Escribí el nombre del medicamento." };
 
-      const grupos = await inventarioNucleo.listarGrupos(supabase, usuario.id);
+      const grupos = await inventarioNucleo.listarGrupos(supabase, pid);
       const clave = claveMedicamento(nombre, dosisValor);
       let coincidencia = grupos.find((g) => g.clave === clave);
       if (!coincidencia && !dosisValor) {
@@ -120,7 +125,7 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
       medicamentoId = coincidencia.representanteId;
     }
 
-    await inventarioNucleo.guardar(supabase, usuario.id, { medicamentoId, stock, pastillasPorToma: porToma });
+    await inventarioNucleo.guardar(supabase, pid, { medicamentoId, stock, pastillasPorToma: porToma });
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "No se pudo guardar el stock." };
   }

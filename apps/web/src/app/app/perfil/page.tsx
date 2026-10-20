@@ -111,6 +111,13 @@ export default async function PerfilPage() {
       <Grupo titulo="Preferencias">
         <FilaNav
           icon="users"
+          tono="violet"
+          label="Familia"
+          sub="Perfiles a cargo, quién te cuida y sus permisos"
+          href="/app/familia"
+        />
+        <FilaNav
+          icon="users"
           label="Mis cuidadores"
           sub="Invitá a alguien para que vea tu adherencia"
           href="/app/perfil/cuidadores"

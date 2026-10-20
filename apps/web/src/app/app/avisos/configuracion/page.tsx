@@ -2,8 +2,8 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { obtenerPreferencias } from "@/lib/notificaciones/avisos";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
-import { Grupo } from "../../perfil/filas";
-import { TopBar } from "../../top-bar";
+import { Grupo } from "@/app/app/perfil/filas";
+import { TopBar } from "@/app/app/top-bar";
 import { FormularioConfigAvisos } from "./formulario";
 
 // V7 "avisos-cfg": qué avisos recibir, cuánto esperar antes de avisarle a quien
