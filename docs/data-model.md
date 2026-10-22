@@ -25,6 +25,9 @@ Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con 
 | contacto_emergencia_nombre | text | |
 | contacto_emergencia_telefono | text | |
 | onboarding_completado_at | timestamptz | gatea si `/app/*` redirige a `/onboarding/nombre` |
+| apellido | text | `025_perfil_campos.sql` (aplicada 2026-10-22) — "Apellido" de Editar perfil, máx. 80 |
+| telefono | text | `025` — "Teléfono" de Editar perfil, máx. 40 |
+| contacto_emergencia_relacion | text | `025` — "Es tu…" (Hermana, Pareja, Mamá…), máx. 40 |
 | color | text | `021_familia.sql` — clave de paleta (`teal`/`violeta`/`ambar`/`rosa`/`azul`, check), la UI la mapea a tokens `--persona-<clave>` (`lib/familia/colores.ts`). null = color por defecto |
 
 **Familia (021)**: además de las policies `_self`, `perfiles_select_cuidador` (`es_cuidador_de(id)`, cualquier rol) y `perfiles_update_cuidador` (`puede_editar_de(id)`). Sin policy de INSERT para el cuidador (un perfil ajeno nace solo desde el admin client — perfil gestionado — o en el login de su dueño), por eso `lib/perfil/nucleo.ts` hace update-primero y upsert solo como fallback. El trigger `perfiles_proteger_columnas_ajenas` rechaza (`columna_no_editable_por_cuidador`) que alguien que no es el dueño cambie `id`/`uso_app`/`onboarding_completado_at`/`avatar_url`/`created_at`; service_role no se restringe.
@@ -50,6 +53,8 @@ Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con 
 El form "Agregar medicamento" permite elegir varios momentos del día a la vez — al guardar se inserta **una fila por momento** (mismo dato compartido, hora default por momento vía `HORA_POR_MOMENTO` en `lib/medicamentos/tipos.ts`).
 
 Columna agregada por la migración 014 (aplicada 2026-10-11): `inventario_id uuid null references inventario_pastillas(id) on delete set null` — el stock compartido por todas las filas del mismo medicamento (ver `inventario_pastillas`).
+
+Columnas agregadas por la migración 023 (`023_rutina_detalles.sql`, aplicada 2026-10-22): `indicado_por text null` ("Indicado por…" en la hoja de detalle de la Rutina) y `fecha_inicio date null` ("Desde"; si es null se usa `created_at`). La UI oculta ambos datos mientras no existan.
 
 ## `inventario_pastillas`
 
@@ -105,6 +110,60 @@ unique `(medicamento_id, fecha)`.
 | created_at | timestamptz | |
 
 Momento del día (para agrupar en la Rutina) se deriva de `hora` con `momentoDelDia()` (`lib/rutina/momento.ts`), no se guarda aparte. "Próximo"/pasado se deriva de `fecha`, sin columna de estado.
+
+Columnas agregadas por la migración 023 (aplicada 2026-10-22): `direccion text null` (+ "Cómo llegar"), `telefono text null` (+ "Llamar al consultorio") y `llevar jsonb not null default '[]'` — checklist "Qué llevar" como `[{"t": "DNI", "ok": false}]` (máx. 30 ítems, `ok` = ya lo preparó). `lib/turnos/nucleo.ts` degrada (reintenta sin estas columnas) si la migración falta.
+
+## `mediciones`
+
+"Monitoreo activo" de Mi Salud (`022_mediciones.sql`, aplicada 2026-10-22). Una fila = una medición puntual.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| tipo | text | `presion`, `glucemia`, `peso`, `pulso`, `saturacion`, `temperatura` (check) |
+| valor | numeric | presión: sistólica (mmHg); glucemia mg/dL; peso kg; pulso lpm; saturación %; temperatura °C |
+| valor_secundario | numeric | solo `presion`: diastólica (obligatoria y menor que `valor`); null en el resto |
+| pulso | numeric | solo `presion`, opcional (lpm) |
+| contexto | text | solo `glucemia`, opcional: `ayunas`, `despues_comer`, `otro` |
+| medido_at | timestamptz | default `now()`; el momento del día se deriva de la hora AR, sin columna |
+| notas | text | opcional, máx. 500 caracteres |
+| created_at | timestamptz | |
+
+Los CHECK por tipo (`mediciones_valor_rango`, etc.) son de **plausibilidad** (descartan errores de tipeo), no rangos clínicos. Índice `(usuario_id, tipo, medido_at desc)`. Los rangos de referencia que muestra la UI (`lib/mediciones/tipos.ts`) viven en código, son orientativos y no se guardan.
+
+**RLS**: dueño `all` (`mediciones_all_self`); cuidador con vínculo aceptado `select` vía `es_cuidador_de(usuario_id)`; insert/update/delete vía `puede_editar_de(usuario_id)` (rol `editar`). Tests: `supabase/tests/mediciones.sql`.
+
+## `recetas`
+
+"Nueva receta · retirar en farmacia" de Rutina → Próximos (`023_rutina_detalles.sql`, aplicada 2026-10-22).
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| nombre | text | 1–120 caracteres (medicamento) |
+| detalle | text | opcional, máx. 200 |
+| fecha | date | día en que hay que retirarla |
+| retirada | boolean | default false |
+| created_at | timestamptz | |
+
+**RLS**: igual que `mediciones` (dueño `all`; cuidador `select` con `es_cuidador_de`; escritura con `puede_editar_de`). Hoy la UI solo las **lista** (no hay pantalla de alta; ver pendientes en el reporte del paquete 2). Tests: `supabase/tests/rutina-detalles.sql`.
+
+## `consultas` / `vacunas`
+
+Filas del feed "Registros" de Mi Salud (`024_consultas_vacunas.sql`, aplicada 2026-10-22). La UI solo las **lista** (el diseño no tiene pantalla de alta; las puede cargar vita desde el chat más adelante).
+
+| tabla | columnas |
+|---|---|
+| `consultas` | id, usuario_id (auth.users, cascade), fecha date, especialidad (1–120), profesional?, lugar?, resumen? (máx. 500), origen (`manual` \| `vita`), created_at |
+| `vacunas` | id, usuario_id, nombre (1–120), fecha date, dosis?, lugar?, origen (`manual` \| `vita`), created_at |
+
+`origen` alimenta la etiqueta MANUAL / VITA del feed (estudios = MANUAL, mediciones = VITA; ver `lib/registros/nucleo.ts`). **RLS**: igual que `mediciones`. Tests: `supabase/tests/consultas-vacunas.sql`.
+
+`estudios.valores` (jsonb libre, sin migración) admite por valor, además de `{nombre, valor}`: `unidad`, `rango_min`, `rango_max`, `rango_texto` y `estado` (`normal` \| `alto` \| `bajo`), solo si la extracción por IA los leyó del documento; los estudios viejos sin esos campos se siguen mostrando.
+
+**Migración 026 (`026_estudios_lugar.sql`, aplicada 2026-10-22)**: `estudios.lugar text` — lugar del estudio, que el usuario confirma en el paso de revisión del alta (nombre / fecha / lugar). Sin la migración el estudio se guarda igual y el campo "Lugar" no se muestra. Tests: `supabase/tests/estudios-lugar.sql`.
 
 ## `sesiones_chat` / `mensajes_chat`
 
@@ -187,6 +246,19 @@ RPCs nuevas (`returns table` con columnas calificadas): `listar_familia()` (pers
 
 **Perfil gestionado** (persona sin celular): cuenta real de `auth.users` con email placeholder `gestionado-<uuid>@usuarios.soyvita.com.ar`, creada por `crearPerfilGestionado` (`lib/familia/nucleo.ts`, admin client) junto con su `perfiles` y un vínculo ya `aceptado` con `rol = 'editar'`. Más adelante entra desde su celular con un código de `codigos_acceso`. Reemplaza `perfiles_pendientes` para flujos nuevos (el camino viejo sigue funcionando).
 
+### Cuidadores de una persona (`027_cuidadores_de_persona.sql`)
+
+Hasta 021 solo la persona cuidada veía a sus cuidadores y solo ella cambiaba permisos o los revocaba; un cuidador no veía a los demás porque la RLS de `vinculos_cuidador` solo le muestra sus propias filas. 027 agrega RPCs `security definer` (search_path fijado, solo `authenticated`, columnas calificadas) con estas reglas:
+
+- **Ver** la lista: la propia persona o un cuidador `aceptado` de ella. Cualquier otro recibe vacío.
+- **Gestionar** (invitar, cambiar permiso, quitar): la propia persona, o un cuidador con `rol = 'editar'` (Admin) **solo si la persona es un perfil gestionado** (`auth.users.raw_app_meta_data.tipo = 'perfil_gestionado'`; app_metadata y no user_metadata, porque el cliente puede reescribir user_metadata). Sobre una persona con cuenta propia decide únicamente ella. Nadie cambia su propio permiso ni se quita a sí mismo por estas RPCs (para salir está `dejar_de_cuidar`).
+
+Columna nueva: `vinculos_cuidador.nombre_invitado text` (cómo el invitador llama al invitado; se muestra mientras la invitación está pendiente).
+
+Funciones: `es_perfil_gestionado(p_id)`, `puede_gestionar_cuidadores(p_elder)`, `listar_cuidadores_de(p_elder)` (aceptados + invitaciones pendientes vigentes; devuelve `vinculo_id, cuidador_id, nombre, rol, relacion, estado, es_yo, puede_gestionar` y, solo a quien gestiona, `email`, `token` de la pendiente, `expira_at`, `aceptado_at`), `invitar_cuidador(p_elder, p_email, p_nombre, p_relacion, p_rol)` (crea o reemite la pendiente al mismo mail; valida email/rol; rechaza si ya la cuida ese mail; devuelve `vinculo_id, token, expira_at`), `cambiar_rol_cuidador(p_vinculo_id, p_rol)` (misma firma que 021, ahora con las reglas de arriba y también sobre pendientes) y `quitar_cuidador(p_vinculo_id)` (revoca un aceptado o cancela un pendiente de OTRA persona). Tests: `supabase/tests/cuidadores-de-persona.sql`.
+
+Re-invitar a alguien quitado funciona: 027 recrea `idx_vinculo_unico` como `(elder_id, cuidador_id) where cuidador_id is not null and estado <> 'revocado'` (antes el vínculo revocado bloqueaba el claim), y agrega `idx_vinculo_invitacion_pendiente` (una sola invitación pendiente por persona y mail).
+
 ## `alertas_dosis`
 
 Log + dedupe de alertas de dosis vencida (una fila por `(medicamento_id, fecha)` evita reenvíos del cron). Ver `008_cuidadores.sql`. Sin policies propias — RLS habilitada sin ninguna policy, solo accesible vía `service_role` (cron route `app/api/cron/dosis-vencidas`).
@@ -243,10 +315,11 @@ Feed del centro de notificaciones (`/app/avisos`): una fila por aviso entregado 
 |---|---|---|
 | id | uuid PK | |
 | usuario_id | uuid | destinatario; references auth.users, on delete cascade |
-| tipo | text | `dosis`, `dosis_segundo`, `dosis_pospuesta`, `dosis_vencida_cuidador`, `dosis_resuelta_cuidador`, `recordatorio_familiar`, `turno_dia_antes`, `turno_2h`, `stock_bajo` |
+| tipo | text | `dosis`, `dosis_segundo`, `dosis_pospuesta`, `dosis_vencida_cuidador`, `dosis_resuelta_cuidador`, `recordatorio_familiar`, `turno_dia_antes`, `turno_2h`, `stock_bajo`, y (028) `resumen_dia_persona`, `turno_persona_dia_antes`, `stock_bajo_persona`, `persona_en_vita` |
 | titulo, cuerpo | text | |
 | url | text | ruta interna a abrir al tocar |
 | datos | jsonb | |
+| persona_id | uuid null | (028) persona cuidada a la que se refiere un aviso del feed de un cuidador; null = aviso propio. references auth.users, on delete cascade; índice `(usuario_id, persona_id, created_at desc)` |
 | leido_at | timestamptz | null = sin leer |
 | created_at | timestamptz | índice `(usuario_id, created_at desc)` |
 
@@ -260,9 +333,11 @@ Feed del centro de notificaciones (`/app/avisos`): una fila por aviso entregado 
 | silencio_desde, silencio_hasta | time | ambos null = sin silencio; pueden cruzar la medianoche (check: ambos o ninguno) |
 | espera_cuidador_min | int | 30 / 60 / 120 (default 30); minutos antes de avisar al cuidador |
 | recordatorio_dosis, aviso_turnos, stock_bajo | boolean | default true |
+| pendiente_persona, resumen_dia, stock_persona | boolean | (028) como CUIDADOR: avisarme si la persona no confirma / resumen 21:00 / stock bajo de la persona (solo Admin). Default true |
+| turnos_persona | boolean | (028) turno de la persona mañana. Default false |
 | updated_at | timestamptz | |
 
-**RLS**: owner-only (`for all`).
+**RLS**: owner-only (`for all`) + la 021 deja a un cuidador Admin editar la fila de la persona (la espera). Sin la 028 la app lee/escribe solo las columnas de la 020 y los avisos de familia quedan apagados.
 
 ## `posposiciones`
 
@@ -279,9 +354,24 @@ Feed del centro de notificaciones (`/app/avisos`): una fila por aviso entregado 
 
 **RLS**: select/delete owner-only; insert exige `usuario_id = auth.uid()` y que el medicamento sea propio.
 
+## `preferencias_modo_simple`
+
+(029) Cómo ve la PERSONA su pantalla de modo simple (`/app/modo-simple`); la configura ella o un cuidador Admin desde `/app/familia/[id]/modo-simple`. Sin fila = defaults del código (`lib/modo-simple/tipos.ts`).
+
+| columna | tipo | notas |
+|---|---|---|
+| usuario_id | uuid PK | la persona cuidada; references auth.users, on delete cascade |
+| ver_turnos, ver_mediciones, charlar, ayuda | boolean | default true: tarjeta de turnos, mediciones, "Hablar con Vita", botón rojo Ayuda |
+| voz, voz_lenta | boolean | default true / false: leerle los avisos y el botón Escuchar; voz más lenta (se aplica con `playbackRate`) |
+| posponer, posponer_min | boolean, int | default true / 15; "Más tarde" on/off y 15/30/60 min (los minutos viajan a `posposiciones.hasta`) |
+| llamar_nombre, llamar_telefono | text | a quién llama Ayuda; ambos null = su contacto de emergencia. Copia hecha por quien configura (ver el comentario de la migración) |
+| updated_at | timestamptz | |
+
+**RLS**: dueño `for all`; cuidador aceptado `select` (`es_cuidador_de`); `insert`/`update` con `puede_editar_de` (rol `editar`). Nadie borra. Tests: `supabase/tests/modo-simple-prefs.sql`.
+
 ## `envios_avisos`
 
-Dedupe claim-before-send de los avisos programados: `unique (tipo, ref_id, fecha)` (`ref_id` = medicamento, turno, inventario o posposición según `tipo`; `fecha` = fecha AR). Columnas: `id`, `tipo`, `ref_id`, `fecha`, `usuario_id`, `created_at`. **RLS** habilitada sin policies: solo `service_role`. El cron borra claims de más de 7 días. `alertas_dosis` suma `resuelta_at` (cuándo se avisó al cuidador que el elder ya tomó).
+Dedupe claim-before-send de los avisos programados: `unique (tipo, ref_id, fecha)` (`ref_id` = medicamento, turno, inventario o posposición según `tipo`; `fecha` = fecha AR). Columnas: `id`, `tipo`, `ref_id`, `fecha`, `usuario_id`, `created_at`. **RLS** habilitada sin policies: solo `service_role`. Los avisos de familia son por cuidador: su `ref_id` es un uuid determinista de (persona, cuidador[, turno/inventario]) y `tipo` es text libre (sin check). El cron borra claims de más de 7 días. `alertas_dosis` suma `resuelta_at` (cuándo se avisó al cuidador que el elder ya tomó).
 
 ## `codigos_acceso`
 
@@ -306,8 +396,6 @@ Throttling anti fuerza bruta de /login por código: `id` (identity), `ip_hash` (
 
 ## Fuera de alcance (sin tabla, decisión — ver CLAUDE.md)
 
-- Métricas de salud (presión, glucemia, peso) — "Monitoreo activo" en Mi Salud.
-- Vacunas / consultas — timeline de "Historial" en Mi Salud (a diferencia de Estudios, que sí tiene tabla).
 - Login con Apple.
 
 Rol Cuidador / vínculo con otro usuario ya no está fuera de alcance — ver `vinculos_cuidador`/`alertas_dosis` arriba (`008_cuidadores.sql`, ampliado en `021` con Familia).
