@@ -1,39 +1,64 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState, useTransition } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { VitaIcon } from "@/lib/vita-icons";
-import { entrarConCodigoAction, type EstadoEntrarConCodigo } from "./actions";
-import { EntrarConEmail } from "./login-email";
+import { VitaAvatar } from "@/components/vita/vita-avatar";
+import {
+  AvisoAuth,
+  BotonCta,
+  BotonPildora,
+  BotonVolver,
+  CampoAuth,
+  CampoPassword,
+  CodigoSeisCajas,
+  IconoPegar,
+  IconoReenviar,
+  PantallaAuth,
+  ReglasPassword,
+  TituloAuth,
+  leerCodigoPortapapeles,
+  passwordValida,
+} from "@/components/vita/auth-ui";
+import { entrarConCodigoAction } from "./actions";
 
-function GoogleLogo() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 18 18" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
-      />
-      <path
-        fill="#34A853"
-        d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"
-      />
-      <path
-        fill="#EA4335"
-        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"
-      />
-    </svg>
-  );
+// Acceso V7 (Onboarding.dc.html): bienvenida, iniciar sesión, crear cuenta,
+// olvidé mi contraseña, revisá tu mail e ingresá tu código — todo en una sola
+// ruta (/login), con vistas internas. Las llamadas de email/contraseña van
+// directo al cliente de Supabase (no hay nada que validar en el servidor antes
+// de que Supabase Auth responda); el código de 6 dígitos usa
+// entrarConCodigoAction. Nada de esto lanza.
+
+type Vista = "bienvenida" | "entrar" | "crear" | "olvide" | "enviado" | "codigo";
+
+const MIN_PASSWORD = 8;
+
+// Errores de Supabase Auth → castellano. Se matchea por `code` cuando existe
+// y por el mensaje como respaldo (versiones viejas no siempre traen code).
+function mensajeDeError(error: { code?: string; message?: string; status?: number }): string {
+  const code = error.code ?? "";
+  const msg = (error.message ?? "").toLowerCase();
+  if (code === "invalid_credentials" || msg.includes("invalid login credentials"))
+    return "El email o la contraseña no coinciden. Probá de nuevo o recuperá tu contraseña.";
+  if (code === "email_not_confirmed" || msg.includes("email not confirmed")) return "Todavía no confirmaste tu email. Revisá tu casilla.";
+  if (code === "user_already_exists" || msg.includes("already registered")) return "Ya hay una cuenta con ese email. Probá iniciar sesión.";
+  if (code === "weak_password" || msg.includes("password")) return `La contraseña tiene que tener al menos ${MIN_PASSWORD} caracteres.`;
+  if (code.includes("rate_limit") || error.status === 429) return "Hicimos muchos intentos seguidos. Esperá unos minutos y probá de nuevo.";
+  return "No pudimos completar el pedido. Probá de nuevo en un rato.";
 }
 
-// Deep link de entrada para quien ya tiene un código de vínculo (lo generó
-// su cuidador desde /onboarding/vincular-cuidado) pero todavía no pasó por
-// Google — no se puede saltear la autenticación, así que el link igual
-// dispara el mismo signInWithOAuth, solo que apunta el `next` a la
-// sub-vista de código de /onboarding/inicio en vez del onboarding normal.
+function urlCallback(next: string): string {
+  const u = new URL("/auth/callback", window.location.origin);
+  u.searchParams.set("next", next);
+  return u.toString();
+}
+
+// Destino tras confirmar el mail / entrar: el primer paso del onboarding es
+// "¿Cómo vas a usar Vita?" (el layout de /app redirige igual si falta).
+const DESTINO_ONBOARDING = "/onboarding/para-quien";
+
+// Deep link para quien ya tiene un código de vínculo pero entra con Google:
+// el callback lo deja en la sub-vista de código de /onboarding/inicio.
 const NEXT_CODIGO = "/onboarding/inicio?modo=codigo";
 
 // Login por email/contraseña SOLO para pruebas automatizadas (TestSprite) —
@@ -41,6 +66,26 @@ const NEXT_CODIGO = "/onboarding/inicio?modo=codigo";
 // NEXT_PUBLIC_ENABLE_TEST_LOGIN=true en .env.local; Netlify no la define,
 // así que en producción este bloque ni se renderiza.
 const LOGIN_DE_PRUEBA = process.env.NEXT_PUBLIC_ENABLE_TEST_LOGIN === "true";
+
+// Apple (V7 Bienvenida): preparado pero apagado. Requiere una cuenta paga de
+// Apple Developer y configurar el provider "apple" en Supabase Auth; recién
+// ahí se activa con NEXT_PUBLIC_ENABLE_APPLE_LOGIN=true.
+const LOGIN_APPLE = process.env.NEXT_PUBLIC_ENABLE_APPLE_LOGIN === "true";
+
+// Logo de marca de Google: sus colores son fijos (no son tokens), por eso
+// vive como SVG estático en /public, igual que icon.svg.
+function GoogleLogo() {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/google-g.svg" alt="" width={19} height={19} aria-hidden="true" />;
+}
+
+function AppleLogo() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.19-1.73-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76-1.48.02-2.85.86-3.61 2.19-1.54 2.67-.39 6.62 1.11 8.79.73 1.06 1.6 2.25 2.75 2.21 1.1-.04 1.52-.71 2.85-.71 1.33 0 1.71.71 2.88.69 1.19-.02 1.94-1.08 2.67-2.14.84-1.23 1.19-2.42 1.21-2.48-.03-.01-2.32-.89-2.33-3.55zM14.18 6.13c.61-.74 1.02-1.76.91-2.78-.88.04-1.94.59-2.57 1.32-.56.65-1.06 1.69-.93 2.69.98.08 1.98-.5 2.59-1.23z" />
+    </svg>
+  );
+}
 
 function LoginDePrueba({ next }: { next?: string }) {
   const [email, setEmail] = useState("");
@@ -63,8 +108,8 @@ function LoginDePrueba({ next }: { next?: string }) {
   }
 
   return (
-    <form onSubmit={enviar} className="flex flex-col gap-2 rounded-[20px] border border-dashed border-primary/40 p-3.5">
-      <p className="text-xs font-semibold text-muted-foreground">Login de prueba (solo local)</p>
+    <form onSubmit={enviar} className="mt-8 flex flex-col gap-2 rounded-[20px] border border-dashed border-teal-line p-3.5">
+      <p className="text-xs font-semibold text-subtle">Login de prueba (solo local)</p>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <input
         type="email"
@@ -86,154 +131,417 @@ function LoginDePrueba({ next }: { next?: string }) {
         className="h-11 rounded-full bg-card px-4 text-sm shadow-outline-soft"
         required
       />
-      <button
-        type="submit"
-        disabled={cargando}
-        className="h-11 rounded-full bg-primary text-sm font-bold text-primary-foreground disabled:opacity-60"
-      >
+      <button type="submit" disabled={cargando} className="h-11 rounded-full bg-primary text-sm font-bold text-primary-foreground disabled:opacity-60">
         {cargando ? "Ingresando…" : "Ingresar"}
       </button>
     </form>
   );
 }
 
-const ESTADO_CODIGO_INICIAL: EstadoEntrarConCodigo = { status: "idle" };
-
-// Entrada principal para quien no tiene cuenta de Google: el código de 6
-// dígitos que le pasó su familiar (primer acceso o "entrar de nuevo").
-function EntrarConCodigo() {
-  const [abierto, setAbierto] = useState(false);
+export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaEliminada?: boolean }) {
+  const [vista, setVista] = useState<Vista>("bienvenida");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [cargando, setCargando] = useState<"google" | "apple" | "codigo" | "email" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [motivoEnviado, setMotivoEnviado] = useState<"crear" | "olvide">("crear");
+  const [puedeReenviar, setPuedeReenviar] = useState(false);
+  // Código de 6 dígitos (login de quien no tiene Google).
   const [codigo, setCodigo] = useState("");
-  const [estado, formAction, pendiente] = useActionState(entrarConCodigoAction, ESTADO_CODIGO_INICIAL);
+  const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
+  const [enviandoCodigo, startCodigo] = useTransition();
 
-  if (!abierto) {
-    return (
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full font-heading text-[15px] font-bold text-primary-foreground"
-        style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
-      >
-        <VitaIcon name="link" size={18} />
-        Me dio un código mi familiar
-      </button>
-    );
+  function ir(v: Vista) {
+    setVista(v);
+    setError(null);
+    setAviso(null);
+    setErrorCodigo(null);
   }
 
-  return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-[20px] bg-card p-4 shadow-card">
-      <label htmlFor="codigo-acceso" className="text-center text-sm font-semibold">
-        Escribí el código de 6 dígitos
-      </label>
-      <input
-        id="codigo-acceso"
-        name="codigo"
-        value={codigo}
-        onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        autoFocus
-        placeholder="000000"
-        className="h-16 w-full rounded-[20px] bg-secondary text-center font-heading text-[26px] font-extrabold tracking-[0.3em] outline-none"
-      />
-
-      {estado.status === "error" && (
-        <div role="alert" className="flex items-start gap-2.5 rounded-[16px] bg-destructive/10 px-3.5 py-3 text-sm text-destructive">
-          <VitaIcon name="alert-triangle" size={18} className="mt-0.5 shrink-0" />
-          <span>{estado.mensaje}</span>
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={codigo.length !== 6 || pendiente}
-        className="h-14 w-full rounded-full font-heading text-[15px] font-bold text-primary-foreground transition-opacity disabled:opacity-55"
-        style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
-      >
-        {pendiente ? "Entrando…" : "Entrar"}
-      </button>
-
-      <button type="button" onClick={() => setAbierto(false)} className="self-center text-sm font-semibold text-muted-foreground">
-        Volver
-      </button>
-    </form>
-  );
-}
-
-// Apple (V7 Bienvenida): preparado pero apagado. Requiere una cuenta paga de
-// Apple Developer y configurar el provider "apple" en Supabase Auth; recién
-// ahí se activa con NEXT_PUBLIC_ENABLE_APPLE_LOGIN=true.
-const LOGIN_APPLE = process.env.NEXT_PUBLIC_ENABLE_APPLE_LOGIN === "true";
-
-export function LoginForm({ next }: { next?: string }) {
-  const [loading, setLoading] = useState<"google" | "codigo" | "apple" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function iniciarSesionGoogle(destino: string, origen: "google" | "codigo" | "apple") {
+  async function ejecutar(fn: () => Promise<void>) {
     setError(null);
-    setLoading(origen);
-    const supabase = createClient();
-    const callbackUrl = new URL("/auth/callback", window.location.origin);
-    callbackUrl.searchParams.set("next", destino);
+    setCargando("email");
+    try {
+      await fn();
+    } catch {
+      setError("No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
+    } finally {
+      setCargando(null);
+    }
+  }
 
-    const { error } = await supabase.auth.signInWithOAuth({
+  async function iniciarSesionOAuth(destino: string, origen: "google" | "codigo" | "apple") {
+    setError(null);
+    setCargando(origen);
+    const { error } = await createClient().auth.signInWithOAuth({
       provider: origen === "apple" ? "apple" : "google",
-      options: { redirectTo: callbackUrl.toString() },
+      options: { redirectTo: urlCallback(destino) },
     });
     if (error) {
       setError(`No se pudo iniciar sesión con ${origen === "apple" ? "Apple" : "Google"}. Intentá de nuevo.`);
-      setLoading(null);
+      setCargando(null);
     }
-    // On success the browser navigates away to Google, so no further
-    // state update is needed here.
+    // Si sale bien el navegador se va a Google: no hay más estado que actualizar.
   }
 
-  return (
-    <div className="flex w-full flex-col gap-3">
-      {error && (
-        <p className="rounded-[14px] bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">{error}</p>
-      )}
+  function entrar(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    void ejecutar(async () => {
+      const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password });
+      if (error) {
+        setError(mensajeDeError(error));
+        setPuedeReenviar(error.code === "email_not_confirmed");
+        return;
+      }
+      window.location.assign(next ?? "/app");
+    });
+  }
 
-      <EntrarConCodigo />
+  const crearOk = passwordValida(password) && email.trim() !== "" && nombre.trim() !== "";
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />o
-        <span className="h-px flex-1 bg-border" />
-      </div>
+  function crear(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!crearOk) return;
+    void ejecutar(async () => {
+      const { error } = await createClient().auth.signUp({
+        email: email.trim(),
+        password,
+        // El nombre viaja en user_metadata: /auth/callback lo copia a
+        // perfiles.nombre al confirmar, y el onboarding lo usa en el saludo.
+        options: { emailRedirectTo: urlCallback(DESTINO_ONBOARDING), data: { full_name: nombre.trim() } },
+      });
+      if (error) return setError(mensajeDeError(error));
+      setAviso(`Te mandamos un mail a ${email.trim()} para confirmar tu cuenta. Abrilo desde este celular.`);
+      setMotivoEnviado("crear");
+      setPuedeReenviar(true);
+      setVista("enviado");
+    });
+  }
 
-      <button
-        type="button"
-        onClick={() => iniciarSesionGoogle(next ?? "/app", "google")}
-        disabled={loading !== null}
-        className="flex h-14 w-full items-center justify-center gap-2.5 rounded-full bg-card font-heading text-[15px] font-bold text-foreground shadow-raised-outline disabled:opacity-60"
-      >
-        <GoogleLogo />
-        {loading === "google" ? "Conectando…" : "Continuar con Google"}
-      </button>
+  function olvide(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    void ejecutar(async () => {
+      const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: urlCallback("/auth/nueva-contrasena"),
+      });
+      if (error) return setError(mensajeDeError(error));
+      // Mismo mensaje exista o no la cuenta: no se revela qué emails están registrados.
+      setAviso(`Si hay una cuenta con ${email.trim()}, te llegó un mail para elegir una contraseña nueva.`);
+      setMotivoEnviado("olvide");
+      setPuedeReenviar(true);
+      setVista("enviado");
+    });
+  }
 
-      {LOGIN_APPLE && (
+  function reenviar() {
+    void ejecutar(async () => {
+      const supabase = createClient();
+      const { error } =
+        motivoEnviado === "olvide"
+          ? await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: urlCallback("/auth/nueva-contrasena") })
+          : await supabase.auth.resend({
+              type: "signup",
+              email: email.trim(),
+              options: { emailRedirectTo: urlCallback(DESTINO_ONBOARDING) },
+            });
+      if (error) return setError(mensajeDeError(error));
+      setAviso(`Te lo mandamos de nuevo a ${email.trim()}.`);
+    });
+  }
+
+  // Código de 6 dígitos: se manda solo al completar la sexta cifra.
+  function cambiarCodigo(v: string) {
+    setCodigo(v);
+    setErrorCodigo(null);
+    if (v.length === 6) {
+      const fd = new FormData();
+      fd.set("codigo", v);
+      startCodigo(async () => {
+        const r = await entrarConCodigoAction({ status: "idle" }, fd);
+        if (r.status === "error") {
+          setErrorCodigo(r.mensaje);
+          setCodigo("");
+        }
+      });
+    }
+  }
+
+  async function pegarCodigo() {
+    const pegado = await leerCodigoPortapapeles();
+    if (pegado) cambiarCodigo(pegado);
+  }
+
+  // ───────────────────────── Bienvenida ─────────────────────────
+  if (vista === "bienvenida") {
+    return (
+      <PantallaAuth className="pt-14">
+        <div className="flex flex-1 flex-col items-center justify-center">
+          <div className="flex size-[168px] items-center justify-center overflow-hidden rounded-full bg-avatar-fondo">
+            <VitaAvatar size={150} estado="happy" />
+          </div>
+          <div className="mt-[22px] font-heading text-[30px] font-extrabold leading-none tracking-[-0.06em]">
+            vi<span className="text-primary">ta</span>
+          </div>
+          <h1 className="mt-5 text-balance text-center font-heading text-[26px] font-extrabold leading-[1.15] tracking-[-0.04em]">
+            Tu salud y la de tu familia, en un solo lugar.
+          </h1>
+          <p className="mt-2.5 text-pretty text-center text-[15px] font-medium leading-normal text-slate-brand">
+            Remedios, turnos y controles. Vita te acompaña.
+          </p>
+          {cuentaEliminada && (
+            <p role="status" className="mt-5 rounded-[16px] bg-card px-4 py-3 text-center text-sm font-semibold shadow-card">
+              Tu cuenta y todos tus datos fueron eliminados.
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={() => iniciarSesionOAuth(next ?? "/app", "google")}
+            disabled={cargando !== null}
+            className="flex h-[54px] items-center justify-center gap-2.5 rounded-full border border-line bg-card font-heading text-[15.5px] font-bold transition-transform active:scale-[0.98] disabled:opacity-60"
+          >
+            <GoogleLogo />
+            {cargando === "google" ? "Conectando…" : "Continuar con Google"}
+          </button>
+          {LOGIN_APPLE && (
+            <button
+              type="button"
+              onClick={() => iniciarSesionOAuth(next ?? "/app", "apple")}
+              disabled={cargando !== null}
+              className="flex h-[54px] items-center justify-center gap-2.5 rounded-full bg-foreground font-heading text-[15.5px] font-bold text-background transition-transform active:scale-[0.98] disabled:opacity-60"
+            >
+              <AppleLogo />
+              {cargando === "apple" ? "Conectando…" : "Continuar con Apple"}
+            </button>
+          )}
+          <button type="button" onClick={() => ir("entrar")} className="h-11 text-[14.5px] font-bold text-slate-brand">
+            Continuar con email
+          </button>
+        </div>
+        {error && <AvisoAuth>{error}</AvisoAuth>}
+        <div className="mb-4 mt-1.5 h-px bg-line-cream" />
+        <div className="text-center text-sm font-medium text-slate-brand">
+          ¿Te invitaron?{" "}
+          <button type="button" onClick={() => ir("codigo")} className="font-extrabold text-teal-deep">
+            Tengo un código
+          </button>
+        </div>
+
+        {LOGIN_DE_PRUEBA && <LoginDePrueba next={next} />}
+      </PantallaAuth>
+    );
+  }
+
+  // ───────────────────────── Ingresá tu código ─────────────────────────
+  if (vista === "codigo") {
+    return (
+      <PantallaAuth>
+        <BotonVolver onClick={() => ir("bienvenida")} />
+        <TituloAuth
+          titulo="Ingresá tu código"
+          sub="Te lo mandó alguien de tu familia por WhatsApp. Sirve para conectar tu celular o para ayudar a cuidar a alguien."
+        />
+        <form onSubmit={(e) => e.preventDefault()}>
+          <CodigoSeisCajas valor={codigo} onChange={cambiarCodigo} autoFocus disabled={enviandoCodigo} />
+        </form>
+        {errorCodigo && <AvisoAuth>{errorCodigo}</AvisoAuth>}
+        <BotonPildora onClick={pegarCodigo} disabled={enviandoCodigo}>
+          <IconoPegar />
+          {enviandoCodigo ? "Entrando…" : "Pegar código"}
+        </BotonPildora>
+        <div className="flex-1" />
+        {error && <AvisoAuth>{error}</AvisoAuth>}
         <button
           type="button"
-          onClick={() => iniciarSesionGoogle(next ?? "/app", "apple")}
-          disabled={loading !== null}
-          className="flex h-14 w-full items-center justify-center rounded-full bg-foreground font-heading text-[15px] font-bold text-background disabled:opacity-60"
+          onClick={() => iniciarSesionOAuth(NEXT_CODIGO, "codigo")}
+          disabled={cargando !== null}
+          className="mt-4 text-center text-sm font-bold text-teal-deep disabled:opacity-60"
         >
-          {loading === "apple" ? "Conectando…" : "Continuar con Apple"}
+          {cargando === "codigo" ? "Conectando…" : "Tengo Google y un código de mi familiar"}
         </button>
-      )}
+        <p className="mt-3 text-balance text-center text-sm font-medium leading-normal text-subtle">
+          Si abriste el link de WhatsApp, entrás directo.
+        </p>
+      </PantallaAuth>
+    );
+  }
 
-      <EntrarConEmail next={next} />
+  // ───────────────────────── Revisá tu mail ─────────────────────────
+  if (vista === "enviado") {
+    return (
+      <PantallaAuth>
+        <BotonVolver onClick={() => ir(motivoEnviado === "crear" ? "crear" : "olvide")} />
+        <TituloAuth titulo="Revisá tu mail" sub={aviso} />
+        {error && <AvisoAuth>{error}</AvisoAuth>}
+        {puedeReenviar && (
+          <BotonPildora onClick={reenviar} disabled={cargando !== null}>
+            <IconoReenviar />
+            {cargando === "email" ? "Enviando…" : "Reenviar mail"}
+          </BotonPildora>
+        )}
+        <div className="flex-1" />
+        <p className="text-balance text-center text-sm font-medium leading-normal text-subtle">
+          Si no lo ves, mirá en Spam o Promociones.
+        </p>
+      </PantallaAuth>
+    );
+  }
 
-      <button
-        type="button"
-        onClick={() => iniciarSesionGoogle(NEXT_CODIGO, "codigo")}
-        disabled={loading !== null}
-        className="text-center text-sm font-semibold text-primary disabled:opacity-60"
-      >
-        {loading === "codigo" ? "Conectando…" : "Tengo Google y un código de mi familiar"}
-      </button>
+  // ───────────────────────── Olvidé mi contraseña ─────────────────────────
+  if (vista === "olvide") {
+    return (
+      <PantallaAuth>
+        <form onSubmit={olvide} className="flex flex-1 flex-col">
+          <BotonVolver onClick={() => ir("entrar")} />
+          <TituloAuth titulo="¿Olvidaste tu contraseña?" sub="Escribí tu email y te mandamos un link para crear una nueva." />
+          <div className="mt-[26px]">
+            <CampoAuth
+              etiqueta="Email"
+              type="email"
+              name="email"
+              placeholder="tu@email.com"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          {error && <AvisoAuth>{error}</AvisoAuth>}
+          <div className="flex-1" />
+          <BotonCta type="submit" habilitado={email.trim() !== ""} disabled={cargando !== null}>
+            {cargando === "email" ? "Un momento…" : "Mandar link"}
+          </BotonCta>
+        </form>
+      </PantallaAuth>
+    );
+  }
 
-      {LOGIN_DE_PRUEBA && <LoginDePrueba next={next} />}
-    </div>
+  // ───────────────────────── Crear cuenta ─────────────────────────
+  if (vista === "crear") {
+    return (
+      <PantallaAuth>
+        <form onSubmit={crear} className="flex flex-1 flex-col">
+          <BotonVolver onClick={() => ir("entrar")} />
+          <TituloAuth titulo="Creá tu cuenta" sub="Con tu email. Después te ayudo a armar todo." />
+          <div className="mt-[26px] flex flex-col gap-3.5">
+            <CampoAuth
+              etiqueta="Nombre"
+              type="text"
+              name="nombre"
+              placeholder="Tu nombre"
+              autoComplete="given-name"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              required
+            />
+            <CampoAuth
+              etiqueta="Email"
+              type="email"
+              name="email"
+              placeholder="tu@email.com"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <CampoPassword
+              etiqueta="Contraseña"
+              name="password"
+              placeholder="8 o más, con número y símbolo"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <div className="mt-4">
+            <ReglasPassword password={password} />
+          </div>
+          {error && <AvisoAuth>{error}</AvisoAuth>}
+          <div className="flex-1" />
+          <BotonCta type="submit" grande habilitado={crearOk} disabled={cargando !== null}>
+            {cargando === "email" ? "Un momento…" : "Crear cuenta"}
+          </BotonCta>
+          <div className="mt-4 text-center text-sm font-medium text-slate-brand">
+            ¿Ya tenés cuenta?{" "}
+            <button type="button" onClick={() => ir("entrar")} className="font-extrabold text-teal-deep">
+              Entrar
+            </button>
+          </div>
+          <p className="mt-3 text-balance text-center text-[12.5px] font-medium leading-normal text-subtle">
+            Al crear tu cuenta aceptás los{" "}
+            <Link href="/legal/terminos" className="underline underline-offset-2">
+              términos
+            </Link>{" "}
+            y la{" "}
+            <Link href="/legal/privacidad" className="underline underline-offset-2">
+              política de privacidad
+            </Link>{" "}
+            de Vita.
+          </p>
+        </form>
+      </PantallaAuth>
+    );
+  }
+
+  // ───────────────────────── Iniciar sesión ─────────────────────────
+  return (
+    <PantallaAuth>
+      <form onSubmit={entrar} className="flex flex-1 flex-col">
+        <BotonVolver onClick={() => ir("bienvenida")} />
+        <TituloAuth titulo="Entrá a tu cuenta" sub="Con el email y la contraseña que usaste al crearla." />
+        <div className="mt-[26px] flex flex-col gap-3.5">
+          <CampoAuth
+            etiqueta="Email"
+            type="email"
+            name="email"
+            placeholder="tu@email.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <CampoPassword
+            etiqueta="Contraseña"
+            name="password"
+            placeholder="Tu contraseña"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <button type="button" onClick={() => ir("olvide")} className="mt-3.5 self-end p-1 text-[15px] font-bold text-teal-deep">
+          ¿Olvidaste tu contraseña?
+        </button>
+        {error && (
+          <AvisoAuth>
+            {error}
+            {puedeReenviar && (
+              <button type="button" onClick={reenviar} disabled={cargando !== null} className="mt-2 block font-extrabold underline">
+                Reenviar el mail de confirmación
+              </button>
+            )}
+          </AvisoAuth>
+        )}
+        {aviso && !error && <AvisoAuth role="status">{aviso}</AvisoAuth>}
+        <div className="flex-1" />
+        <BotonCta type="submit" habilitado={email.trim() !== "" && password !== ""} disabled={cargando !== null}>
+          {cargando === "email" ? "Entrando…" : "Entrar"}
+        </BotonCta>
+        <div className="mt-4 text-center text-sm font-medium text-slate-brand">
+          ¿No tenés cuenta?{" "}
+          <button type="button" onClick={() => ir("crear")} className="font-extrabold text-teal-deep">
+            Crear cuenta
+          </button>
+        </div>
+      </form>
+    </PantallaAuth>
   );
 }

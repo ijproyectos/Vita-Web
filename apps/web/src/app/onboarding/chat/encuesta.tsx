@@ -89,9 +89,14 @@ export function EncuestaOnboarding() {
         if (actual.tipo === "chip" && actual.final) {
           setTimeout(() => {
             const r = respuestasRef.current;
-            startTransition(() =>
-              completarOnboardingAction({ edadRango: r.edad, condicionesIds: r.condicionesIds, medicamentos: r.meds })
-            );
+            startTransition(async () => {
+              const res = await completarOnboardingAction({
+                edadRango: r.edad,
+                condicionesIds: r.condicionesIds,
+                medicamentos: r.meds,
+              });
+              if (res?.status === "error") toast.error(res.message);
+            });
           }, 1200);
         }
       },
@@ -222,7 +227,10 @@ export function EncuestaOnboarding() {
         <StepDots total={3} activo={2} />
         <button
           type="button"
-          onClick={() => startTransition(() => omitirOnboardingAction())}
+          onClick={() => startTransition(async () => {
+              const r = await omitirOnboardingAction();
+              if (r?.status === "error") toast.error(r.message);
+            })}
           disabled={pendiente}
           className="text-sm font-semibold text-primary"
         >

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CambiosPerfil, Condicion, Perfil, UsoApp } from "./tipos";
+import { COLUMNAS_025, type CambiosPerfil, type Condicion, type Perfil, type UsoApp } from "./tipos";
 
 type Cliente = SupabaseClient;
 
@@ -16,11 +16,38 @@ export async function obtenerPerfil(supabase: Cliente, usuarioId: string): Promi
   return data as Perfil | null;
 }
 
+// Postgres 42703 / PostgREST PGRST204: la columna no existe (migración 025
+// sin aplicar).
+function faltaColumna(error: { code?: string; message?: string }): boolean {
+  return error.code === "42703" || error.code === "PGRST204" || /column .* does not exist|could not find the .* column/i.test(error.message ?? "");
+}
+
+class ErrorColumna extends Error {}
+
 export async function actualizarPerfil(
   supabase: Cliente,
   usuarioId: string,
   cambios: CambiosPerfil
 ): Promise<Perfil> {
+  try {
+    return await escribirPerfil(supabase, usuarioId, cambios);
+  } catch (e) {
+    // Degradación: si todavía no existen las columnas de la 025 se reintenta
+    // sin ellas, para que un campo faltante nunca tire todo el guardado.
+    const sin = { ...cambios } as Record<string, unknown>;
+    let quitoAlguna = false;
+    for (const c of COLUMNAS_025) {
+      if (c in sin) {
+        delete sin[c];
+        quitoAlguna = true;
+      }
+    }
+    if (!quitoAlguna || !(e instanceof ErrorColumna)) throw e;
+    return escribirPerfil(supabase, usuarioId, sin as CambiosPerfil);
+  }
+}
+
+async function escribirPerfil(supabase: Cliente, usuarioId: string, cambios: CambiosPerfil): Promise<Perfil> {
   // update primero (sirve también para un cuidador 'editar', que no tiene
   // policy de INSERT y cuyo upsert fallaría); si no tocó ninguna fila, upsert
   // (ver el comentario en `actualizarPerfilCrudo`).
@@ -30,7 +57,10 @@ export async function actualizarPerfil(
     .eq("id", usuarioId)
     .select()
     .maybeSingle();
-  if (errorUpdate) throw new Error(`No se pudo actualizar el perfil: ${errorUpdate.message}`);
+  if (errorUpdate) {
+    const Clase = faltaColumna(errorUpdate) ? ErrorColumna : Error;
+    throw new Clase(`No se pudo actualizar el perfil: ${errorUpdate.message}`);
+  }
   if (actualizado) return actualizado as Perfil;
 
   const { data, error } = await supabase
@@ -39,7 +69,10 @@ export async function actualizarPerfil(
     .select()
     .single();
 
-  if (error) throw new Error(`No se pudo actualizar el perfil: ${error.message}`);
+  if (error) {
+    const Clase = faltaColumna(error) ? ErrorColumna : Error;
+    throw new Clase(`No se pudo actualizar el perfil: ${error.message}`);
+  }
   return data as Perfil;
 }
 
@@ -49,7 +82,10 @@ export async function agregarCondicion(
   condicion: Condicion
 ): Promise<Condicion[]> {
   const perfil = await obtenerPerfil(supabase, usuarioId);
-  const condiciones = [...(perfil?.condiciones ?? []), condicion];
+  const actuales = perfil?.condiciones ?? [];
+  // Idempotente: una condición con el mismo nombre no se duplica.
+  if (actuales.some((c) => c.label.trim().toLowerCase() === condicion.label.trim().toLowerCase())) return actuales;
+  const condiciones = [...actuales, condicion];
   await actualizarPerfilCrudo(supabase, usuarioId, { condiciones });
   return condiciones;
 }
@@ -63,6 +99,41 @@ export async function quitarCondicion(
   const condiciones = (perfil?.condiciones ?? []).filter((c) => c.label !== label);
   await actualizarPerfilCrudo(supabase, usuarioId, { condiciones });
   return condiciones;
+}
+
+/** Cambia una condición existente (identificada por su label actual). */
+export async function actualizarCondicion(
+  supabase: Cliente,
+  usuarioId: string,
+  labelActual: string,
+  cambios: Partial<Condicion>
+): Promise<Condicion[]> {
+  const perfil = await obtenerPerfil(supabase, usuarioId);
+  const actuales = perfil?.condiciones ?? [];
+  if (!actuales.some((c) => c.label === labelActual)) throw new Error("No encontramos esa condición.");
+  const condiciones = actuales.map((c) => (c.label === labelActual ? limpiarCondicion({ ...c, ...cambios }) : c));
+  await actualizarPerfilCrudo(supabase, usuarioId, { condiciones });
+  return condiciones;
+}
+
+function limpiarCondicion(c: Condicion): Condicion {
+  const { detalle, ...resto } = c;
+  return detalle?.trim() ? { ...resto, detalle: detalle.trim() } : resto;
+}
+
+/** Renombra una alergia existente. */
+export async function actualizarAlergia(
+  supabase: Cliente,
+  usuarioId: string,
+  alergiaActual: string,
+  nueva: string
+): Promise<string[]> {
+  const perfil = await obtenerPerfil(supabase, usuarioId);
+  const actuales = perfil?.alergias ?? [];
+  if (!actuales.includes(alergiaActual)) throw new Error("No encontramos esa alergia.");
+  const alergias = actuales.map((a) => (a === alergiaActual ? nueva : a));
+  await actualizarPerfilCrudo(supabase, usuarioId, { alergias });
+  return alergias;
 }
 
 export async function agregarAlergia(

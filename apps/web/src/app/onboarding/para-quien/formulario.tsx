@@ -1,87 +1,84 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { VMark } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { StepDots } from "../step-dots";
-import { guardarUsoAppAction, omitirOnboardingAction } from "../actions";
+import { IconoTilde } from "@/components/vita/auth-ui";
+import { guardarUsoAppAction, omitirIntroAction } from "../actions";
 import type { UsoApp } from "@/lib/perfil/tipos";
 
+// "¿Cómo vas a usar Vita?" (V7 `isUse`): dos tarjetas con ícono y radio,
+// CTA gris hasta elegir. "Para mi familia" guarda `cuido`; `ambos` se llega
+// desde el chat ("¿Querés sumarte vos también?"). Este es el primer paso
+// después del login, así que no hay "volver": en su lugar "Omitir" salta la
+// intro y va directo a cargar datos (omitirIntroAction).
 const OPCIONES: { valor: UsoApp; titulo: string; sub: string; icon: string }[] = [
-  { valor: "yo", titulo: "Para mí", sub: "Voy a llevar mi propia salud al día", icon: "user" },
-  { valor: "cuido", titulo: "Para alguien que cuido", sub: "Un familiar o alguien a quien acompaño", icon: "heart" },
-  { valor: "ambos", titulo: "Para las dos cosas", sub: "Mi salud y la de alguien que cuido", icon: "users" },
+  { valor: "yo", titulo: "Para mí", sub: "Mis remedios, turnos y controles", icon: "user" },
+  { valor: "cuido", titulo: "Para mi familia", sub: "Papás, hijos, pareja… y vos si querés", icon: "users" },
 ];
 
-// Paso nuevo, antes de "¿cómo te llamás?" — respuesta a `uso_app`, se
-// pregunta una sola vez (ver lib/perfil/nucleo.ts#guardarUsoApp). Mismo
-// shell visual que onboarding/nombre/formulario.tsx (plain screen, no la
-// burbuja de chat).
-export function FormularioParaQuien() {
+export function FormularioParaQuien({ nombre }: { nombre: string | null }) {
   const [seleccion, setSeleccion] = useState<UsoApp | null>(null);
   const [pendiente, startTransition] = useTransition();
+  const [omitiendo, startOmitir] = useTransition();
 
   function continuar() {
     if (!seleccion) return;
-    startTransition(() => guardarUsoAppAction(seleccion));
+    startTransition(async () => {
+      const r = await guardarUsoAppAction(seleccion);
+      if (r?.status === "error") toast.error(r.message);
+    });
   }
 
   return (
-    <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-gradient-to-b from-background to-card px-7 pb-8 pt-14">
-      <div
-        className="pointer-events-none absolute left-1/2 top-[-140px] size-[340px] -translate-x-1/2 rounded-full"
-        style={{ background: "radial-gradient(circle, color-mix(in srgb, var(--primary) 12%, transparent), transparent 60%)" }}
-      />
-
-      <div className="z-10 flex items-center justify-between">
-        <StepDots total={3} activo={0} />
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-canvas px-[22px] pb-10 pt-16">
+      <div className="flex h-[42px] items-center justify-end">
         <button
           type="button"
-          onClick={() => startTransition(() => omitirOnboardingAction())}
-          className="text-sm font-semibold text-primary"
+          onClick={() => startOmitir(async () => void (await omitirIntroAction()))}
+          disabled={omitiendo || pendiente}
+          className="rounded-full px-3 py-2 text-sm font-bold text-slate-brand disabled:opacity-60"
         >
           Omitir
         </button>
       </div>
 
-      <div className="z-10 mt-7 flex justify-center">
-        <VMark size={64} />
-      </div>
+      <div className="mt-7 text-[15px] font-semibold text-slate-brand">{nombre ? `Hola, ${nombre}` : "Hola"}</div>
+      <h1 className="mt-1.5 font-heading text-[28px] font-extrabold leading-[1.12] tracking-[-0.04em]">¿Cómo vas a usar Vita?</h1>
 
-      <div className="z-10 mt-7.5 text-center">
-        <div className="font-heading text-[26px] font-extrabold tracking-tight">¿Para quién vas a usar la app?</div>
-        <div className="mt-1.5 text-sm text-muted-foreground">Así te mostramos las pantallas que necesitás.</div>
-      </div>
-
-      <div className="z-10 mt-7 flex flex-col gap-2.5">
+      <div className="mt-[26px] flex flex-col gap-3" role="radiogroup" aria-label="¿Cómo vas a usar Vita?">
         {OPCIONES.map((op) => {
           const sel = seleccion === op.valor;
           return (
             <button
               key={op.valor}
               type="button"
+              role="radio"
+              aria-checked={sel}
               onClick={() => setSeleccion(op.valor)}
               className={cn(
-                "flex items-center gap-3 rounded-[20px] p-4 text-left transition-all",
-                sel
-                  ? "bg-primary text-primary-foreground shadow-[0_10px_24px_color-mix(in_srgb,var(--primary)_30%,transparent)]"
-                  : "bg-card text-foreground shadow-card"
+                "flex items-center gap-3.5 rounded-[22px] bg-card p-[18px] text-left transition-shadow",
+                sel ? "shadow-[0_0_0_2px_var(--primary),0_6px_20px_color-mix(in_srgb,var(--primary)_15%,transparent)]" : "shadow-card"
               )}
             >
-              <div
-                className={cn(
-                  "flex size-11 shrink-0 items-center justify-center rounded-full",
-                  sel ? "bg-primary-foreground/20" : "bg-secondary text-primary"
-                )}
-              >
-                <VitaIcon name={op.icon} size={20} color={sel ? "var(--primary-foreground)" : undefined} />
+              <div className="flex size-[52px] shrink-0 items-center justify-center rounded-[16px] bg-persona-1-tint text-teal-deep">
+                <VitaIcon name={op.icon} size={26} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-heading text-[15px] font-bold">{op.titulo}</div>
-                <div className={cn("mt-0.5 text-[12.5px]", sel ? "text-primary-foreground/85" : "text-muted-foreground")}>{op.sub}</div>
+                <div className="font-heading text-[17px] font-extrabold tracking-[-0.02em]">{op.titulo}</div>
+                <div className="mt-[3px] text-[13.5px] font-medium leading-[1.4] text-slate-brand">{op.sub}</div>
               </div>
-              {sel && <VitaIcon name="check" size={18} color="var(--primary-foreground)" />}
+              <div
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-full border-2 text-primary-foreground transition-colors",
+                  sel ? "border-primary bg-primary" : "border-line-strong bg-card"
+                )}
+              >
+                <span className={sel ? "opacity-100" : "opacity-0"}>
+                  <IconoTilde />
+                </span>
+              </div>
             </button>
           );
         })}
@@ -93,10 +90,12 @@ export function FormularioParaQuien() {
         type="button"
         onClick={continuar}
         disabled={!seleccion || pendiente}
-        className="z-10 h-14 w-full rounded-full font-heading text-[15px] font-bold text-primary-foreground transition-opacity disabled:opacity-55"
-        style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
+        className={cn(
+          "h-14 w-full rounded-full font-heading text-base font-extrabold text-primary-foreground transition-colors",
+          seleccion ? "bg-primary shadow-cta disabled:opacity-60" : "bg-deshabilitado"
+        )}
       >
-        Continuar
+        Seguir
       </button>
     </div>
   );

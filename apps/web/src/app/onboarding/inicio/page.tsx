@@ -1,14 +1,13 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { PantallaInicio } from "./pantalla";
 
-// Primer paso real de onboarding (ver app/app/layout.tsx, que redirige
-// acá en vez de a /onboarding/nombre) — separa a quien ya tiene un código
-// de vínculo (un elder cuyo cuidador generó el código desde
-// /onboarding/vincular-cuidado) del resto, que sigue el guion normal
-// empezando por /onboarding/para-quien. `?modo=codigo` (nuevo — desde el
-// link "Me invitó un familiar, tengo un código" de /login) abre la misma
-// sub-vista de código, sin pre-cargar nada (a diferencia de `?codigo=`, el
-// deep link compartido, que sí trae el código ya escrito).
+// La bienvenida vive ANTES del login (/login, V7 "Bienvenida"), así que acá
+// ya no hay intro: quien llega sin código sigue al "¿Cómo vas a usar Vita?".
+// Esta ruta queda solo para reclamar un código de vínculo ya logueado/a:
+// `?modo=codigo` (link "Tengo Google y un código" de /login) abre la pantalla
+// vacía; `?codigo=` (deep link de /onboarding/vincular-cuidado, mail o
+// WhatsApp) la trae con el código ya escrito.
 export default async function OnboardingInicioPage(props: PageProps<"/onboarding/inicio">) {
   await requireUser();
   const searchParams = await props.searchParams;
@@ -17,5 +16,7 @@ export default async function OnboardingInicioPage(props: PageProps<"/onboarding
   const modoParam = searchParams?.modo;
   const modo = Array.isArray(modoParam) ? modoParam[0] : modoParam;
 
-  return <PantallaInicio codigoInicial={codigoInicial} abrirCodigoInicial={modo === "codigo"} />;
+  if (!codigoInicial && modo !== "codigo") redirect("/onboarding/para-quien");
+
+  return <PantallaInicio codigoInicial={codigoInicial?.replace(/\D/g, "").slice(0, 6)} />;
 }

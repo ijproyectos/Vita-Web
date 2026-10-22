@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { VMark } from "@/components/vita/v-mark";
 import { StepDots } from "../step-dots";
 import { guardarNombreAction, omitirOnboardingAction } from "../actions";
@@ -11,7 +12,10 @@ export function FormularioNombre() {
 
   function continuar() {
     if (!nombre.trim()) return;
-    startTransition(() => guardarNombreAction(nombre));
+    startTransition(async () => {
+      const r = await guardarNombreAction(nombre);
+      if (r?.status === "error") toast.error(r.message);
+    });
   }
 
   return (
@@ -25,7 +29,10 @@ export function FormularioNombre() {
         <StepDots total={3} activo={0} />
         <button
           type="button"
-          onClick={() => startTransition(() => omitirOnboardingAction())}
+          onClick={() => startTransition(async () => {
+              const r = await omitirOnboardingAction();
+              if (r?.status === "error") toast.error(r.message);
+            })}
           className="text-sm font-semibold text-primary"
         >
           Omitir

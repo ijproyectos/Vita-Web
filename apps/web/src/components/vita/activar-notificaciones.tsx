@@ -6,7 +6,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { borrarSuscripcionAction, guardarSuscripcionAction } from "@/lib/notificaciones/actions";
 
-type Estado = "cargando" | "no-soportado" | "ios-instalar" | "bloqueado" | "inactivo" | "activo";
+export type EstadoPush = "cargando" | "no-soportado" | "ios-instalar" | "bloqueado" | "inactivo" | "activo";
 
 // "perfil": fila dentro del grupo Notificaciones. "cuidador": tarjeta que
 // solo aparece mientras los avisos están apagados. "simple": botón grande
@@ -40,7 +40,7 @@ async function obtenerRegistro(): Promise<ServiceWorkerRegistration> {
   return existente ?? navigator.serviceWorker.register("/sw.js", { scope: "/" });
 }
 
-async function detectar(): Promise<{ estado: Estado; suscripcion: PushSubscription | null }> {
+async function detectar(): Promise<{ estado: EstadoPush; suscripcion: PushSubscription | null }> {
   const soportaPush = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   // En iPhone/iPad el push solo existe dentro de la PWA instalada.
   if (esIOS() && !esStandalone()) return { estado: "ios-instalar", suscripcion: null };
@@ -66,8 +66,10 @@ function aPayload(s: PushSubscription) {
   };
 }
 
-export function ActivarNotificaciones({ variante }: { variante: Variante }) {
-  const [estado, setEstado] = useState<Estado>("cargando");
+// Estado + acciones del push, compartidos con el paso de permiso del
+// onboarding (`/onboarding/permiso`) para no duplicar el flujo de suscripción.
+export function useNotificacionesPush() {
+  const [estado, setEstado] = useState<EstadoPush>("cargando");
   const [pendiente, startTransition] = useTransition();
 
   useEffect(() => {
@@ -131,6 +133,12 @@ export function ActivarNotificaciones({ variante }: { variante: Variante }) {
       }
     });
   }
+
+  return { estado, pendiente, activar, desactivar };
+}
+
+export function ActivarNotificaciones({ variante }: { variante: Variante }) {
+  const { estado, pendiente, activar, desactivar } = useNotificacionesPush();
 
   if (estado === "cargando") return null;
 
@@ -201,9 +209,9 @@ export function ActivarNotificaciones({ variante }: { variante: Variante }) {
   );
 }
 
-const TEXTO_IOS = "Para recibir avisos en iPhone, primero agregá vita a tu pantalla de inicio: Compartir → Agregar a inicio.";
+export const TEXTO_IOS = "Para recibir avisos en iPhone, primero agregá vita a tu pantalla de inicio: Compartir → Agregar a inicio.";
 
-function descripcion(estado: Estado, variante: Variante): string {
+function descripcion(estado: EstadoPush, variante: Variante): string {
   switch (estado) {
     case "activo":
       return "Activados. Te avisamos acá cuando haga falta.";

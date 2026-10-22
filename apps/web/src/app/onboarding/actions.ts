@@ -13,13 +13,25 @@ import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import { HORA_POR_MOMENTO } from "@/lib/medicamentos/tipos";
 import { CONDICIONES } from "@/lib/onboarding/catalogo-condiciones";
 
+// Las acciones que terminan en redirect() solo "devuelven" si algo falló
+// (redirect lanza un control-flow error que Next intercepta): nunca lanzan.
+type ErrorAccion = { status: "error"; message: string } | void;
+
+function mensajeDe(e: unknown): string {
+  return e instanceof Error && e.message ? e.message : "No pudimos guardar. Probá de nuevo.";
+}
+
 // Paso 1: nombre. Se guarda pero NO se marca onboarding_completado_at
 // todavía (falta el paso 2). "Omitir" también guarda lo que haya y avanza.
-export async function guardarNombreAction(nombre: string) {
+export async function guardarNombreAction(nombre: string): Promise<ErrorAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();
-  if (nombre.trim()) {
-    await perfilNucleo.actualizarPerfil(supabase, usuario.id, { nombre: nombre.trim() });
+  try {
+    if (nombre.trim()) {
+      await perfilNucleo.actualizarPerfil(supabase, usuario.id, { nombre: nombre.trim() });
+    }
+  } catch (e) {
+    return { status: "error", message: mensajeDe(e) };
   }
   redirect("/onboarding/chat");
 }
@@ -32,22 +44,46 @@ export async function guardarNombreAction(nombre: string) {
 // (/onboarding/nombre → /onboarding/chat, catálogo sin IA) sigue existiendo
 // como fallback manual — ver el link "Prefiero un formulario" dentro del
 // flujo conversacional.
-export async function guardarUsoAppAction(usoApp: UsoApp) {
+export async function guardarUsoAppAction(usoApp: UsoApp): Promise<ErrorAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();
-  await perfilNucleo.guardarUsoApp(supabase, usuario.id, usoApp);
+  try {
+    await perfilNucleo.guardarUsoApp(supabase, usuario.id, usoApp);
+  } catch (e) {
+    return { status: "error", message: mensajeDe(e) };
+  }
   redirect("/onboarding/conversar");
+}
+
+// "Omitir" de la bienvenida (/onboarding/inicio): se salta la intro y el
+// "¿cómo vas a usar vita?" y va directo a cargar datos (/onboarding/conversar).
+// NO marca el onboarding como completo. Como el chat necesita `uso_app`, si
+// todavía no hay respuesta se asume "yo" (se puede cambiar desde el perfil).
+export async function omitirIntroAction() {
+  let destino = "/onboarding/conversar";
+  const usuario = await requireUser();
+  try {
+    const supabase = await createClient();
+    const perfil = await perfilNucleo.obtenerPerfil(supabase, usuario.id);
+    if (!perfil?.uso_app) await perfilNucleo.guardarUsoApp(supabase, usuario.id, "yo");
+  } catch {
+    destino = "/onboarding/para-quien";
+  }
+  redirect(destino);
 }
 
 // Después de completar (o saltear) el onboarding: si la persona dijo que
 // usa la app para cuidar a alguien, todavía le falta vincular ese celular
 // — la manda a /onboarding/vincular-cuidado en vez de directo a /app.
 async function redirigirSegunUsoApp(supabase: SupabaseClient, usuarioId: string): Promise<never> {
-  const perfil = await perfilNucleo.obtenerPerfil(supabase, usuarioId);
-  if (perfil?.uso_app === "cuido" || perfil?.uso_app === "ambos") {
-    redirect("/onboarding/vincular-cuidado");
+  let destino = "/app";
+  try {
+    const perfil = await perfilNucleo.obtenerPerfil(supabase, usuarioId);
+    if (perfil?.uso_app === "cuido" || perfil?.uso_app === "ambos") destino = "/onboarding/vincular-cuidado";
+  } catch {
+    // Onboarding ya completo: si no se puede leer el perfil, /app decide.
   }
-  redirect("/app");
+  redirect(destino);
 }
 
 // Paso 2: encuesta scripteada — guion fijo, no pasa por Anthropic (mismo
@@ -63,7 +99,7 @@ export async function completarOnboardingAction(datos: {
   condicion?: string;
   condicionesIds?: string[];
   medicamentos?: string;
-}) {
+}): Promise<ErrorAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();
 
@@ -89,19 +125,28 @@ export async function completarOnboardingAction(datos: {
     condicionesSeed.push({ label, tipo: "permanente", desde: String(new Date().getFullYear()) });
   }
 
-  await perfilNucleo.completarOnboarding(supabase, usuario.id, {
-    edadRango: datos.edadRango,
-    condicionesSeed,
-    alergiasSeed,
-  });
+  try {
+    await perfilNucleo.completarOnboarding(supabase, usuario.id, {
+      edadRango: datos.edadRango,
+      condicionesSeed,
+      alergiasSeed,
+    });
+  } catch (e) {
+    return { status: "error", message: mensajeDe(e) };
+  }
 
   await redirigirSegunUsoApp(supabase, usuario.id);
 }
 
-export async function omitirOnboardingAction() {
+export async function omitirOnboardingAction(): Promise<ErrorAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();
-  await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
+  try {
+    await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
+  } catch (e) {
+    return { status: "error", message: mensajeDe(e) };
+  }
+
   await redirigirSegunUsoApp(supabase, usuario.id);
 }
 
@@ -180,7 +225,16 @@ export async function reclamarCodigoAction(
     return { status: "error", mensaje: MENSAJE_POR_MOTIVO_CODIGO[resultado.error] };
   }
 
-  await perfilNucleo.guardarUsoApp(supabase, usuario.id, "yo");
-  await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
+  // El código ya quedó consumido: si esto falla, reintentar el mismo código
+  // daría "ya fue usado". Se avisa que ya está vinculado y que entre igual.
+  try {
+    await perfilNucleo.guardarUsoApp(supabase, usuario.id, "yo");
+    await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
+  } catch {
+    return {
+      status: "error",
+      mensaje: "Ya quedaste vinculado, pero no pudimos terminar de configurar tu cuenta. Entrá a vita para continuar.",
+    };
+  }
   redirect("/app/modo-simple");
 }

@@ -8,7 +8,7 @@ import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
 import { ETIQUETA_MOMENTO, ORDEN_MOMENTOS } from "@/lib/rutina/momento";
 import { VitaIcon } from "@/lib/vita-icons";
 import type { MedicamentoExtraido } from "@/lib/onboarding/extraer";
-import { Burbuja, CampoEntrada, ChipBoton, EncabezadoConversar, PuntosEscribiendo, type Mensaje } from "./componentes";
+import { Burbuja, CampoEntrada, ChipBoton, ChipsMulti, EncabezadoConversar, PuntosEscribiendo, type Mensaje } from "./componentes";
 import {
   contarMedicamentosPendientesAction,
   crearPerfilPendienteAction,
@@ -16,8 +16,12 @@ import {
   extraerNombreEdadAction,
   finalizarConCuidadoAction,
   finalizarSoloYoAction,
+  guardarAlergiasPropiasAction,
+  guardarCondicionesPropiasAction,
   guardarMedicamentoPendienteAction,
   guardarMedicamentoPropioAction,
+  guardarTurnoPropioAction,
+  marcarUsoAmbosAction,
   type DatosMedicamentoConfirmado,
 } from "./actions";
 
@@ -31,6 +35,25 @@ import {
 // setState de acá dispara react-hooks/set-state-in-effect (ver
 // CLAUDE.md). El único useEffect real es el de autoscroll, que no hace
 // setState.
+
+// Pasos de salud propia (V7 `chipsFor`). Solo se preguntan sobre el perfil de
+// quien está logueada: el borrador de la persona cuidada no tiene dónde
+// guardar condiciones/alergias/turnos, así que en esa rama se saltean.
+const OPC_CONDICIONES = ["Diabetes", "Hipertensión", "Hipotiroidismo", "Otra"] as const;
+const OPC_ALERGIAS = ["Penicilina", "Aspirina", "Lactosa", "Otra"] as const;
+const OPC_SOLAS = ["Ninguna", "Saltear"] as const;
+const ESPECIALIDADES = ["Clínico", "Cardiólogo", "Traumatólogo", "Oculista", "Otro"] as const;
+
+type PasoChips = "med" | "turno" | "turno-spec" | "meas";
+const OPCIONES_CHIPS: Record<PasoChips, readonly string[]> = {
+  med: ["Sí", "No", "Saltear"],
+  turno: ["Sí", "No", "Saltear"],
+  "turno-spec": ESPECIALIDADES,
+  meas: ["Presión", "Azúcar", "Las dos", "No", "Saltear"],
+};
+
+type ResumenPropio = { cond: string[]; alergias: string[]; meds: number; turno: string | null; meas: string | null };
+const RESUMEN_VACIO: ResumenPropio = { cond: [], alergias: [], meds: 0, turno: null, meas: null };
 
 const RELACIONES = ["Mamá", "Papá", "Abuela/o", "Otro"] as const;
 const COLOR_LABEL: Record<string, string> = { teal: "teal", violet: "violeta", amber: "ámbar", rose: "rosa" };
@@ -90,27 +113,35 @@ type Vista =
   | { tipo: "pedir-medicamentos"; contexto: "persona" | "vos" }
   | { tipo: "confirmar-medicamentos"; contexto: "persona" | "vos"; items: ItemCard[] }
   | { tipo: "handoff-vos" }
+  | { tipo: "multi"; paso: "cond" | "alergia"; seleccion: string[] }
+  | { tipo: "chips"; paso: PasoChips }
+  | { tipo: "turno-spec-texto" }
+  | { tipo: "turno-fecha"; especialidad: string }
+  | { tipo: "turno-lugar"; especialidad: string; fecha: string; hora: string }
+  | { tipo: "resumen-propio" }
   | { tipo: "fin" };
 
-function mensajeInicial(usoApp: UsoApp): Mensaje {
+function mensajesIniciales(usoApp: UsoApp): Mensaje[] {
   if (usoApp === "yo") {
-    return {
-      id: "vita-0",
-      from: "vita",
-      texto: "¡Hola! Soy vita 👋 Contame qué medicamentos tomás — decímelos como te salga, yo los ordeno.",
-    };
+    return [
+      { id: "vita-0", from: "vita", texto: "¡Hola! Soy vita." },
+      { id: "vita-1", from: "vita", texto: "Te hago unas preguntas cortas para armar tu perfil. Podés saltear cualquiera." },
+      { id: "vita-2", from: "vita", texto: "¿Tenés alguna condición de salud? Podés marcar varias." },
+    ];
   }
-  return { id: "vita-0", from: "vita", texto: "¡Hola! Soy vita. Empecemos por la persona que cuidás. ¿Quién es?" };
+  return [{ id: "vita-0", from: "vita", texto: "¡Hola! Soy vita. Empecemos por la persona que cuidás. ¿Quién es?" }];
 }
 
 export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   const dosTabs = usoApp !== "yo";
 
-  const [mensajes, setMensajes] = useState<Mensaje[]>(() => [mensajeInicial(usoApp)]);
+  const [mensajes, setMensajes] = useState<Mensaje[]>(() => mensajesIniciales(usoApp));
   const [escribiendo, setEscribiendo] = useState(false);
   const [vista, setVista] = useState<Vista>(
-    dosTabs ? { tipo: "relacion" } : { tipo: "pedir-medicamentos", contexto: "vos" }
+    dosTabs ? { tipo: "relacion" } : { tipo: "multi", paso: "cond", seleccion: [] }
   );
+  const [resumen, setResumen] = useState<ResumenPropio>(RESUMEN_VACIO);
+  const [hayAvance, setHayAvance] = useState(false);
   const [tabActiva, setTabActiva] = useState<"persona" | "vos">("persona");
   const [personaCompleta, setPersonaCompleta] = useState(false);
   const [nombrePersona, setNombrePersona] = useState<string | null>(null);
@@ -135,6 +166,11 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
 
   function agregarBurbujaVita(texto: string) {
     setMensajes((prev) => [...prev, { id: nuevoId(), from: "vita", texto }]);
+  }
+
+  function decir(...textos: string[]) {
+    const nuevos: Mensaje[] = textos.map((texto) => ({ id: nuevoId(), from: "vita", texto }));
+    setMensajes((prev) => [...prev, ...nuevos]);
   }
 
   // ---- Paso "relación" ----------------------------------------------------
@@ -178,6 +214,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     agregarBurbujaVita(
       `Perfecto, voy a crear el perfil de ${nombre}. Le asigno el color ${color} para que siempre sepas cuándo estás viendo lo suyo.`
     );
+    setHayAvance(true);
     setNombrePersona(nombre);
     setEdadPersona(edad);
     setPerfilPendienteId(creado.perfilPendienteId);
@@ -250,6 +287,8 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       return;
     }
 
+    setHayAvance(true);
+    if (contexto === "vos") setResumen((r) => ({ ...r, meds: r.meds + 1 }));
     actualizarItem(item.clientId, { guardando: false, guardado: true, editando: false });
   }
 
@@ -268,32 +307,181 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     agregarBurbujaVita(`¡Listo! El perfil de ${nombrePersona ?? "la persona que cuidás"} quedó armado.`);
 
     window.setTimeout(() => {
-      agregarBurbujaVita("Ahora vamos con vos. ¿Cargamos lo tuyo ahora o lo dejamos para después?");
+      agregarBurbujaVita("¿Querés sumarte vos también?");
       setVista({ tipo: "handoff-vos" });
     }, 650);
   }
 
-  function irAVosAhora() {
+  async function irAVosAhora() {
+    agregarBurbujaUsuario("Sumarme yo");
     setTabActiva("vos");
-    agregarBurbujaVita("¿Y vos? ¿Qué remedios tomás? Contame como te salga.");
-    setVista({ tipo: "pedir-medicamentos", contexto: "vos" });
+    // uso_app pasa a "ambos". Si falla no se corta el chat: "cuido" y
+    // "ambos" llevan al mismo destino (vincular-cuidado).
+    const r = await marcarUsoAmbosAction();
+    if (r.status === "error") toast.error("No pudimos actualizar tu perfil de uso, seguimos igual.");
+    decir("¡Genial! Ahora vos.", "¿Tenés alguna condición de salud? Podés marcar varias.");
+    setVista({ tipo: "multi", paso: "cond", seleccion: [] });
   }
 
   async function irADespues() {
     if (!perfilPendienteId) return;
+    const r = await finalizarConCuidadoAction(perfilPendienteId);
+    if (r?.status === "error") {
+      toast.error("No pudimos guardar. Probá de nuevo.");
+      return;
+    }
     setVista({ tipo: "fin" });
-    await finalizarConCuidadoAction(perfilPendienteId);
   }
 
-  async function terminarMedicamentosVos() {
-    setVista({ tipo: "fin" });
-    if (dosTabs && perfilPendienteId) {
-      await finalizarConCuidadoAction(perfilPendienteId);
+  // ---- Salud propia: condiciones -> alergias -> remedios -> turno -> mediciones
+
+  function alternarMulti(opcion: string) {
+    setVista((v) =>
+      v.tipo === "multi"
+        ? { ...v, seleccion: v.seleccion.includes(opcion) ? v.seleccion.filter((x) => x !== opcion) : [...v.seleccion, opcion] }
+        : v
+    );
+  }
+
+  async function responderMulti(paso: "cond" | "alergia", seleccion: string[], sola?: string) {
+    agregarBurbujaUsuario(sola ?? seleccion.join(" · "));
+    const reales = sola ? [] : seleccion.filter((x) => x !== "Otra");
+    const soloOtra = !sola && reales.length === 0;
+
+    if (reales.length > 0) {
+      setEscribiendo(true);
+      const r = paso === "cond" ? await guardarCondicionesPropiasAction(reales) : await guardarAlergiasPropiasAction(reales);
+      setEscribiendo(false);
+      if (r.status === "error") {
+        toast.error(`No se pudo guardar: ${r.message}`);
+      } else {
+        setHayAvance(true);
+        setResumen((prev) => (paso === "cond" ? { ...prev, cond: [...prev.cond, ...reales] } : { ...prev, alergias: [...prev.alergias, ...reales] }));
+      }
+    }
+
+    const lista = reales.join(", ");
+    if (paso === "cond") {
+      decir(
+        sola ? "Perfecto, seguimos." : soloOtra ? "Anotado, después la completás en el perfil." : `Anotado: ${lista}. Lo voy a tener en cuenta en los controles.`,
+        "¿Alguna alergia? Podés marcar varias."
+      );
+      setVista({ tipo: "multi", paso: "alergia", seleccion: [] });
     } else {
-      await finalizarSoloYoAction();
+      decir(
+        sola ? "Buenísimo." : soloOtra ? "Anotado, después la completás en el perfil." : `Anotado: ${lista}. Te aviso si algo choca con eso.`,
+        "¿Tomás algún remedio todos los días?"
+      );
+      setVista({ tipo: "chips", paso: "med" });
     }
   }
 
+  function preguntarTurno(previo: string) {
+    decir(previo, "¿Tenés algún turno médico próximo?");
+    setVista({ tipo: "chips", paso: "turno" });
+  }
+
+  function preguntarMediciones(previo: string) {
+    decir(previo, "¿Te medís la presión o el azúcar en casa?");
+    setVista({ tipo: "chips", paso: "meas" });
+  }
+
+  function responderChip(paso: PasoChips, valor: string) {
+    agregarBurbujaUsuario(valor);
+    const omitido = valor === "Saltear" || valor === "No";
+
+    switch (paso) {
+      case "med":
+        if (valor === "Sí") {
+          decir("Contame cuáles — decímelos como te salga, yo los ordeno.");
+          setVista({ tipo: "pedir-medicamentos", contexto: "vos" });
+        } else {
+          preguntarTurno(valor === "Saltear" ? "Perfecto." : "Buenísimo.");
+        }
+        break;
+      case "turno":
+        if (valor === "Sí") {
+          decir("¿Con qué médico?");
+          setVista({ tipo: "chips", paso: "turno-spec" });
+        } else {
+          preguntarMediciones(valor === "Saltear" ? "Perfecto." : "Buenísimo.");
+        }
+        break;
+      case "turno-spec":
+        if (valor === "Otro") {
+          decir("¿Con qué especialidad?");
+          setVista({ tipo: "turno-spec-texto" });
+        } else {
+          pedirFechaTurno(valor);
+        }
+        break;
+      case "meas":
+        decir(omitido ? "Dale." : "Perfecto, cuando quieras anotar una medición, hablame y la guardo.");
+        setResumen((prev) => ({ ...prev, meas: omitido ? null : valor === "Las dos" ? "Presión · Azúcar" : valor }));
+        mostrarResumenPropio();
+        break;
+    }
+  }
+
+  function pedirFechaTurno(especialidad: string) {
+    decir("¿Cuándo es? Elegí el día y la hora.");
+    setVista({ tipo: "turno-fecha", especialidad });
+  }
+
+  function responderEspecialidad(texto: string) {
+    agregarBurbujaUsuario(texto);
+    pedirFechaTurno(texto);
+  }
+
+  function confirmarFechaTurno(especialidad: string, fecha: string, hora: string) {
+    agregarBurbujaUsuario(`${fecha.split("-").reverse().join("/")} · ${hora}`);
+    decir("¿Dónde es? Escribí el lugar o la dirección.");
+    setVista({ tipo: "turno-lugar", especialidad, fecha, hora });
+  }
+
+  async function guardarTurno(v: { especialidad: string; fecha: string; hora: string }, lugar: string | null) {
+    agregarBurbujaUsuario(lugar ?? "Lo cargo después");
+    setEscribiendo(true);
+    const r = await guardarTurnoPropioAction({ ...v, lugar });
+    setEscribiendo(false);
+
+    if (r.status === "error") {
+      toast.error(`No se pudo guardar el turno: ${r.message}`);
+      preguntarMediciones("No pude guardar el turno, lo podés cargar después desde Turnos.");
+      return;
+    }
+    setHayAvance(true);
+    const cuando = `${v.fecha.split("-").reverse().join("/")} · ${v.hora}`;
+    setResumen((prev) => ({ ...prev, turno: [v.especialidad, cuando, lugar].filter(Boolean).join(" · ") }));
+    preguntarMediciones("Anotado. Te aviso el día antes y esa mañana.");
+  }
+
+  function mostrarResumenPropio() {
+    decir("¡Listo, tu perfil está creado! Todo lo demás lo podés completar cuando quieras.");
+    setVista({ tipo: "resumen-propio" });
+  }
+
+  function terminarMedicamentosVos() {
+    preguntarTurno("Listo con los remedios.");
+  }
+
+  // Fin del recorrido propio: marca onboarding completo y sigue al permiso.
+  async function terminarTodo() {
+    const r =
+      dosTabs && perfilPendienteId
+        ? await finalizarConCuidadoAction(perfilPendienteId)
+        : await finalizarSoloYoAction();
+    if (r?.status === "error") {
+      toast.error("No pudimos guardar. Probá de nuevo.");
+      return;
+    }
+    setVista({ tipo: "fin" });
+  }
+
+  // "Terminar después" (V7 `skipChat`): cierra con lo que ya se guardó.
+  async function terminarDespues() {
+    await terminarTodo();
+  }
   const tabs = dosTabs
     ? [
         {
@@ -305,36 +493,46 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       ]
     : [];
 
+  // Barra de entrada fija abajo (V7): activa solo en los pasos de texto libre,
+  // inerte ("Elegí una opción") cuando el paso se responde con chips/tarjetas.
+  const placeholderCampo = escribiendo ? null : placeholderDelPaso(vista);
+
+  function enviarDesdeCampo(texto: string, audioSeg?: number) {
+    if (vista.tipo === "nombre-edad") responderNombreEdad(vista.relacion, texto, audioSeg);
+    else if (vista.tipo === "pedir-medicamentos") responderMedicamentos(vista.contexto, texto, audioSeg);
+    else if (vista.tipo === "turno-spec-texto") responderEspecialidad(texto);
+    else if (vista.tipo === "turno-lugar") guardarTurno(vista, texto);
+  }
+
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
+    <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-canvas">
       {/* /onboarding/nombre, no /onboarding/chat directo -- conserva el paso
           de nombre del guion viejo en vez de saltarlo (el perfil ya viene
           con el nombre de Google, pero así la persona lo puede corregir
           antes de seguir, como en el flujo original). */}
-      <EncabezadoConversar tabs={tabs} linkFormulario="/onboarding/nombre" />
+      <EncabezadoConversar
+        tabs={tabs}
+        linkFormulario="/onboarding/nombre"
+        escribiendo={escribiendo}
+        onTerminar={hayAvance && vista.tipo !== "fin" ? terminarDespues : undefined}
+      />
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2">
-        {mensajes.map((m) => (
-          <Burbuja key={m.id} m={m} />
+      <div ref={scrollRef} className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-3.5 pt-[18px]">
+        {mensajes.map((m, i) => (
+          <Burbuja key={m.id} m={m} conAvatar={mensajes[i + 1] ? mensajes[i + 1].from !== "vita" : !escribiendo} />
         ))}
         {escribiendo && <PuntosEscribiendo />}
 
         {!escribiendo && vista.tipo === "relacion" && (
-          <div className="flex flex-wrap gap-1.5 pl-9">
+          <div className="flex flex-wrap gap-1.5 pl-[46px]">
             {RELACIONES.map((r) => (
               <ChipBoton key={r} texto={r} onClick={() => elegirRelacion(r)} />
             ))}
           </div>
         )}
 
-        {!escribiendo && vista.tipo === "nombre-edad" && (
-          <div className="pl-9">
-            <CampoEntrada onEnviar={(texto, audioSeg) => responderNombreEdad(vista.relacion, texto, audioSeg)} placeholder="Nombre y edad…" />
-          </div>
-        )}
-
         {!escribiendo && vista.tipo === "nombre-edad-manual" && (
-          <div className="pl-9">
+          <div className="pl-[46px]">
             <FormularioNombreEdadManual
               relacion={vista.relacion}
               nombreInicial={vista.nombreSugerido}
@@ -344,7 +542,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         )}
 
         {!escribiendo && vista.tipo === "consentimiento" && (
-          <div className="pl-9">
+          <div className="pl-[46px]">
             <TarjetaConsentimiento
               nombre={vista.nombre}
               autorizado={vista.autorizado}
@@ -354,14 +552,8 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
           </div>
         )}
 
-        {!escribiendo && vista.tipo === "pedir-medicamentos" && (
-          <div className="pl-9">
-            <CampoEntrada onEnviar={(texto, audioSeg) => responderMedicamentos(vista.contexto, texto, audioSeg)} placeholder="Ej: Losartán de 50, a la mañana" />
-          </div>
-        )}
-
         {!escribiendo && vista.tipo === "confirmar-medicamentos" && (
-          <div className="flex flex-col gap-2.5 pl-9">
+          <div className="flex flex-col gap-2.5 pl-[46px]">
             {vista.items.map((item) => (
               <TarjetaMedicamento
                 key={item.clientId}
@@ -376,14 +568,14 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
               <button
                 type="button"
                 onClick={agregarItemManual}
-                className="rounded-full bg-secondary px-3.5 py-2 text-[12px] font-semibold text-muted-foreground"
+                className="rounded-full border border-teal-line bg-card px-3.5 py-2.5 text-[12.5px] font-bold text-slate-brand"
               >
                 + Agregar otro a mano
               </button>
               <button
                 type="button"
                 onClick={() => pedirOtroMedicamento(vista.contexto)}
-                className="rounded-full bg-secondary px-3.5 py-2 text-[12px] font-semibold text-muted-foreground"
+                className="rounded-full border border-teal-line bg-card px-3.5 py-2.5 text-[12.5px] font-bold text-slate-brand"
               >
                 + Otro remedio
               </button>
@@ -399,21 +591,86 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         )}
 
         {!escribiendo && vista.tipo === "handoff-vos" && (
-          <div className="flex flex-col gap-3 pl-9">
+          <div className="flex flex-col gap-3 pl-[46px]">
             <TarjetaResumenPersona nombre={nombrePersona} edad={edadPersona} cantidad={resumenCantidad} />
             <div className="flex gap-2">
-              <button type="button" onClick={irAVosAhora} className="flex-1 rounded-full bg-primary py-3 text-[13.5px] font-bold text-primary-foreground">
-                Ahora
+              <button type="button" onClick={irAVosAhora} className="h-12 flex-1 rounded-full bg-primary text-[14px] font-extrabold text-primary-foreground shadow-cta">
+                Sumarme yo
               </button>
-              <button type="button" onClick={irADespues} className="flex-1 rounded-full bg-secondary py-3 text-[13.5px] font-semibold">
-                Después
+              <button type="button" onClick={irADespues} className="h-12 flex-1 rounded-full border border-teal-line bg-card text-[14px] font-bold text-teal-deep">
+                Listo por ahora
               </button>
             </div>
           </div>
         )}
+
+        {!escribiendo && vista.tipo === "multi" && (
+          <ChipsMulti
+            opciones={vista.paso === "cond" ? OPC_CONDICIONES : OPC_ALERGIAS}
+            solas={OPC_SOLAS}
+            seleccion={vista.seleccion}
+            onToggle={alternarMulti}
+            onSola={(o) => responderMulti(vista.paso, [], o)}
+            onListo={() => responderMulti(vista.paso, vista.seleccion)}
+          />
+        )}
+
+        {!escribiendo && vista.tipo === "chips" && (
+          <div className="flex flex-wrap gap-1.5 pl-[46px]">
+            {OPCIONES_CHIPS[vista.paso].map((o) => (
+              <ChipBoton key={o} texto={o} onClick={() => responderChip(vista.paso, o)} />
+            ))}
+          </div>
+        )}
+
+        {!escribiendo && vista.tipo === "turno-fecha" && (
+          <div className="pl-[46px]">
+            <TarjetaFechaTurno onConfirmar={(fecha, hora) => confirmarFechaTurno(vista.especialidad, fecha, hora)} />
+          </div>
+        )}
+
+        {!escribiendo && vista.tipo === "turno-lugar" && (
+          <div className="pl-[46px]">
+            <ChipBoton texto="Lo cargo después" onClick={() => guardarTurno(vista, null)} />
+          </div>
+        )}
+
+        {!escribiendo && vista.tipo === "resumen-propio" && (
+          <div className="flex flex-col gap-3 pl-[46px]">
+            <TarjetaResumenPropia resumen={resumen} />
+            <button type="button" onClick={terminarTodo} className="h-12 rounded-full bg-primary text-[15px] font-extrabold text-primary-foreground shadow-cta">
+              Continuar
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 bg-card px-3.5 pb-[30px] pt-2.5">
+        <CampoEntrada
+          // Remonta al cambiar de paso: limpia el texto escrito y corta cualquier dictado.
+          key={placeholderCampo ?? "inerte"}
+          activo={placeholderCampo !== null}
+          onEnviar={(texto, audioSeg) => enviarDesdeCampo(texto, audioSeg)}
+          placeholder={placeholderCampo ?? undefined}
+        />
       </div>
     </div>
   );
+}
+
+function placeholderDelPaso(vista: Vista): string | null {
+  switch (vista.tipo) {
+    case "nombre-edad":
+      return "Nombre y edad…";
+    case "pedir-medicamentos":
+      return "Ej: Losartán de 50, a la mañana";
+    case "turno-spec-texto":
+      return "Ej: Dermatólogo";
+    case "turno-lugar":
+      return "Escribí el lugar";
+    default:
+      return null;
+  }
 }
 
 function FormularioNombreEdadManual({
@@ -599,6 +856,76 @@ function TarjetaResumenPersona({ nombre, edad, cantidad }: { nombre: string | nu
       <div className="rounded-[16px] bg-primary-foreground/15 px-4 py-3 text-center">
         <div className="font-heading text-[22px] font-extrabold">{cantidad}</div>
         <div className="text-[11.5px] text-primary-foreground/80">{cantidad === 1 ? "remedio" : "remedios"}</div>
+      </div>
+    </div>
+  );
+}
+
+function TarjetaFechaTurno({ onConfirmar }: { onConfirmar: (fecha: string, hora: string) => void }) {
+  const [fecha, setFecha] = useState("");
+  const [hora, setHora] = useState("09:00");
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-[var(--radius-card)] bg-card p-3.5 shadow-card">
+      <input
+        type="date"
+        value={fecha}
+        onChange={(e) => setFecha(e.target.value)}
+        aria-label="Día del turno"
+        className="rounded-[14px] bg-secondary px-3 py-2 text-[13px] font-semibold outline-none"
+      />
+      <input
+        type="time"
+        value={hora}
+        onChange={(e) => setHora(e.target.value)}
+        aria-label="Hora del turno"
+        className="rounded-[14px] bg-secondary px-3 py-2 text-[13px] font-semibold outline-none"
+      />
+      <button
+        type="button"
+        disabled={!fecha || !hora}
+        onClick={() => onConfirmar(fecha, hora)}
+        className="rounded-full bg-primary py-2 text-[12.5px] font-bold text-primary-foreground disabled:opacity-50"
+      >
+        Seguir
+      </button>
+    </div>
+  );
+}
+
+// Tarjeta de resumen (V7 `who === 'c'`): lo que quedó cargado, "Sin cargar"
+// en lo que se salteó.
+function TarjetaResumenPropia({ resumen }: { resumen: ResumenPropio }) {
+  const filas: [string, string | null][] = [
+    ["Condición", resumen.cond.length ? resumen.cond.join(", ") : null],
+    ["Alergia", resumen.alergias.length ? resumen.alergias.join(", ") : null],
+    ["Remedio", resumen.meds > 0 ? `${resumen.meds} ${resumen.meds === 1 ? "remedio" : "remedios"}` : null],
+    ["Turno", resumen.turno],
+    ["Mediciones", resumen.meas],
+  ];
+
+  return (
+    <div className="flex flex-col gap-3 rounded-[20px] bg-card p-[15px] shadow-card">
+      <div className="flex items-center gap-[11px]">
+        <div className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-ink font-heading text-base font-extrabold text-background">
+          V
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-heading text-[15.5px] font-extrabold tracking-[-0.01em]">Tu perfil</div>
+          <div className="text-xs font-medium text-subtle">Vos</div>
+        </div>
+        <div className="flex items-center gap-[5px] rounded-full bg-persona-1-tint px-2.5 py-[5px] text-[11.5px] font-extrabold text-teal-deep">
+          <VitaIcon name="check" size={12} />
+          Perfil creado
+        </div>
+      </div>
+      <div className="flex flex-col border-t border-line-soft">
+        {filas.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3 border-b border-line-soft py-[9px]">
+            <span className="text-[13px] font-semibold text-slate-brand">{k}</span>
+            <span className={cn("text-right text-[13px] font-bold", v ? "text-foreground" : "text-subtle")}>{v ?? "Sin cargar"}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

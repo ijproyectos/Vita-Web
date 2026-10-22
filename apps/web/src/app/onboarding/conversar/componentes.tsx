@@ -10,9 +10,8 @@ import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 
 // Piezas de UI compartidas por el onboarding conversacional nuevo
 // (/onboarding/conversar) — bocadillos de chat, chips, indicador de
-// "escribiendo" y el campo de entrada texto+voz. Estética calcada de
-// onboarding/chat/encuesta.tsx (el guion viejo), no del sistema de diseño
-// propio del mock (ver CLAUDE.md).
+// "escribiendo" y el campo de entrada texto+voz. La fuente de verdad visual
+// es el diseño V7 (`pantallas/V7/design v0 vita/Onboarding.dc.html`).
 
 export type Mensaje = {
   id: string;
@@ -25,11 +24,24 @@ export type Mensaje = {
   audioSeg?: number;
 };
 
-export function Burbuja({ m }: { m: Mensaje }) {
+const ANIM_ENTRADA = "animate-in fade-in slide-in-from-bottom-1.5 duration-300";
+
+// Avatar de vita junto a la burbuja (V7: 38px sobre círculo claro). Solo se
+// dibuja en la última burbuja consecutiva de vita; en las demás queda el hueco.
+function AvatarBurbuja({ visible }: { visible: boolean }) {
+  if (!visible) return <div className="size-[38px] shrink-0" aria-hidden="true" />;
+  return (
+    <div className="flex size-[38px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-avatar-fondo ring-1 ring-ink/5">
+      <VitaAvatar size={34} />
+    </div>
+  );
+}
+
+export function Burbuja({ m, conAvatar = true }: { m: Mensaje; conAvatar?: boolean }) {
   if (m.from === "user") {
     return (
-      <div className="mb-2.5 flex justify-end">
-        <div className="max-w-[80%] whitespace-pre-line rounded-[20px] rounded-br-[6px] bg-gradient-to-br from-brand-from to-brand-to px-3.5 py-2.5 text-[14.5px] text-primary-foreground">
+      <div className={cn("flex justify-end", ANIM_ENTRADA)}>
+        <div className="max-w-[78%] whitespace-pre-line rounded-[20px_20px_6px_20px] bg-primary px-[15px] py-[11px] text-[14.5px] font-medium leading-[1.45] text-primary-foreground shadow-bubble">
           {typeof m.audioSeg === "number" && (
             <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-primary-foreground/75">
               Audio · 0:{String(Math.min(59, m.audioSeg)).padStart(2, "0")}
@@ -42,9 +54,9 @@ export function Burbuja({ m }: { m: Mensaje }) {
   }
 
   return (
-    <div className="mb-2.5 flex items-end gap-2">
-      <VitaAvatar size={26} />
-      <div className="max-w-[82%] whitespace-pre-line rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] leading-snug shadow-card">
+    <div className={cn("flex items-end gap-2", ANIM_ENTRADA)}>
+      <AvatarBurbuja visible={conAvatar} />
+      <div className="max-w-[78%] whitespace-pre-line rounded-[20px_20px_20px_6px] bg-card px-4 py-3 text-[14.5px] font-medium leading-[1.5] shadow-card">
         {m.texto}
       </div>
     </div>
@@ -54,8 +66,8 @@ export function Burbuja({ m }: { m: Mensaje }) {
 export function PuntosEscribiendo() {
   return (
     <div className="flex items-end gap-2">
-      <VitaAvatar size={26} />
-      <div className="flex gap-1 rounded-[20px] rounded-bl-[6px] bg-card px-4 py-3 shadow-card">
+      <AvatarBurbuja visible />
+      <div className="flex gap-[5px] rounded-[20px_20px_20px_6px] bg-card px-[17px] py-3.5 shadow-card">
         {[0, 1, 2].map((i) => (
           <span key={i} className="size-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: `${i * 0.15}s` }} />
         ))}
@@ -70,10 +82,62 @@ export function ChipBoton({ texto, onClick, disabled }: { texto: string; onClick
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-full bg-card px-3.5 py-2 text-[13px] font-semibold text-primary shadow-[inset_0_0_0_1px_var(--border)] disabled:opacity-50"
+      className="rounded-full border border-teal-line bg-card px-[15px] py-2.5 text-[13.5px] font-bold text-teal-deep transition-colors disabled:opacity-50"
     >
       {texto}
     </button>
+  );
+}
+
+/**
+ * Chips de selección múltiple (condiciones, alergias): las opciones normales
+ * se tildan, las "solas" (Ninguna / Saltear) responden de una, y "Listo"
+ * aparece cuando hay algo tildado. Mismo comportamiento que `MULTI` del diseño.
+ */
+export function ChipsMulti({
+  opciones,
+  solas,
+  seleccion,
+  onToggle,
+  onSola,
+  onListo,
+}: {
+  opciones: readonly string[];
+  solas: readonly string[];
+  seleccion: string[];
+  onToggle: (opcion: string) => void;
+  onSola: (opcion: string) => void;
+  onListo: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-[7px] pl-[46px]">
+      {opciones.map((o) => {
+        const sel = seleccion.includes(o);
+        return (
+          <button
+            key={o}
+            type="button"
+            aria-pressed={sel}
+            onClick={() => onToggle(o)}
+            className={cn(
+              "rounded-full border px-[15px] py-2.5 text-[13.5px] font-bold transition-colors",
+              sel ? "border-primary bg-primary text-primary-foreground" : "border-teal-line bg-card text-teal-deep"
+            )}
+          >
+            {sel ? "✓ " : ""}
+            {o}
+          </button>
+        );
+      })}
+      {solas.map((o) => (
+        <ChipBoton key={o} texto={o} onClick={() => onSola(o)} />
+      ))}
+      {seleccion.length > 0 && (
+        <button type="button" onClick={onListo} className="rounded-full border border-ink bg-ink px-[15px] py-2.5 text-[13.5px] font-bold text-background">
+          Listo →
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -91,23 +155,40 @@ const FONDO_COMPLETO: Record<ColorTab, string> = { teal: "bg-chip-teal-bg text-c
 export function EncabezadoConversar({
   tabs,
   linkFormulario,
+  escribiendo,
+  onTerminar,
 }: {
   tabs: { label: string; estado: EstadoTab; color: ColorTab }[];
   linkFormulario: string;
+  escribiendo: boolean;
+  // "Terminar después" (V7 `showSkip`): solo se pasa cuando ya hay algo guardado.
+  onTerminar?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 px-4.5 pb-3 pt-4.5">
-      <div className="flex items-center justify-between">
-        <div className="font-heading text-[17px] font-extrabold">
-          vi<span className="text-primary">ta</span>
+    <header className="shrink-0 bg-card px-[18px] pb-3.5 pt-14 shadow-header">
+      <div className="flex items-center gap-3">
+        <div className="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-avatar-fondo ring-1 ring-ink/5">
+          <VitaAvatar size={46} estado={escribiendo ? "thinking" : "idle"} />
         </div>
-        <Link href={linkFormulario} className="text-[12.5px] font-semibold text-primary underline">
-          Prefiero un formulario
-        </Link>
+        <div className="min-w-0 flex-1">
+          <div className="font-heading text-[21px] font-extrabold leading-none tracking-[-0.05em]">
+            vi<span className="text-primary">ta</span>
+          </div>
+          <div className="mt-[5px] text-xs font-semibold text-subtle">{escribiendo ? "Escribiendo…" : "Armando tu perfil"}</div>
+        </div>
+        {onTerminar && (
+          <button
+            type="button"
+            onClick={onTerminar}
+            className="rounded-full bg-canvas px-3.5 py-[9px] text-[13px] font-bold text-slate-brand"
+          >
+            Terminar después
+          </button>
+        )}
       </div>
 
       {tabs.length > 1 && (
-        <div className="flex gap-2">
+        <div className="mt-3 flex gap-2">
           {tabs.map((t) => (
             <span
               key={t.label}
@@ -115,7 +196,7 @@ export function EncabezadoConversar({
                 "flex-1 rounded-full px-3 py-2 text-center text-[12.5px] font-bold transition-colors",
                 t.estado === "activo" && cn(FONDO_ACTIVO[t.color], "text-primary-foreground"),
                 t.estado === "completo" && FONDO_COMPLETO[t.color],
-                t.estado === "inactivo" && "bg-secondary text-muted-foreground"
+                t.estado === "inactivo" && "bg-canvas text-subtle"
               )}
             >
               {t.label}
@@ -123,7 +204,11 @@ export function EncabezadoConversar({
           ))}
         </div>
       )}
-    </div>
+
+      <Link href={linkFormulario} className="mt-2.5 block text-right text-[12.5px] font-semibold text-teal-deep underline">
+        Prefiero un formulario
+      </Link>
+    </header>
   );
 }
 
@@ -140,10 +225,13 @@ export function EncabezadoConversar({
 export function CampoEntrada({
   onEnviar,
   disabled,
+  activo = true,
   placeholder = "Escribí o dictá…",
 }: {
   onEnviar: (texto: string, audioSeg?: number) => void;
   disabled?: boolean;
+  // false = barra inerte "Elegí una opción" (V7: el paso actual se responde con chips).
+  activo?: boolean;
   placeholder?: string;
 }) {
   const [texto, setTexto] = useState("");
@@ -191,40 +279,52 @@ export function CampoEntrada({
   }
 
   const grabando = estado !== "inactivo";
+  const habilitado = activo && !disabled;
+  const puedeEnviar = habilitado && texto.trim() !== "";
 
   return (
-    <div className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-4.5 shadow-float">
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-full bg-canvas py-[5px] pl-[18px] pr-[5px] transition-shadow",
+        habilitado && "shadow-[0_0_0_2px_var(--primary)]"
+      )}
+    >
       <input
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && enviarTexto()}
-        disabled={disabled || grabando}
-        placeholder={grabando ? (estado === "procesando" ? "Transcribiendo…" : "Escuchando…") : placeholder}
-        className="flex-1 bg-transparent py-2 text-[15px] outline-none disabled:opacity-60"
+        disabled={!habilitado || grabando}
+        aria-label={activo ? placeholder : "Elegí una opción"}
+        placeholder={
+          !activo ? "Elegí una opción" : grabando ? (estado === "procesando" ? "Transcribiendo…" : "Escuchando…") : placeholder
+        }
+        className="min-w-0 flex-1 bg-transparent py-2.5 text-[15px] font-medium outline-none placeholder:text-subtle disabled:opacity-100"
       />
-      {texto.trim() ? (
-        <button
-          type="button"
-          onClick={enviarTexto}
-          disabled={disabled}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-60"
-        >
-          <VitaIcon name="send" size={18} />
-        </button>
-      ) : (
+      {habilitado && !texto.trim() && (
         <button
           type="button"
           onClick={alternarMic}
-          disabled={disabled}
+          aria-label={grabando ? "Detener dictado" : "Dictar por voz"}
           className={cn(
             "flex size-11 shrink-0 items-center justify-center rounded-full",
-            grabando ? "bg-chip-teal-bg text-primary" : "bg-muted text-muted-foreground",
-            "disabled:opacity-60"
+            grabando ? "bg-chip-teal-bg text-primary" : "text-subtle"
           )}
         >
           <VitaIcon name="mic" size={18} />
         </button>
       )}
+      <button
+        type="button"
+        onClick={enviarTexto}
+        disabled={!puedeEnviar}
+        aria-label="Enviar"
+        className={cn(
+          "flex size-11 shrink-0 items-center justify-center rounded-full text-primary-foreground transition-colors",
+          puedeEnviar ? "bg-primary" : "bg-deshabilitado"
+        )}
+      >
+        <VitaIcon name="send" size={18} />
+      </button>
     </div>
   );
 }

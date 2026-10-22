@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/dal";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as perfilesPendientesNucleo from "@/lib/onboarding/perfiles-pendientes";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
+import * as turnosNucleo from "@/lib/turnos/nucleo";
 import { extraerMedicamentos, extraerNombreEdad, type MedicamentoExtraido } from "@/lib/onboarding/extraer";
 import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
 
@@ -163,24 +164,108 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   return { status: "success" };
 }
 
+// --- Salud propia (condiciones, alergias, turno) -------------------------
+// Solo para el perfil de quien está logueada: el borrador de la persona que
+// se cuida (`perfiles_pendientes`) no tiene columnas para esto y no se
+// agregó migración — esos pasos se saltean en la rama de familia.
+
+export async function guardarCondicionesPropiasAction(labels: string[]): Promise<EstadoAccion> {
+  const usuario = await requireUser();
+  const supabase = await createClient();
+  try {
+    // agregarCondicion ya omite las duplicadas.
+    for (const label of labels) {
+      await perfilNucleo.agregarCondicion(supabase, usuario.id, {
+        label,
+        tipo: "permanente",
+        desde: String(new Date().getFullYear()),
+      });
+    }
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+  }
+  return { status: "success" };
+}
+
+export async function guardarAlergiasPropiasAction(alergias: string[]): Promise<EstadoAccion> {
+  const usuario = await requireUser();
+  const supabase = await createClient();
+  try {
+    for (const alergia of alergias) {
+      await perfilNucleo.agregarAlergia(supabase, usuario.id, alergia);
+    }
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+  }
+  return { status: "success" };
+}
+
+// `fecha` es "YYYY-MM-DD" exacta (la elige la persona en el chat): como
+// todavía no hay editar/eliminar turnos, nunca se guarda una fecha aproximada.
+export async function guardarTurnoPropioAction(datos: {
+  especialidad: string;
+  fecha: string;
+  hora: string;
+  lugar: string | null;
+}): Promise<EstadoAccion> {
+  const usuario = await requireUser();
+  const supabase = await createClient();
+
+  const especialidad = datos.especialidad.trim();
+  if (!especialidad) return { status: "error", message: "Faltan datos del turno." };
+
+  try {
+    await turnosNucleo.agregar(supabase, usuario.id, {
+      especialidad,
+      fecha: datos.fecha,
+      hora: datos.hora,
+      lugar: datos.lugar?.trim() || null,
+    });
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+  }
+  return { status: "success" };
+}
+
+// "¿Querés sumarte vos también?" -> uso_app pasa de "cuido" a "ambos".
+export async function marcarUsoAmbosAction(): Promise<EstadoAccion> {
+  const usuario = await requireUser();
+  const supabase = await createClient();
+  try {
+    await perfilNucleo.guardarUsoApp(supabase, usuario.id, "ambos");
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+  }
+  return { status: "success" };
+}
+
 // --- Finalización ----------------------------------------------------------
 
 // uso_app "cuido"/"ambos": marca el onboarding completo (recién acá, mismo
-// punto que el guion viejo vía redirigirSegunUsoApp) y sigue a
-// vincular-cuidado, threadeando el perfil en borrador para que el código
+// punto que el guion viejo vía redirigirSegunUsoApp) y sigue al paso de
+// permiso, que luego va a vincular-cuidado, threadeando el perfil en borrador para que el código
 // generado quede linkeado a él (ver crearVinculoComoCuidador).
-export async function finalizarConCuidadoAction(perfilPendienteId: string) {
+export async function finalizarConCuidadoAction(perfilPendienteId: string): Promise<EstadoAccion | void> {
   const usuario = await requireUser();
   const supabase = await createClient();
-  await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
-  redirect(`/onboarding/vincular-cuidado?perfilPendienteId=${perfilPendienteId}`);
+  try {
+    await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+  }
+  redirect(`/onboarding/permiso?pp=${perfilPendienteId}`);
 }
 
-// uso_app "yo": marca el onboarding completo y va directo a /app (no hay
-// nada que vincular).
-export async function finalizarSoloYoAction() {
+// Sin borrador (uso_app "yo", o "Terminar después" sin haber creado a la
+// persona): marca el onboarding completo y va al paso de permiso, que decide
+// el destino final (/app o vincular-cuidado según uso_app).
+export async function finalizarSoloYoAction(): Promise<EstadoAccion | void> {
   const usuario = await requireUser();
   const supabase = await createClient();
-  await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
-  redirect("/app");
+  try {
+    await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+  }
+  redirect("/onboarding/permiso");
 }
