@@ -20,7 +20,9 @@ import { fechaDeHoyISO, formatoFechaCorta } from "@/lib/rutina/formato";
 
 type ItemHabla = { texto: string; audioPromise: Promise<Blob | null> };
 
-const SUGERENCIAS_INICIALES = ["Contame mi día", "Agregar medicamento", "Agendar turno"];
+// Copy del diseño V7 ("Mi rutina de hoy" / "Agendar turno"). El chip "Registrar presión"
+// del mock no está: vita todavía no tiene una herramienta para cargar mediciones.
+const SUGERENCIAS_INICIALES = ["Mi rutina de hoy", "Agregar medicamento", "Agendar turno"];
 
 // Mapea el mood decidido por la tool set_avatar_mood (lib/ai/tools.ts) al
 // subconjunto "emocional" de EstadoAvatar — nunca listening/thinking/

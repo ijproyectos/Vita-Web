@@ -5,19 +5,23 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
-import { AvisoStockBajo } from "@/components/vita/aviso-stock-bajo";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import { InstalarVita } from "@/components/vita/instalar-vita";
 import { NudgeVita } from "@/components/vita/nudge-vita";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { contarNoLeidos } from "@/lib/notificaciones/avisos";
-import { fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
+import { fechaConOffset, fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
-import { CLASES_COLOR } from "@/lib/familia/colores";
-import { SelectorPerfil } from "@/components/vita/selector-perfil";
+import { EncabezadoPerfil, PastillaLector } from "@/components/vita/encabezado-perfil";
+import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
+import { TarjetaDosisVencida, type DosisVencida } from "@/components/vita/tarjeta-dosis-vencida";
+import { TarjetaEmpecemos } from "@/components/vita/tarjeta-empecemos";
+import { TiraStock, type ItemStockBajo } from "@/components/vita/tira-stock";
+import { textoDosis } from "@/lib/medicamentos/tipos";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
-import { TurnoCard, AgregarTurnoCard } from "./rutina/turno-card";
+import { nombreConMayuscula } from "@/lib/perfil/formato";
+import { TurnosHome } from "./turnos-home";
 
 export default async function HomePage() {
   const usuario = await requireUser();
@@ -27,22 +31,47 @@ export default async function HomePage() {
   const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
   const pid = activo.id;
   const puedeEditar = activo.rol === "editar";
-  const color = CLASES_COLOR[activo.color];
 
-  const [perfil, medsHoy, adherencia, turnosProximos, inventarios, noLeidos] = await Promise.all([
+  const [perfil, medsHoy, todosLosMeds, adherencia, turnosProximos, grupos, noLeidos] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, pid),
     medicamentos.listarHoy(supabase, pid),
+    medicamentos.listarTodos(supabase, pid),
     medicamentos.calcularAdherencia(supabase, pid),
     turnosNucleo.listarProximos(supabase, pid, 5),
-    inventarioNucleo.listarSeguro(supabase, pid),
+    inventarioNucleo.listarGruposSeguro(supabase, pid),
     contarNoLeidos(supabase, usuario.id),
   ]);
 
   // Los recordatorios ("te recordó X") son para la persona logueada.
   const recordatorios = activo.esPropio ? await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy) : [];
-  const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
 
-  const nombre = perfil?.nombre?.split(" ")[0] ?? activo.nombre.split(" ")[0] ?? "Ahí vamos";
+  // Tira de poco stock (V7): el medicamento con menos pastillas, "alcanzan hasta el jueves".
+  const stockBajo: ItemStockBajo[] = grupos
+    .filter((g) => g.inventario && g.inventario.stock < g.inventario.umbral_alerta)
+    .sort((a, b) => a.inventario!.stock - b.inventario!.stock)
+    .map((g) => {
+      const dias = inventarioNucleo.diasQueAlcanza(g);
+      return {
+        medicamentoId: g.representanteId,
+        nombre: g.nombre,
+        stock: g.inventario!.stock,
+        hasta: dias === null ? null : nombreDelDia(fechaConOffset(dias)),
+      };
+    });
+
+  // Dosis de hoy que ya pasaron de hora sin marcar.
+  const ahora = medicamentos.horaEnAR();
+  const vencidas: DosisVencida[] = [...medsHoy]
+    .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
+    .filter((m) => !m.tomado && medicamentos.esDosisVencida(m.hora_programada, ahora, 0))
+    .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5) }));
+
+  // Primera vez: ni remedios ni turnos cargados.
+  const primeraVez = todosLosMeds.length === 0 && turnosProximos.length === 0;
+
+  // activo.nombre is already capitalized (perfil-activo.ts).
+  const nombreCompleto = perfil?.nombre?.trim() ? nombreConMayuscula(perfil.nombre) : activo.nombre;
+  const nombre = nombreCompleto.split(" ")[0];
   // El punto de la campana es la cuenta de avisos sin leer del centro (/app/avisos).
   const hayAvisos = noLeidos > 0;
 
@@ -62,44 +91,39 @@ export default async function HomePage() {
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <InstalarVita />
 
-      {/* Saludo + selector de perfil (hoy solo vos) + avisos */}
-      <div className="mt-1.5 flex items-start justify-between">
-        <div>
-          <div className="eyebrow text-subtle">{saludoEnAR()},</div>
-          <SelectorPerfil
-            opciones={opciones}
-            activoId={pid}
-            ariaLabel={`Perfil de ${nombre}. Cambiar de perfil`}
-            className="mt-[5px] flex items-center gap-[9px] text-left"
+      {/* Saludo + selector de perfil + avisos */}
+      <EncabezadoPerfil
+        perfil={activo}
+        opciones={opciones}
+        nombre={nombre}
+        eyebrowSelector={activo.esPropio ? `${saludoEnAR()},` : "Estás viendo a"}
+        estatico={{ eyebrow: `${saludoEnAR()},`, titulo: `${nombre} 👋`, eyebrowClassName: "text-subtle" }}
+        pie={!puedeEditar ? <PastillaLector /> : undefined}
+        accion={
+          <Link
+            href="/app/avisos"
+            aria-label={hayAvisos ? "Avisos, hay novedades" : "Avisos"}
+            className="relative flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card text-slate-brand shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
           >
-            <span className={`font-heading text-[28px] font-extrabold tracking-[-0.04em] ${color.tinta}`}>{nombre}</span>
-            <span
-              aria-hidden
-              className={`flex size-[26px] shrink-0 items-center justify-center rounded-full ${color.fondo} ${color.texto}`}
-            >
-              <VitaIcon name="chevron-down" size={14} strokeWidth={2.8} />
-            </span>
-          </SelectorPerfil>
-        </div>
-        <Link
-          href="/app/avisos"
-          aria-label={hayAvisos ? "Avisos, hay novedades" : "Avisos"}
-          className="relative flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card text-slate-brand shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
-        >
-          <VitaIcon name="bell" size={19} strokeWidth={1.9} />
-          {hayAvisos && <span className="absolute right-[11px] top-2.5 size-2 rounded-full bg-primary ring-2 ring-card" />}
-        </Link>
-      </div>
+            <VitaIcon name="bell" size={19} strokeWidth={1.9} />
+            {hayAvisos && <span className="absolute right-[11px] top-2.5 size-2 rounded-full bg-primary ring-2 ring-card" />}
+          </Link>
+        }
+      />
+
+      {activo.esPropio && <TarjetaAvisosApagados />}
 
       <AvisoRecordatorio items={recordatorios} href="/app/modo-simple" />
+
+      <TarjetaDosisVencida vencidas={vencidas} puedeEditar={puedeEditar} />
 
       {/* Tarjeta de perfil */}
       <Link href="/app/resumen-salud" className="flex items-center justify-between rounded-[20px] bg-card p-[18px] shadow-card">
         <div className="flex items-center gap-3">
-          <AvatarPersona nombre={perfil?.nombre ?? activo.nombre} color={activo.color} size={52} />
+          <AvatarPersona nombre={nombreCompleto} color={activo.color} size={52} />
           <div className="min-w-0">
             <div className="truncate font-heading text-[16.5px] font-extrabold tracking-[-0.02em]">
-              {perfil?.nombre ?? activo.nombre}
+              {nombreCompleto}
             </div>
             <div className="mt-0.5 text-[11.5px] font-medium text-subtle">
               {activo.esPropio ? "Resumen de salud" : puedeEditar ? "A tu cargo · Resumen de salud" : "Solo ver · Resumen de salud"}
@@ -109,6 +133,13 @@ export default async function HomePage() {
         <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
       </Link>
 
+      {primeraVez ? (
+        <TarjetaEmpecemos
+          titulo={activo.esPropio ? "Contame qué remedios tomás" : `Contame qué remedios toma ${nombre}`}
+          puedeEditar={puedeEditar}
+        />
+      ) : (
+        <>
       {/* Adherencia de hoy */}
       <Link
         href="/app/rutina"
@@ -157,7 +188,7 @@ export default async function HomePage() {
         )}
       </Link>
 
-      <AvisoStockBajo items={stockBajo} href="/app/pastillas" />
+      <TiraStock items={stockBajo} deQuien={activo.esPropio ? null : nombre} puedeEditar={puedeEditar} />
 
       {/* Próximos turnos */}
       <div>
@@ -167,15 +198,17 @@ export default async function HomePage() {
             Ver todos →
           </Link>
         </div>
-        <div className="-mx-[18px] flex gap-2.5 overflow-x-auto px-[18px] pb-1 [scrollbar-width:none]">
-          {turnosProximos.map((t, i) => (
-            <TurnoCard key={t.id} turno={t} indice={i} />
-          ))}
-          {puedeEditar && <AgregarTurnoCard />}
-        </div>
+        <TurnosHome turnos={turnosProximos} perfil={activo} puedeEditar={puedeEditar} />
       </div>
+        </>
+      )}
 
       {activo.esPropio && <NudgeVita />}
     </div>
   );
+}
+
+// "jueves": nombre del día de la semana de una fecha AR (para "alcanzan hasta el jueves").
+function nombreDelDia(fechaISO: string): string {
+  return new Intl.DateTimeFormat("es-AR", { weekday: "long", timeZone: "UTC" }).format(new Date(`${fechaISO}T12:00:00Z`));
 }

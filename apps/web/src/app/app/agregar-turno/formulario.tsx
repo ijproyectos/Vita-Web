@@ -1,215 +1,235 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
+import { EtiquetaSeccion, FranjaDias, NotaLateral, PillsEspecialidad } from "@/components/vita/campos-turno";
+import { FilaHora, SelectorHora } from "@/components/vita/selector-hora";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { crearTurnoAction, type EstadoAccion } from "../rutina/actions";
-import { fechaConOffset, formatoFechaCorta } from "@/lib/rutina/formato";
-import { ESPECIALIDADES_SUGERIDAS } from "@/lib/turnos/tipos";
-import { ICONO_ESPECIALIDAD } from "@/lib/turnos/icono";
+import { fechaConOffset } from "@/lib/rutina/formato";
+import { BASE_LLEVAR, SUGERENCIAS_LLEVAR, type ItemLlevar } from "@/lib/turnos/tipos";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
 
-const RECORDATORIOS = [
-  { v: "1h", label: "1 hora antes" },
-  { v: "1d", label: "1 día antes" },
-  { v: "2d", label: "2 días antes" },
-  { v: "1w", label: "1 semana antes" },
-];
+const CLASE_CAMPO =
+  "w-full rounded-full bg-card px-[18px] py-[15px] text-[14.5px] font-semibold shadow-item outline-none placeholder:font-medium placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40";
 
-const HORARIOS_SUGERIDOS = ["08:00", "10:00", "14:00", "17:00"];
-
-export function FormularioAgregarTurno() {
+export function FormularioAgregarTurno({
+  llevarDisponible,
+  paraNombre,
+}: {
+  /** La columna `turnos.llevar` (migración 023) existe: si no, se oculta "Qué hay que llevar". */
+  llevarDisponible: boolean;
+  paraNombre?: string;
+}) {
   const router = useRouter();
   const [especialidad, setEspecialidad] = useState("");
   const [profesional, setProfesional] = useState("");
   const [lugar, setLugar] = useState("");
-  const [fecha, setFecha] = useState("");
-  const [hora, setHora] = useState("");
-  const [motivo, setMotivo] = useState("");
-  const [recordatorio, setRecordatorio] = useState("1d");
-  const [acompanado, setAcompanado] = useState(false);
-  const [notas, setNotas] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [fecha, setFecha] = useState(() => fechaConOffset(1));
+  const [hora, setHora] = useState("10:00");
+  const [pickerAbierto, setPickerAbierto] = useState(false);
+
+  // "Qué hay que llevar" (D:2256): ítems base, sugerencias por especialidad y propios.
+  const [baseOff, setBaseOff] = useState<string[]>(() => BASE_LLEVAR.filter(([, , on]) => !on).map(([t]) => t));
+  const [sugAgregadas, setSugAgregadas] = useState<string[]>([]);
+  const [sugOcultas, setSugOcultas] = useState<string[]>([]);
+  const [extras, setExtras] = useState<string[]>([]);
+  const [borrador, setBorrador] = useState("");
 
   async function accion(prev: EstadoAccion, formData: FormData): Promise<EstadoAccion> {
     const resultado = await crearTurnoAction(prev, formData);
     if (resultado.status === "success") {
-      toast.success("Turno agregado");
+      toast.success("Turno agendado");
       router.push("/app/rutina");
     }
     return resultado;
   }
 
   const [estado, formAction, pendiente] = useActionState(accion, ESTADO_INICIAL);
-  const puedeGuardar = especialidad.trim() && fecha.trim() && hora.trim();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [ocultoPara, setOcultoPara] = useState<typeof estado | null>(null);
+
+  const sugeridas = SUGERENCIAS_LLEVAR[especialidad] ?? [];
+  const sugeribles = sugeridas.filter((s) => !sugAgregadas.includes(s) && !sugOcultas.includes(s));
+  const filas: { texto: string; etiqueta: string; quitar: () => void }[] = [
+    ...BASE_LLEVAR.filter(([t]) => !baseOff.includes(t)).map(([t, tag]) => ({
+      texto: t,
+      etiqueta: tag,
+      quitar: () => setBaseOff((p) => [...p, t]),
+    })),
+    ...sugAgregadas.filter((s) => sugeridas.includes(s)).map((s) => ({
+      texto: s,
+      etiqueta: "",
+      quitar: () => setSugAgregadas((p) => p.filter((x) => x !== s)),
+    })),
+    ...extras.map((x, i) => ({ texto: x, etiqueta: "", quitar: () => setExtras((p) => p.filter((_, j) => j !== i)) })),
+  ];
+  const llevar: ItemLlevar[] = filas.map((f) => ({ t: f.texto, ok: false }));
+
+  function agregarExtra() {
+    const v = borrador.trim();
+    if (!v) return;
+    setExtras((p) => [...p, v.slice(0, 80)]);
+    setBorrador("");
+  }
+
+  const faltantes = [!especialidad.trim() && "la especialidad", !fecha.trim() && "la fecha"].filter(Boolean) as string[];
+  const puedeGuardar = faltantes.length === 0;
 
   return (
-    <form action={formAction} className="flex flex-col gap-[22px] pb-24">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-[22px] pb-24">
       <div>
-        <Etiqueta text="Especialidad" requerido />
-        <div className="grid grid-cols-4 gap-2">
-          {ESPECIALIDADES_SUGERIDAS.map((e) => {
-            const sel = especialidad === e;
-            return (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setEspecialidad(e)}
-                className={cn(
-                  "flex flex-col items-center gap-1 rounded-[var(--radius-item)] px-1.5 pb-2.5 pt-3.5 transition-all motion-reduce:transition-none",
-                  sel
-                    ? "bg-primary text-primary-foreground shadow-[0_8px_18px_color-mix(in_srgb,var(--primary)_25%,transparent)]"
-                    : "bg-card text-foreground shadow-item"
-                )}
-              >
-                <VitaIcon name={ICONO_ESPECIALIDAD[e] ?? "plus"} size={20} color={sel ? "var(--primary-foreground)" : "var(--primary)"} />
-                <span className="text-center text-[10.5px] font-semibold leading-tight">{e}</span>
-              </button>
-            );
-          })}
+        <EtiquetaSeccion text="Especialidad" />
+        <div className="mt-3.5">
+          <PillsEspecialidad valor={especialidad} onCambio={setEspecialidad} />
         </div>
         <input type="hidden" name="especialidad" value={especialidad} />
       </div>
 
-      <CampoTexto label="Profesional" placeholder="Dra. Laura Méndez" name="profesional" value={profesional} onChange={setProfesional} />
-      <CampoTexto label="Lugar / institución" placeholder="Hospital Italiano · sede Perón" name="lugar" value={lugar} onChange={setLugar} icon="location" />
-
-      <div className="flex items-start gap-3">
-        <div className="flex-1">
-          <Etiqueta text="Fecha" requerido />
-          <div className="flex items-center gap-2 rounded-[var(--radius-item)] bg-card px-3.5 py-3.5 shadow-item">
-            <VitaIcon name="routine" size={16} color="var(--primary)" />
-            <input
-              name="fecha"
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              className="w-full bg-transparent text-sm font-semibold outline-none"
-            />
-          </div>
-          <div className="mt-2 flex gap-1.5">
-            {[
-              ["Hoy", 0],
-              ["Mañana", 1],
-              ["+3 días", 3],
-            ].map(([label, offset]) => (
-              <button
-                key={label as string}
-                type="button"
-                onClick={() => setFecha(fechaConOffset(offset as number))}
-                className="rounded-full px-2.5 py-1 text-[11.5px] font-bold text-teal-deep shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_25%,transparent)]"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex-1">
-          <Etiqueta text="Hora" requerido />
-          <div className="flex items-center gap-2 rounded-[var(--radius-item)] bg-card px-3.5 py-3.5 shadow-item">
-            <VitaIcon name="clock" size={16} color="var(--primary)" />
-            <input
-              name="hora"
-              type="time"
-              value={hora}
-              onChange={(e) => setHora(e.target.value)}
-              className="w-full bg-transparent text-sm font-semibold outline-none"
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {HORARIOS_SUGERIDOS.map((h) => (
-              <button
-                key={h}
-                type="button"
-                onClick={() => setHora(h)}
-                className="rounded-full px-2.5 py-1 text-[11.5px] font-bold text-teal-deep shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_25%,transparent)]"
-              >
-                {h}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      {fecha && <p className="-mt-3 text-xs font-medium text-subtle">{formatoFechaCorta(fecha)}</p>}
-
-      <CampoTexto label="Motivo" placeholder="Control anual, seguimiento…" name="motivo" value={motivo} onChange={setMotivo} />
-
       <div>
-        <Etiqueta text="Recordarme" />
-        <div className="flex flex-wrap gap-1.5">
-          {RECORDATORIOS.map((r) => (
-            <button
-              key={r.v}
-              type="button"
-              onClick={() => setRecordatorio(r.v)}
-              className={cn(
-                "rounded-full px-[17px] py-[11px] text-[13.5px] font-bold",
-                recordatorio === r.v ? "bg-primary text-primary-foreground shadow-[0_6px_14px_color-mix(in_srgb,var(--primary)_25%,transparent)]" : "bg-card text-slate-brand shadow-item"
-              )}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-        <input type="hidden" name="recordatorio" value={RECORDATORIOS.find((r) => r.v === recordatorio)?.label} />
-      </div>
-
-      <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius-item)] bg-card p-3.5 shadow-item">
-        <VitaIcon name="user" size={18} color="var(--primary)" />
-        <div className="flex-1">
-          <div className="font-heading text-[13.5px] font-bold">Voy a ir acompañado</div>
-          <div className="text-xs text-muted-foreground">Para que vita se lo recuerde también a esa persona</div>
-        </div>
-        <input
-          type="checkbox"
-          name="acompanado"
-          checked={acompanado}
-          onChange={(e) => setAcompanado(e.target.checked)}
-          className="sr-only"
-        />
-        <span
-          className={cn(
-            "relative h-6 w-[42px] shrink-0 rounded-full transition-colors",
-            acompanado ? "bg-primary" : "bg-foreground/15"
+        <EtiquetaSeccion text="Profesional y lugar" />
+        <div className="mt-3.5 flex flex-col gap-[9px]">
+          <input name="profesional" value={profesional} onChange={(e) => setProfesional(e.target.value)} placeholder="Dr. / Dra." className={CLASE_CAMPO} />
+          <input name="lugar" value={lugar} onChange={(e) => setLugar(e.target.value)} placeholder="Sanatorio, clínica o centro" className={CLASE_CAMPO} />
+          {llevarDisponible && (
+            <input name="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Teléfono del consultorio (opcional)" inputMode="tel" aria-label="Teléfono del consultorio" className={CLASE_CAMPO} />
           )}
-        >
-          <span
-            className={cn(
-              "absolute top-0.5 size-5 rounded-full bg-card shadow transition-all",
-              acompanado ? "left-[20px]" : "left-0.5"
-            )}
-          />
-        </span>
-      </label>
-
-      <div>
-        <Etiqueta text="Notas" />
-        <textarea
-          name="notas"
-          value={notas}
-          onChange={(e) => setNotas(e.target.value)}
-          placeholder="Llevar estudios previos, ayunar 8hs, etc."
-          rows={3}
-          className="w-full resize-none rounded-[20px] bg-card px-[18px] py-3.5 text-[15px] font-medium shadow-item outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40"
-        />
+        </div>
       </div>
 
-      {estado.status === "error" && (
-        <p className="rounded-[14px] bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">{estado.message}</p>
+      <div>
+        <EtiquetaSeccion text="Fecha y hora" />
+        <div className="mt-3.5">
+          <FranjaDias valor={fecha} onCambio={setFecha} />
+        </div>
+        <div className="mt-3">
+          <FilaHora etiqueta="Hora del turno" hora={hora} placeholderRelacion={null} onClick={() => setPickerAbierto(true)} />
+        </div>
+        <input type="hidden" name="fecha" value={fecha} />
+        <input type="hidden" name="hora" value={hora} />
+        <NotaLateral>
+          Vita te avisa la noche anterior y unas 2 horas antes del turno{especialidad ? ` de ${especialidad.toLowerCase()}` : ""}.
+        </NotaLateral>
+      </div>
+
+      {llevarDisponible && (
+        <div>
+          <EtiquetaSeccion text="Qué hay que llevar" />
+          <ul className="mt-3.5 flex flex-col gap-2">
+            {BASE_LLEVAR.map(([t, tag]) => (
+              <FilaLlevar
+                key={t}
+                texto={t}
+                etiqueta={tag}
+                activo={!baseOff.includes(t)}
+                alternar={() => setBaseOff((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]))}
+              />
+            ))}
+            {sugAgregadas.filter((s) => sugeridas.includes(s)).map((s) => (
+              <FilaLlevar key={s} texto={s} etiqueta="" activo alternar={() => setSugAgregadas((p) => p.filter((x) => x !== s))} />
+            ))}
+            {extras.map((x, i) => (
+              <FilaLlevar key={`${x}-${i}`} texto={x} etiqueta="" activo alternar={() => setExtras((p) => p.filter((_, j) => j !== i))} />
+            ))}
+          </ul>
+
+          {sugeribles.length > 0 && (
+            <>
+              <div className="mt-4 text-[12.5px] font-bold text-slate-brand">Vita sugiere para {especialidad.toLowerCase()}</div>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {sugeribles.map((g) => (
+                  <div key={g} className="inline-flex items-center overflow-hidden rounded-full border-[1.5px] border-dashed border-primary bg-primary/[0.06]">
+                    <button
+                      type="button"
+                      onClick={() => setSugAgregadas((p) => [...p, g])}
+                      className="inline-flex items-center gap-1.5 py-[9px] pl-[13px] pr-1.5 text-[13.5px] font-bold text-teal-deep"
+                    >
+                      <VitaIcon name="plus" size={13} strokeWidth={3} />
+                      {g}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSugOcultas((p) => [...p, g])}
+                      aria-label="Borrar sugerencia"
+                      className="flex items-center py-[9px] pl-1.5 pr-3 text-subtle"
+                    >
+                      <VitaIcon name="close" size={12} strokeWidth={3} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="mt-3 flex gap-2">
+            <input
+              value={borrador}
+              onChange={(e) => setBorrador(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  agregarExtra();
+                }
+              }}
+              placeholder="Agregar otra cosa"
+              className="min-w-0 flex-1 rounded-full bg-card px-[18px] py-3.5 text-[14.5px] font-semibold shadow-item outline-none placeholder:font-medium placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40"
+            />
+            <button
+              type="button"
+              onClick={agregarExtra}
+              className={cn("shrink-0 rounded-full px-[18px] text-[13.5px] font-extrabold text-primary-foreground", borrador.trim() ? "bg-primary" : "bg-line")}
+            >
+              Agregar
+            </button>
+          </div>
+          <NotaLateral>
+            Lo ves la noche anterior, junto con el aviso del turno. El DNI y la credencial pueden ir en el celular. Remedios y mediciones ya van en el resumen para el médico.
+          </NotaLateral>
+          <input type="hidden" name="llevar" value={JSON.stringify(llevar)} />
+        </div>
       )}
+
+      <SelectorHora
+        abierto={pickerAbierto}
+        hora={hora}
+        conComidas={false}
+        onCerrar={() => setPickerAbierto(false)}
+        onConfirmar={(h) => {
+          setHora(h);
+          setPickerAbierto(false);
+        }}
+      />
+
+      {/* "No pudimos guardar" (V7): lo cargado sigue en el formulario. */}
+      <ErrorGuardarSheet
+        abierto={estado.status === "error" && ocultoPara !== estado}
+        detalle={estado.status === "error" ? estado.message : null}
+        reintentando={pendiente}
+        onReintentar={() => formRef.current?.requestSubmit()}
+        onCerrar={() => setOcultoPara(estado)}
+        onDescartar={() => router.back()}
+      />
 
       <div
         className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-md gap-2.5 bg-gradient-to-t from-background from-70% to-transparent px-[18px] pt-4"
         style={{ paddingBottom: "var(--safe-bottom)" }}
       >
+        {!puedeGuardar && (
+          <p className="absolute inset-x-0 -top-3 text-center text-xs font-semibold text-subtle" aria-live="polite">
+            Para guardar falta elegir {faltantes.join(", ").replace(/, ([^,]*)$/, " y $1")}
+          </p>
+        )}
         <button
           type="button"
           onClick={() => router.back()}
           className="rounded-full border border-foreground/10 px-[22px] py-4 font-heading text-sm font-bold text-slate-brand"
         >
-          Cancelar
+          Atrás
         </button>
         <button
           type="submit"
@@ -221,50 +241,33 @@ export function FormularioAgregarTurno() {
               : "bg-secondary text-subtle"
           )}
         >
-          {pendiente ? "Guardando…" : "Guardar turno"}
+          {pendiente ? "Guardando…" : paraNombre ? `+ Agendar turno a ${paraNombre}` : "✓ Guardar turno"}
         </button>
       </div>
     </form>
   );
 }
 
-function Etiqueta({ text, requerido }: { text: string; requerido?: boolean }) {
+function FilaLlevar({ texto, etiqueta, activo, alternar }: { texto: string; etiqueta: string; activo: boolean; alternar: () => void }) {
   return (
-    <div className="eyebrow mb-3.5 flex items-center gap-1 border-b border-foreground/[0.07] pb-2.5 text-subtle">
-      {text}
-      {requerido && <span className="text-primary">•</span>}
-    </div>
-  );
-}
-
-function CampoTexto({
-  label,
-  placeholder,
-  name,
-  value,
-  onChange,
-  icon,
-}: {
-  label: string;
-  placeholder: string;
-  name: string;
-  value: string;
-  onChange: (v: string) => void;
-  icon?: string;
-}) {
-  return (
-    <div>
-      <Etiqueta text={label} />
-      <div className="flex items-center gap-2.5 rounded-full bg-card px-[18px] py-1 shadow-item">
-        {icon && <VitaIcon name={icon} size={16} className="text-muted-foreground" />}
-        <input
-          name={name}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full bg-transparent py-3 text-[15px] font-semibold outline-none placeholder:font-medium placeholder:text-faint"
-        />
-      </div>
-    </div>
+    <li>
+      <button
+        type="button"
+        onClick={alternar}
+        aria-pressed={activo}
+        className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-[13px] text-left shadow-item transition-transform active:scale-[0.99] motion-reduce:transition-none"
+      >
+        <span
+          className={cn(
+            "flex size-[22px] shrink-0 items-center justify-center rounded-full transition-all",
+            activo ? "bg-primary" : "border-2 border-line-strong bg-card"
+          )}
+        >
+          <VitaIcon name="check" size={13} strokeWidth={3.4} color="var(--primary-foreground)" className={activo ? "opacity-100" : "opacity-0"} />
+        </span>
+        <span className={cn("min-w-0 flex-1 text-[14.5px] font-bold", activo ? "text-foreground" : "text-subtle")}>{texto}</span>
+        {etiqueta && <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-subtle">{etiqueta}</span>}
+      </button>
+    </li>
   );
 }

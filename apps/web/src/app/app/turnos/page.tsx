@@ -2,31 +2,27 @@ import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
-import { etiquetaDia, formatoFechaCorta } from "@/lib/rutina/formato";
-import { iconoDeEspecialidad, tonoDeTurno } from "@/lib/turnos/icono";
-import type { Turno } from "@/lib/turnos/tipos";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../top-bar";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
+import { ListaTurnos } from "./lista";
 
 // Mis turnos (Home → "Ver todos"): próximos turnos agrupados por día.
-// Solo lectura: editar/eliminar un turno todavía no tiene acción de servidor.
-export default async function TurnosPage() {
+// Lápiz y papelera por fila; `?editar=<id>` abre ese turno ya en edición.
+export default async function TurnosPage(props: PageProps<"/app/turnos">) {
   await requireUser();
   const supabase = await createClient();
   const activo = await obtenerPerfilActivo();
   const turnos = await turnosNucleo.listarProximos(supabase, activo.id, 50);
 
-  const porFecha = new Map<string, Turno[]>();
-  for (const t of turnos) {
-    if (!porFecha.has(t.fecha)) porFecha.set(t.fecha, []);
-    porFecha.get(t.fecha)!.push(t);
-  }
+  const pedido = (await props.searchParams)?.editar;
+  const editarPedido = Array.isArray(pedido) ? pedido[0] : pedido;
+  const editarId = turnos.find((t) => t.id === editarPedido)?.id;
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Mi salud" title={activo.esPropio ? "Mis turnos" : `Turnos de ${activo.nombre.split(" ")[0]}`} />
+      <TopBar eyebrow="Agenda" title={activo.esPropio ? "Mis turnos" : `Turnos de ${activo.nombre.split(" ")[0]}`} />
       <BannerPerfil perfil={activo} />
 
       {turnos.length === 0 && (
@@ -36,48 +32,22 @@ export default async function TurnosPage() {
           </div>
           <div className="mt-0.5 font-heading text-[15px] font-extrabold tracking-[-0.02em]">Todavía no hay turnos</div>
           <div className="max-w-[280px] text-[12.5px] font-medium leading-[1.45] text-subtle text-balance">
-            Cargá el próximo turno y te aviso con tiempo.
+            Cargá el próximo turno y te aviso el día antes, con lo que hay que llevar.
           </div>
         </div>
       )}
 
-      {[...porFecha.entries()].map(([fecha, items]) => (
-        <section key={fecha}>
-          <h2 className="eyebrow px-0.5 pb-[9px] text-subtle">
-            {etiquetaDia(fecha) === "Hoy" || etiquetaDia(fecha) === "Mañana"
-              ? `${etiquetaDia(fecha)} · ${formatoFechaCorta(fecha)}`
-              : formatoFechaCorta(fecha)}
-          </h2>
-          <ul className="overflow-hidden rounded-[20px] bg-card shadow-card">
-            {items.map((t, i) => (
-              <li key={t.id} className={i > 0 ? "border-t border-foreground/[0.06]" : ""}>
-                <div className="flex items-center gap-3 py-3.5 pl-4 pr-3.5">
-                  <span
-                    className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-canvas"
-                    style={{ color: tonoDeTurno(t.especialidad, i) }}
-                  >
-                    <VitaIcon name={iconoDeEspecialidad(t.especialidad)} size={19} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">
-                      {t.especialidad}
-                    </div>
-                    <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">
-                      {[t.profesional, t.lugar].filter(Boolean).join(" · ") || "Sin profesional cargado"}
-                    </div>
-                  </div>
-                  <div className="text-[13px] font-bold tabular-nums">{t.hora}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <ListaTurnos
+        turnos={turnos}
+        editarInicial={activo.rol === "editar" ? editarId : undefined}
+        puedeEditar={activo.rol === "editar"}
+        perfil={activo}
+      />
 
       {activo.rol === "editar" && (
       <Link
         href="/app/agregar-turno"
-        className="flex items-center justify-center gap-2 rounded-full bg-primary py-[15px] font-heading text-sm font-extrabold text-primary-foreground shadow-[0_3px_10px_color-mix(in_srgb,var(--primary)_35%,transparent)]"
+        className="flex items-center justify-center gap-2 rounded-full bg-primary py-[15px] font-heading text-sm font-extrabold text-primary-foreground shadow-cta"
       >
         <VitaIcon name="plus" size={16} strokeWidth={2.6} />
         Agregar turno

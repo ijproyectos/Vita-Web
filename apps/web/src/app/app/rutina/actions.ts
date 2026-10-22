@@ -7,7 +7,8 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { PASTILLAS_POR_TOMA_MAXIMO, STOCK_MAXIMO } from "@/lib/inventario/tipos";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
-import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
+import { normalizarLlevar, validarTelefono, type ItemLlevar } from "@/lib/turnos/tipos";
+import { leerTomas } from "@/lib/medicamentos/formulario";
 import { MENSAJE_SOLO_LECTURA, perfilActivoEditable, rolSobre } from "@/lib/familia/perfil-activo";
 
 // Compartidas entre Home y Rutina — ambas pantallas muestran y togglean
@@ -100,19 +101,12 @@ export async function crearMedicamentoAction(
   const dosis = String(formData.get("dosis") ?? "").trim();
   const unidad = String(formData.get("unidad") ?? "mg");
   const frecuencia = String(formData.get("frecuencia") ?? "");
-  const MOMENTOS_VALIDOS: MomentoDia[] = ["mañana", "mediodia", "tarde", "noche"];
-  // Validado en runtime, no solo casteado — el form ya solo manda estos
-  // valores, pero un FormData siempre es texto libre en el borde del
-  // sistema; antes esto solo fallaba tarde, en el constraint de la DB.
-  const momentos = (formData.getAll("momentos") as string[]).filter((m): m is MomentoDia =>
-    MOMENTOS_VALIDOS.includes(m as MomentoDia)
-  );
-  const conComida = String(formData.get("conComida") ?? "no-importa") as ConComida;
+  const tomas = leerTomas(formData);
   const duracion = String(formData.get("duracion") ?? "");
   const notas = String(formData.get("notas") ?? "").trim();
 
-  if (!nombre || !dosis || momentos.length === 0) {
-    return { status: "error", message: "Nombre, dosis y al menos un momento del día son obligatorios." };
+  if (!nombre || tomas.length === 0) {
+    return { status: "error", message: "El nombre y al menos un horario son obligatorios." };
   }
 
   // Stock contado desde "Mis pastillas" (medicamento nuevo detectado en un
@@ -133,11 +127,10 @@ export async function crearMedicamentoAction(
   try {
     const filas = await medicamentos.agregarMultiMomento(supabase, usuarioId, {
       nombre,
-      dosis,
+      dosis: dosis || null,
       unidad,
-      momentos,
+      tomas,
       frecuencia: frecuencia || null,
-      conComida,
       duracion: duracion || null,
       notas: notas || null,
     });
@@ -183,6 +176,19 @@ export async function crearTurnoAction(
   const recordatorio = String(formData.get("recordatorio") ?? "");
   const acompanado = formData.get("acompanado") === "on";
   const notas = String(formData.get("notas") ?? "").trim();
+  const telefonoCrudo = formData.get("telefono");
+  const tel = typeof telefonoCrudo === "string" ? validarTelefono(telefonoCrudo) : null;
+  if (tel && !tel.ok) return { status: "error", message: tel.message };
+  // "Qué hay que llevar": JSON del formulario; sin el campo no se toca la columna.
+  let llevar: ItemLlevar[] | undefined;
+  const llevarCrudo = formData.get("llevar");
+  if (typeof llevarCrudo === "string") {
+    try {
+      llevar = normalizarLlevar(JSON.parse(llevarCrudo));
+    } catch {
+      llevar = undefined;
+    }
+  }
 
   if (!especialidad || !fecha || !hora) {
     return { status: "error", message: "Especialidad, fecha y hora son obligatorios." };
@@ -199,6 +205,8 @@ export async function crearTurnoAction(
       recordatorio: recordatorio || null,
       acompanado,
       notas: notas || null,
+      ...(llevar !== undefined ? { llevar } : {}),
+      ...(tel && tel.ok && tel.valor ? { telefono: tel.valor } : {}),
     });
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
@@ -206,5 +214,27 @@ export async function crearTurnoAction(
 
   revalidatePath("/app");
   revalidatePath("/app/rutina");
+  return { status: "success" };
+}
+
+/**
+ * Guarda el checklist "Qué llevar" de un turno (hoja de detalle). Escribe
+ * sobre el DUEÑO del turno (como las acciones sobre medicamentos) y exige
+ * permiso de edición; con la migración 023 sin aplicar devuelve un error amable.
+ */
+export async function guardarLlevarAction(turnoId: string, llevar: ItemLlevar[]): Promise<EstadoAccion> {
+  await requireUser();
+  try {
+    const supabase = await createClient();
+    const duenio = await turnosNucleo.duenioDeTurno(supabase, turnoId);
+    if (!duenio) return { status: "error", message: "No encontramos ese turno." };
+    const rol = await rolSobre(duenio);
+    if (rol !== "editar") return { status: "error", message: MENSAJE_SOLO_LECTURA };
+    await turnosNucleo.actualizar(supabase, duenio, turnoId, { llevar });
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "No se pudo guardar la lista." };
+  }
+  revalidatePath("/app/rutina");
+  revalidatePath("/app");
   return { status: "success" };
 }

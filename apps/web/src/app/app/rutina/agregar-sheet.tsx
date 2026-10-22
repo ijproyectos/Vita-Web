@@ -1,61 +1,94 @@
 "use client";
 
 import Link from "next/link";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VMark } from "@/components/vita/v-mark";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 
-// "Agregar a tu rutina" — porta AddSheet de RutinaScreen.jsx (3 opciones:
-// medicamento, turno, o pedírselo a vita en texto libre).
-export function AgregarSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+// "Agregar a tu rutina" (V7 ADD SHEET): medicamento, turno, medición o
+// pedírselo a vita. Con `tipo="salud"` (el "+" de Mi Salud) ofrece estudio y
+// vita. "Contar pastillas" es app-only y se conserva en la rutina.
+export function AgregarSheet({
+  open,
+  onOpenChange,
+  tipo = "rutina",
+  nombrePersona,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  tipo?: "rutina" | "salud";
+  /** Primer nombre cuando el perfil activo es otra persona. */
+  nombrePersona?: string | null;
+}) {
   const { abrir } = useChatOverlay();
+  const titulo =
+    tipo === "salud"
+      ? nombrePersona ? `Agregar a la salud de ${nombrePersona}` : "Agregar a tu salud"
+      : nombrePersona ? `Agregar a la rutina de ${nombrePersona}` : "Agregar a tu rutina";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-[28px] pb-8">
-        <SheetHeader>
-          <SheetTitle>Agregar a tu rutina</SheetTitle>
-          <SheetDescription>¿Qué querés guardar hoy?</SheetDescription>
-        </SheetHeader>
-        <div className="flex flex-col gap-2 px-4">
-          <OpcionAgregar
-            icon="pill"
-            tinte="bg-chip-teal-bg text-chip-teal-ink"
-            titulo="Medicamento"
-            sub="Dosis, horario y duración"
-            href="/app/agregar-medicamento"
-          />
-          <OpcionAgregar
-            icon="stethoscope"
-            tinte="bg-chip-teal-bg text-chip-teal-ink"
-            titulo="Turno médico"
-            sub="Especialidad, profesional, fecha"
-            href="/app/agregar-turno"
-          />
-          <OpcionAgregar
-            icon="camera"
-            tinte="bg-chip-teal-bg text-chip-teal-ink"
-            titulo="Contar pastillas"
-            sub="Foto del blister y control de stock"
-            href="/app/pastillas/contar"
-          />
+      <SheetContent side="bottom" showCloseButton={false} className="gap-0 rounded-t-[28px] bg-card px-4 pb-[42px] pt-3.5">
+        <div aria-hidden className="mx-auto mb-4 h-1 w-10 rounded bg-line-soft" />
+        <SheetTitle className="px-1 font-heading text-lg font-extrabold tracking-[-0.02em]">{titulo}</SheetTitle>
+        <SheetDescription className="px-1 pb-3.5 pt-1 text-[12.5px] font-medium text-subtle">¿Qué querés guardar hoy?</SheetDescription>
+        <div className="flex flex-col gap-[9px]">
+          {tipo === "rutina" && (
+            <>
+              <Opcion
+                icon="pill"
+                tinte="bg-chip-teal-bg text-chip-teal-ink"
+                titulo="Medicamento"
+                sub="Dosis, frecuencia y horarios"
+                href="/app/agregar-medicamento"
+              />
+              <Opcion
+                icon="stethoscope"
+                tinte="bg-chip-amber-bg text-chip-amber-ink"
+                titulo="Turno médico"
+                sub="Especialidad, profesional, fecha"
+                href="/app/agregar-turno"
+              />
+              <Opcion
+                icon="chart"
+                tinte="bg-chip-violet-bg text-chip-violet-ink"
+                titulo="Medición"
+                sub="Presión, glucemia o peso"
+                href="/app/mi-salud/monitoreo/agregar"
+              />
+              <Opcion
+                icon="camera"
+                tinte="bg-chip-teal-bg text-chip-teal-ink"
+                titulo="Contar pastillas"
+                sub="Foto del blister y control de stock"
+                href="/app/pastillas/contar"
+              />
+            </>
+          )}
+          {tipo === "salud" && (
+            <Opcion
+              icon="doc"
+              tinte="bg-chip-amber-bg text-chip-amber-ink"
+              titulo="Estudio"
+              sub="Foto o PDF del resultado"
+              href="/app/mi-salud/agregar-estudio"
+            />
+          )}
           <button
             type="button"
             onClick={() => {
               onOpenChange(false);
               abrir();
             }}
-            className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 text-left shadow-card"
+            className="flex items-center gap-[13px] rounded-[18px] bg-canvas/60 p-3.5 text-left transition-colors hover:bg-canvas"
           >
             <VMark size={44} forma="circulo" className="shrink-0 rounded-full" />
             <div className="min-w-0 flex-1">
-              <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">
-                Pedírselo a vita
-              </div>
-              <div className="mt-0.5 text-xs font-medium text-subtle">Contame con tus palabras y lo agendo</div>
+              <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">Pedírselo a vita</div>
+              <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Contame con tus palabras y lo agendo</div>
             </div>
-            <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
+            <VitaIcon name="chevron-right" size={17} className="text-faint" />
           </button>
         </div>
       </SheetContent>
@@ -63,7 +96,7 @@ export function AgregarSheet({ open, onOpenChange }: { open: boolean; onOpenChan
   );
 }
 
-function OpcionAgregar({
+function Opcion({
   icon,
   tinte,
   titulo,
@@ -77,18 +110,15 @@ function OpcionAgregar({
   href: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 rounded-[20px] bg-card p-3.5 shadow-card"
-    >
-      <div className={`flex size-11 shrink-0 items-center justify-center rounded-[13px] ${tinte}`}>
+    <Link href={href} className="flex items-center gap-[13px] rounded-[18px] bg-canvas/60 p-3.5 transition-colors hover:bg-canvas">
+      <div className={`flex size-11 shrink-0 items-center justify-center rounded-[14px] ${tinte}`}>
         <VitaIcon name={icon} size={20} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{titulo}</div>
-        <div className="mt-0.5 text-xs font-medium text-subtle">{sub}</div>
+        <div className="mt-0.5 text-[11.5px] font-medium text-subtle">{sub}</div>
       </div>
-      <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
+      <VitaIcon name="chevron-right" size={17} className="text-faint" />
     </Link>
   );
 }

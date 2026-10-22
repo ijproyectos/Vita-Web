@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { VMark } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { cn } from "@/lib/utils";
+import { SelectorPerfil } from "@/components/vita/selector-perfil";
+import type { OpcionPerfil } from "@/lib/familia/tipos";
 
 const ITEMS = [
   { href: "/app", icon: "home", label: "Inicio" },
@@ -22,15 +25,21 @@ const SIN_NAV = [
   "/app/agregar-turno",
   "/app/resumen-salud",
   "/app/mi-salud/agregar-estudio",
+  "/app/mi-salud/monitoreo/agregar",
   // Modo simple (fase 3.5): pantalla única sin nav ni FAB — el FAB de
   // chat se monta acá adentro de BottomNav, así que ocultar el nav lo
   // oculta también, sin tocar layout.tsx.
   "/app/modo-simple",
+  "/app/vita-plus",
 ];
 
-export function BottomNav() {
+// Pulsación larga en "Perfil" (V7): abre el selector de perfiles sin entrar a la pantalla.
+const MS_PULSACION_LARGA = 480;
+
+export function BottomNav({ opciones, activoId }: { opciones: OpcionPerfil[] | null; activoId: string }) {
   const pathname = usePathname();
   const { abrir } = useChatOverlay();
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
 
   if (SIN_NAV.some((p) => pathname.startsWith(p))) return null;
 
@@ -67,8 +76,16 @@ export function BottomNav() {
       </div>
 
       {derecha.map((item) => (
-        <NavItem key={item.href} {...item} activo={esActivo(pathname, item.href)} />
+        <NavItem
+          key={item.href}
+          {...item}
+          activo={esActivo(pathname, item.href)}
+          alPulsacionLarga={item.href === "/app/perfil" && opciones ? () => setSelectorAbierto(true) : undefined}
+        />
       ))}
+      {opciones && (
+        <SelectorPerfil opciones={opciones} activoId={activoId} abierto={selectorAbierto} onAbiertoChange={setSelectorAbierto} />
+      )}
     </nav>
   );
 }
@@ -83,18 +100,55 @@ function NavItem({
   icon,
   label,
   activo,
+  alPulsacionLarga,
 }: {
   href: string;
   icon: string;
   label: string;
   activo: boolean;
+  alPulsacionLarga?: () => void;
 }) {
+  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disparada = useRef(false);
+
+  function empezar() {
+    if (!alPulsacionLarga) return;
+    disparada.current = false;
+    temporizador.current = setTimeout(() => {
+      disparada.current = true;
+      try {
+        navigator.vibrate?.(15);
+      } catch {
+        /* sin vibración: no importa */
+      }
+      alPulsacionLarga();
+    }, MS_PULSACION_LARGA);
+  }
+
+  function cancelar() {
+    if (temporizador.current) clearTimeout(temporizador.current);
+    temporizador.current = null;
+  }
+
   return (
     <Link
       href={href}
       aria-current={activo ? "page" : undefined}
+      onPointerDown={empezar}
+      onPointerUp={cancelar}
+      onPointerLeave={cancelar}
+      onPointerCancel={cancelar}
+      onContextMenu={alPulsacionLarga ? (e) => e.preventDefault() : undefined}
+      onClick={(e) => {
+        // La pulsación larga ya abrió el selector: no se navega al soltar.
+        if (disparada.current) {
+          e.preventDefault();
+          disparada.current = false;
+        }
+      }}
+      draggable={false}
       className={cn(
-        "flex flex-col items-center gap-[5px] rounded-[18px] px-0.5 py-2 font-sans text-[10.5px] font-bold tracking-[-0.01em] transition-colors",
+        "flex select-none flex-col items-center gap-[5px] rounded-[18px] px-0.5 py-2 font-sans text-[10.5px] font-bold tracking-[-0.01em] transition-colors [-webkit-touch-callout:none]",
         activo ? "text-primary" : "text-subtle"
       )}
     >

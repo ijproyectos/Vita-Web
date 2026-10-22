@@ -27,11 +27,12 @@ export default async function AgregarMedicamentoPage(props: PageProps<"/app/agre
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
-      <TopBar eyebrow="Rutina" title="Agregar medicamento" accionDerecha={activo.esPropio ? <VitaShortcutButton /> : undefined} />
+      <TopBar eyebrow={activo.esPropio ? "Nuevo en tu rutina" : `Para `} title="Medicamento" accionDerecha={activo.esPropio ? <VitaShortcutButton /> : undefined} />
       {/* El chat con vita actúa sobre la cuenta logueada: para otra persona no se ofrece. */}
       {activo.esPropio ? <VitaShortcutButton size="banner" /> : <BannerPerfil perfil={activo} accion="cargar" />}
       <FormularioAgregarMedicamento
         inicial={{ nombre, dosis, unidad, stockInicial: stock, pastillasPorToma: porToma }}
+        paraNombre={activo.esPropio ? undefined : activo.nombre.split(" ")[0]}
       />
     </div>
   );

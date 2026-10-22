@@ -17,7 +17,7 @@ export default async function PastillasPage() {
   const grupos = await inventarioNucleo.listarGrupos(supabase, activo.id);
 
   return (
-    <div className="flex flex-col gap-4.5 px-4 pt-2">
+    <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
       <TopBar eyebrow="Mi Salud" title={activo.esPropio ? "Mis pastillas" : `Pastillas de ${activo.nombre.split(" ")[0]}`} />
       <BannerPerfil perfil={activo} />
 

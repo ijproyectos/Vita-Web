@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
 import { etiquetaDia } from "@/lib/rutina/formato";
@@ -6,13 +8,14 @@ import type { Turno } from "@/lib/turnos/tipos";
 
 // Tarjeta de turno para el scroll horizontal de Home (V7): borde izquierdo de
 // color, ícono de la especialidad, chip de día y hora.
-export function TurnoCard({ turno, indice }: { turno: Turno; indice: number }) {
+export function TurnoCard({ turno, indice, onAbrir }: { turno: Turno; indice: number; onAbrir: () => void }) {
   const tono = tonoDeTurno(turno.especialidad, indice);
 
   return (
-    <Link
-      href="/app/turnos"
-      className="relative w-[196px] shrink-0 rounded-[18px] bg-card py-3.5 pl-[18px] pr-3.5 shadow-card"
+    <button
+      type="button"
+      onClick={onAbrir}
+      className="relative w-[196px] shrink-0 rounded-[18px] bg-card py-3.5 pl-[18px] pr-3.5 text-left shadow-card"
     >
       <span className="absolute inset-y-4 left-2 w-[3px] rounded-full" style={{ background: tono }} />
       <span style={{ color: tono }}>
@@ -28,7 +31,7 @@ export function TurnoCard({ turno, indice }: { turno: Turno; indice: number }) {
         </span>
         <span className="text-[11.5px] font-bold tabular-nums text-subtle">{turno.hora} hs</span>
       </div>
-    </Link>
+    </button>
   );
 }
 
