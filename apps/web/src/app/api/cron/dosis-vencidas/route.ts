@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { detectarDosisVencidas, enviarAlertaDosis } from "@/lib/notificaciones/nucleo";
-import { entregarAviso } from "@/lib/notificaciones/avisos";
+import { entregarAviso, obtenerPreferenciasDe } from "@/lib/notificaciones/avisos";
+import { PREFERENCIAS_POR_DEFECTO } from "@/lib/notificaciones/avisos-tipos";
 import { procesarAvisosProgramados, type ResumenProgramados } from "@/lib/notificaciones/programados";
 import { payloadDosisVencida } from "@/lib/notificaciones/mensajes";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -71,7 +72,18 @@ export async function POST(request: Request) {
   let sinCanal = 0;
   let pushEnviados = 0;
 
-  for (const dosis of dosisVencidas) {
+  // "Si no confirma una toma" es una preferencia del cuidador (migración 028):
+  // quien la apagó no recibe la alerta. Sin la migración, todos la reciben.
+  const prefsCuidadores = await obtenerPreferenciasDe(admin, [...new Set(dosisVencidas.flatMap((d) => d.cuidadorIds))]).catch(
+    () => new Map<string, typeof PREFERENCIAS_POR_DEFECTO>()
+  );
+
+  for (const dosis of dosisVencidas.map((d) => ({
+    ...d,
+    cuidadorIds: d.cuidadorIds.filter((id) => (prefsCuidadores.get(id) ?? PREFERENCIAS_POR_DEFECTO).pendiente_persona),
+  }))) {
+    // Todos los cuidadores apagaron este aviso: no se reclama nada.
+    if (dosis.cuidadorIds.length === 0) continue;
     // Dedupe por fecha de pared AR (no UTC): ver `fechaAR` en tipos.ts.
     const { data: reclamada, error: errorClaim } = await admin
       .from("alertas_dosis")
@@ -111,7 +123,7 @@ export async function POST(request: Request) {
       const r = await entregarAviso(
         admin,
         cuidadorId,
-        { tipo: "dosis_vencida_cuidador", titulo: payload.body, url: payload.url, datos: { elderId: dosis.elderId, medicamentoId: dosis.medicamentoId } },
+        { tipo: "dosis_vencida_cuidador", titulo: payload.body, url: payload.url, personaId: dosis.elderId, datos: { elderId: dosis.elderId, medicamentoId: dosis.medicamentoId } },
         payload
       );
       enviadosPush += r.push.enviados;
