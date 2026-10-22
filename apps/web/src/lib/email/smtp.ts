@@ -57,6 +57,9 @@ export async function enviarEmail(args: {
   asunto: string;
   html: string;
   texto: string;
+  /** Reply-To (ej. el mail de quien reporta un problema). */
+  responderA?: string;
+  adjuntos?: { nombre: string; contenido: Buffer; tipo?: string }[];
 }): Promise<ResultadoEnvio> {
   // Las cuentas creadas por código (sin Gmail) tienen un email placeholder
   // que no recibe correo: nunca se intenta enviar (evita rebotes que dañan
@@ -71,6 +74,10 @@ export async function enviarEmail(args: {
       subject: args.asunto,
       html: args.html,
       text: args.texto,
+      ...(args.responderA ? { replyTo: args.responderA } : {}),
+      ...(args.adjuntos?.length
+        ? { attachments: args.adjuntos.map((a) => ({ filename: a.nombre, content: a.contenido, contentType: a.tipo })) }
+        : {}),
     });
     return { ok: true };
   } catch (e) {

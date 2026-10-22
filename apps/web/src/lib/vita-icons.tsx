@@ -1,8 +1,17 @@
 import {
   Pill,
+  Navigation,
+  SlidersHorizontal,
+  BellOff,
+  ChartLine,
+  WifiOff,
   Share,
   Stethoscope,
   Heart,
+  Droplet,
+  Scale,
+  Thermometer,
+  Wind,
   HeartPulse,
   Activity,
   ChevronRight,
@@ -14,6 +23,7 @@ import {
   X,
   Pencil,
   Upload,
+  Download,
   FileText,
   Settings,
   Mic,
@@ -52,6 +62,10 @@ import {
   Eye,
   UserPlus,
   Smartphone,
+  Delete,
+  Search,
+  Bone,
+  Smile,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -62,6 +76,10 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   pill: Pill,
   stethoscope: Stethoscope,
   heart: Heart,
+  droplet: Droplet,
+  scale: Scale,
+  thermometer: Thermometer,
+  wind: Wind,
   "heart-plus": HeartPulse,
   activity: Activity,
   "chevron-right": ChevronRight,
@@ -73,6 +91,7 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   close: X,
   edit: Pencil,
   upload: Upload,
+  download: Download,
   doc: FileText,
   settings: Settings,
   mic: Mic,
@@ -117,6 +136,17 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   eye: Eye,
   "user-plus": UserPlus,
   smartphone: Smartphone,
+  backspace: Delete,
+  search: Search,
+  // Especialidades del alta de turno (V7 specIcon): kinesiología y odontología.
+  bone: Bone,
+  tooth: Smile,
+  // Rutina V7: "Cómo llegar", avisos apagados, medición, sin conexión.
+  navigation: Navigation,
+  sliders: SlidersHorizontal,
+  "bell-off": BellOff,
+  chart: ChartLine,
+  "wifi-off": WifiOff,
 };
 
 export function VitaIcon({

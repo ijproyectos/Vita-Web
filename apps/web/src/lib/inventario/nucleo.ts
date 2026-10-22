@@ -109,6 +109,15 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
   return [...grupos.values()];
 }
 
+/** Como `listarGrupos` pero ante cualquier fallo (migración 014 sin aplicar) devuelve []. */
+export async function listarGruposSeguro(supabase: Cliente, usuarioId: string): Promise<GrupoMedicamento[]> {
+  try {
+    return await listarGrupos(supabase, usuarioId);
+  } catch {
+    return [];
+  }
+}
+
 /** Días que alcanza el stock al ritmo actual; null si no se puede derivar. */
 export function diasQueAlcanza(grupo: GrupoMedicamento): number | null {
   if (!grupo.inventario) return null;

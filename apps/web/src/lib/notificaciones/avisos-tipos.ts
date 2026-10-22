@@ -11,7 +11,11 @@ export type TipoAviso =
   | "recordatorio_familiar"
   | "turno_dia_antes"
   | "turno_2h"
-  | "stock_bajo";
+  | "stock_bajo"
+  | "resumen_dia_persona"
+  | "turno_persona_dia_antes"
+  | "stock_bajo_persona"
+  | "persona_en_vita";
 
 export type Aviso = {
   id: string;
@@ -21,6 +25,8 @@ export type Aviso = {
   cuerpo: string;
   url: string | null;
   datos: Record<string, unknown>;
+  /** Persona cuidada a la que se refiere (feed del cuidador); null = aviso propio. Migración 028. */
+  persona_id: string | null;
   leido_at: string | null;
   created_at: string;
 };
@@ -39,6 +45,15 @@ export type PreferenciasAvisos = {
   recordatorio_dosis: boolean;
   aviso_turnos: boolean;
   stock_bajo: boolean;
+  // --- Como CUIDADOR (migración 028; bloque "Avisos de {persona}") ---
+  /** Avisarme si la persona no confirma una toma. */
+  pendiente_persona: boolean;
+  /** Resumen de las 21:00 ("Elsa tomó 4 de 5 hoy"). */
+  resumen_dia: boolean;
+  /** Remedio por terminarse de la persona (solo cuidadores Admin). */
+  stock_persona: boolean;
+  /** Turno de la persona mañana. */
+  turnos_persona: boolean;
 };
 
 /** Sin fila en `preferencias_avisos`: todo activado, sin silencio, 30 min. */
@@ -49,7 +64,26 @@ export const PREFERENCIAS_POR_DEFECTO: PreferenciasAvisos = {
   recordatorio_dosis: true,
   aviso_turnos: true,
   stock_bajo: true,
+  pendiente_persona: true,
+  resumen_dia: true,
+  stock_persona: true,
+  turnos_persona: false,
 };
+
+/** Claves booleanas que se pueden cambiar de a una (toggles instantáneos). */
+export const CLAVES_BOOLEANAS = [
+  "recordatorio_dosis",
+  "aviso_turnos",
+  "stock_bajo",
+  "pendiente_persona",
+  "resumen_dia",
+  "stock_persona",
+  "turnos_persona",
+] as const;
+export type ClaveBooleana = (typeof CLAVES_BOOLEANAS)[number];
+
+/** Las que viven en columnas de la migración 028. */
+export const CLAVES_FAMILIA: readonly ClaveBooleana[] = ["pendiente_persona", "resumen_dia", "stock_persona", "turnos_persona"];
 
 /** Rango sugerido al prender el silencio por primera vez (el del diseño). */
 export const SILENCIO_SUGERIDO = { desde: "23:00", hasta: "07:00" } as const;

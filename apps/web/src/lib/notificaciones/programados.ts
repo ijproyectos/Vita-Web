@@ -10,9 +10,20 @@ import {
   minutosDesde,
   type PreferenciasAvisos,
 } from "./avisos-tipos";
-import { entregarAviso, existeEnvio, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
+import { entregarAviso, existeEnvio, familiaAvisosDisponible, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
+import {
+  cuidadorRecibe,
+  enVentanaResumenDia,
+  enVentanaStockPersona,
+  enVentanaTurnoPersona,
+  refDeterminista,
+  type RolCuidador,
+} from "./avisos-familia-reglas";
 import {
   horaCorta,
+  payloadResumenDia,
+  payloadStockPersona,
+  payloadTurnoPersonaDiaAntes,
   payloadDosisHora,
   payloadDosisPospuesta,
   payloadDosisResuelta,
@@ -35,6 +46,14 @@ import {
 //   turno_2h           105..120 min antes del turno          turno
 //   stock_bajo         09:00-20:59, una vez por día          inventario
 //
+// Avisos de familia (al CUIDADOR, sobre la persona cuidada; migración 028 —
+// sin ella quedan apagados, ver `procesarAvisosDeFamilia` y las reglas en
+// avisos-familia-reglas.ts). Como son por cuidador, el ref_id del dedupe es un
+// uuid determinista de (persona, cuidador[, turno/inventario]):
+//   resumen_dia_persona       21:00-21:59                           persona x cuidador
+//   turno_persona_dia_antes   20:00-22:59 del día anterior          turno x cuidador
+//   stock_bajo_persona        09:00-20:59, a cuidadores Admin       inventario x cuidador
+//
 // Silencio nocturno: aplica a dosis_hora, dosis_pospuesta, turnos y stock. NO
 // aplica al segundo aviso (la toma sin confirmar suena igual, como en el
 // diseño) — y como solo existe si el primero salió, nunca es el primer ruido
@@ -51,6 +70,11 @@ export type ResumenProgramados = {
   turno2h: number;
   stockBajo: number;
   dosisResuelta: number;
+  resumenDia: number;
+  turnoPersona: number;
+  stockPersona: number;
+  /** Solo si falló la parte de familia (el resto del tick no se ve afectado). */
+  errorFamilia?: string;
 };
 
 type FilaMedicamento = {
@@ -123,6 +147,9 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     turno2h: 0,
     stockBajo: 0,
     dosisResuelta: 0,
+    resumenDia: 0,
+    turnoPersona: 0,
+    stockPersona: 0,
   };
 
   const hoyAR = fechaEnAR(ahora);
@@ -341,9 +368,12 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
       .select("cuidador_id")
       .eq("estado", "aceptado")
       .eq("elder_id", m.usuario_id);
-    const cuidadorIds = ((vinculos ?? []) as { cuidador_id: string | null }[])
+    const todos = ((vinculos ?? []) as { cuidador_id: string | null }[])
       .map((v) => v.cuidador_id)
       .filter((id): id is string => Boolean(id));
+    // Quien apagó "Si no confirma una toma" tampoco recibe el "ya tomó".
+    const prefsCuidadores = await obtenerPreferenciasDe(admin, todos);
+    const cuidadorIds = todos.filter((id) => (prefsCuidadores.get(id) ?? PREFERENCIAS_POR_DEFECTO).pendiente_persona);
     if (cuidadorIds.length === 0) continue;
 
     const { data: perfil } = await admin.from("perfiles").select("nombre").eq("id", m.usuario_id).maybeSingle();
@@ -359,12 +389,184 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
       await entregarAviso(
         admin,
         cuidadorId,
-        { tipo: "dosis_resuelta_cuidador", titulo: payload.body, cuerpo: `Era a las ${horaCorta(m.hora_programada)}`, url: payload.url },
+        { tipo: "dosis_resuelta_cuidador", titulo: payload.body, cuerpo: `Era a las ${horaCorta(m.hora_programada)}`, url: payload.url, personaId: m.usuario_id, datos: { elderId: m.usuario_id, medicamentoId: m.id } },
         payload
       );
     }
     resumen.dosisResuelta++;
   }
 
+  // h) Avisos de familia. Un fallo acá no tumba lo que ya salió en este tick.
+  if (enVentanaResumenDia(horaAR) || enVentanaTurnoPersona(horaAR) || enVentanaStockPersona(horaAR)) {
+    try {
+      if (await familiaAvisosDisponible(admin)) {
+        await procesarAvisosDeFamilia(admin, {
+          ahora,
+          hoyAR,
+          horaAR,
+          mananaAR,
+          deHoy,
+          turnos,
+          stockBajo,
+          resumen,
+        });
+      }
+    } catch (e) {
+      resumen.errorFamilia = e instanceof Error ? e.message : "Fallo en los avisos de familia.";
+    }
+  }
+
   return resumen;
+}
+
+type ContextoFamilia = {
+  ahora: Date;
+  hoyAR: string;
+  horaAR: string;
+  mananaAR: string;
+  deHoy: FilaMedicamento[];
+  turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string }[];
+  stockBajo: { id: string; usuario_id: string; nombre: string; stock: number }[];
+  resumen: ResumenProgramados;
+};
+
+/**
+ * Resumen del día, turno de mañana y stock bajo de las personas cuidadas, al
+ * feed (y push) de cada cuidador. Todo pasa por reclamarEnvio antes de enviar.
+ */
+async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Promise<void> {
+  const { hoyAR, horaAR, mananaAR, resumen } = c;
+  const hacerResumen = enVentanaResumenDia(horaAR);
+  const hacerTurnos = enVentanaTurnoPersona(horaAR);
+  const hacerStock = enVentanaStockPersona(horaAR);
+
+  const medsDePersona = new Map<string, FilaMedicamento[]>();
+  if (hacerResumen) {
+    for (const m of c.deHoy) {
+      const l = medsDePersona.get(m.usuario_id) ?? [];
+      l.push(m);
+      medsDePersona.set(m.usuario_id, l);
+    }
+  }
+  const turnosManana = hacerTurnos ? c.turnos.filter((t) => t.fecha === mananaAR && TURNO_HORA.test(t.hora)) : [];
+  const stock = hacerStock ? c.stockBajo : [];
+
+  const personaIds = [...new Set([...medsDePersona.keys(), ...turnosManana.map((t) => t.usuario_id), ...stock.map((i) => i.usuario_id)])];
+  if (personaIds.length === 0) return;
+
+  const { data: vinculosData, error: errorVinculos } = await admin
+    .from("vinculos_cuidador")
+    .select("elder_id, cuidador_id, rol")
+    .eq("estado", "aceptado")
+    .in("elder_id", personaIds);
+  if (errorVinculos) throw new Error(`No se pudieron leer los vínculos: ${errorVinculos.message}`);
+  const cuidadoresDe = new Map<string, { cuidadorId: string; rol: RolCuidador }[]>();
+  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null; rol: string | null }[]) {
+    if (!v.cuidador_id) continue;
+    const l = cuidadoresDe.get(v.elder_id) ?? [];
+    l.push({ cuidadorId: v.cuidador_id, rol: v.rol === "ver" ? "ver" : "editar" });
+    cuidadoresDe.set(v.elder_id, l);
+  }
+  if (cuidadoresDe.size === 0) return;
+
+  const cuidadorIds = [...new Set([...cuidadoresDe.values()].flatMap((l) => l.map((x) => x.cuidadorId)))];
+  const prefsMapa = await obtenerPreferenciasDe(admin, cuidadorIds);
+  const prefsDe = (id: string): PreferenciasAvisos => prefsMapa.get(id) ?? PREFERENCIAS_POR_DEFECTO;
+
+  const { data: perfiles } = await admin.from("perfiles").select("id, nombre").in("id", [...cuidadoresDe.keys()]);
+  const nombreDe = new Map<string, string>();
+  for (const p of (perfiles ?? []) as { id: string; nombre: string | null }[]) {
+    nombreDe.set(p.id, p.nombre?.trim().split(/\s+/)[0] || "Tu familiar");
+  }
+  const nombre = (id: string) => nombreDe.get(id) ?? "Tu familiar";
+
+  // Resumen del día: "Elsa tomó 4 de 5 hoy" con las tomas REALES de hoy (AR).
+  if (hacerResumen) {
+    const ids = [...medsDePersona.values()].flat().map((m) => m.id);
+    const tomadas = await tomadasHoyAR(admin, ids, c.ahora, hoyAR);
+    for (const [personaId, meds] of medsDePersona) {
+      const cuidadores = cuidadoresDe.get(personaId);
+      if (!cuidadores || meds.length === 0) continue;
+      const hechas = meds.filter((m) => tomadas.has(m.id)).length;
+      const pendientes = meds
+        .filter((m) => !tomadas.has(m.id))
+        .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
+        .map((m) => ({ nombre: m.nombre, hora: m.hora_programada }));
+      for (const cu of cuidadores) {
+        const silenciado = enSilencioNocturno(prefsDe(cu.cuidadorId), horaAR);
+        if (!cuidadorRecibe("resumen_dia_persona", prefsDe(cu.cuidadorId), cu.rol, silenciado)) continue;
+        if (!(await reclamarEnvio(admin, "resumen_dia_persona", refDeterminista(personaId, cu.cuidadorId), hoyAR, cu.cuidadorId))) continue;
+        const payload = payloadResumenDia({
+          personaId,
+          personaNombre: nombre(personaId),
+          tomadas: hechas,
+          total: meds.length,
+          pendientes,
+          fechaAR: hoyAR,
+        });
+        await entregarAviso(
+          admin,
+          cu.cuidadorId,
+          {
+            tipo: "resumen_dia_persona",
+            titulo: payload.title,
+            cuerpo: payload.body,
+            url: payload.url,
+            personaId,
+            datos: { personaId, tomadas: hechas, total: meds.length, tono: pendientes.length > 0 ? "ambar" : "ok" },
+          },
+          payload
+        );
+        resumen.resumenDia++;
+      }
+    }
+  }
+
+  // Turno de la persona mañana.
+  for (const t of turnosManana) {
+    for (const cu of cuidadoresDe.get(t.usuario_id) ?? []) {
+      const silenciado = enSilencioNocturno(prefsDe(cu.cuidadorId), horaAR);
+      if (!cuidadorRecibe("turno_persona_dia_antes", prefsDe(cu.cuidadorId), cu.rol, silenciado)) continue;
+      if (!(await reclamarEnvio(admin, "turno_persona_dia_antes", refDeterminista(t.usuario_id, cu.cuidadorId, t.id), t.fecha, cu.cuidadorId))) continue;
+      const payload = payloadTurnoPersonaDiaAntes({
+        personaId: t.usuario_id,
+        personaNombre: nombre(t.usuario_id),
+        turnoId: t.id,
+        especialidad: t.especialidad,
+        profesional: t.profesional,
+        hora: t.hora,
+      });
+      await entregarAviso(
+        admin,
+        cu.cuidadorId,
+        { tipo: "turno_persona_dia_antes", titulo: payload.title, cuerpo: payload.body, url: payload.url, personaId: t.usuario_id, datos: { turnoId: t.id } },
+        payload
+      );
+      resumen.turnoPersona++;
+    }
+  }
+
+  // Stock bajo de la persona, a sus cuidadores Admin (una vez por día por inventario).
+  for (const i of stock) {
+    for (const cu of cuidadoresDe.get(i.usuario_id) ?? []) {
+      const silenciado = enSilencioNocturno(prefsDe(cu.cuidadorId), horaAR);
+      if (!cuidadorRecibe("stock_bajo_persona", prefsDe(cu.cuidadorId), cu.rol, silenciado)) continue;
+      if (!(await reclamarEnvio(admin, "stock_bajo_persona", refDeterminista(i.usuario_id, cu.cuidadorId, i.id), hoyAR, cu.cuidadorId))) continue;
+      const payload = payloadStockPersona({
+        personaId: i.usuario_id,
+        personaNombre: nombre(i.usuario_id),
+        inventarioId: i.id,
+        nombre: i.nombre,
+        stock: i.stock,
+        fechaAR: hoyAR,
+      });
+      await entregarAviso(
+        admin,
+        cu.cuidadorId,
+        { tipo: "stock_bajo_persona", titulo: payload.title, cuerpo: payload.body, url: payload.url, personaId: i.usuario_id, datos: { inventarioId: i.id } },
+        payload
+      );
+      resumen.stockPersona++;
+    }
+  }
 }

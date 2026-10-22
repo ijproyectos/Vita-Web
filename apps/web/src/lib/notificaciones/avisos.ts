@@ -6,9 +6,9 @@ import { enviarPush, type PayloadPush, type ResultadoPush } from "./push";
 import {
   MINUTOS_POSPONER_SERVIDOR,
   PREFERENCIAS_POR_DEFECTO,
-  esHoraValida,
   recortarHora,
   type Aviso,
+  type ClaveBooleana,
   type PreferenciasAvisos,
 } from "./avisos-tipos";
 
@@ -22,14 +22,15 @@ type Cliente = SupabaseClient;
 // --- Centro de notificaciones (lecturas bajo RLS, cliente de sesión) ---------
 
 export async function listarAvisos(supabase: Cliente, usuarioId: string, limite = 60): Promise<Aviso[]> {
-  const { data, error } = await supabase
-    .from("avisos")
-    .select("id, usuario_id, tipo, titulo, cuerpo, url, datos, leido_at, created_at")
-    .eq("usuario_id", usuarioId)
-    .order("created_at", { ascending: false })
-    .limit(limite);
-  if (error || !data) return [];
-  return data as Aviso[];
+  const consulta = (columnas: string) =>
+    supabase.from("avisos").select(columnas).eq("usuario_id", usuarioId).order("created_at", { ascending: false }).limit(limite);
+  const base = "id, usuario_id, tipo, titulo, cuerpo, url, datos, leido_at, created_at";
+  const { data, error } = await consulta(`${base}, persona_id`);
+  if (!error && data) return data as unknown as Aviso[];
+  // Migración 028 sin aplicar: no existe persona_id, el feed propio sigue andando.
+  const { data: legado, error: errorLegado } = await consulta(base);
+  if (errorLegado || !legado) return [];
+  return (legado as unknown as Omit<Aviso, "persona_id">[]).map((a) => ({ ...a, persona_id: null }));
 }
 
 export async function contarNoLeidos(supabase: Cliente, usuarioId: string): Promise<number> {
@@ -70,6 +71,11 @@ type FilaPreferencias = {
   recordatorio_dosis: boolean;
   aviso_turnos: boolean;
   stock_bajo: boolean;
+  // Migración 028: ausentes si todavía no está aplicada.
+  pendiente_persona?: boolean;
+  resumen_dia?: boolean;
+  stock_persona?: boolean;
+  turnos_persona?: boolean;
 };
 
 function desdeFila(f: FilaPreferencias): PreferenciasAvisos {
@@ -80,21 +86,40 @@ function desdeFila(f: FilaPreferencias): PreferenciasAvisos {
     recordatorio_dosis: f.recordatorio_dosis,
     aviso_turnos: f.aviso_turnos,
     stock_bajo: f.stock_bajo,
+    pendiente_persona: f.pendiente_persona ?? PREFERENCIAS_POR_DEFECTO.pendiente_persona,
+    resumen_dia: f.resumen_dia ?? PREFERENCIAS_POR_DEFECTO.resumen_dia,
+    stock_persona: f.stock_persona ?? PREFERENCIAS_POR_DEFECTO.stock_persona,
+    turnos_persona: f.turnos_persona ?? PREFERENCIAS_POR_DEFECTO.turnos_persona,
   };
 }
 
-const COLUMNAS_PREFS =
+const COLUMNAS_PREFS_BASE =
   "usuario_id, silencio_desde, silencio_hasta, espera_cuidador_min, recordatorio_dosis, aviso_turnos, stock_bajo";
+const COLUMNAS_PREFS = `${COLUMNAS_PREFS_BASE}, pendiente_persona, resumen_dia, stock_persona, turnos_persona`;
 
-/** Sin fila (o con la tabla sin migrar) devuelve los defaults. Nunca lanza. */
+/**
+ * Preferencias + si las columnas de familia (migración 028) existen. Sin fila
+ * (o con la tabla sin migrar) devuelve los defaults. Nunca lanza.
+ */
+export async function obtenerPreferenciasConEstado(
+  supabase: Cliente,
+  usuarioId: string
+): Promise<{ prefs: PreferenciasAvisos; familiaDisponible: boolean }> {
+  const completa = await supabase.from("preferencias_avisos").select(COLUMNAS_PREFS).eq("usuario_id", usuarioId).maybeSingle();
+  if (!completa.error) {
+    return {
+      prefs: completa.data ? desdeFila(completa.data as unknown as FilaPreferencias) : { ...PREFERENCIAS_POR_DEFECTO },
+      familiaDisponible: true,
+    };
+  }
+  // Sin la 028: se reintenta con las columnas de la 020 para no perder el silencio ni los toggles.
+  const legado = await supabase.from("preferencias_avisos").select(COLUMNAS_PREFS_BASE).eq("usuario_id", usuarioId).maybeSingle();
+  if (legado.error || !legado.data) return { prefs: { ...PREFERENCIAS_POR_DEFECTO }, familiaDisponible: false };
+  return { prefs: desdeFila(legado.data as unknown as FilaPreferencias), familiaDisponible: false };
+}
+
 export async function obtenerPreferencias(supabase: Cliente, usuarioId: string): Promise<PreferenciasAvisos> {
-  const { data, error } = await supabase
-    .from("preferencias_avisos")
-    .select(COLUMNAS_PREFS)
-    .eq("usuario_id", usuarioId)
-    .maybeSingle();
-  if (error || !data) return { ...PREFERENCIAS_POR_DEFECTO };
-  return desdeFila(data as FilaPreferencias);
+  return (await obtenerPreferenciasConEstado(supabase, usuarioId)).prefs;
 }
 
 /** Preferencias de varios usuarios (cron, service_role). Los que no tienen fila no aparecen. */
@@ -104,39 +129,58 @@ export async function obtenerPreferenciasDe(
 ): Promise<Map<string, PreferenciasAvisos>> {
   const mapa = new Map<string, PreferenciasAvisos>();
   if (usuarioIds.length === 0) return mapa;
-  const { data, error } = await admin
-    .from("preferencias_avisos")
-    .select(COLUMNAS_PREFS)
-    .in("usuario_id", usuarioIds);
-  if (error || !data) return mapa;
-  for (const f of data as (FilaPreferencias & { usuario_id: string })[]) mapa.set(f.usuario_id, desdeFila(f));
+  let filas: unknown[] | null = null;
+  const completa = await admin.from("preferencias_avisos").select(COLUMNAS_PREFS).in("usuario_id", usuarioIds);
+  if (!completa.error) filas = completa.data;
+  else {
+    // Sin la 028: columnas de la 020.
+    const legado = await admin.from("preferencias_avisos").select(COLUMNAS_PREFS_BASE).in("usuario_id", usuarioIds);
+    if (!legado.error) filas = legado.data;
+  }
+  if (!filas) return mapa;
+  const data = filas;
+  for (const f of data as unknown as (FilaPreferencias & { usuario_id: string })[]) mapa.set(f.usuario_id, desdeFila(f));
   return mapa;
 }
 
-export async function guardarPreferencias(
+/**
+ * Cambia SOLO los campos del parche (toggles instantáneos de Configurar
+ * avisos): el upsert no toca las demás columnas de una fila existente y, si no
+ * hay fila, el resto toma los defaults de la tabla. Ya validado por quien llama.
+ */
+export async function actualizarPreferencias(
   supabase: Cliente,
   usuarioId: string,
-  prefs: PreferenciasAvisos
+  parche: Partial<Pick<PreferenciasAvisos, ClaveBooleana | "espera_cuidador_min" | "silencio_desde" | "silencio_hasta">>
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const conSilencio = Boolean(prefs.silencio_desde && prefs.silencio_hasta);
-  if (conSilencio && (!esHoraValida(prefs.silencio_desde) || !esHoraValida(prefs.silencio_hasta))) {
-    return { ok: false, error: "El horario de silencio no es válido." };
-  }
-  const { error } = await supabase.from("preferencias_avisos").upsert(
-    {
-      usuario_id: usuarioId,
-      silencio_desde: conSilencio ? prefs.silencio_desde : null,
-      silencio_hasta: conSilencio ? prefs.silencio_hasta : null,
-      espera_cuidador_min: prefs.espera_cuidador_min,
-      recordatorio_dosis: prefs.recordatorio_dosis,
-      aviso_turnos: prefs.aviso_turnos,
-      stock_bajo: prefs.stock_bajo,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "usuario_id" }
-  );
+  const { error } = await supabase
+    .from("preferencias_avisos")
+    .upsert({ usuario_id: usuarioId, ...parche, updated_at: new Date().toISOString() }, { onConflict: "usuario_id" });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * La espera antes de avisar a quien cuida es de la PERSONA (la lee el cron
+ * desde su fila). Un cuidador Admin la edita por la policy de la 021.
+ */
+export async function actualizarEsperaDePersona(
+  supabase: Cliente,
+  personaId: string,
+  minutos: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return actualizarPreferencias(supabase, personaId, { espera_cuidador_min: minutos });
+}
+
+/** Espera vigente de una persona (default 30). Nunca lanza. */
+export async function esperaDePersona(supabase: Cliente, personaId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("preferencias_avisos")
+    .select("espera_cuidador_min")
+    .eq("usuario_id", personaId)
+    .maybeSingle();
+  if (error || !data) return PREFERENCIAS_POR_DEFECTO.espera_cuidador_min;
+  return (data as { espera_cuidador_min: number }).espera_cuidador_min;
 }
 
 // --- Posposiciones ----------------------------------------------------------------
@@ -217,19 +261,38 @@ export type DatosAviso = {
   cuerpo?: string;
   url?: string | null;
   datos?: Record<string, unknown>;
+  /** Persona cuidada a la que se refiere (feed del cuidador). Migración 028. */
+  personaId?: string | null;
 };
 
-/** Inserta la fila del centro de notificaciones. Nunca lanza. */
+/**
+ * Inserta la fila del centro de notificaciones. Nunca lanza. Con `personaId`
+ * intenta guardar la columna de la 028; si todavía no existe reintenta sin ella
+ * (el aviso llega igual, solo sin el filtro por persona).
+ */
 export async function crearAviso(admin: Cliente, usuarioId: string, aviso: DatosAviso): Promise<boolean> {
-  const { error } = await admin.from("avisos").insert({
+  const fila = {
     usuario_id: usuarioId,
     tipo: aviso.tipo,
     titulo: aviso.titulo,
     cuerpo: aviso.cuerpo ?? "",
     url: aviso.url ?? null,
     datos: aviso.datos ?? {},
-  });
+  };
+  if (aviso.personaId) {
+    const { error } = await admin.from("avisos").insert({ ...fila, persona_id: aviso.personaId });
+    if (!error) return true;
+  }
+  const { error } = await admin.from("avisos").insert(fila);
   return !error;
+}
+
+/** ¿Está aplicada la migración 028? (los avisos de familia se apagan si no). Nunca lanza. */
+export async function familiaAvisosDisponible(admin: Cliente): Promise<boolean> {
+  const a = await admin.from("avisos").select("persona_id").limit(1);
+  if (a.error) return false;
+  const p = await admin.from("preferencias_avisos").select("resumen_dia").limit(1);
+  return !p.error;
 }
 
 /**

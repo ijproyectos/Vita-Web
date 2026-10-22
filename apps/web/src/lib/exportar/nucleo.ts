@@ -241,7 +241,14 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
 
   return {
     generado_en: new Date().toISOString(),
-    cuenta: { email: esEmailDeCuentaPorCodigo(authRes.data.user?.email) ? null : (authRes.data.user?.email ?? null) },
+    // Solo el mail de la sesión si el export es del propio usuario; al exportar a
+    // alguien que se cuida no se le atribuye el mail de quien exporta.
+    cuenta: {
+      email:
+        authRes.data.user?.id !== usuarioId || esEmailDeCuentaPorCodigo(authRes.data.user?.email)
+          ? null
+          : (authRes.data.user?.email ?? null),
+    },
     perfil: perfilExportado,
     medicamentos: medicamentos.map(({ usuario_id: _u, ...m }) => {
       void _u;

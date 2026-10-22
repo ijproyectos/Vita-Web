@@ -10,3 +10,20 @@ export function edadTexto(perfil: Pick<Perfil, "fecha_nacimiento" | "edad_rango"
   }
   return perfil.edad_rango;
 }
+
+// Particles that stay lowercase inside a name ("María de los Ángeles").
+const PARTICULAS = new Set(["de", "del", "la", "las", "los", "y"]);
+
+// "jonatan rios" → "Jonatan Rios". Only uppercases the first letter of each
+// word (except particles after the first word); the rest is left as typed.
+export function nombreConMayuscula(nombre: string): string {
+  return nombre
+    .trim()
+    .split(/\s+/)
+    .map((palabra, i) =>
+      i > 0 && PARTICULAS.has(palabra.toLowerCase())
+        ? palabra
+        : palabra.charAt(0).toLocaleUpperCase("es-AR") + palabra.slice(1)
+    )
+    .join(" ");
+}

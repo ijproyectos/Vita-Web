@@ -2,6 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  ConComida,
+  MomentoDia,
+  DatosActualizarGrupo,
   DatosActualizarHorario,
   DatosNuevoMedicamento,
   DatosNuevoMedicamentoMultiMomento,
@@ -9,9 +12,12 @@ import type {
   Medicamento,
   MedicamentoConToma,
   ResumenAdherencia,
+  TomaRegistrada,
 } from "./tipos";
 import { HORA_POR_MOMENTO } from "./tipos";
 import { ajustarStock, buscarInventarioId } from "@/lib/inventario/nucleo";
+import { claveMedicamento } from "@/lib/inventario/tipos";
+import { momentoDelDia } from "@/lib/rutina/momento";
 
 // Núcleo de lógica de medicamentos, sin acoplarse a Server Actions ni al
 // chat con IA — ambos llaman a estas mismas funciones (pasando el cliente
@@ -133,7 +139,7 @@ export function esDosisVencida(
   return aMinutos(ahoraHHMM) - aMinutos(horaProgramada) >= minutosGracia;
 }
 
-function aplicaHoy(medicamento: Medicamento): boolean {
+export function aplicaHoy(medicamento: Medicamento): boolean {
   return (
     medicamento.dias_recurrentes.length === 0 ||
     medicamento.dias_recurrentes.includes(diaDeHoy())
@@ -182,6 +188,26 @@ export async function listarHoy(
     const toma = tomaPorMedicamento.get(m.id);
     return { ...m, tomado: toma?.tomado ?? false, toma_id: toma?.id ?? null };
   });
+}
+
+/**
+ * Tomas registradas desde `desdeFecha` ("YYYY-MM-DD", UTC) hasta hoy: alimenta
+ * la semana del detalle del medicamento y el Historial de la Rutina. Nunca
+ * lanza: una lectura fallida devuelve [] (la UI muestra "sin tomas").
+ */
+export async function listarTomasDesde(
+  supabase: Cliente,
+  usuarioId: string,
+  desdeFecha: string
+): Promise<TomaRegistrada[]> {
+  const { data, error } = await supabase
+    .from("medicamentos_tomas")
+    .select("medicamento_id, fecha, tomado, tomado_en")
+    .eq("usuario_id", usuarioId)
+    .gte("fecha", desdeFecha)
+    .order("fecha", { ascending: true });
+  if (error) return [];
+  return data as TomaRegistrada[];
 }
 
 /**
@@ -265,18 +291,24 @@ export async function agregarMultiMomento(
   // nuevas nacen enganchadas a él (un solo stock compartido por medicamento).
   const inventarioId = await buscarInventarioId(supabase, usuarioId, datos.nombre, datos.dosis);
 
-  const filas = datos.momentos.map((momento) => ({
+  // Alta por toma (hora propia + comida por fila) o por momento (hora por defecto).
+  const plan: { hora: string; momento: MomentoDia; conComida: ConComida }[] = datos.tomas?.length
+    ? datos.tomas.map((t) => ({ hora: t.hora, momento: momentoDelDia(t.hora), conComida: t.conComida }))
+    : (datos.momentos ?? []).map((m) => ({ hora: HORA_POR_MOMENTO[m], momento: m, conComida: datos.conComida ?? "no-importa" }));
+  if (plan.length === 0) throw new Error("Falta al menos un horario.");
+
+  const filas = plan.map((toma) => ({
     // Solo si hay uno: así el insert tampoco depende de que la columna exista.
     ...(inventarioId ? { inventario_id: inventarioId } : {}),
     usuario_id: usuarioId,
     nombre: datos.nombre,
     dosis: datos.dosis ?? null,
     unidad: datos.unidad ?? "mg",
-    hora_programada: HORA_POR_MOMENTO[momento],
-    momento_dia: momento,
+    hora_programada: toma.hora,
+    momento_dia: toma.momento,
     dias_recurrentes: [],
     frecuencia: datos.frecuencia ?? null,
-    con_comida: datos.conComida ?? "no-importa",
+    con_comida: toma.conComida,
     duracion: datos.duracion ?? null,
     notas: datos.notas ?? null,
   }));
@@ -353,6 +385,122 @@ export async function eliminarHorario(
     .eq("usuario_id", usuarioId);
 
   if (error) throw new Error(`No se pudo eliminar el medicamento: ${error.message}`);
+}
+
+/**
+ * Edita un medicamento completo (todas las filas/horarios del grupo) desde
+ * "Mis medicamentos". Las filas existentes se identifican por id (conservan
+ * sus tomas), las tomas sin id se crean copiando lo compartido de la primera
+ * fila (stock, indicaciones, días) y las filas que ya no vienen se borran.
+ * Si el medicamento tiene stock y cambia nombre/dosis, el inventario se
+ * renombra para que siga enganchado (best-effort: nunca bloquea el guardado).
+ */
+export async function actualizarGrupo(
+  supabase: Cliente,
+  usuarioId: string,
+  ids: string[],
+  datos: DatosActualizarGrupo
+): Promise<void> {
+  const nombre = datos.nombre.trim();
+  if (!nombre) throw new Error("El nombre no puede quedar vacío.");
+  if (datos.tomas.length === 0) throw new Error("Tiene que haber al menos un horario.");
+  if (datos.tomas.some((t) => !/^\d{2}:\d{2}$/.test(t.hora))) throw new Error("Revisá los horarios.");
+  if (new Set(datos.tomas.map((t) => t.hora)).size !== datos.tomas.length) {
+    throw new Error("Hay dos tomas a la misma hora.");
+  }
+
+  const { data: existentes, error: errLeer } = await supabase
+    .from("medicamentos")
+    .select("*")
+    .eq("usuario_id", usuarioId)
+    .in("id", ids)
+    .order("hora_programada", { ascending: true });
+  if (errLeer) throw new Error(`No se pudo leer el medicamento: ${errLeer.message}`);
+  const filas = (existentes ?? []) as Medicamento[];
+  if (filas.length === 0) throw new Error("No encontramos ese medicamento.");
+
+  const idsValidos = new Set(filas.map((f) => f.id));
+  if (datos.tomas.some((t) => t.id && !idsValidos.has(t.id))) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
+
+  const compartido: Record<string, unknown> = { nombre, dosis: datos.dosis, unidad: datos.unidad };
+  if (datos.frecuencia !== undefined) compartido.frecuencia = datos.frecuencia;
+  const ahora = new Date().toISOString();
+
+  // Primero lo que no puede dejar el grupo a medias: altas y borrados.
+  const conservar = new Set(datos.tomas.flatMap((t) => (t.id ? [t.id] : [])));
+  const aBorrar = filas.filter((f) => !conservar.has(f.id)).map((f) => f.id);
+  const molde = filas[0];
+
+  const nuevas = datos.tomas.filter((t) => !t.id);
+  if (nuevas.length > 0) {
+    const { id: _id, created_at: _c, updated_at: _u, ...base } = molde;
+    void _id;
+    void _c;
+    void _u;
+    const { error } = await supabase.from("medicamentos").insert(
+      nuevas.map((t) => ({
+        ...base,
+        ...compartido,
+        hora_programada: t.hora,
+        momento_dia: momentoDelDia(t.hora),
+        con_comida: t.conComida,
+      }))
+    );
+    if (error) throw new Error(`No se pudo guardar el horario nuevo: ${error.message}`);
+  }
+
+  for (const t of datos.tomas.filter((x) => x.id)) {
+    const { error } = await supabase
+      .from("medicamentos")
+      .update({
+        ...compartido,
+        hora_programada: t.hora,
+        momento_dia: momentoDelDia(t.hora),
+        con_comida: t.conComida,
+        updated_at: ahora,
+      })
+      .eq("id", t.id!)
+      .eq("usuario_id", usuarioId);
+    if (error) throw new Error(`No se pudo actualizar el medicamento: ${error.message}`);
+  }
+
+  if (aBorrar.length > 0) {
+    const { error } = await supabase.from("medicamentos").delete().in("id", aBorrar).eq("usuario_id", usuarioId);
+    if (error) throw new Error(`No se pudo quitar el horario: ${error.message}`);
+  }
+
+  if (molde.inventario_id && claveMedicamento(molde.nombre, molde.dosis) !== claveMedicamento(nombre, datos.dosis)) {
+    await supabase
+      .from("inventario_pastillas")
+      .update({ nombre, dosis: datos.dosis })
+      .eq("id", molde.inventario_id);
+  }
+}
+
+/**
+ * Borra un medicamento con todos sus horarios (y sus tomas, por cascada). Si
+ * su stock de pastillas queda sin ningún medicamento enganchado, también se
+ * borra (best-effort) para no dejar un inventario huérfano en "Mis pastillas".
+ */
+export async function eliminarGrupo(supabase: Cliente, usuarioId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { data: filas } = await supabase
+    .from("medicamentos")
+    .select("inventario_id")
+    .eq("usuario_id", usuarioId)
+    .in("id", ids);
+  const inventarios = [...new Set((filas ?? []).map((f) => f.inventario_id as string | null).filter((x): x is string => !!x))];
+
+  const { error } = await supabase.from("medicamentos").delete().in("id", ids).eq("usuario_id", usuarioId);
+  if (error) throw new Error(`No se pudo eliminar el medicamento: ${error.message}`);
+
+  for (const inventarioId of inventarios) {
+    const { count } = await supabase
+      .from("medicamentos")
+      .select("id", { count: "exact", head: true })
+      .eq("inventario_id", inventarioId);
+    if ((count ?? 0) === 0) await supabase.from("inventario_pastillas").delete().eq("id", inventarioId);
+  }
 }
 
 export async function marcarTomado(

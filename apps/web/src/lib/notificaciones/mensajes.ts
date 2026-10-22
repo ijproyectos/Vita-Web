@@ -188,3 +188,85 @@ export function payloadStockBajo(s: { inventarioId: string; nombre: string; stoc
     tag: `stock-${s.inventarioId}-${s.fechaAR}`,
   };
 }
+
+// --- Avisos de familia (V7 paquete 8): al CUIDADOR, sobre una persona cuidada ----
+
+function primerNombre(nombre: string): string {
+  return nombre.trim().split(/\s+/)[0] || "Tu familiar";
+}
+
+/** 21:00: "Elsa tomó 4 de 5 hoy". Con pendientes, el cuerpo dice cuáles. */
+export function payloadResumenDia(d: {
+  personaId: string;
+  personaNombre: string;
+  tomadas: number;
+  total: number;
+  pendientes: { nombre: string; hora: string }[];
+  fechaAR: string;
+}): PayloadPush {
+  const nombre = primerNombre(d.personaNombre);
+  const falta = d.pendientes.slice(0, 2).map((p) => `${p.nombre} (${horaCorta(p.hora)})`);
+  const resto = d.pendientes.length - falta.length;
+  const cuerpo =
+    d.pendientes.length === 0
+      ? "Completó todas sus tomas de hoy."
+      : `Quedó sin tomar: ${falta.join(", ")}${resto > 0 ? ` y ${resto} más` : ""}.`;
+  return {
+    title: `${nombre} tomó ${d.tomadas} de ${d.total} hoy`,
+    body: cuerpo,
+    url: `/app/familia/${d.personaId}`,
+    tag: `resumen-dia-${d.personaId}-${d.fechaAR}`,
+  };
+}
+
+/** El día anterior (20:00): "Mañana Elsa tiene Kinesiología". */
+export function payloadTurnoPersonaDiaAntes(t: {
+  personaId: string;
+  personaNombre: string;
+  turnoId: string;
+  especialidad: string;
+  profesional: string | null;
+  hora: string;
+}): PayloadPush {
+  const detalle = [horaCorta(t.hora), t.profesional?.trim() || null].filter(Boolean).join(" · ");
+  return {
+    title: `Mañana ${primerNombre(t.personaNombre)} tiene ${t.especialidad}`,
+    body: detalle,
+    url: `/app/familia/${t.personaId}`,
+    tag: `turno-persona-${t.turnoId}`,
+  };
+}
+
+/** Stock por debajo del umbral de la persona (a cuidadores Admin, una vez por día). */
+export function payloadStockPersona(s: {
+  personaId: string;
+  personaNombre: string;
+  inventarioId: string;
+  nombre: string;
+  stock: number;
+  fechaAR: string;
+}): PayloadPush {
+  const quien = primerNombre(s.personaNombre);
+  const titulo =
+    s.stock <= 0
+      ? `A ${quien} se le terminó el ${s.nombre}`
+      : s.stock === 1
+        ? `A ${quien} le queda 1 pastilla de ${s.nombre}`
+        : `A ${quien} le quedan ${s.stock} pastillas de ${s.nombre}`;
+  return {
+    title: titulo,
+    body: "Para que lo pida a tiempo.",
+    url: `/app/familia/${s.personaId}`,
+    tag: `stock-persona-${s.inventarioId}-${s.fechaAR}`,
+  };
+}
+
+/** "Elsa ya está en vita": entró por primera vez con el código de acceso. */
+export function payloadPersonaEnVita(d: { personaId: string; personaNombre: string }): PayloadPush {
+  return {
+    title: `${primerNombre(d.personaNombre)} ya está en vita`,
+    body: "Entró con el código · usa el modo simple.",
+    url: `/app/familia/${d.personaId}`,
+    tag: `persona-en-vita-${d.personaId}`,
+  };
+}

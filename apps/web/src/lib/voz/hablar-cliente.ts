@@ -109,13 +109,25 @@ export async function obtenerAudioBlob(texto: string): Promise<Blob | null> {
   }
 }
 
-/** Reproduce un blob ya obtenido y espera a que termine. Nunca lanza. */
-export async function reproducirBlob(blob: Blob | null): Promise<void> {
+/**
+ * Reproduce un blob ya obtenido y espera a que termine. Nunca lanza.
+ * `velocidad` (1 = normal): "voz más lenta" del modo simple. Deepgram Aura no
+ * expone un parámetro de velocidad en /v1/speak (no figura entre los que usa
+ * este proyecto), así que se aplica con `playbackRate` conservando el tono.
+ */
+export async function reproducirBlob(blob: Blob | null, velocidad = 1): Promise<void> {
   if (typeof window === "undefined" || !blob) return;
 
   const url = URL.createObjectURL(blob);
   const audio = new Audio(url);
   audioActual = audio;
+  if (velocidad !== 1) {
+    audio.playbackRate = velocidad;
+    // Tono natural al bajar la velocidad (default true en los navegadores
+    // modernos; el prefijo cubre Safari viejo).
+    audio.preservesPitch = true;
+    (audio as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = true;
+  }
 
   await new Promise<void>((resolve) => {
     const terminar = () => {

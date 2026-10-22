@@ -2,13 +2,13 @@
 
 import { useSyncExternalStore } from "react";
 
-// "Más tarde · en 15 min" del modo simple: posponer es SOLO del cliente — se
-// guarda en localStorage (con try/catch: puede no existir, o estar lleno) y
-// no toca el servidor ni apaga ningún aviso. Store a nivel módulo + evento
+// "Más tarde · en N min" del modo simple: la tarjeta se oculta del lado del
+// cliente — se guarda en localStorage (con try/catch: puede no existir, o estar
+// lleno). El aviso de nuevo lo programa aparte posponerDosisAction (servidor). Store a nivel módulo + evento
 // `storage`, mismo patrón que usar-silencio.ts, para no hacer setState en
 // efectos y no romper la hidratación (el servidor siempre ve "sin posponer").
 const CLAVE = "vita_simple_posponer";
-export const MINUTOS_POSPONER = 15;
+export const MINUTOS_POSPONER = 15; // default; la persona puede tener 30 o 60 (Configurar modo simple)
 
 type Registro = { clave: string; hasta: number };
 
@@ -81,7 +81,7 @@ function snapshotReloj(): number {
  * coma): si las dosis cambian, la clave cambia y el posponer anterior deja de
  * aplicar solo.
  */
-export function usePosponer(clave: string) {
+export function usePosponer(clave: string, minutos: number = MINUTOS_POSPONER) {
   const guardado = useSyncExternalStore(suscribir, snapshot, () => null);
   const ahora = useSyncExternalStore(suscribirReloj, snapshotReloj, () => 0);
 
@@ -93,7 +93,7 @@ export function usePosponer(clave: string) {
   return {
     posponido,
     minutosRestantes,
-    posponer: () => escribir(JSON.stringify({ clave, hasta: Date.now() + MINUTOS_POSPONER * 60_000 } satisfies Registro)),
+    posponer: () => escribir(JSON.stringify({ clave, hasta: Date.now() + minutos * 60_000 } satisfies Registro)),
     cancelar: () => escribir(null),
   };
 }

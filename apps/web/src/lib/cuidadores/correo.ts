@@ -22,10 +22,13 @@ async function nombreDe(supabase: SupabaseClient, usuarioId: string): Promise<st
 export async function enviarInvitacionPorMail(
   supabase: SupabaseClient,
   elderId: string,
-  vinculo: VinculoCuidador,
-  origen: string
+  vinculo: Pick<VinculoCuidador, "email_invitado" | "token" | "expira_at">,
+  origen: string,
+  /** Si invita alguien que gestiona el perfil (no la propia persona), su id. */
+  quienInvitaId?: string
 ): Promise<ResultadoEnvio> {
   const nombreElder = await nombreDe(supabase, elderId);
+  const nombreQuienInvita = quienInvitaId && quienInvitaId !== elderId ? await nombreDe(supabase, quienInvitaId) : undefined;
   const msRestantes = new Date(vinculo.expira_at).getTime() - new Date().getTime();
   const diasVigencia = Math.max(1, Math.ceil(msRestantes / (24 * 60 * 60 * 1000)));
   const plantilla = invitacionCuidador({
@@ -33,6 +36,7 @@ export async function enviarInvitacionPorMail(
     urlInvitacion: `${origen}/cuidar/invitacion/${vinculo.token}`,
     diasVigencia,
     origen,
+    nombreQuienInvita,
   });
   return enviarEmail({ para: vinculo.email_invitado, ...plantilla });
 }

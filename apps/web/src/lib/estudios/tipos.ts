@@ -1,4 +1,17 @@
-export type ValorEstudio = { nombre: string; valor: string };
+export type EstadoValor = "normal" | "alto" | "bajo";
+
+// Un valor de laboratorio. `nombre`/`valor` existen desde siempre; el resto
+// (unidad, rango de referencia, estado) solo está si la extracción lo leyó del
+// documento — los estudios viejos no lo tienen y se siguen mostrando igual.
+export type ValorEstudio = {
+  nombre: string;
+  valor: string;
+  unidad?: string | null;
+  rango_min?: number | null;
+  rango_max?: number | null;
+  rango_texto?: string | null;
+  estado?: EstadoValor | null;
+};
 
 export type Estudio = {
   id: string;
@@ -11,6 +24,8 @@ export type Estudio = {
   archivo_tipo: string;
   estado: "listo" | "error";
   created_at: string;
+  /** Migración 026 (puede faltar). */
+  lugar?: string | null;
 };
 
 // Estudio con una URL firmada temporal para ver la foto original — el

@@ -8,6 +8,9 @@ export const ICONO_ESPECIALIDAD: Record<string, string> = {
   "Endocrinología": "flame",
   "Laboratorio": "activity",
   "Imágenes": "camera",
+  "Odontología": "tooth",
+  "Kinesiología": "bone",
+  "Traumatología": "bone",
   Otro: "plus",
 };
 

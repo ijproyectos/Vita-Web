@@ -72,9 +72,14 @@ export function generarCodigo(): string {
 export async function invitar(
   supabase: Cliente,
   elderId: string,
-  emailInvitado: string
+  emailInvitado: string,
+  /** Permiso y relación del invitado (columnas de 021); sin datos = defaults de la DB. */
+  datos?: { rol?: "editar" | "ver"; relacion?: string | null }
 ): Promise<VinculoCuidador> {
   const email = emailInvitado.trim().toLowerCase();
+  const extra: Record<string, unknown> = {};
+  if (datos?.rol) extra.rol = datos.rol;
+  if (datos && datos.relacion !== undefined) extra.relacion = datos.relacion;
 
   const { data: existente, error: errorLectura } = await supabase
     .from("vinculos_cuidador")
@@ -96,6 +101,7 @@ export async function invitar(
         expira_at: new Date(
           Date.now() + DIAS_EXPIRACION_INVITACION * 24 * 60 * 60 * 1000
         ).toISOString(),
+        ...extra,
       })
       .eq("id", existente.id)
       .select()
@@ -107,7 +113,7 @@ export async function invitar(
 
   const { data, error } = await supabase
     .from("vinculos_cuidador")
-    .insert({ elder_id: elderId, email_invitado: email })
+    .insert({ elder_id: elderId, email_invitado: email, ...extra })
     .select()
     .single();
 

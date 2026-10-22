@@ -24,8 +24,30 @@ const EstudioExtraidoSchema = z.object({
     .describe("Fecha del estudio en formato YYYY-MM-DD, SOLO si está visible en la imagen. null si no se ve ninguna fecha."),
   resumen: z.string().describe("Resumen breve (1-2 oraciones) del contenido o hallazgos del estudio, en español."),
   valores: z
-    .array(z.object({ nombre: z.string(), valor: z.string() }))
-    .describe("Valores/mediciones relevantes visibles (ej. {nombre: 'Hemoglobina', valor: '14.2 g/dL'}). Array vacío si no aplica."),
+    .array(
+      z.object({
+        nombre: z.string().describe("Nombre del parámetro, ej. 'Hemoglobina'."),
+        valor: z.string().describe("Solo el resultado, sin la unidad, ej. '14,2'. Respetá el formato impreso."),
+        unidad: z.string().nullable().describe("Unidad impresa junto al resultado, ej. 'g/dL'. null si no figura."),
+        rango_min: z
+          .number()
+          .nullable()
+          .describe("Límite inferior del rango de referencia IMPRESO en el documento. null si no está impreso o no tiene límite inferior."),
+        rango_max: z
+          .number()
+          .nullable()
+          .describe("Límite superior del rango de referencia IMPRESO en el documento. null si no está impreso o no tiene límite superior."),
+        rango_texto: z
+          .string()
+          .nullable()
+          .describe("Rango de referencia tal como está impreso cuando no es un simple mínimo–máximo (ej. 'Negativo', 'Menor a 200'). null si no aplica."),
+        estado: z
+          .enum(["normal", "alto", "bajo"])
+          .nullable()
+          .describe("'alto'/'bajo' solo si el documento lo marca (H/L, asterisco, negrita) o el resultado cae claramente fuera del rango impreso; 'normal' si está dentro. null si no hay rango impreso."),
+      })
+    )
+    .describe("Valores/mediciones relevantes visibles. Array vacío si no aplica. NUNCA inventes rangos: solo los impresos en el documento."),
 });
 
 export type ExtraccionResultado =
@@ -93,8 +115,8 @@ export async function extraerDatosEstudio(
             {
               type: "text",
               text: esPdf
-                ? "Este es un PDF de un estudio médico (análisis de laboratorio, informe, etc.). Extraé la información visible."
-                : "Esta es una foto de un estudio médico (análisis de laboratorio, radiografía, informe, etc.). Extraé la información visible.",
+                ? "Este es un PDF de un estudio médico (análisis de laboratorio, informe, etc.). Extraé la información visible. Para cada valor, separá resultado y unidad, y copiá el rango de referencia solo si está impreso en el documento (nunca lo completes de memoria)."
+                : "Esta es una foto de un estudio médico (análisis de laboratorio, radiografía, informe, etc.). Extraé la información visible. Para cada valor, separá resultado y unidad, y copiá el rango de referencia solo si está impreso en el documento (nunca lo completes de memoria).",
             },
           ],
         },

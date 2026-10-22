@@ -4,8 +4,9 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
+import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { colorPorDefecto } from "./colores";
-import { listarFamilia } from "./nucleo";
+import { estadoHoyPorPerfil, listarFamilia } from "./nucleo";
 import { esColorPerfil, type MiembroFamilia, type OpcionPerfil, type PerfilActivo, type RolVinculo } from "./tipos";
 
 // Perfil activo de /app/*: de quién son los remedios/turnos/salud que se ven
@@ -35,9 +36,16 @@ const resolverContexto = cache(async (): Promise<Contexto> => {
     cookies(),
   ]);
 
+  // Without a name in `perfiles`, fall back to the one Google gave us.
+  const meta = usuario.user_metadata ?? {};
+  const nombrePropio =
+    (perfilPropio?.nombre as string | null)?.trim() ||
+    (typeof meta.full_name === "string" ? meta.full_name.trim() : "") ||
+    (typeof meta.name === "string" ? meta.name.trim() : "");
+
   const propio: PerfilActivo = {
     id: usuario.id,
-    nombre: (perfilPropio?.nombre as string | null)?.trim() || "Vos",
+    nombre: nombrePropio ? nombreConMayuscula(nombrePropio) : "Mi perfil",
     color: esColorPerfil(perfilPropio?.color) ? perfilPropio.color : "teal",
     esPropio: true,
     rol: "editar",
@@ -65,19 +73,31 @@ export async function obtenerPerfilActivo(): Promise<PerfilActivo> {
   return (await resolverContexto()).activo;
 }
 
-/** Opciones del selector: "Vos" primero y después las personas que cuido. */
-export async function obtenerOpcionesPerfil(): Promise<OpcionPerfil[]> {
+/** Opciones del selector: el propio perfil primero y después las personas que cuido. */
+const calcularOpciones = cache(async (): Promise<OpcionPerfil[]> => {
   const { propio, familia } = await resolverContexto();
+  // Línea de estado por persona (V7 "¿De quién querés ver?"): 2 consultas en
+  // total, y solo si hay a quién cambiar (con un único perfil el selector
+  // no se muestra).
+  const estados =
+    familia.length > 0
+      ? await estadoHoyPorPerfil(await createClient(), [propio.id, ...familia.map((m) => m.id)])
+      : new Map();
   return [
-    { id: propio.id, nombre: propio.nombre, color: propio.color, sub: "Vos", esPropio: true },
+    { id: propio.id, nombre: propio.nombre, color: propio.color, sub: "Tu perfil", esPropio: true, estado: estados.get(propio.id) },
     ...familia.map((m, i) => ({
       id: m.id,
       nombre: m.nombre,
       color: m.color ?? colorPorDefecto(i),
       sub: [m.relacion, m.rol === "ver" ? "Solo ver" : null].filter(Boolean).join(" · ") || "A tu cargo",
       esPropio: false,
+      estado: estados.get(m.id),
     })),
   ];
+});
+
+export async function obtenerOpcionesPerfil(): Promise<OpcionPerfil[]> {
+  return calcularOpciones();
 }
 
 /** True si `id` es el propio usuario o alguien con vínculo aceptado hacia él. */

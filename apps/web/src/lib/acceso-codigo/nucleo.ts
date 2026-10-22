@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { avisarPersonaEnVita } from "@/lib/notificaciones/familia";
 import { generarCodigo, reclamarVinculoComoElder } from "@/lib/cuidadores/nucleo";
 import {
   DOMINIO_CUENTA_POR_CODIGO,
@@ -263,12 +264,20 @@ async function entrarConCodigoDeAcceso(
     return { ok: false, motivo: "error" };
   }
 
+  // Primera vez de un perfil gestionado: nunca inició sesión. Se mira ANTES de
+  // abrir la sesión (que actualiza last_sign_in_at).
+  const primeraVez =
+    !elder?.user?.last_sign_in_at && (elder?.user?.app_metadata as { tipo?: string } | null)?.tipo === "perfil_gestionado";
+
   const idSesion = await abrirSesion(admin, supabase, email);
   if (idSesion !== match.elder_id) {
     await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
     await devolver();
     return { ok: false, motivo: "error" };
   }
+  // "Elsa ya está en vita" para sus cuidadores Admin (feed + push). Nunca lanza
+  // ni rompe el ingreso: es secundario (se espera para que la función serverless no corte el envío).
+  if (primeraVez) await avisarPersonaEnVita(admin, match.elder_id);
   return { ok: true };
 }
 

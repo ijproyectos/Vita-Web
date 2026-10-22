@@ -42,6 +42,31 @@ export type MiCuidador = {
   relacion: string | null;
 };
 
+/**
+ * Cuidador (aceptado) o invitación pendiente de una persona
+ * (RPC `listar_cuidadores_de`, migración 027).
+ */
+export type CuidadorDePersona = {
+  vinculoId: string;
+  cuidadorId: string | null;
+  nombre: string;
+  rol: RolVinculo;
+  relacion: string | null;
+  estado: "aceptado" | "pendiente";
+  /** Soy yo (el usuario logueado). */
+  esYo: boolean;
+  /** Puedo invitar, cambiar permisos y quitar (solo la propia persona o un Admin de un perfil gestionado). */
+  puedeGestionar: boolean;
+  /** Solo para quien puede gestionar. */
+  email: string | null;
+  /** Token de la invitación pendiente (solo para quien puede gestionar). */
+  token: string | null;
+  expiraAt: string | null;
+  aceptadoAt: string | null;
+};
+
+export const RELACIONES_CUIDADOR = ["Hermana", "Hermano", "Hijo/a", "Pareja", "Nieto/a", "Otro"] as const;
+
 /** Perfil sobre el que se está mirando/cargando en /app/* (cookie `vita_perfil`). */
 export type PerfilActivo = {
   id: string;
@@ -52,6 +77,14 @@ export type PerfilActivo = {
   rol: RolVinculo;
 };
 
+/** Estado de hoy de un perfil, para la línea de estado del selector. */
+export type EstadoHoyPerfil = {
+  tomadas: number;
+  total: number;
+  /** Primera dosis de hoy ya pasada de hora y sin marcar. */
+  vencida: { nombre: string; hora: string } | null;
+};
+
 /** Opción del selector de perfiles (bottom sheet). */
 export type OpcionPerfil = {
   id: string;
@@ -59,6 +92,8 @@ export type OpcionPerfil = {
   color: ColorPerfil;
   sub: string;
   esPropio: boolean;
+  /** Se omite si no se pudo calcular (el selector cae a `sub`). */
+  estado?: EstadoHoyPerfil;
 };
 
 export const RELACIONES_SUGERIDAS = ["Mamá", "Papá", "Abuela/o", "Pareja", "Hijo/a", "Otro"] as const;
