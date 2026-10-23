@@ -5,6 +5,9 @@ import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaLargaEnAR, saludoEnAR } from "@/lib/rutina/formato";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
+import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
+import { medicionesParaMostrar, proximoGrupoPendiente, turnoParaMostrar } from "@/lib/modo-simple/datos";
+import type { PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { Pantalla } from "./pantalla";
 
 // Mismo margen de gracia que va a usar el cron de dosis vencidas (PR5,
@@ -35,35 +38,41 @@ export default async function ModoSimplePage() {
   const usuario = await requireUser();
   const supabase = await createClient();
 
-  const [hoy, perfil] = await Promise.all([
+  const [hoy, perfil, config] = await Promise.all([
     // listarHoy() ya devuelve las filas ordenadas por hora_programada
     // ascendente (ver listarTodos) — la primera pendiente es exactamente
     // "la próxima dosis" que pide el diseño, ya sea una vencida más
     // temprano en el día o la próxima por venir.
     medicamentos.listarHoy(supabase, usuario.id),
     perfilNucleo.obtenerPerfil(supabase, usuario.id),
+    obtenerPrefs(supabase, usuario.id),
   ]);
-  const pendientes = hoy.filter((m) => !m.tomado);
+  const [turno, mediciones] = await Promise.all([
+    config.ver_turnos ? turnoParaMostrar(supabase, usuario.id) : null,
+    config.ver_mediciones ? medicionesParaMostrar(supabase, usuario.id) : null,
+  ]);
+  const { primera, momento, enGrupo, resto } = proximoGrupoPendiente(hoy);
 
   const cabecera = {
     nombre: perfil?.nombre?.trim() || "",
     saludo: saludoEnAR(),
     fechaTexto: fechaLargaEnAR(),
-    telefonoEmergencia: perfil?.contacto_emergencia_telefono?.trim() || null,
-    nombreEmergencia: perfil?.contacto_emergencia_nombre?.trim() || null,
+    // Ayuda llama a quien eligió quien configuró el modo simple; si no, al
+    // contacto de emergencia del perfil.
+    telefonoAyuda: config.llamar_telefono ?? (perfil?.contacto_emergencia_telefono?.trim() || null),
+    nombreAyuda: config.llamar_telefono ? config.llamar_nombre : perfil?.contacto_emergencia_nombre?.trim() || null,
+    config: config satisfies PrefsModoSimple,
+    turno,
+    mediciones,
   };
 
-  if (pendientes.length === 0) {
+  if (!primera) {
     return <Pantalla key="descanso" {...cabecera} grupo={[]} momento={null} siguientes={[]} hayMedsHoy={hoy.length > 0} vencida={false} faltanMinutos={0} recordatorios={[]} />;
   }
 
   // V7: una tarjeta por momento del día. El grupo son todas las pendientes
   // del mismo momento que la próxima dosis pendiente ("Tus 2 pastillas de la
   // mañana"); lo que queda para otros momentos va a "Después".
-  const primera = pendientes[0];
-  const momento = momentoDelDia(primera.hora_programada);
-  const enGrupo = pendientes.filter((m) => momentoDelDia(m.hora_programada) === momento);
-  const resto = pendientes.filter((m) => momentoDelDia(m.hora_programada) !== momento);
 
   const ahoraHHMM = medicamentos.horaEnAR();
   const vencida = medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN);

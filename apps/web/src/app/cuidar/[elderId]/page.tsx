@@ -136,7 +136,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
         </div>
       )}
 
-      <CodigoAcceso elderId={elderId} />
+      <CodigoAcceso elderId={elderId} nombre={elder.nombre.split(" ")[0]} />
 
       <p className="px-1.5 text-center text-[11px] text-muted-foreground">
         Como cuidador podés agregar medicamentos nuevos y recordarle una toma pendiente, pero no podés editar los existentes ni marcar tomas.

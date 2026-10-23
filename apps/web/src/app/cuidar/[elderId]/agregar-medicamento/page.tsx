@@ -37,7 +37,7 @@ export default async function AgregarMedicamentoElderPage(
         </div>
       </div>
 
-      <FormularioAgregarMedicamentoElder elderId={elderId} />
+      <FormularioAgregarMedicamentoElder elderId={elderId} nombre={elder.nombre} />
     </div>
   );
 }

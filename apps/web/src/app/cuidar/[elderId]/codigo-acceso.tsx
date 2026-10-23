@@ -3,26 +3,29 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
+import { PanelCodigoAcceso } from "@/components/vita/panel-codigo-acceso";
 import { generarCodigoAccesoAction } from "./actions";
 
 export function CodigoAcceso({
   elderId,
+  nombre = "la persona",
   titulo = "Código para que entre de nuevo",
   descripcion = "Si cambió de celular o se cerró su sesión, generá un código y pasáselo.",
 }: {
   elderId: string;
+  nombre?: string;
   titulo?: string;
   descripcion?: string;
 }) {
   const [pendiente, startTransition] = useTransition();
-  const [codigo, setCodigo] = useState<string | null>(null);
+  const [codigo, setCodigo] = useState<{ codigo: string; expiraAt: string } | null>(null);
 
   function generar() {
     startTransition(async () => {
       try {
         const r = await generarCodigoAccesoAction(elderId);
         if (r.status === "success") {
-          setCodigo(r.codigo);
+          setCodigo({ codigo: r.codigo, expiraAt: r.expiraAt });
         } else {
           toast.error(r.message);
         }
@@ -38,13 +41,8 @@ export function CodigoAcceso({
       <p className="mt-1 text-[12.5px] text-muted-foreground">{descripcion}</p>
 
       {codigo && (
-        <div className="mt-3 rounded-[16px] bg-secondary px-4 py-4 text-center">
-          <div className="font-heading text-[34px] font-extrabold tracking-[0.3em] text-primary" aria-live="polite">
-            {codigo}
-          </div>
-          <p className="mt-2 text-[12px] text-muted-foreground">
-            Se lo dictás o se lo mandás por WhatsApp. Vence en 15 minutos y sirve una sola vez.
-          </p>
+        <div className="mt-3">
+          <PanelCodigoAcceso codigo={codigo.codigo} expiraAt={codigo.expiraAt} nombre={nombre} />
         </div>
       )}
 

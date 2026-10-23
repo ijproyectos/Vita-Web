@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/server";
 import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { COOKIE_PERFIL_ACTIVO, esPerfilValido } from "@/lib/familia/perfil-activo";
+import { enviarInvitacionPorMail } from "@/lib/cuidadores/correo";
+import { emailValido, origenPublico } from "@/lib/email/origen";
+import { permitirEnvio } from "@/lib/email/limite";
 import {
   esColorPerfil,
   esRolVinculo,
@@ -17,6 +20,15 @@ import { CONDICIONES } from "@/lib/onboarding/catalogo-condiciones";
 
 // Server Actions de Familia. Nunca lanzan; requireUser queda fuera del try
 // (redirige). La autorización real la hacen la RLS y las RPCs de 021.
+
+// Cookie del perfil activo: httpOnly, nunca se confía en su valor (se valida en cada request).
+const OPCIONES_COOKIE_PERFIL = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+  path: "/app",
+  maxAge: 60 * 60 * 24 * 180,
+} as const;
 
 function revalidarApp() {
   revalidatePath("/app", "layout");
@@ -32,13 +44,7 @@ export async function cambiarPerfilActivoAction(id: string): Promise<ResultadoFa
     if (id === usuario.id) {
       almacen.set(COOKIE_PERFIL_ACTIVO, "", { path: "/app", maxAge: 0 });
     } else {
-      almacen.set(COOKIE_PERFIL_ACTIVO, id, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/app",
-        maxAge: 60 * 60 * 24 * 180,
-      });
+      almacen.set(COOKIE_PERFIL_ACTIVO, id, OPCIONES_COOKIE_PERFIL);
     }
   } catch {
     return { status: "error", message: "No pudimos cambiar de perfil." };
@@ -57,8 +63,8 @@ export async function crearPerfilGestionadoAction(
 ): Promise<EstadoCrearPerfil> {
   const usuario = await requireUser();
 
-  const nombre = String(formData.get("nombre") ?? "").trim();
-  const relacion = String(formData.get("relacion") ?? "").trim();
+  const nombre = String(formData.get("nombre") ?? "").trim().slice(0, 60);
+  const relacion = String(formData.get("relacion") ?? "").trim().slice(0, 30);
   const color = String(formData.get("color") ?? "");
   const anioCrudo = String(formData.get("anioNacimiento") ?? "").trim();
   const anio = anioCrudo ? Number(anioCrudo) : null;
@@ -95,13 +101,7 @@ export async function crearPerfilGestionadoAction(
   // hacer es cargarle remedios y turnos.
   try {
     const almacen = await cookies();
-    almacen.set(COOKIE_PERFIL_ACTIVO, resultado.id, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/app",
-      maxAge: 60 * 60 * 24 * 180,
-    });
+    almacen.set(COOKIE_PERFIL_ACTIVO, resultado.id, OPCIONES_COOKIE_PERFIL);
   } catch {
     /* no crítico: se puede elegir desde el selector */
   }
@@ -132,7 +132,10 @@ export async function actualizarMiembroAction(
   return { status: "success" };
 }
 
-/** La persona cuidada (cuenta logueada) cambia el permiso de uno de sus cuidadores. */
+/**
+ * Cambia el permiso de un cuidador: la propia persona, o un Admin de un perfil
+ * gestionado (lo decide la RPC `cambiar_rol_cuidador`, migración 027).
+ */
 export async function cambiarRolCuidadorAction(vinculoId: string, rol: string): Promise<ResultadoFamilia> {
   await requireUser();
   if (typeof vinculoId !== "string" || !esRolVinculo(rol)) return { status: "error", message: "Permiso inválido." };
@@ -143,8 +146,123 @@ export async function cambiarRolCuidadorAction(vinculoId: string, rol: string): 
   } catch {
     return { status: "error", message: "No pudimos cambiar el permiso." };
   }
-  revalidatePath("/app/familia");
+  revalidatePath("/app/familia", "layout");
   return { status: "success" };
+}
+
+/** Quita a otro cuidador o cancela una invitación pendiente (RPC `quitar_cuidador`). */
+export async function quitarCuidadorAction(vinculoId: string, personaId: string): Promise<ResultadoFamilia> {
+  const usuario = await requireUser();
+  if (typeof vinculoId !== "string" || typeof personaId !== "string") return { status: "error", message: "Datos inválidos." };
+  try {
+    const supabase = await createClient();
+    const r = await familiaNucleo.quitarCuidador(supabase, vinculoId, { elderId: personaId, usuarioId: usuario.id });
+    if (r.status === "error") return r;
+  } catch {
+    return { status: "error", message: "No pudimos quitarlo." };
+  }
+  revalidatePath("/app/familia", "layout");
+  return { status: "success" };
+}
+
+export type ResultadoInvitar =
+  | { status: "success"; url: string; emailEnviado: boolean; email: string; vinculoId: string }
+  | { status: "error"; message: string };
+
+/**
+ * Crea la invitación (rol, relación y a quién va a cuidar), manda el mail y
+ * devuelve el link para compartirlo por WhatsApp o copiarlo. El mail puede
+ * fallar sin romper nada: la invitación existe igual.
+ */
+export async function invitarCuidadorAction(datos: {
+  personaId: string;
+  nombre: string;
+  email: string;
+  relacion: string | null;
+  rol: string;
+}): Promise<ResultadoInvitar> {
+  const usuario = await requireUser();
+  const nombre = typeof datos?.nombre === "string" ? datos.nombre.trim().slice(0, 60) : "";
+  const email = typeof datos?.email === "string" ? datos.email.trim().toLowerCase() : "";
+  const relacion = typeof datos?.relacion === "string" && datos.relacion.trim() ? datos.relacion.trim().slice(0, 30) : null;
+  if (!nombre) return { status: "error", message: "Escribí su nombre." };
+  if (!emailValido(email)) return { status: "error", message: "Ingresá un email válido." };
+  if (!esRolVinculo(datos.rol)) return { status: "error", message: "Elegí un permiso." };
+  if (typeof datos.personaId !== "string" || !(await esPerfilValido(datos.personaId))) {
+    return { status: "error", message: "No tenés acceso a esa persona." };
+  }
+
+  try {
+    const supabase = await createClient();
+    const r = await familiaNucleo.invitarCuidador(supabase, usuario.id, {
+      elderId: datos.personaId,
+      email,
+      nombre,
+      relacion,
+      rol: datos.rol,
+    });
+    if (r.status === "error") return r;
+
+    const origen = await origenPublico();
+    const envio = permitirEnvio(r.vinculoId)
+      ? await enviarInvitacionPorMail(
+          supabase,
+          datos.personaId,
+          { email_invitado: email, token: r.token, expira_at: r.expiraAt },
+          origen,
+          usuario.id
+        )
+      : { ok: false as const };
+    revalidatePath("/app/familia", "layout");
+    return { status: "success", url: `${origen}/cuidar/invitacion/${r.token}`, emailEnviado: envio.ok, email, vinculoId: r.vinculoId };
+  } catch {
+    return { status: "error", message: "No pudimos crear la invitación. Probá de nuevo." };
+  }
+}
+
+export type ResultadoReenvio = { status: "success"; email: string; url: string } | { status: "error"; message: string };
+
+/** Reenvía por mail una invitación pendiente (token vigente) y devuelve su link. */
+export async function reenviarInvitacionAction(personaId: string, vinculoId: string): Promise<ResultadoReenvio> {
+  const usuario = await requireUser();
+  if (typeof personaId !== "string" || typeof vinculoId !== "string") return { status: "error", message: "Datos inválidos." };
+  try {
+    const supabase = await createClient();
+    const lista = await familiaNucleo.listarCuidadoresDe(supabase, personaId);
+    const inv = lista?.find((c) => c.vinculoId === vinculoId && c.estado === "pendiente" && c.puedeGestionar);
+    if (!inv?.token || !inv.email) return { status: "error", message: "No encontramos esa invitación." };
+    const origen = await origenPublico();
+    const url = `${origen}/cuidar/invitacion/${inv.token}`;
+    if (!permitirEnvio(inv.vinculoId)) {
+      return { status: "error", message: "Ya mandamos varios mails. Probá más tarde o compartí el link." };
+    }
+    const envio = await enviarInvitacionPorMail(
+      supabase,
+      personaId,
+      { email_invitado: inv.email, token: inv.token, expira_at: inv.expiraAt ?? new Date().toISOString() },
+      origen,
+      usuario.id
+    );
+    if (!envio.ok) return { status: "error", message: "No pudimos mandar el mail. Compartí el link." };
+    return { status: "success", email: inv.email, url };
+  } catch {
+    return { status: "error", message: "No pudimos reenviar la invitación." };
+  }
+}
+
+/** ¿Ya entró a vita la cuenta de esta persona? (la pantalla "Conectar su celular" lo consulta cada tanto). */
+export async function estadoConexionAction(
+  personaId: string
+): Promise<{ status: "success"; conectado: boolean } | { status: "error"; message: string }> {
+  await requireUser();
+  if (typeof personaId !== "string") return { status: "error", message: "Datos inválidos." };
+  try {
+    const familia = await familiaNucleo.listarFamilia(await createClient());
+    const m = familia.find((f) => f.id === personaId);
+    return m ? { status: "success", conectado: m.conectado } : { status: "error", message: "No tenés acceso a esta persona." };
+  } catch {
+    return { status: "error", message: "No pudimos consultar la conexión." };
+  }
 }
 
 /** El usuario logueado deja de cuidar a alguien. Si era el perfil activo, vuelve al propio. */

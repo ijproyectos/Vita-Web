@@ -35,7 +35,7 @@ export function AlertaDosisPopup({ dosis }: { dosis: DosisVencidaCuidador[] }) {
 
         <div className="mt-4 flex flex-col gap-2">
           {dosis.map((d) => (
-            <div key={`${d.elderId}-${d.medicamentoId}`} className="flex flex-col gap-2 rounded-2xl bg-chip-rose-bg px-3.5 py-3">
+            <div key={`${d.elderId}-${d.medicamentoId}`} className="flex flex-col gap-2 rounded-[var(--radius-item)] bg-chip-rose-bg px-3.5 py-3">
               <Link
                 href={`/cuidar/${d.elderId}`}
                 onClick={() => setAbierto(false)}

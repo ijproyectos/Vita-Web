@@ -42,3 +42,29 @@ export const VELOCIDAD_VOZ_LENTA = 0.8;
 export function esMinutosPosponer(v: unknown): v is MinutosPosponer {
   return typeof v === "number" && (POSPONER_OPCIONES as readonly number[]).includes(v);
 }
+
+// Data shapes for the simple-mode cards (shared by the elder screen and the
+// caregiver preview).
+export type TurnoSimple = {
+  dia: "hoy" | "manana";
+  especialidad: string;
+  profesional: string | null;
+  /** "A las 10 de la mañana" */
+  palabras: string;
+  lugar: string | null;
+  direccion: string | null;
+  /** Checklist "Qué llevar" (migración 023); vacío si no hay. */
+  llevar: string[];
+};
+
+export type MedicionSimple = {
+  tipo: "presion" | "glucemia";
+  nombre: string;
+  /** "135/85" */
+  valor: string;
+  unidad: string;
+  /** "Hoy", "Ayer", "Hace 3 días". */
+  cuando: string;
+  /** Todavía no se midió hoy. */
+  pendiente: boolean;
+};

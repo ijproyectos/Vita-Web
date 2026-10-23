@@ -16,6 +16,13 @@ export async function obtenerPerfil(supabase: Cliente, usuarioId: string): Promi
   return data as Perfil | null;
 }
 
+/** Primer nombre de la persona ("Vos" si no hay). Nunca lanza. */
+export async function obtenerNombre(supabase: Cliente, usuarioId: string): Promise<string> {
+  const { data } = await supabase.from("perfiles").select("nombre").eq("id", usuarioId).maybeSingle();
+  const nombre = (data?.nombre as string | null | undefined)?.trim();
+  return nombre ? nombre.split(/\s+/)[0] : "Vos";
+}
+
 // Postgres 42703 / PostgREST PGRST204: la columna no existe (migración 025
 // sin aplicar).
 function faltaColumna(error: { code?: string; message?: string }): boolean {

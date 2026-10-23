@@ -99,12 +99,15 @@ export function AccionesMiembro({
   nombre,
   soloVerRutina,
   soloQuitar,
+  ultimoCuidador,
 }: {
   elderId: string;
   vinculoId: string;
   nombre: string;
   soloVerRutina?: boolean;
   soloQuitar?: boolean;
+  /** Nadie más la cuida y no usa su celular: nadie podría volver a abrir ese perfil. */
+  ultimoCuidador?: boolean;
 }) {
   const router = useRouter();
   const [confirmando, setConfirmando] = useState(false);
@@ -161,8 +164,9 @@ export function AccionesMiembro({
     <div className="rounded-[20px] bg-card p-[18px] shadow-card">
       <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">¿Dejar de cuidar a {nombre}?</div>
       <p className="mt-1 text-[12.5px] font-medium leading-[1.45] text-subtle">
-        Sale de tu lista y dejás de ver sus datos y sus avisos. Lo que cargaste queda guardado en su perfil. Si nadie más
-        la cuida y no usa su celular, nadie va a poder volver a abrir ese perfil.
+        Sale de tu lista y dejás de recibir sus avisos. Los otros cuidadores la siguen viendo.
+        {ultimoCuidador &&
+          " Hoy sos la única persona que la cuida y todavía no usa su celular: si te vas, nadie va a poder volver a abrir ese perfil."}
       </p>
       <div className="mt-3 flex gap-2">
         <button

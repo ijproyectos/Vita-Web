@@ -160,6 +160,12 @@ export async function listarTodos(
   return data as Medicamento[];
 }
 
+/** Cantidad de remedios distintos (por nombre) de una persona. */
+export async function contarRemediosDistintos(supabase: Cliente, usuarioId: string): Promise<number> {
+  const todos = await listarTodos(supabase, usuarioId);
+  return new Set(todos.map((m) => m.nombre.trim().toLowerCase())).size;
+}
+
 export async function listarHoy(
   supabase: Cliente,
   usuarioId: string

@@ -9,7 +9,8 @@ import { generarCodigoAcceso } from "@/lib/acceso-codigo/nucleo";
 import type { ResultadoCodigoAcceso } from "@/lib/acceso-codigo/tipos";
 import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
-import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
+import type { EstadoAccion } from "@/app/app/rutina/actions";
+import { leerTomas } from "@/lib/medicamentos/formulario";
 
 // Único punto de escritura real del cuidador sobre datos del elder (fuera
 // de marcar tomas, que este dashboard tampoco expone) — se apoya
@@ -18,8 +19,6 @@ import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
 // dominio que usa el propio elder (`agregarMultiMomento`), solo que acá
 // `usuarioId` es el `elderId`, no `requireCuidador().userId` — nunca se
 // reimplementa la creación.
-export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
-
 export async function crearMedicamentoParaElderAction(
   elderId: string,
   _prev: EstadoAccion,
@@ -36,35 +35,31 @@ export async function crearMedicamentoParaElderAction(
 
   const supabase = await createClient();
 
-  const nombre = String(formData.get("nombre") ?? "").trim();
-  const dosis = String(formData.get("dosis") ?? "").trim();
+  const nombre = String(formData.get("nombre") ?? "").trim().slice(0, 120);
+  const dosis = String(formData.get("dosis") ?? "").trim().slice(0, 40);
   const unidad = String(formData.get("unidad") ?? "mg");
   const frecuencia = String(formData.get("frecuencia") ?? "");
-  const MOMENTOS_VALIDOS: MomentoDia[] = ["mañana", "mediodia", "tarde", "noche"];
-  const momentos = (formData.getAll("momentos") as string[]).filter((m): m is MomentoDia =>
-    MOMENTOS_VALIDOS.includes(m as MomentoDia)
-  );
-  const conComida = String(formData.get("conComida") ?? "no-importa") as ConComida;
+  const tomas = leerTomas(formData);
   const duracion = String(formData.get("duracion") ?? "");
-  const notas = String(formData.get("notas") ?? "").trim();
+  const notas = String(formData.get("notas") ?? "").trim().slice(0, 500);
 
-  if (!nombre || !dosis || momentos.length === 0) {
-    return { status: "error", message: "Nombre, dosis y al menos un momento del día son obligatorios." };
+  if (!nombre || tomas.length === 0) {
+    return { status: "error", message: "El nombre y al menos un horario son obligatorios." };
   }
 
   try {
     await medicamentosNucleo.agregarMultiMomento(supabase, elderId, {
       nombre,
-      dosis,
+      dosis: dosis || null,
       unidad,
-      momentos,
+      tomas,
       frecuencia: frecuencia || null,
-      conComida,
       duracion: duracion || null,
       notas: notas || null,
     });
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    console.error("crearMedicamentoParaElderAction", e);
+    return { status: "error", message: "No pudimos guardar el medicamento. Probá de nuevo." };
   }
 
   redirect(`/cuidar/${elderId}`);
@@ -81,8 +76,12 @@ export async function recordarleAction(elderId: string, medicamentoId: string): 
   if (typeof elderId !== "string" || typeof medicamentoId !== "string") {
     return { status: "error", message: "Datos inválidos." };
   }
-  const supabase = await createClient();
-  return recordarDosisAlElder(supabase, usuario.id, elderId, medicamentoId);
+  try {
+    const supabase = await createClient();
+    return await recordarDosisAlElder(supabase, usuario.id, elderId, medicamentoId);
+  } catch {
+    return { status: "error", message: "No pudimos mandar el recordatorio. Probá de nuevo." };
+  }
 }
 
 /**
