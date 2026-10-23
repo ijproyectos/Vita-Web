@@ -1,0 +1,23 @@
+# Code owners: a pull request that touches any path below needs the owner's
+# approval before it can be merged (enforced by the main ruleset with
+# "require review from code owners"). Everything else needs one approval
+# from any collaborator.
+
+# Database: schema, RLS policies, security-definer RPCs and their tests.
+/supabase/                                   @ijproyectos
+
+# Code that bypasses RLS (service_role) or opens sessions without a password.
+/apps/web/src/lib/supabase/admin.ts          @ijproyectos
+/apps/web/src/lib/acceso-codigo/             @ijproyectos
+/apps/web/src/lib/familia/nucleo.ts          @ijproyectos
+/apps/web/src/lib/notificaciones/            @ijproyectos
+/apps/web/src/app/api/cron/                  @ijproyectos
+/apps/web/src/app/auth/                      @ijproyectos
+
+# Accounts, deletion and data export.
+/apps/web/src/lib/cuenta/                    @ijproyectos
+/apps/web/src/lib/exportar/                  @ijproyectos
+
+# Deploy, CI and repository rules.
+/netlify.toml                                @ijproyectos
+/.github/                                    @ijproyectos
