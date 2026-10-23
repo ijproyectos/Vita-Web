@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { TopBar } from "../../top-bar";
+import { createClient } from "@/lib/supabase/server";
+import { lugarDisponible } from "@/lib/estudios/nucleo";
 import { FormularioAgregarEstudio } from "./formulario";
 
 export default async function AgregarEstudioPage() {
@@ -12,10 +14,10 @@ export default async function AgregarEstudioPage() {
   if (activo.rol !== "editar") redirect("/app");
 
   return (
-    <div className="flex flex-col gap-4.5 px-4 pt-2">
-      <TopBar eyebrow="Mi Salud" title="Agregar estudio" />
+    <div className="flex flex-col gap-5 px-[18px] pt-1.5">
+      <TopBar eyebrow="Mi salud" title="Nuevo estudio" />
       <BannerPerfil perfil={activo} accion="cargar" />
-      <FormularioAgregarEstudio />
+      <FormularioAgregarEstudio lugarDisponible={await lugarDisponible(await createClient())} />
     </div>
   );
 }

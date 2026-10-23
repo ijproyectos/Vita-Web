@@ -130,9 +130,9 @@ export async function agregar(
     usuario_id: usuarioId,
     archivo_path: datos.archivoPath,
     archivo_tipo: datos.archivoTipo,
-    tipo: textoOnull(datos.nombre, 120) ?? datos.extraccion?.tipo ?? null,
+    tipo: textoOnull(datos.nombre, 120) ?? textoOnull(datos.extraccion?.tipo, 120),
     fecha: fechaValidaOnull(datos.fecha !== undefined ? datos.fecha : (datos.extraccion?.fecha ?? null)),
-    resumen: datos.extraccion?.resumen ?? null,
+    resumen: textoOnull(datos.extraccion?.resumen, 2000),
     valores: normalizarValores(datos.extraccion?.valores),
     estado: datos.extraccion ? "listo" : "error",
   };
@@ -169,6 +169,21 @@ export async function lugarDisponible(supabase: Cliente): Promise<boolean> {
 export async function descartarArchivo(supabase: Cliente, usuarioId: string, path: string): Promise<void> {
   if (!path.startsWith(`${usuarioId}/`) || path.includes("..")) return;
   await supabase.storage.from(BUCKET).remove([path]);
+}
+
+/**
+ * La extracción que vuelve del cliente en el paso 2 es entrada no confiable:
+ * se reconstruye campo por campo (nunca se guarda el objeto tal cual).
+ */
+export function sanearExtraccion(crudo: unknown): DatosExtraidos | null {
+  if (!crudo || typeof crudo !== "object") return null;
+  const o = crudo as Record<string, unknown>;
+  return {
+    tipo: textoOnull(o.tipo, 120),
+    fecha: fechaValidaOnull(typeof o.fecha === "string" ? o.fecha : null),
+    resumen: textoOnull(o.resumen, 2000),
+    valores: normalizarValores(o.valores),
+  };
 }
 
 export function esRutaDe(usuarioId: string, path: string): boolean {

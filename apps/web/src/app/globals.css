@@ -15,6 +15,8 @@
   --color-mint: var(--mint);
   --color-cream: var(--cream);
   --color-ink: var(--ink);
+  --color-on-ink: var(--on-ink);
+  --color-paper: var(--paper);
   --color-slate-brand: var(--slate);
   --color-amber: var(--amber);
   --color-violet: var(--violet);
@@ -85,6 +87,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -116,6 +119,7 @@
   --color-online: var(--online);
   --shadow-float: var(--elevation-float);
   --shadow-cta: var(--elevation-cta);
+  --shadow-cta-sm: var(--elevation-cta-sm);
   --shadow-bubble: var(--elevation-bubble);
   --shadow-header: var(--elevation-header);
   --shadow-outline-soft: var(--elevation-outline-soft);
@@ -138,6 +142,8 @@
   --mint: #d7f0ec; /* Menta: fondos suaves */
   --cream: #faf8f4; /* Crema: fondo base */
   --ink: #0f1923; /* Tinta */
+  --on-ink: #ffffff; /* Texto sobre superficies tinta (visor de estudios) */
+  --paper: #ffffff; /* Hoja de papel: no se invierte en modo oscuro */
   --slate: #4a5568; /* Pizarra: texto secundario */
   --amber: #f2b872; /* Ambar latido: punto del logo */
   --violet: #7c5cd6; /* Violeta: la persona cuidada */
@@ -232,6 +238,7 @@
   --accent: var(--teal);
   --accent-foreground: #ffffff;
   --destructive: #d1434b;
+  --destructive-foreground: #ffffff;
   --border: #dfe5eb;
   --input: #dfe5eb;
   --ring: var(--teal);
@@ -277,6 +284,7 @@
   --elevation-float: 0 8px 24px rgba(15, 25, 35, 0.08);
   /* Botón primario teal (CTA de login/onboarding V7). */
   --elevation-cta: 0 6px 18px color-mix(in srgb, var(--teal) 30%, transparent);
+  --elevation-cta-sm: 0 3px 10px color-mix(in srgb, var(--teal) 32%, transparent);
   /* Burbuja enviada del chat de onboarding. */
   --elevation-bubble: 0 4px 14px color-mix(in srgb, var(--teal) 25%, transparent);
   /* Encabezado blanco del chat de onboarding. */
@@ -323,6 +331,7 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.205 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
