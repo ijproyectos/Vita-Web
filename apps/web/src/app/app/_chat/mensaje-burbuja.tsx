@@ -11,7 +11,7 @@ export type MensajeChatUI = {
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
-export function MensajeBurbuja({ m, cargando }: { m: MensajeChatUI; cargando: boolean }) {
+export function MensajeBurbuja({ m, cargando, alCerrar, esPropio }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean }) {
   if (m.role === "user") {
     return (
       <div className="mb-2.5 flex justify-end">
@@ -30,7 +30,7 @@ export function MensajeBurbuja({ m, cargando }: { m: MensajeChatUI; cargando: bo
           {cargando ? <PuntosEscribiendo /> : m.content}
         </div>
       </div>
-      {m.accion && <TarjetaAccion accion={m.accion} />}
+      {m.accion && <TarjetaAccion accion={m.accion} alCerrar={alCerrar} esPropio={esPropio} />}
     </div>
   );
 }
@@ -49,7 +49,17 @@ function PuntosEscribiendo() {
   );
 }
 
-function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: unknown } }) {
+// El chat escribe en la cuenta logueada; /app/medicamentos y /app/turnos listan el
+// perfil ACTIVO. Los enlaces de edición solo valen si el activo es el propio.
+function TarjetaAccion({
+  accion,
+  alCerrar,
+  esPropio,
+}: {
+  accion: { type: string; [clave: string]: unknown };
+  alCerrar: () => void;
+  esPropio: boolean;
+}) {
   const base = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-card";
 
   switch (accion.type) {
@@ -63,7 +73,12 @@ function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: un
               {[accion.dose, accion.time && `${accion.time} hs`].filter(Boolean).join(" · ")}
             </div>
           </div>
-          <EnlaceTarjeta href="/app/rutina" texto="Ver en Rutina" />
+          <div className="flex flex-wrap gap-2">
+            {esPropio && typeof accion.id === "string" && (
+              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/medicamentos?editar=${accion.id}`} texto="Ajustar detalles" primario />
+            )}
+            <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
+          </div>
         </div>
       );
     case "appointment_added":
@@ -76,7 +91,12 @@ function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: un
               {String(accion.date)} · {String(accion.time)} hs
             </div>
           </div>
-          <EnlaceTarjeta href="/app/rutina" texto="Ver en Rutina" />
+          <div className="flex flex-wrap gap-2">
+            {esPropio && typeof accion.id === "string" && (
+              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos?editar=${accion.id}`} texto="Completar turno" primario />
+            )}
+            <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
+          </div>
         </div>
       );
     case "show_today_medications":
@@ -84,7 +104,7 @@ function TarjetaAccion({ accion }: { accion: { type: string; [clave: string]: un
       return (
         <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
           <span className="text-[13.5px] font-medium text-subtle">Tu rutina está actualizada.</span>
-          <EnlaceTarjeta href="/app/rutina" texto="Ver rutina" inline />
+          <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />
         </div>
       );
     default:
@@ -103,12 +123,28 @@ function CabeceraTarjeta({ icon, texto }: { icon: string; texto: string }) {
   );
 }
 
-function EnlaceTarjeta({ href, texto, inline }: { href: string; texto: string; inline?: boolean }) {
+function EnlaceTarjeta({
+  href,
+  texto,
+  inline,
+  primario,
+  alCerrar,
+}: {
+  href: string;
+  texto: string;
+  inline?: boolean;
+  primario?: boolean;
+  alCerrar: () => void;
+}) {
+  // El chat es un overlay fijo encima de la app: navegar sin cerrarlo deja
+  // la pantalla nueva tapada. Se cierra y se navega.
   return (
     <Link
       href={href}
+      onClick={alCerrar}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full bg-secondary px-3.5 py-2 font-heading text-[12.5px] font-bold text-teal-deep",
+        "inline-flex items-center gap-1 rounded-full px-3.5 py-2 font-heading text-[12.5px] font-bold",
+        primario ? "bg-primary text-primary-foreground" : "bg-secondary text-teal-deep",
         !inline && "mt-2.5"
       )}
     >

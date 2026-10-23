@@ -16,7 +16,7 @@ export default async function CondicionesPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Mi estado" title="Condiciones y alergias" />
+      <TopBar volverA="/app/mi-salud" eyebrow="Mi estado" title="Condiciones y alergias" />
       <BannerPerfil perfil={activo} />
       <CondicionesView
         condiciones={perfil?.condiciones ?? []}

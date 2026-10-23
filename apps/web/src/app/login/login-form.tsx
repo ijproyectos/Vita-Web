@@ -20,7 +20,9 @@ import {
   leerCodigoPortapapeles,
   passwordValida,
 } from "@/components/vita/auth-ui";
-import { entrarConCodigoAction } from "./actions";
+import { ConfirmarPersona, MENSAJE_CODIGO_DE_OTRO_PERFIL } from "@/components/vita/confirmar-persona";
+import type { VistaPreviaCodigo } from "@/lib/acceso-codigo/tipos";
+import { entrarConCodigoAction, verCodigoAction, type EstadoVerCodigo } from "./actions";
 
 // Acceso V7 (Onboarding.dc.html): bienvenida, iniciar sesión, crear cuenta,
 // olvidé mi contraseña, revisá tu mail e ingresá tu código — todo en una sola
@@ -67,24 +69,11 @@ const NEXT_CODIGO = "/onboarding/inicio?modo=codigo";
 // así que en producción este bloque ni se renderiza.
 const LOGIN_DE_PRUEBA = process.env.NEXT_PUBLIC_ENABLE_TEST_LOGIN === "true";
 
-// Apple (V7 Bienvenida): preparado pero apagado. Requiere una cuenta paga de
-// Apple Developer y configurar el provider "apple" en Supabase Auth; recién
-// ahí se activa con NEXT_PUBLIC_ENABLE_APPLE_LOGIN=true.
-const LOGIN_APPLE = process.env.NEXT_PUBLIC_ENABLE_APPLE_LOGIN === "true";
-
 // Logo de marca de Google: sus colores son fijos (no son tokens), por eso
 // vive como SVG estático en /public, igual que icon.svg.
 function GoogleLogo() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src="/google-g.svg" alt="" width={19} height={19} aria-hidden="true" />;
-}
-
-function AppleLogo() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.19-1.73-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76-1.48.02-2.85.86-3.61 2.19-1.54 2.67-.39 6.62 1.11 8.79.73 1.06 1.6 2.25 2.75 2.21 1.1-.04 1.52-.71 2.85-.71 1.33 0 1.71.71 2.88.69 1.19-.02 1.94-1.08 2.67-2.14.84-1.23 1.19-2.42 1.21-2.48-.03-.01-2.32-.89-2.33-3.55zM14.18 6.13c.61-.74 1.02-1.76.91-2.78-.88.04-1.94.59-2.57 1.32-.56.65-1.06 1.69-.93 2.69.98.08 1.98-.5 2.59-1.23z" />
-    </svg>
-  );
 }
 
 function LoginDePrueba({ next }: { next?: string }) {
@@ -143,7 +132,7 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nombre, setNombre] = useState("");
-  const [cargando, setCargando] = useState<"google" | "apple" | "codigo" | "email" | null>(null);
+  const [cargando, setCargando] = useState<"google" | "codigo" | "email" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [motivoEnviado, setMotivoEnviado] = useState<"crear" | "olvide">("crear");
@@ -152,6 +141,7 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
   const [codigo, setCodigo] = useState("");
   const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
   const [enviandoCodigo, startCodigo] = useTransition();
+  const [vistaPrevia, setVistaPrevia] = useState<VistaPreviaCodigo | null>(null);
 
   function ir(v: Vista) {
     setVista(v);
@@ -172,15 +162,15 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
     }
   }
 
-  async function iniciarSesionOAuth(destino: string, origen: "google" | "codigo" | "apple") {
+  async function iniciarSesionOAuth(destino: string, origen: "google" | "codigo") {
     setError(null);
     setCargando(origen);
     const { error } = await createClient().auth.signInWithOAuth({
-      provider: origen === "apple" ? "apple" : "google",
+      provider: "google",
       options: { redirectTo: urlCallback(destino) },
     });
     if (error) {
-      setError(`No se pudo iniciar sesión con ${origen === "apple" ? "Apple" : "Google"}. Intentá de nuevo.`);
+      setError("No se pudo iniciar sesión con Google. Intentá de nuevo.");
       setCargando(null);
     }
     // Si sale bien el navegador se va a Google: no hay más estado que actualizar.
@@ -254,20 +244,38 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
   }
 
   // Código de 6 dígitos: se manda solo al completar la sexta cifra.
+  async function entrarConEsteCodigo(v: string) {
+    const fd = new FormData();
+    fd.set("codigo", v);
+    const r = await entrarConCodigoAction({ status: "idle" }, fd);
+    if (r.status === "error") {
+      setErrorCodigo(r.mensaje);
+      setCodigo("");
+      setVistaPrevia(null);
+    }
+  }
+
+  // Al completar la sexta cifra primero se mira a quién pertenece el código
+  // ("¿Sos vos?", sin consumirlo); si no se puede mirar, se entra directo.
   function cambiarCodigo(v: string) {
     setCodigo(v);
     setErrorCodigo(null);
     if (v.length === 6) {
-      const fd = new FormData();
-      fd.set("codigo", v);
       startCodigo(async () => {
-        const r = await entrarConCodigoAction({ status: "idle" }, fd);
-        if (r.status === "error") {
-          setErrorCodigo(r.mensaje);
+        const previa = await verCodigoAction(v).catch((): EstadoVerCodigo => ({ status: "sinVista" }));
+        if (previa.status === "ok") setVistaPrevia(previa.vista);
+        else if (previa.status === "error") {
+          setErrorCodigo(previa.mensaje);
           setCodigo("");
-        }
+        } else await entrarConEsteCodigo(v);
       });
     }
+  }
+
+  function noSoyYo() {
+    setVistaPrevia(null);
+    setCodigo("");
+    setErrorCodigo(MENSAJE_CODIGO_DE_OTRO_PERFIL);
   }
 
   async function pegarCodigo() {
@@ -309,24 +317,19 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
             <GoogleLogo />
             {cargando === "google" ? "Conectando…" : "Continuar con Google"}
           </button>
-          {LOGIN_APPLE && (
-            <button
-              type="button"
-              onClick={() => iniciarSesionOAuth(next ?? "/app", "apple")}
-              disabled={cargando !== null}
-              className="flex h-[54px] items-center justify-center gap-2.5 rounded-full bg-foreground font-heading text-[15.5px] font-bold text-background transition-transform active:scale-[0.98] disabled:opacity-60"
-            >
-              <AppleLogo />
-              {cargando === "apple" ? "Conectando…" : "Continuar con Apple"}
-            </button>
-          )}
-          <button type="button" onClick={() => ir("entrar")} className="h-11 text-[14.5px] font-bold text-slate-brand">
+          <button type="button" onClick={() => ir("crear")} className="h-11 text-[14.5px] font-bold text-slate-brand">
             Continuar con email
           </button>
         </div>
         {error && <AvisoAuth>{error}</AvisoAuth>}
         <div className="mb-4 mt-1.5 h-px bg-line-cream" />
         <div className="text-center text-sm font-medium text-slate-brand">
+          ¿Ya tenés cuenta?{" "}
+          <button type="button" onClick={() => ir("entrar")} className="font-extrabold text-teal-deep">
+            Entrar
+          </button>
+        </div>
+        <div className="mt-2 text-center text-sm font-medium text-slate-brand">
           ¿Te invitaron?{" "}
           <button type="button" onClick={() => ir("codigo")} className="font-extrabold text-teal-deep">
             Tengo un código
@@ -339,6 +342,17 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
   }
 
   // ───────────────────────── Ingresá tu código ─────────────────────────
+  if (vista === "codigo" && vistaPrevia) {
+    return (
+      <ConfirmarPersona
+        vista={vistaPrevia}
+        pendiente={enviandoCodigo}
+        onSi={() => startCodigo(() => entrarConEsteCodigo(codigo))}
+        onNo={noSoyYo}
+      />
+    );
+  }
+
   if (vista === "codigo") {
     return (
       <PantallaAuth>

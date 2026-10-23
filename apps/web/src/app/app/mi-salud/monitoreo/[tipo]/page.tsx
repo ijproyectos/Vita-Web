@@ -20,6 +20,7 @@ import {
   esTipoMedicion,
   formatearNumero,
   formatearValor,
+  hrefNuevaMedicion,
 } from "@/lib/mediciones/tipos";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
@@ -51,7 +52,7 @@ export default async function MonitoreoDetallePage(props: PageProps<"/app/mi-sal
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Monitoreo" title={meta.nombre} />
+      <TopBar volverA="/app/mi-salud/monitoreo" eyebrow="Monitoreo" title={meta.nombre} />
       <BannerPerfil perfil={activo} />
 
       {!ultima ? (
@@ -217,7 +218,7 @@ export default async function MonitoreoDetallePage(props: PageProps<"/app/mi-sal
 
       {puedeEditar && (
         <Link
-          href={`/app/mi-salud/monitoreo/agregar?tipo=${tipo}`}
+          href={hrefNuevaMedicion({ tipo, volver: `/app/mi-salud/monitoreo/${tipo}` })}
           className="flex items-center justify-center gap-2 rounded-full bg-primary p-4 font-heading text-[14.5px] font-extrabold text-primary-foreground shadow-cta-sm"
         >
           <VitaIcon name="plus" size={16} strokeWidth={2.6} />

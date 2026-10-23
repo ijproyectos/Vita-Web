@@ -22,7 +22,7 @@ export default async function PrivacidadPage() {
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Cuenta" title="Privacidad y datos" />
+      <TopBar volverA="/app/perfil" eyebrow="Cuenta" title="Privacidad y datos" />
 
       <section>
         <h2 className="eyebrow px-0.5 pb-[9px] text-subtle">Qué guardamos</h2>

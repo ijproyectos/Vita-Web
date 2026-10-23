@@ -19,7 +19,7 @@ export default async function ConectarCelularPage(props: PageProps<"/app/familia
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow={`${primerNombre} · modo simple`} title="Conectar su celular" />
+      <TopBar volverA={`/app/familia/${id}`} eyebrow={`${primerNombre} · modo simple`} title="Conectar su celular" />
       <ConectarCelular personaId={persona.id} nombre={primerNombre} yaConectado={persona.conectado} />
     </div>
   );

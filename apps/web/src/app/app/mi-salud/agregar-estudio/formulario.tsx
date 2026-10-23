@@ -83,7 +83,7 @@ export function FormularioAgregarEstudio({ lugarDisponible }: { lugarDisponible:
           return;
         }
         toast.success("Estudio agregado");
-        router.push("/app/mi-salud");
+        router.replace("/app/mi-salud");
       } catch {
         setErrorLocal("No pudimos guardar el estudio. Probá de nuevo.");
       }

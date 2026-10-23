@@ -66,7 +66,7 @@ export default async function AvisosPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pb-8 pt-1.5">
-      <TopBar
+      <TopBar volverA="/app"
         eyebrow={`Hoy · ${formatoFechaCorta(fechaDeHoyISO())}`}
         title="Avisos"
         accionDerecha={

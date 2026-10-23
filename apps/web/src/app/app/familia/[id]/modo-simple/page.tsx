@@ -45,7 +45,7 @@ export default async function ModoSimpleDePersonaPage(props: PageProps<"/app/fam
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow={`Su celular · ${primerNombre}`} title="Modo simple" />
+      <TopBar volverA={`/app/familia/${id}`} eyebrow={`Su celular · ${primerNombre}`} title="Modo simple" />
       <ConfigurarModoSimple
         personaId={id}
         nombre={primerNombre}

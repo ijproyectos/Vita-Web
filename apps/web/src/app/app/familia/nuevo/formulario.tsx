@@ -28,7 +28,7 @@ export function FormularioNuevoPerfil() {
     const resultado = await crearPerfilGestionadoAction(prev, formData);
     if (resultado.status === "success") {
       toast.success(`Listo. Ya podés cargar los remedios de ${nombre.trim()}`);
-      router.push("/app/rutina");
+      router.replace("/app/rutina");
     } else if (resultado.status === "error") {
       toast.error(resultado.message);
     }

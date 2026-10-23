@@ -257,6 +257,7 @@ export async function ejecutarTool(
         contenido: JSON.stringify(paraModelo(creado)),
         accionUI: {
           type: "medication_added",
+          id: creado.id,
           name: creado.nombre,
           dose: creado.dosis,
           time: creado.hora_programada,
@@ -354,6 +355,7 @@ export async function ejecutarTool(
         }),
         accionUI: {
           type: "appointment_added",
+          id: creado.id,
           specialty: creado.especialidad,
           date: creado.fecha,
           time: creado.hora,

@@ -34,7 +34,7 @@ export default async function CompartirPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5 pb-6">
-      <TopBar eyebrow="Privacidad y datos" title="Compartir con profesional" />
+      <TopBar volverA="/app/perfil/privacidad" eyebrow="Privacidad y datos" title="Compartir con profesional" />
 
       <p className="-mt-2 text-[13px] text-muted-foreground">
         Creá un link temporal para mostrarle a tu médico un resumen de tu salud, sin que tenga que instalar nada ni

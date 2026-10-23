@@ -8,6 +8,7 @@ export function FormularioAgregarMedicamentoElder({ elderId, nombre }: { elderId
   return (
     <FormularioMedicamento
       accion={crearMedicamentoParaElderAction.bind(null, elderId)}
+      volverA={`/cuidar/${elderId}`}
       etiquetaGuardar={`+ Agregar medicamento a ${nombre.split(" ")[0]}`}
     />
   );

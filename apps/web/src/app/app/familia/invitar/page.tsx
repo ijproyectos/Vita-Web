@@ -26,8 +26,16 @@ export default async function InvitarCuidadorPage(props: PageProps<"/app/familia
   const opciones: PersonaInvitable[] = [
     { id: usuario.id, nombre: "Vos", sub: "Tu perfil", color: "teal", propia: true },
     ...gestionables
-      .map((m, i) =>
-        m ? { id: m.id, nombre: m.nombre, sub: m.relacion ?? "A tu cargo", color: m.color ?? colorPorDefecto(i), propia: false } : null
+      .map((m) =>
+        m
+          ? {
+              id: m.id,
+              nombre: m.nombre,
+              sub: m.relacion ?? "A tu cargo",
+              color: m.color ?? colorPorDefecto(familia.findIndex((f) => f.id === m.id)),
+              propia: false,
+            }
+          : null
       )
       .filter((o): o is PersonaInvitable => o !== null),
   ];
@@ -37,7 +45,7 @@ export default async function InvitarCuidadorPage(props: PageProps<"/app/familia
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Familia" title="Invitar a un cuidador" />
+      <TopBar volverA="/app/familia" eyebrow="Familia" title="Invitar a un cuidador" />
       <FormularioInvitar personas={opciones} personaInicial={inicial} />
     </div>
   );

@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as medicionesNucleo from "@/lib/mediciones/nucleo";
 import { agruparPorTipo, crearEscala, cuandoAR, MINIMO_TARJETA, resumirTipo } from "@/lib/mediciones/resumen";
-import { META_MEDICION, TIPOS_MEDICION, formatearValor } from "@/lib/mediciones/tipos";
+import { META_MEDICION, RUTA_MONITOREO, TIPOS_MEDICION, formatearValor, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -22,13 +22,13 @@ export default async function MonitoreoPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pb-10 pt-1.5">
-      <TopBar
+      <TopBar volverA="/app/mi-salud"
         eyebrow="Mi salud"
         title="Monitoreo activo"
         accionDerecha={
           puedeEditar ? (
             <Link
-              href="/app/mi-salud/monitoreo/agregar"
+              href={hrefNuevaMedicion({ volver: RUTA_MONITOREO })}
               aria-label="Agregar una medición"
               className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-cta-sm transition-transform active:scale-[0.94] motion-reduce:transition-none"
             >
@@ -45,7 +45,7 @@ export default async function MonitoreoPage() {
         </p>
       )}
 
-      {tipos.length === 0 && <EstadoVacioMonitoreo puedeEditar={puedeEditar} />}
+      {tipos.length === 0 && <EstadoVacioMonitoreo puedeEditar={puedeEditar} volver={RUTA_MONITOREO} />}
 
       {tipos.map((tipo) => {
         const resumen = resumirTipo(tipo, porTipo.get(tipo)!);
@@ -97,7 +97,7 @@ export default async function MonitoreoPage() {
               <div className="text-[12.5px] font-medium text-slate-brand">{resumen.textoPromedio}</div>
               {puedeEditar && (
                 <Link
-                  href={`/app/mi-salud/monitoreo/agregar?tipo=${tipo}`}
+                  href={hrefNuevaMedicion({ tipo, volver: RUTA_MONITOREO })}
                   className="-my-2 -mr-3 rounded-full px-3 py-2 text-[13px] font-bold text-teal-deep"
                 >
                   + Registrar

@@ -25,7 +25,7 @@ export default async function ConfigurarAvisosPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pb-8 pt-1.5">
-      <TopBar eyebrow="Avisos" title="Configurar avisos" />
+      <TopBar volverA="/app/avisos" eyebrow="Avisos" title="Configurar avisos" />
       <Grupo>
         <ActivarNotificaciones variante="perfil" />
       </Grupo>

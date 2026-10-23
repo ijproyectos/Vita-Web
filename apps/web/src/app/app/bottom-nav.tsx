@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { VMark } from "@/components/vita/v-mark";
@@ -152,8 +152,19 @@ function NavItem({
         activo ? "text-primary" : "text-subtle"
       )}
     >
-      <VitaIcon name={icon} size={21} strokeWidth={1.9} />
-      <span>{label}</span>
+      <ContenidoNavItem icon={icon} label={label} />
     </Link>
+  );
+}
+
+// useLinkStatus solo funciona como hijo del <Link>: da feedback inmediato
+// (ícono pulsando) mientras el servidor responde, así no se vuelve a tocar.
+function ContenidoNavItem({ icon, label }: { icon: string; label: string }) {
+  const { pending } = useLinkStatus();
+  return (
+    <>
+      <VitaIcon name={icon} size={21} strokeWidth={1.9} className={pending ? "animate-pulse" : undefined} />
+      <span className={pending ? "opacity-60" : undefined}>{label}</span>
+    </>
   );
 }

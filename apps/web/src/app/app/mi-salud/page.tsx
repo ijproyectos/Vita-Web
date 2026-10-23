@@ -127,7 +127,7 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
             )}
           </div>
           <div className="mt-3 flex justify-end">
-            <Link href="/app/resumen-salud" className="flex items-center gap-0.5 text-[13px] font-bold text-teal-deep">
+            <Link href="/app/condiciones" className="flex items-center gap-0.5 text-[13px] font-bold text-teal-deep">
               {puedeEditar ? "Editar" : "Ver todo"}
               <VitaIcon name="chevron-right" size={15} strokeWidth={2.4} />
             </Link>
@@ -176,7 +176,7 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
           </Link>
         </div>
         {resumenes.length === 0 ? (
-          <EstadoVacioMonitoreo puedeEditar={puedeEditar} />
+          <EstadoVacioMonitoreo puedeEditar={puedeEditar} volver="/app/mi-salud" />
         ) : (
           <div className="-mx-[18px] flex gap-2.5 overflow-x-auto px-[18px] pb-1">
             {resumenes.map((r) => (

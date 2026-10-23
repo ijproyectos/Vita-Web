@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { listarDosisVencidasDeMisElders, listarElders } from "@/lib/cuidadores/nucleo";
+import { RastreadorNavegacion } from "@/lib/navegacion/rastreador";
 import { AlertaDosisPopup } from "./alerta-dosis-popup";
 
 // Árbol separado de /app/layout.tsx (que asume que el usuario autenticado
@@ -24,6 +25,7 @@ export default async function CuidarLayout({ children }: LayoutProps<"/cuidar">)
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background pb-6">
+      <RastreadorNavegacion />
       <AlertaDosisPopup dosis={dosisVencidas} />
       {children}
     </div>

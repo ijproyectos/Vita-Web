@@ -26,7 +26,7 @@ export default async function SeguridadPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Preferencias" title="Seguridad" />
+      <TopBar volverA="/app/perfil" eyebrow="Preferencias" title="Seguridad" />
 
       <PinSeguridad uid={usuario.id} nombre={perfil?.nombre?.trim().split(/\s+/)[0] || "vita"} />
 

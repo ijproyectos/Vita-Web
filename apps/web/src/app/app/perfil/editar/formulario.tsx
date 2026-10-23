@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useVolver } from "@/lib/navegacion/rastreador";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { GENEROS, GRUPOS_SANGUINEOS, OTRA_PREPAGA, PREPAGAS_ARGENTINA } from "@/lib/perfil/opciones";
@@ -25,6 +26,7 @@ export function FormularioEditarPerfil({
   soloLectura: boolean;
 }) {
   const router = useRouter();
+  const volver = useVolver("/app/perfil");
   const conocida = !!perfil.obra_social && (PREPAGAS_ARGENTINA as readonly string[]).includes(perfil.obra_social);
   const [nombre, setNombre] = useState(perfil.nombre ?? "");
   const [apellido, setApellido] = useState(perfil.apellido ?? "");
@@ -58,7 +60,7 @@ export function FormularioEditarPerfil({
       const r = await guardarPerfilAction(datos);
       if (r.ok) {
         toast.success("Perfil actualizado");
-        router.push("/app/perfil");
+        router.replace("/app/perfil");
       } else setError(r.message);
     });
   }
@@ -155,7 +157,7 @@ export function FormularioEditarPerfil({
         <div className="flex gap-2.5">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => volver()}
             className="rounded-full border border-foreground/10 px-[22px] py-4 text-sm font-bold text-slate-brand"
           >
             Cancelar

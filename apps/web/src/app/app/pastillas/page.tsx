@@ -18,7 +18,7 @@ export default async function PastillasPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
-      <TopBar eyebrow="Mi Salud" title={activo.esPropio ? "Mis pastillas" : `Pastillas de ${activo.nombre.split(" ")[0]}`} />
+      <TopBar volverA="/app/mi-salud" eyebrow="Mi Salud" title={activo.esPropio ? "Mis pastillas" : `Pastillas de ${activo.nombre.split(" ")[0]}`} />
       <BannerPerfil perfil={activo} />
 
       <p className="px-0.5 text-sm text-muted-foreground">

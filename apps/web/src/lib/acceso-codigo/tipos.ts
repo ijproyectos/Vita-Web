@@ -16,3 +16,19 @@ export type ResultadoEntrarConCodigo = { ok: true } | { ok: false; motivo: "inva
 export type ResultadoCodigoAcceso =
   | { status: "success"; codigo: string; expiraAt: string }
   | { status: "error"; message: string };
+
+/** Vista previa de un código válido (sin consumirlo): para el "¿Sos vos?". */
+export type VistaPreviaCodigo = {
+  /** Nombre completo de la persona del perfil, tal como lo cargó su cuidador. */
+  nombreCompleto: string;
+  /** Primer nombre. */
+  nombre: string;
+  /** Primer nombre de quien la cuida, si se conoce. */
+  cuidador: string | null;
+  /** Medicamentos ya cargados en el borrador (solo código de vínculo). */
+  medicamentos: number | null;
+};
+
+export type ResultadoVerCodigo =
+  | { ok: true; vista: VistaPreviaCodigo }
+  | { ok: false; motivo: "invalido" | "bloqueado" | "error" };

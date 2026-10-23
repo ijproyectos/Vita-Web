@@ -52,7 +52,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Perfil a cargo" title={primerNombre} />
+      <TopBar volverA="/app/familia" eyebrow="Perfil a cargo" title={primerNombre} />
 
       <div className="flex items-center gap-3.5 rounded-[22px] bg-card p-[18px] shadow-card">
         <AvatarPersona nombre={miembro.nombre} color={color} size={60} />
