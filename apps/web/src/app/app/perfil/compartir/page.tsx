@@ -33,7 +33,7 @@ export default async function CompartirPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4.5 px-4 pt-2 pb-6">
+    <div className="flex flex-col gap-[18px] px-[18px] pt-1.5 pb-6">
       <TopBar eyebrow="Privacidad y datos" title="Compartir con profesional" />
 
       <p className="-mt-2 text-[13px] text-muted-foreground">

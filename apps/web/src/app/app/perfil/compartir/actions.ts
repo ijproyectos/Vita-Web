@@ -1,9 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
+import { origenPublico } from "@/lib/email/origen";
 import * as compartirNucleo from "@/lib/compartir/nucleo";
 import { DURACIONES, type DuracionEnlace } from "@/lib/compartir/tipos";
 
@@ -13,17 +13,6 @@ export type EstadoCrearEnlace =
   | { status: "idle" }
   | { status: "success"; url: string; expiraAt: string }
   | { status: "error"; message: string };
-
-// El origen sale de NEXT_PUBLIC_SITE_URL si está definida; si no, de los
-// headers de la request (host + proto reenviados por Netlify).
-async function origenPublico(): Promise<string> {
-  const fija = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (fija) return fija.replace(/\/+$/, "");
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
 
 export async function crearEnlaceAction(
   _prev: EstadoCrearEnlace,

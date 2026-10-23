@@ -1,13 +1,18 @@
 import { requireUser } from "@/lib/dal";
+import { createClient } from "@/lib/supabase/server";
+import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { TopBar } from "../../top-bar";
 import { FilaAccion, Grupo, Tile } from "../filas";
+import { PinSeguridad } from "./pin-seguridad";
 
-// Seguridad (V7): información real de la sesión + cierre de sesión en este
-// dispositivo. No hay PIN ni verificación en dos pasos: el acceso es con
-// Google (o con el código de un familiar), no se simulan controles.
+// Seguridad (V7): PIN al volver (real, de este dispositivo), verificación en
+// dos pasos (todavía no existe: se dice "Próximamente", sin interruptor
+// falso), datos reales de la sesión y cierre de sesión.
 export default async function SeguridadPage() {
   const usuario = await requireUser();
+  const supabase = await createClient();
+  const perfil = await perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null);
   const porCodigo = esEmailDeCuentaPorCodigo(usuario.email);
   const ultimoIngreso = usuario.last_sign_in_at
     ? new Intl.DateTimeFormat("es-AR", {
@@ -20,20 +25,28 @@ export default async function SeguridadPage() {
     : null;
 
   return (
-    <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Cuenta" title="Seguridad" />
+    <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
+      <TopBar eyebrow="Preferencias" title="Seguridad" />
+
+      <PinSeguridad uid={usuario.id} nombre={perfil?.nombre?.trim().split(/\s+/)[0] || "vita"} />
+
+      <div className="flex items-center gap-3 rounded-[20px] bg-card px-4 py-[15px] shadow-card">
+        <div className="min-w-0 flex-1">
+          <div className="font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">Verificación en dos pasos</div>
+          <div className="mt-0.5 text-pretty text-[11.5px] font-medium leading-[1.4] text-subtle">
+            {porCodigo
+              ? "No aplica a una cuenta vinculada con el código de un familiar."
+              : "Todavía no está disponible en vita. Si entrás con Google, podés activarla en los ajustes de tu cuenta de Google."}
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-[10.5px] font-bold text-slate-brand">Próximamente</span>
+      </div>
 
       <Grupo titulo="Tu sesión">
         <Dato icon="user" label="Cuenta" valor={porCodigo ? "Cuenta vinculada con tu familiar" : (usuario.email ?? "Sin email")} />
-        <Dato icon="shield" label="Cómo entrás" valor={porCodigo ? "Con el código de tu familiar" : "Con tu cuenta de Google"} />
+        <Dato icon="shield" label="Cómo entrás" valor={porCodigo ? "Con el código de tu familiar" : "Con tu cuenta (Google o email)"} />
         {ultimoIngreso && <Dato icon="clock" label="Último ingreso" valor={ultimoIngreso} />}
       </Grupo>
-
-      <p className="px-0.5 text-[12.5px] font-medium leading-[1.5] text-subtle">
-        {porCodigo
-          ? "Estás usando una cuenta vinculada con el código de un familiar."
-          : "La contraseña y la verificación en dos pasos de tu cuenta las administra Google. Si querés reforzarlas, hacelo desde los ajustes de tu cuenta de Google."}
-      </p>
 
       <Grupo titulo="Este dispositivo">
         <form action="/auth/signout" method="post">

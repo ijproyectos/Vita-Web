@@ -51,6 +51,7 @@ export function FilaNav({
   sub,
   href,
   externo,
+  peligro,
 }: {
   icon: string;
   tono?: TonoFila;
@@ -58,11 +59,12 @@ export function FilaNav({
   sub?: string;
   href: string;
   externo?: boolean;
+  peligro?: boolean;
 }) {
   const contenido = (
     <>
       <Tile icon={icon} tono={tono} />
-      <Cuerpo label={label} sub={sub} />
+      <Cuerpo label={label} sub={sub} peligro={peligro} />
       <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
     </>
   );

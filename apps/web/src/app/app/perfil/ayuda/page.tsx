@@ -4,7 +4,7 @@ import { FilaNav, Grupo } from "../filas";
 
 import { CORREO_SOPORTE } from "@/lib/legal/datos";
 
-// Ayuda y soporte (V7): preguntas frecuentes (estáticas) y dos mails reales.
+// Ayuda y soporte (V7): preguntas frecuentes, un mail real y el formulario de reporte.
 export default async function AyudaPage() {
   await requireUser();
 
@@ -25,8 +25,7 @@ export default async function AyudaPage() {
           icon="alert-triangle"
           label="Reportar un problema"
           sub="Contanos qué pasó y lo revisamos"
-          href={`mailto:${CORREO_SOPORTE}?subject=${encodeURIComponent("Reporte de un problema en vita")}&body=${encodeURIComponent("Contanos qué pasó:\n\n")}`}
-          externo
+          href="/app/perfil/ayuda/reportar"
         />
       </Grupo>
 

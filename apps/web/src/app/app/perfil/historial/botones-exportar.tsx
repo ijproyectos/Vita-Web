@@ -5,7 +5,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 // Acciones de la página de historial. Todo este bloque se oculta al
 // imprimir (clase `no-imprimir`, ver globals.css): el PDF sale solo con
 // el reporte.
-export function BotonesExportar() {
+export function BotonesExportar({ de }: { de?: string }) {
   return (
     <div className="no-imprimir flex flex-col gap-2.5">
       <button
@@ -20,7 +20,7 @@ export function BotonesExportar() {
         En el celular: Compartir → Imprimir → Guardar como PDF
       </p>
       <a
-        href="/app/perfil/historial/datos"
+        href={de ? `/app/perfil/historial/datos?de=${encodeURIComponent(de)}` : "/app/perfil/historial/datos"}
         download
         className="flex h-12 items-center justify-center gap-2 rounded-full bg-secondary font-heading text-[15px] font-bold text-secondary-foreground"
       >

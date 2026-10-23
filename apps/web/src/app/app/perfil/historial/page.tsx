@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { obtenerHistorial, type HistorialExportado } from "@/lib/exportar/nucleo";
+import { nombreCompleto } from "@/lib/perfil/tipos";
+import { rolSobre } from "@/lib/familia/perfil-activo";
 import { VitaWordmark } from "@/components/vita/v-mark";
 import { TopBar } from "../../top-bar";
 import { BotonesExportar } from "./botones-exportar";
@@ -40,24 +42,28 @@ const ESTADOS_VINCULO: Record<string, string> = {
   revocado: "Revocado",
 };
 
-export default async function HistorialPage() {
+export default async function HistorialPage({ searchParams }: { searchParams: Promise<{ de?: string }> }) {
   const usuario = await requireUser();
   const supabase = await createClient();
+  // `?de=<id>`: exportar a alguien que cuido (solo con permiso Admin; la RLS
+  // igual decide qué filas se leen). Cualquier otro valor cae al propio.
+  const { de } = await searchParams;
+  const sobre = de && de !== usuario.id && (await rolSobre(de)) === "editar" ? de : usuario.id;
 
   let h: HistorialExportado | null = null;
   try {
-    h = await obtenerHistorial(supabase, usuario.id);
+    h = await obtenerHistorial(supabase, sobre);
   } catch {
     h = null;
   }
 
   return (
-    <div className="reporte-historial flex flex-col gap-5 px-4 pt-2">
+    <div className="reporte-historial flex flex-col gap-5 px-[18px] pt-1.5">
       <div className="no-imprimir">
-        <TopBar eyebrow="Privacidad y datos" title="Exportar mi historial" />
+        <TopBar eyebrow="Privacidad y datos" title={sobre === usuario.id ? "Exportar mi historial" : "Exportar historial"} />
       </div>
 
-      <BotonesExportar />
+      <BotonesExportar de={sobre === usuario.id ? undefined : sobre} />
 
       {!h ? (
         <p className="rounded-[20px] bg-destructive/10 p-4 text-sm text-destructive">
@@ -79,7 +85,7 @@ function Reporte({ h }: { h: HistorialExportado }) {
       <header className="flex flex-col gap-1.5 pt-1">
         <VitaWordmark size={30} tono="menta" />
         <h1 className="font-heading text-[22px] font-extrabold tracking-tight">
-          Historial de salud{p?.nombre ? ` de ${p.nombre}` : ""}
+          Historial de salud{p?.nombre ? ` de ${nombreCompleto(p)}` : ""}
         </h1>
         <p className="text-[12.5px] text-muted-foreground">
           Generado el {fechaHora(h.generado_en)}
@@ -93,7 +99,7 @@ function Reporte({ h }: { h: HistorialExportado }) {
         ) : (
           <div className="evitar-corte rounded-[20px] bg-card p-4.5 shadow-card">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-              <Dato etiqueta="Nombre" valor={p.nombre} />
+              <Dato etiqueta="Nombre" valor={nombreCompleto(p) || p.nombre} />
               <Dato etiqueta="Fecha de nacimiento" valor={p.fecha_nacimiento ? fechaSimple(p.fecha_nacimiento) : null} />
               <Dato etiqueta="Género" valor={p.genero} />
               <Dato etiqueta="Grupo sanguíneo" valor={p.grupo_sanguineo} />

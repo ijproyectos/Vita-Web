@@ -17,8 +17,12 @@ export async function eliminarCuentaAction(
     return { status: "error", mensaje: `Escribí ${PALABRA_CONFIRMACION} para confirmar.` };
   }
 
-  const resultado = await eliminarCuenta(usuario.id);
-  if (!resultado.ok) return { status: "error", mensaje: resultado.error };
+  try {
+    const resultado = await eliminarCuenta(usuario.id);
+    if (!resultado.ok) return { status: "error", mensaje: resultado.error };
+  } catch {
+    return { status: "error", mensaje: "No pudimos eliminar la cuenta. Probá de nuevo." };
+  }
 
   // El usuario ya no existe en Auth; esto solo limpia las cookies de
   // sesión de este navegador. Si falla, igual la sesión es inválida.
