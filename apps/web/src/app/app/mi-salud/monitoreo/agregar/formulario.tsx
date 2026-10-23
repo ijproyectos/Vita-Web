@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useVolver } from "@/lib/navegacion/rastreador";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
@@ -25,8 +26,9 @@ const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
 const CLASE_INPUT_VALOR =
   "w-24 rounded-[var(--radius-item)] bg-secondary py-2.5 text-center font-heading text-[38px] font-bold tracking-[-0.04em] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 
-export function FormularioMedicion({ tipoInicial }: { tipoInicial: string }) {
+export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: string; volver: string }) {
   const router = useRouter();
+  const volverAtras = useVolver(volver);
   const [tipo, setTipo] = useState<TipoMedicion>(esTipoMedicion(tipoInicial) ? tipoInicial : "presion");
   const [valor, setValor] = useState("");
   const [secundario, setSecundario] = useState("");
@@ -40,7 +42,7 @@ export function FormularioMedicion({ tipoInicial }: { tipoInicial: string }) {
     const resultado = await crearMedicionAction(prev, formData);
     if (resultado.status === "success") {
       toast.success("Medición guardada");
-      router.push(`/app/mi-salud/monitoreo/${tipo}`);
+      router.replace(volver);
     }
     return resultado;
   }
@@ -254,7 +256,7 @@ export function FormularioMedicion({ tipoInicial }: { tipoInicial: string }) {
         )}
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => volverAtras()}
           className="rounded-full border border-foreground/10 px-[22px] py-4 font-heading text-sm font-bold text-slate-brand"
         >
           Atrás

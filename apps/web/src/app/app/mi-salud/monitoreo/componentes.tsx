@@ -2,7 +2,7 @@ import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { crearEscala, cuandoAR, type ResumenTipo, type TonoBadge } from "@/lib/mediciones/resumen";
-import { META_MEDICION, formatearValor } from "@/lib/mediciones/tipos";
+import { META_MEDICION, formatearValor, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 
 const CLASES_BADGE: Record<TonoBadge, string> = {
   ok: "bg-chip-teal-bg text-chip-teal-ink",
@@ -19,7 +19,7 @@ export function BadgeMedicion({ badge, className }: { badge: ResumenTipo["badge"
 }
 
 /** Estado vacío compartido por la lista y por la sección de Mi Salud. */
-export function EstadoVacioMonitoreo({ puedeEditar }: { puedeEditar: boolean }) {
+export function EstadoVacioMonitoreo({ puedeEditar, volver }: { puedeEditar: boolean; volver: string }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-[20px] bg-card px-5 pb-[22px] pt-[26px] text-center shadow-card">
       <div className="flex size-12 items-center justify-center rounded-full bg-persona-1-tint text-persona-1">
@@ -31,7 +31,7 @@ export function EstadoVacioMonitoreo({ puedeEditar }: { puedeEditar: boolean }) 
       </div>
       {puedeEditar && (
         <Link
-          href="/app/mi-salud/monitoreo/agregar"
+          href={hrefNuevaMedicion({ volver })}
           className="mt-2 inline-flex rounded-full bg-primary px-5 py-[11px] font-heading text-[13.5px] font-extrabold text-primary-foreground shadow-cta-sm"
         >
           Agregar medición

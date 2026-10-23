@@ -13,7 +13,7 @@ import { ListaMedicamentos } from "./lista";
 // Mis medicamentos (V7): un renglón por medicamento con sus horarios, lápiz
 // para editarlo en la propia fila y papelera. `?editar=<id>` abre esa fila ya
 // en edición (la hoja de detalle de la Rutina enlaza acá).
-export default async function MedicamentosPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function MedicamentosPage(props: PageProps<"/app/medicamentos">) {
   await requireUser();
   const supabase = await createClient();
   const activo = await obtenerPerfilActivo();
@@ -28,7 +28,7 @@ export default async function MedicamentosPage(props: { searchParams: Promise<Re
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar
+      <TopBar volverA="/app/mi-salud"
         eyebrow="Mi salud"
         title={activo.esPropio ? "Mis medicamentos" : `Medicamentos de ${activo.nombre.split(" ")[0]}`}
       />

@@ -25,7 +25,7 @@ export function FormularioAgregarMedicamento({
       etiquetaGuardar={paraNombre ? `+ Agregar medicamento a ${paraNombre}` : "✓ Guardar medicamento"}
       onExito={() => {
         toast.success("Medicamento agregado");
-        router.push("/app/rutina");
+        router.replace("/app/rutina");
       }}
     />
   );

@@ -18,7 +18,7 @@ export default async function AgregarTurnoPage() {
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
-      <TopBar eyebrow={activo.esPropio ? "Nuevo en tu rutina" : `Para ${activo.nombre}`} title="Turno médico" accionDerecha={activo.esPropio ? <VitaShortcutButton /> : undefined} />
+      <TopBar volverA="/app/rutina" eyebrow={activo.esPropio ? "Nuevo en tu rutina" : `Para ${activo.nombre}`} title="Turno médico" accionDerecha={activo.esPropio ? <VitaShortcutButton /> : undefined} />
       {/* El chat con vita actúa sobre la cuenta logueada: para otra persona no se ofrece. */}
       {activo.esPropio ? <VitaShortcutButton size="banner" /> : <BannerPerfil perfil={activo} accion="cargar" />}
       <FormularioAgregarTurno

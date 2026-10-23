@@ -33,7 +33,7 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
-      <TopBar eyebrow="Mis pastillas" title="Contar pastillas" />
+      <TopBar volverA="/app/pastillas" eyebrow="Mis pastillas" title="Contar pastillas" />
       <BannerPerfil perfil={activo} accion="cargar" />
       <FlujoContar opciones={opciones} inicialId={grupoPreseleccionado?.representanteId ?? ""} />
     </div>

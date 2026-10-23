@@ -39,7 +39,7 @@ export function FormularioContacto({
       const r = await guardarContactoEmergenciaAction({ nombre, relacion: relacion || "Otro", telefono });
       if (r.ok) {
         toast.success("Contacto de emergencia guardado");
-        router.push("/app/perfil");
+        router.replace("/app/perfil");
       } else setError(r.message);
     });
   }

@@ -43,7 +43,7 @@ export default async function ResumenSaludPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Perfil clínico" title="Resumen de salud" />
+      <TopBar volverA="/app/perfil" eyebrow="Perfil clínico" title="Resumen de salud" />
       <BannerPerfil perfil={activo} />
 
       <div className="rounded-[20px] bg-card p-[18px] shadow-card">

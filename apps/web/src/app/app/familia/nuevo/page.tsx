@@ -6,7 +6,7 @@ export default async function NuevoPerfilPage() {
   await requireUser();
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
-      <TopBar eyebrow="Familia" title="Crear un perfil" />
+      <TopBar volverA="/app/familia" eyebrow="Familia" title="Crear un perfil" />
       <FormularioNuevoPerfil />
     </div>
   );

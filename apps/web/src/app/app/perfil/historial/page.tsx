@@ -42,12 +42,13 @@ const ESTADOS_VINCULO: Record<string, string> = {
   revocado: "Revocado",
 };
 
-export default async function HistorialPage({ searchParams }: { searchParams: Promise<{ de?: string }> }) {
+export default async function HistorialPage({ searchParams }: PageProps<"/app/perfil/historial">) {
   const usuario = await requireUser();
   const supabase = await createClient();
   // `?de=<id>`: exportar a alguien que cuido (solo con permiso Admin; la RLS
   // igual decide qué filas se leen). Cualquier otro valor cae al propio.
-  const { de } = await searchParams;
+  const { de: deCrudo } = await searchParams;
+  const de = Array.isArray(deCrudo) ? deCrudo[0] : deCrudo;
   const sobre = de && de !== usuario.id && (await rolSobre(de)) === "editar" ? de : usuario.id;
 
   let h: HistorialExportado | null = null;
@@ -60,7 +61,7 @@ export default async function HistorialPage({ searchParams }: { searchParams: Pr
   return (
     <div className="reporte-historial flex flex-col gap-5 px-[18px] pt-1.5">
       <div className="no-imprimir">
-        <TopBar eyebrow="Privacidad y datos" title={sobre === usuario.id ? "Exportar mi historial" : "Exportar historial"} />
+        <TopBar volverA="/app/perfil/privacidad" eyebrow="Privacidad y datos" title={sobre === usuario.id ? "Exportar mi historial" : "Exportar historial"} />
       </div>
 
       <BotonesExportar de={sobre === usuario.id ? undefined : sobre} />

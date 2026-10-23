@@ -9,6 +9,7 @@ import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { esTipoMedicion, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
@@ -321,7 +322,7 @@ export function Pantalla({
                 <TarjetaMediciones
                   titulo={mediciones.titulo}
                   mediciones={mediciones.items}
-                  hrefDe={(tipo) => `/app/mi-salud/monitoreo/agregar?tipo=${tipo}`}
+                  hrefDe={(tipo) => hrefNuevaMedicion({ tipo: esTipoMedicion(tipo) ? tipo : undefined, volver: "/app/modo-simple" })}
                 />
               )}
 

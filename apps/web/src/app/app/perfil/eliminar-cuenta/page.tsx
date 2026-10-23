@@ -20,7 +20,7 @@ export default async function EliminarCuentaPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Cuenta" title="Eliminar mi cuenta" />
+      <TopBar volverA="/app/perfil" eyebrow="Cuenta" title="Eliminar mi cuenta" />
 
       <p className="px-1 text-pretty text-sm font-medium leading-[1.5] text-slate-brand">Es para siempre. No se puede deshacer.</p>
 

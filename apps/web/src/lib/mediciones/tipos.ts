@@ -267,3 +267,21 @@ export function validarMedicion(
     },
   };
 }
+
+export const RUTA_MONITOREO = "/app/mi-salud/monitoreo";
+
+// Destino de retorno de "Nueva medición": solo rutas internas de /app (evita
+// open-redirect vía ?volver=). Cualquier otra cosa cae al Monitoreo.
+export function volverSeguro(valor: unknown): string {
+  if (typeof valor !== "string") return RUTA_MONITOREO;
+  if (!/^\/app(\/[A-Za-z0-9\-_/]*)?(\?[A-Za-z0-9\-_=&%.]*)?$/.test(valor) || valor.includes("//")) return RUTA_MONITOREO;
+  return valor;
+}
+
+export function hrefNuevaMedicion(opciones: { tipo?: TipoMedicion; volver?: string } = {}): string {
+  const q = new URLSearchParams();
+  if (opciones.tipo) q.set("tipo", opciones.tipo);
+  if (opciones.volver) q.set("volver", opciones.volver);
+  const s = q.toString();
+  return `${RUTA_MONITOREO}/agregar${s ? `?${s}` : ""}`;
+}

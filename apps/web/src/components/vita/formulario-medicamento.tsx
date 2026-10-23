@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import type { EstadoAccion } from "@/app/app/rutina/actions";
+import { useVolver } from "@/lib/navegacion/rastreador";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EditorTomas } from "@/components/vita/editor-tomas";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -20,7 +21,6 @@ import {
 // "Vita te recuerda a las…". Lo comparten el alta propia/familiar y la del
 // cuidador; cada una aporta su Server Action.
 
-type Estado = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
 
 export type InicialMedicamento = {
   nombre: string;
@@ -36,13 +36,16 @@ export function FormularioMedicamento({
   inicial,
   etiquetaGuardar,
   onExito,
+  volverA = "/app/rutina",
 }: {
-  accion: (prev: Estado, formData: FormData) => Promise<Estado>;
+  accion: (prev: EstadoAccion, formData: FormData) => Promise<EstadoAccion>;
   inicial?: InicialMedicamento;
   etiquetaGuardar: string;
   onExito?: () => void;
+  /** Destino de Cancelar/Descartar sin historial dentro de la app. */
+  volverA?: string;
 }) {
-  const router = useRouter();
+  const volver = useVolver(volverA);
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
   const [dosisTexto, setDosisTexto] = useState(
     inicial?.dosis ? `${inicial.dosis} ${inicial.unidad}`.trim() : ""
@@ -50,15 +53,15 @@ export function FormularioMedicamento({
   const [frecuencia, setFrecuencia] = useState<string>(FRECUENCIAS_MEDICAMENTO[0]);
   const [tomas, setTomas] = useState<TomaForm[]>(() => ajustarTomas([], 1));
 
-  async function ejecutar(prev: Estado, formData: FormData): Promise<Estado> {
+  async function ejecutar(prev: EstadoAccion, formData: FormData): Promise<EstadoAccion> {
     const resultado = await accion(prev, formData);
     if (resultado.status === "success") onExito?.();
     return resultado;
   }
 
-  const [estado, formAction, pendiente] = useActionState(ejecutar, { status: "idle" } as Estado);
+  const [estado, formAction, pendiente] = useActionState(ejecutar, { status: "idle" } as EstadoAccion);
   const formRef = useRef<HTMLFormElement>(null);
-  const [ocultoPara, setOcultoPara] = useState<Estado | null>(null);
+  const [ocultoPara, setOcultoPara] = useState<EstadoAccion | null>(null);
 
   const horas = tomas.map((t) => t.hora);
   const repetidas = new Set(horas).size !== horas.length;
@@ -158,7 +161,7 @@ export function FormularioMedicamento({
         reintentando={pendiente}
         onReintentar={() => formRef.current?.requestSubmit()}
         onCerrar={() => setOcultoPara(estado)}
-        onDescartar={() => router.back()}
+        onDescartar={() => volver()}
       />
 
       <div
@@ -167,7 +170,7 @@ export function FormularioMedicamento({
       >
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => volver()}
           className="rounded-full border border-foreground/10 px-[22px] py-4 font-heading text-sm font-bold text-slate-brand"
         >
           Atrás

@@ -10,7 +10,7 @@ export default async function AyudaPage() {
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Cuenta" title="Ayuda y soporte" />
+      <TopBar volverA="/app/perfil" eyebrow="Cuenta" title="Ayuda y soporte" />
 
       <Grupo>
         <FilaNav icon="help" label="Preguntas frecuentes" sub="Remedios, avisos, familia y datos" href="/app/perfil/ayuda/faq" />

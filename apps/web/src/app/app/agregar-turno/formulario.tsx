@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useVolver } from "@/lib/navegacion/rastreador";
 import { toast } from "sonner";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EtiquetaSeccion, FranjaDias, NotaLateral, PillsEspecialidad } from "@/components/vita/campos-turno";
@@ -26,6 +27,7 @@ export function FormularioAgregarTurno({
   paraNombre?: string;
 }) {
   const router = useRouter();
+  const volver = useVolver("/app/rutina");
   const [especialidad, setEspecialidad] = useState("");
   const [profesional, setProfesional] = useState("");
   const [lugar, setLugar] = useState("");
@@ -45,7 +47,7 @@ export function FormularioAgregarTurno({
     const resultado = await crearTurnoAction(prev, formData);
     if (resultado.status === "success") {
       toast.success("Turno agendado");
-      router.push("/app/rutina");
+      router.replace("/app/rutina");
     }
     return resultado;
   }
@@ -212,7 +214,7 @@ export function FormularioAgregarTurno({
         reintentando={pendiente}
         onReintentar={() => formRef.current?.requestSubmit()}
         onCerrar={() => setOcultoPara(estado)}
-        onDescartar={() => router.back()}
+        onDescartar={() => volver()}
       />
 
       <div
@@ -226,7 +228,7 @@ export function FormularioAgregarTurno({
         )}
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => volver()}
           className="rounded-full border border-foreground/10 px-[22px] py-4 font-heading text-sm font-bold text-slate-brand"
         >
           Atrás

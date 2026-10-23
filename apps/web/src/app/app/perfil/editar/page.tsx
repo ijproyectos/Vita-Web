@@ -19,7 +19,7 @@ export default async function EditarPerfilPage() {
 
   return (
     <div className="flex flex-col gap-6 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Datos personales" title={activo.esPropio ? "Editar mi perfil" : `Editar a ${activo.nombre}`} />
+      <TopBar volverA="/app/perfil" eyebrow="Datos personales" title={activo.esPropio ? "Editar mi perfil" : `Editar a ${activo.nombre}`} />
       <BannerPerfil perfil={activo} accion="cargar" />
       <FormularioEditarPerfil
         perfil={perfil}

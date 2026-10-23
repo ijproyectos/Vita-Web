@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VMark } from "@/components/vita/v-mark";
@@ -22,6 +24,7 @@ export function AgregarSheet({
   nombrePersona?: string | null;
 }) {
   const { abrir } = useChatOverlay();
+  const pathname = usePathname();
   const titulo =
     tipo === "salud"
       ? nombrePersona ? `Agregar a la salud de ${nombrePersona}` : "Agregar a tu salud"
@@ -55,7 +58,7 @@ export function AgregarSheet({
                 tinte="bg-chip-violet-bg text-chip-violet-ink"
                 titulo="Medición"
                 sub="Presión, glucemia o peso"
-                href="/app/mi-salud/monitoreo/agregar"
+                href={hrefNuevaMedicion({ volver: pathname })}
               />
               <Opcion
                 icon="camera"

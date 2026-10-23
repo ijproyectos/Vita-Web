@@ -121,18 +121,16 @@ export function SelectorPerfil({
             })}
           </div>
 
-          {opciones.length < 2 && (
-            <Link
-              href="/app/familia/nuevo"
-              onClick={() => setAbierto(false)}
-              className="mt-0.5 flex items-center gap-[13px] rounded-[18px] px-3.5 py-3 font-heading text-[14.5px] font-extrabold hover:bg-canvas/60"
-            >
-              <span className="flex size-[46px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-foreground/20 text-slate-brand">
-                <VitaIcon name="plus" size={18} />
-              </span>
-              Agregar a alguien que cuido
-            </Link>
-          )}
+          <Link
+            href="/app/familia/nuevo"
+            onClick={() => setAbierto(false)}
+            className="mt-0.5 flex items-center gap-[13px] rounded-[18px] px-3.5 py-3 font-heading text-[14.5px] font-extrabold hover:bg-canvas/60"
+          >
+            <span className="flex size-[46px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-foreground/20 text-slate-brand">
+              <VitaIcon name="plus" size={18} />
+            </span>
+            Agregar a alguien que cuido
+          </Link>
           <Link
             href="/app/familia"
             onClick={() => setAbierto(false)}

@@ -32,7 +32,7 @@ export default async function CuidadorPage(props: PageProps<"/app/familia/[id]/c
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Cuidador" title={c.nombre} />
+      <TopBar volverA={`/app/familia/${id}`} eyebrow="Cuidador" title={c.nombre} />
 
       <div className="flex items-center gap-3.5 rounded-[22px] bg-card p-[18px] shadow-card">
         <AvatarPersona nombre={c.nombre} color={colorPorDefecto(indice + 1)} size={60} />

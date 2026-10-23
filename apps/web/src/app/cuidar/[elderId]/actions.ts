@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireCuidador, requireUser } from "@/lib/dal";
 import { recordarDosisAlElder, type ResultadoRecordatorio } from "@/lib/notificaciones/recordatorios";
@@ -62,7 +62,9 @@ export async function crearMedicamentoParaElderAction(
     return { status: "error", message: "No pudimos guardar el medicamento. Probá de nuevo." };
   }
 
-  redirect(`/cuidar/${elderId}`);
+  // redirect() lanza NEXT_REDIRECT a propósito: excepción deliberada de Next.js,
+  // por eso queda fuera de cualquier try/catch.
+  redirect(`/cuidar/${elderId}`, RedirectType.replace);
 }
 
 /**

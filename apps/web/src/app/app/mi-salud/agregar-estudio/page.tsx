@@ -15,7 +15,7 @@ export default async function AgregarEstudioPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pt-1.5">
-      <TopBar eyebrow="Mi salud" title="Nuevo estudio" />
+      <TopBar volverA="/app/mi-salud" eyebrow="Mi salud" title="Nuevo estudio" />
       <BannerPerfil perfil={activo} accion="cargar" />
       <FormularioAgregarEstudio lugarDisponible={await lugarDisponible(await createClient())} />
     </div>

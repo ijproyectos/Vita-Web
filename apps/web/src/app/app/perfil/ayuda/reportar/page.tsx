@@ -6,7 +6,7 @@ export default async function ReportarPage() {
   await requireUser();
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Ayuda y soporte" title="Reportar un problema" />
+      <TopBar volverA="/app/perfil/ayuda" eyebrow="Ayuda y soporte" title="Reportar un problema" />
       <FormularioReporte />
     </div>
   );

@@ -22,7 +22,7 @@ export default async function TurnosPage(props: PageProps<"/app/turnos">) {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Agenda" title={activo.esPropio ? "Mis turnos" : `Turnos de ${activo.nombre.split(" ")[0]}`} />
+      <TopBar volverA="/app/rutina" eyebrow="Agenda" title={activo.esPropio ? "Mis turnos" : `Turnos de ${activo.nombre.split(" ")[0]}`} />
       <BannerPerfil perfil={activo} />
 
       {turnos.length === 0 && (

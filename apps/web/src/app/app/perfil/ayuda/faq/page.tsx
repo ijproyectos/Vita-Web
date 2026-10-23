@@ -7,7 +7,7 @@ export default async function FaqPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar eyebrow="Ayuda" title="Preguntas frecuentes" />
+      <TopBar volverA="/app/perfil/ayuda" eyebrow="Ayuda" title="Preguntas frecuentes" />
       <PreguntasFrecuentes />
     </div>
   );

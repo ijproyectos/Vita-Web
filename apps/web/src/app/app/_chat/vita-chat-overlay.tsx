@@ -66,7 +66,7 @@ function etiquetaEstadoVoz(estado: EstadoVoz, hablando: boolean): string {
 // oculto vía transform, no un mount/unmount condicional) para conservar la
 // conversación en curso al cerrar y reabrir — mismo espíritu que el FAB
 // del diseño, adaptado de ruta a overlay real.
-export function VitaChatOverlay() {
+export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
   const { abierto, mensajeInicial, cerrar } = useChatOverlay();
   const cargadoRef = useRef(false); // no es estado reactivo — solo evita re-pedir sesiones
   const [sesionId, setSesionId] = useState<string | null>(null);
@@ -513,7 +513,7 @@ export function VitaChatOverlay() {
             Hoy · {formatoFechaCorta(fechaDeHoyISO())}
           </div>
           {mensajes.map((m, i) => (
-            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} />
+            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} />
           ))}
           {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">

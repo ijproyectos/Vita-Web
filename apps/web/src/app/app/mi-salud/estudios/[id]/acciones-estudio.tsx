@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useVolver } from "@/lib/navegacion/rastreador";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { eliminarEstudioAction } from "../../estudio-actions";
@@ -10,11 +11,11 @@ import { eliminarEstudioAction } from "../../estudio-actions";
 type ArchivoEstudio = { nombreArchivo: string; esPdf: boolean; url: string | null };
 
 export function BotonVolver() {
-  const router = useRouter();
+  const volver = useVolver("/app/mi-salud");
   return (
     <button
       type="button"
-      onClick={() => router.back()}
+      onClick={volver}
       aria-label="Volver"
       className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
     >
