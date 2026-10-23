@@ -9,6 +9,8 @@ import {
   DOMINIO_CUENTA_POR_CODIGO,
   MINUTOS_VIGENCIA_CODIGO_ACCESO,
   type ResultadoCodigoAcceso,
+  type ResultadoVerCodigo,
+  type VistaPreviaCodigo,
   type ResultadoEntrarConCodigo,
 } from "./tipos";
 
@@ -18,8 +20,14 @@ import {
 // quien entra por código NO tiene sesión todavía — ninguna policy RLS puede
 // resolver "¿este código es válido?" para un anónimo. Es la única vía de
 // request de usuario (no cron) autorizada a importar lib/supabase/admin.ts,
-// y solo se invoca desde la Server Action de /login (`entrarConCodigoAction`),
-// siempre DESPUÉS del throttling por IP. Nunca loguear códigos ni emails.
+// y solo se invoca desde dos Server Actions, siempre DESPUÉS del throttling
+// por IP (`intentos_codigo`): `entrarConCodigoAction` (login) y
+// `verCodigoAction` (vista previa "¿Sos vos?", también alcanzable desde
+// /onboarding/inicio). La vista previa es de solo lectura: nunca consume el
+// código, devuelve únicamente el primer nombre de la persona, el primer
+// nombre de quien la cuida y la cantidad de medicamentos, y replica los
+// chequeos del login (código vigente y vínculo emisor aún aceptado), así que
+// no expone nada que no se vea igual sin sesión. Nunca loguear códigos ni emails.
 type Cliente = SupabaseClient;
 
 const VENTANA_MIN = 15;
@@ -211,11 +219,15 @@ async function entrarConCodigoDeVinculo(
 
 // --- re-acceso (código de acceso) -------------------------------------------
 
-async function entrarConCodigoDeAcceso(
-  admin: Cliente,
-  supabase: Cliente,
-  codigo: string
-): Promise<ResultadoEntrarConCodigo> {
+type CodigoAccesoValido = { id: string; elder_id: string; cuidador_id: string };
+
+/**
+ * Busca el código de acceso vigente (sin usar, sin vencer) que coincide con
+ * `codigo`. Compartido por el login y la vista previa. Se recorren TODOS los
+ * candidatos (sin cortar en el primer match) para no filtrar por tiempo cuál
+ * posición coincidió.
+ */
+async function buscarCodigoAcceso(admin: Cliente, codigo: string): Promise<CodigoAccesoValido | null> {
   const { data: candidatos } = await admin
     .from("codigos_acceso")
     .select("id, elder_id, cuidador_id, codigo_hash, salt")
@@ -223,15 +235,34 @@ async function entrarConCodigoDeAcceso(
     .gt("expira_at", new Date().toISOString())
     .limit(MAX_CODIGOS_CANDIDATOS);
 
-  // Se recorren TODOS (sin cortar en el primer match) para no filtrar por
-  // tiempo cuál posición coincidió.
-  let match: { id: string; elder_id: string; cuidador_id: string } | null = null;
+  let match: CodigoAccesoValido | null = null;
   for (const c of candidatos ?? []) {
     const coincide = igualesEnTiempoConstante(hashCodigoAcceso(c.salt as string, codigo), c.codigo_hash as string);
     if (coincide && !match) {
       match = { id: c.id as string, elder_id: c.elder_id as string, cuidador_id: c.cuidador_id as string };
     }
   }
+  return match;
+}
+
+/** El cuidador que emitió el código tiene que seguir vinculado (no revocado). */
+async function vinculoAceptado(admin: Cliente, elderId: string, cuidadorId: string): Promise<boolean> {
+  const { data } = await admin
+    .from("vinculos_cuidador")
+    .select("id")
+    .eq("elder_id", elderId)
+    .eq("cuidador_id", cuidadorId)
+    .eq("estado", "aceptado")
+    .maybeSingle();
+  return !!data;
+}
+
+async function entrarConCodigoDeAcceso(
+  admin: Cliente,
+  supabase: Cliente,
+  codigo: string
+): Promise<ResultadoEntrarConCodigo> {
+  const match = await buscarCodigoAcceso(admin, codigo);
   if (!match) return { ok: false, motivo: "invalido" };
 
   // Consumo atómico: solo una request puede pasar de usado_at null a now().
@@ -248,14 +279,7 @@ async function entrarConCodigoDeAcceso(
   };
 
   // El cuidador que lo emitió tiene que seguir vinculado (no revocado).
-  const { data: vinculo } = await admin
-    .from("vinculos_cuidador")
-    .select("id")
-    .eq("elder_id", match.elder_id)
-    .eq("cuidador_id", match.cuidador_id)
-    .eq("estado", "aceptado")
-    .maybeSingle();
-  if (!vinculo) return { ok: false, motivo: "invalido" };
+  if (!(await vinculoAceptado(admin, match.elder_id, match.cuidador_id))) return { ok: false, motivo: "invalido" };
 
   const { data: elder, error: errorElder } = await admin.auth.admin.getUserById(match.elder_id);
   const email = elder?.user?.email;
@@ -306,6 +330,82 @@ export async function entrarConCodigo(
     return await entrarConCodigoDeAcceso(admin, supabase, codigo);
   } catch {
     console.error("[acceso-codigo] error inesperado al entrar con código");
+    return { ok: false, motivo: "error" };
+  }
+}
+
+// --- vista previa ("¿Sos vos?") ---------------------------------------------
+
+function primerNombre(nombre: string | null | undefined): string | null {
+  const n = nombre?.trim().split(/\s+/)[0];
+  return n ? n : null;
+}
+
+async function nombreDePerfil(admin: Cliente, id: string): Promise<string | null> {
+  const { data } = await admin.from("perfiles").select("nombre").eq("id", id).maybeSingle();
+  return (data?.nombre as string | null | undefined)?.trim() || null;
+}
+
+/**
+ * Mira a quién pertenece un código VÁLIDO (sin vencer y sin usar) sin
+ * consumirlo, para mostrar "Hola, Elsa. Mica ya armó tu perfil" antes de
+ * reclamarlo. Solo expone el nombre de la persona, el primer nombre de quien
+ * la cuida y cuántos medicamentos hay cargados — nada más. Comparte el
+ * throttling por IP con `entrarConCodigo` (cada vista previa cuenta como un
+ * intento), así que no sirve para enumerar códigos. Un código inexistente,
+ * vencido o usado da el mismo `invalido`. Nunca lanza.
+ */
+export async function verCodigo(codigo: string, ip: string): Promise<ResultadoVerCodigo> {
+  try {
+    const admin = createAdminClient();
+    const bloqueado = await registrarIntentoYVerificarBloqueo(admin, hashIp(ip));
+    if (bloqueado) return { ok: false, motivo: "bloqueado" };
+
+    // 1) Código de vínculo (primer acceso): el cuidador armó un borrador.
+    const vinculo = await buscarVinculoPendiente(admin, codigo);
+    if (vinculo) {
+      const { data: borrador } = await admin
+        .from("perfiles_pendientes")
+        .select("id, nombre")
+        .eq("vinculo_id", vinculo.id)
+        .eq("estado", "borrador")
+        .maybeSingle();
+      const nombreCompleto = (borrador?.nombre as string | undefined)?.trim();
+      // Sin borrador no hay a quién mostrar: se sigue por el camino directo.
+      if (!borrador || !nombreCompleto) return { ok: false, motivo: "error" };
+      const { count } = await admin
+        .from("medicamentos_pendientes")
+        .select("id", { count: "exact", head: true })
+        .eq("perfil_pendiente_id", borrador.id as string);
+      const vista: VistaPreviaCodigo = {
+        nombreCompleto,
+        nombre: primerNombre(nombreCompleto) ?? nombreCompleto,
+        cuidador: primerNombre(await nombreDePerfil(admin, vinculo.cuidadorId)),
+        medicamentos: count ?? null,
+      };
+      return { ok: true, vista };
+    }
+
+    // 2) Código de acceso (re-ingreso), sin consumirlo.
+    const match = await buscarCodigoAcceso(admin, codigo);
+    if (!match) return { ok: false, motivo: "invalido" };
+
+    // Igual que el login: el cuidador emisor tiene que seguir vinculado.
+    if (!(await vinculoAceptado(admin, match.elder_id, match.cuidador_id))) return { ok: false, motivo: "invalido" };
+
+    const nombreCompleto = await nombreDePerfil(admin, match.elder_id);
+    if (!nombreCompleto) return { ok: false, motivo: "error" };
+    return {
+      ok: true,
+      vista: {
+        nombreCompleto,
+        nombre: primerNombre(nombreCompleto) ?? nombreCompleto,
+        cuidador: primerNombre(await nombreDePerfil(admin, match.cuidador_id)),
+        medicamentos: null,
+      },
+    };
+  } catch {
+    console.error("[acceso-codigo] error inesperado al ver el código");
     return { ok: false, motivo: "error" };
   }
 }
