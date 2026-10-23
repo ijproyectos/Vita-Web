@@ -8,7 +8,22 @@ Vita-Web ("vita.ia") es una app de salud personal — medicamentos, turnos médi
 
 A diferencia de NutrIA (multi-tenant, profesional↔paciente), Vita-Web es **single-tenant por usuario** — cada persona ve y gestiona solo sus propios datos, sin ningún rol ni jerarquía.
 
-## Project state (2026-10-19)
+## Project state (2026-10-22)
+
+**V7 completo (fidelidad total a `pantallas/V7/design v0 vita/VitaApp.dc.html` + `Onboarding.dc.html`)** — pedido explícito del usuario: toda la UI, estructura y funcionalidad iguales al diseño. Migraciones **022 a 029 aplicadas** (por el usuario vía `psql`, registradas en `schema_migrations`). Resumen por área (el detalle histórico de fases 1a–3a sigue abajo):
+- **Acceso/onboarding**: `/login` = "Bienvenida" V7 (entrar / crear cuenta con nombre → `user_metadata.full_name` / olvidé = link por mail / código de 6 cajas); un usuario nuevo va directo a `/onboarding/para-quien` → charla (`/onboarding/conversar`, con condiciones, alergias, turno y mediciones; "Terminar después") → `/onboarding/permiso` → app. "Omitir" en para-quien salta a cargar datos. Sin tour guiado (el usuario eligió el onboarding).
+- **Global**: `EncabezadoPerfil` (nombre + chevron → `SelectorPerfil` con estado por persona) en Home/Rutina/Mi Salud/Perfil; estados de sistema (sin conexión, "No pudimos guardar" `ErrorGuardarSheet`, avisos apagados, toma vencida, Empecemos, confirmar cierre de sesión). Nombres con mayúscula vía `nombreConMayuscula` (`lib/perfil/formato.ts`).
+- **Rutina**: Hoy/Próximos/Historial (calendario derivado de tomas+mediciones); hojas de detalle de medicamento y turno (abren también desde Mis medicamentos/Mis turnos); `recetas` (023) solo se listan.
+- **Formularios**: modelo por toma (`EditorTomas`, `SelectorHora`, `agregarMultiMomento({tomas})`); turno con especialidad, tira de días, teléfono/dirección y checklist "Qué hay que llevar" (`turnos.llevar`, 023). Edición inline en `/app/medicamentos`, `/app/turnos`, `/app/condiciones`.
+- **Mi Salud**: feed unificado (`lib/registros`) estudios+mediciones+consultas+vacunas (024; sin alta propia) con etiqueta MANUAL/VITA; Monitoreo real (`mediciones`, 022); estudio = analizar → revisar (nombre/fecha/lugar, 026) → guardar; detalle con visor, rangos/flags extraídos (solo si vienen impresos), Compartir, Eliminar.
+- **Perfil**: Resumen (solo lectura) separado de `/app/perfil/editar` (revierte el "un solo formulario"; apellido/teléfono/relación del contacto en 025); contacto de emergencia; PIN de bloqueo real por dispositivo (`lib/seguridad/pin.ts`, `BloqueoPin`); 2FA = "Próximamente"; Privacidad con Borrar historial; Eliminar cuenta; FAQ; Reportar problema por SMTP.
+- **Familia**: cuidadores por persona vía RPCs `security definer` de 027 (`listar_cuidadores_de`, `invitar_cuidador`, `cambiar_rol_cuidador`, `quitar_cuidador`); un Admin gestiona cuidadores SOLO de perfiles gestionados, y esa marca vive en **`app_metadata.tipo`** (no `user_metadata`, que el cliente puede reescribir). Índice `idx_vinculo_unico` excluye revocados (re-invitar funciona). Conectar su celular (código 15 min, WhatsApp).
+- **Avisos**: feed con `persona_id` (028), filtro Todos/{Persona}/Vos; avisos de familia en el MISMO cron (`resumen_dia_persona` 21 h, turno de la persona, stock bajo a Admins, "ya está en vita"); configuración con toggles instantáneos.
+- **Modo simple**: tarjetas de turno y mediciones, prefs por persona (`preferencias_modo_simple`, 029) configurables desde `/app/familia/[id]/modo-simple` con vista previa; "voz lenta" = `playbackRate`.
+- **vita+**: `/app/vita-plus` solo informativa ("Muy pronto"); sin cobros, sin datos de tarjeta, nada gateado. Suscripción/pago quedan para cuando exista un proveedor.
+- **Gotchas nuevos**: pgcrypto está en el schema `extensions` → en funciones con `search_path = public` no usar `gen_random_bytes` (usar `gen_random_uuid()`); `storage.objects` no se borra por SQL (usar la Storage API). Para Playwright: el dev server escucha solo en IPv6 → chromium con `--host-resolver-rules=MAP localhost [::1]`. Cuenta de prueba local: `prueba.vita@example.com` (creada por SQL).
+
+### Historial previo (2026-10-19)
 
 **Rediseño V7 en curso — fuente de verdad: `pantallas/V7/design v0 vita/`** (`VitaApp.dc.html` = app completa, `Vita Modo Simple v2.dc.html`, `Vita Design System.dc.html`; el flujo de onboarding V7 es la Fase 3, todavía no hecho). Historia corta: la base original fue el diseño "vita.ia" (`pantallas/Vitaoriginal/vita (1)/`), hoy solo histórico; el Flutter original y el bundle brutalista intermedio están descartados. `apps/web/` es Next.js 16 (Turbopack, App Router) — build y lint limpios.
 
