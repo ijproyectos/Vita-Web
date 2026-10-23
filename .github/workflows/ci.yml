@@ -1,0 +1,59 @@
+# Runs on every pull request to main (and on main itself) so nothing reaches
+# production without passing lint, type checking and a production build.
+# The job name `verificar` is the required status check in the main ruleset.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: verificar
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    # Placeholder public values: the build only needs them to exist. No real
+    # secret is ever required here, so CI also runs on PRs from forks.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: placeholder-vapid-key
+      NEXT_PUBLIC_SITE_URL: https://vitappweb.netlify.app
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Next 16 generates the global route types (PageProps, LayoutProps) under
+      # .next/types; a clean checkout doesn't have them until this runs.
+      - name: Generate route types
+        run: npx next typegen
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
