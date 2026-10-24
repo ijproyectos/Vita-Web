@@ -169,6 +169,21 @@ Filas del feed "Registros" de Mi Salud (`024_consultas_vacunas.sql`, aplicada 20
 
 Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_chat_historial.sql`.
 
+## `acciones_agente`
+
+Reintentos del chat sin duplicar escrituras (migración 030, escrita, pendiente de aplicar; sin ella el chat funciona igual, solo sin la protección). Cada mensaje lleva un `pedido_id` generado por la app; antes de ejecutar una tool que escribe, `/api/chat` reclama una fila con el cliente de sesión. La clave es el nombre de la tool + los campos que identifican la acción, normalizados (no el input entero, que el modelo puede reformular). Si ya existe, no se re-ejecuta y se devuelve el `resultado` guardado al modelo; un claim sin resultado de más de 2 min se considera huérfano y se vuelve a reclamar. En un reintento cuyo primer intento ya guardó la respuesta de vita, el servidor la devuelve sin volver a correr el modelo. No hay job de limpieza todavía (pendiente). Tests: `supabase/tests/acciones-agente.sql`.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `usuario_id` | uuid FK `auth.users` on delete cascade | dueño |
+| `pedido_id` | uuid not null | el del mensaje del usuario |
+| `clave` | text not null | nombre de la tool + JSON canónico del input |
+| `resultado` | jsonb | `{contenido, accionUI}`; null mientras se ejecuta |
+| `created_at` | timestamptz | índice para limpieza por antigüedad |
+
+`unique (usuario_id, pedido_id, clave)`. RLS owner-only (select/insert/update/delete propios). `mensajes_chat` no cambia: en un reintento el servidor no reinserta el mensaje si ya es el último del usuario en la sesión.
+
 ## `enlaces_profesional`
 
 Links temporales de solo lectura para mostrarle un resumen de salud a un profesional (`/p/{token}`, sin login). **Migración 015 aplicada 2026-10-11** (psql + registro en `schema_migrations`; `supabase/tests/enlaces-profesional.sql` 17/17 PASS).
