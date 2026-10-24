@@ -8,6 +8,7 @@ import * as turnos from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
 import { GENEROS, GRUPOS_SANGUINEOS } from "@/lib/perfil/opciones";
+import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaDeHoyISO } from "@/lib/rutina/formato";
 import {
@@ -16,6 +17,7 @@ import {
   momentoDiaAIngles,
   momentoDiaDesdeIngles,
 } from "./mapeo";
+import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
 // Tools portadas 1:1 desde `agent/README.md` del Vitapp original (el
 // agente LangGraph + MCP), acotadas al módulo en alcance (medicamentos).
@@ -24,10 +26,12 @@ import {
 // sin el subproceso ni el JWT intermedio (el `usuarioId` ya viene resuelto
 // de la sesión de Supabase, nunca del modelo).
 //
-// Familia (021): las tools actúan SIEMPRE sobre la cuenta logueada, nunca
-// sobre el perfil activo (cookie `vita_perfil`). Que vita cargue datos de
-// otra persona necesitaría un destino explícito por tool — decisión aparte.
-export const TOOLS: Anthropic.Tool[] = [
+// Familia (021): cada tool de datos acepta un `persona_id` opcional. Ausente =
+// la cuenta logueada (nunca el perfil activo de la UI: eso es solo contexto
+// para el prompt). Si viene, `resolverDestino` (lib/ai/destino.ts) lo valida
+// contra los vínculos reales y, para escribir en otra persona, exige rol
+// `editar` y confirmación explícita. La RLS sigue siendo la autoridad final.
+const TOOLS_BASE: Anthropic.Tool[] = [
   {
     name: "list_today_medications",
     description: "Lista los medicamentos programados para hoy, con si ya se tomaron o no.",
@@ -213,6 +217,35 @@ export const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const PROPIEDAD_PERSONA = {
+  type: "string",
+  description:
+    "Id de la persona sobre la que actuar, tomado EXACTAMENTE de la lista de Personas del contexto. Omitir = quien está chateando.",
+} as const;
+
+const PROPIEDAD_CONFIRMADO = {
+  type: "boolean",
+  description:
+    "Solo para escribir en OTRA persona: true si el usuario ya confirmó explícitamente, en un mensaje anterior, esta acción exacta para esa persona. Es solo una indicación: el servidor exige su propia confirmación (un mensaje posterior al que preguntó) y no ejecuta nada sin ella. Nunca lo pongas en true en el mismo turno en que preguntás.",
+} as const;
+
+// Suma `persona_id` (y `confirmado` en las de escritura) a las tools con destino.
+export const TOOLS: Anthropic.Tool[] = TOOLS_BASE.map((t) => {
+  if (!TOOLS_CON_DESTINO.has(t.name)) return t;
+  const schema = t.input_schema as { properties?: Record<string, unknown> };
+  return {
+    ...t,
+    input_schema: {
+      ...t.input_schema,
+      properties: {
+        ...(schema.properties ?? {}),
+        persona_id: PROPIEDAD_PERSONA,
+        ...(TOOLS_DE_ESCRITURA.has(t.name) ? { confirmado: PROPIEDAD_CONFIRMADO } : {}),
+      },
+    },
+  };
+});
+
 export type AccionUI = { type: string; [clave: string]: unknown };
 
 export type ResultadoTool = {
@@ -220,7 +253,43 @@ export type ResultadoTool = {
   accionUI?: AccionUI; // si corresponde, se emite como evento SSE {action}
 };
 
+export type ContextoTool = {
+  supabase: SupabaseClient;
+  /** El usuario logueado (quien chatea). */
+  usuarioId: string;
+  /** Personas que cuida (listar_familia): único universo válido para `persona_id`. */
+  familia: MiembroFamilia[];
+  /** Perfil de un familiar abierto en pantalla (ya validado contra `familia`), si lo hay. */
+  abiertoId?: string;
+};
+
 export async function ejecutarTool(
+  nombre: string,
+  input: Record<string, unknown>,
+  ctx: ContextoTool
+): Promise<ResultadoTool> {
+  const destino = resolverDestino(nombre, input, ctx);
+  if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
+  // Defensa en profundidad: quien llama (pedidos.ts) ya exigió la confirmación
+  // del servidor y recién ahí pasa `confirmado: true`.
+  if (destino.requiereConfirmacion && input.confirmado !== true) {
+    return {
+      contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona"),
+      accionUI: opcionesConfirmarPara(destino.persona ?? "esa persona"),
+    };
+  }
+
+  const resultado = await ejecutarEnDestino(nombre, input, { supabase: ctx.supabase, usuarioId: destino.destinoId });
+  // Las tarjetas/toasts de una escritura en otra persona dicen para quién.
+  if (destino.persona && resultado.accionUI) {
+    return { ...resultado, accionUI: { ...resultado.accionUI, persona: destino.persona } };
+  }
+  return resultado;
+}
+
+// `usuarioId` acá ya es el DESTINO validado (el propio usuario o un miembro de
+// su familia): los núcleos de dominio filtran por él y la RLS decide el resto.
+async function ejecutarEnDestino(
   nombre: string,
   input: Record<string, unknown>,
   ctx: { supabase: SupabaseClient; usuarioId: string }
