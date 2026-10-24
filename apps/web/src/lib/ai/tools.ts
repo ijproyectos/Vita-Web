@@ -288,7 +288,7 @@ export async function ejecutarTool(
           ? diasDesdeIngles(input.recurring_days as string[])
           : undefined,
       });
-      return { contenido: JSON.stringify(paraModelo(actualizado)) };
+      return { contenido: JSON.stringify(paraModelo(actualizado)), accionUI: { type: "schedule_updated" } };
     }
 
     case "delete_schedule": {

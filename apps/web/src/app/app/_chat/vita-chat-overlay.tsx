@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { esAccionDeEscritura } from "@/lib/ai/acciones-escritura";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
@@ -67,6 +69,7 @@ function etiquetaEstadoVoz(estado: EstadoVoz, hablando: boolean): string {
 // conversación en curso al cerrar y reabrir — mismo espíritu que el FAB
 // del diseño, adaptado de ruta a overlay real.
 export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean; nombreActivo: string }) {
+  const router = useRouter();
   const { abierto, mensajeInicial, cerrar } = useChatOverlay();
   const cargadoRef = useRef(false); // no es estado reactivo — solo evita re-pedir sesiones
   const [sesionId, setSesionId] = useState<string | null>(null);
@@ -298,6 +301,7 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
 
     let sesionAsignada: string | null = null;
     let textoAcumulado = "";
+    let huboEscritura = false; // refresca las pantallas UNA vez al terminar la respuesta
     if (modoVozRef.current) fraseHabladaIndiceRef.current = 0;
 
     try {
@@ -364,6 +368,7 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
               setMoodAvatar(moodValido(evento.action.mood));
               continue;
             }
+            if (esAccionDeEscritura(evento.action.type)) huboEscritura = true;
             setMensajes((prev) => {
               const copia = [...prev];
               copia[copia.length - 1] = { ...copia[copia.length - 1], accion: evento.action };
@@ -386,6 +391,10 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
           }
         }
       }
+
+      // Las pantallas (Home, Rutina, Mi Salud...) son Server Components: sin
+      // esto siguen mostrando lo de antes de que vita escribiera.
+      if (huboEscritura) router.refresh();
 
       // Lo que haya quedado sin punto final (el cierre de la respuesta,
       // que raramente termina justo en un terminador de oración) también
