@@ -29,6 +29,17 @@ function norm(valor: unknown): string {
     .trim();
 }
 
+// Horas "12:00" y "12:00:00" (o "9:00") dan lo mismo: HH:MM. Si no parece una hora, se normaliza como texto.
+function normHora(valor: unknown): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(valor ?? "").trim());
+  return m ? `${m[1].padStart(2, "0")}:${m[2]}` : norm(valor);
+}
+
+// "400mg", "400 mg" y "400 MG" son la misma dosis.
+function normDosis(valor: unknown): string {
+  return norm(valor).replace(/\s+/g, "");
+}
+
 /**
  * Clasifica el mensaje ACTUAL del usuario como respuesta a "¿se lo cargo a X?".
  * Solo un sí explícito (o el botón "Para X") autoriza; un rechazo gana siempre
@@ -55,29 +66,36 @@ export function clasificarRespuesta(texto: string, persona: string | null): "si"
  */
 function claveSemantica(nombre: string, input: Record<string, unknown>): string {
   const dias = Array.isArray(input.recurring_days) ? input.recurring_days.map(norm).sort().join(",") : "";
+  // Los campos ya vienen normalizados (hora, dosis); el resto pasa por norm() al final.
   let campos: unknown[];
   switch (nombre) {
     case "add_medication":
-      campos = [input.name, input.scheduled_time];
+      campos = [input.name, normDosis(input.dose), normHora(input.scheduled_time), input.time_of_day, dias];
       break;
     case "update_schedule":
-      campos = [input.medication_name, input.medication_time_hint, input.scheduled_time, input.time_of_day, dias];
+      campos = [
+        input.medication_name,
+        normHora(input.medication_time_hint),
+        normHora(input.scheduled_time),
+        input.time_of_day,
+        dias,
+      ];
       break;
     case "delete_schedule":
     case "mark_taken":
-      campos = [input.medication_name, input.medication_time_hint];
+      campos = [input.medication_name, normHora(input.medication_time_hint)];
       break;
     case "mark_all_taken":
       campos = [];
       break;
     case "add_appointment":
-      campos = [input.date, input.time, input.specialty];
+      campos = [input.date, normHora(input.time), input.specialty, input.professional, input.place];
       break;
     case "update_health_profile":
       campos = [input.gender, input.blood_type, input.height_cm, input.weight_kg, input.health_insurance];
       break;
     case "add_condition":
-      campos = [input.label];
+      campos = [input.label, input.type];
       break;
     case "add_allergy":
       campos = [input.name];
