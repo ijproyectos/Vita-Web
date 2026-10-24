@@ -17,6 +17,9 @@ export const runtime = "nodejs";
 // Modelo y tope de tokens en lib/ai/modelo.ts (sonnet: punto justo de
 // latencia/calidad para una conversación con tool-calling).
 const MAX_TURNOS_TOOL_USE = 6;
+// Solo los últimos N mensajes de la sesión viajan al modelo (el historial
+// completo sigue en la DB): acota el costo de cada turno del loop.
+const MAX_MENSAJES_HISTORIAL = 30;
 // Tools que no consultan ni cambian datos: solo disparan un efecto de UI. Si el
 // turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo.
 const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications"]);
@@ -222,10 +225,16 @@ export async function POST(request: Request) {
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
         // verdad), nunca se confía en lo que mande el cliente.
         const mensajesGuardados = await chat.listarMensajes(supabase, user.id, sesionId);
-        const historial: Anthropic.MessageParam[] = mensajesGuardados.map((m) => ({
-          role: m.role,
-          content: m.contenido,
-        }));
+        // Solo los últimos N, y la lista tiene que arrancar con un turno del
+        // usuario (la API lo exige): se recorta del principio hasta lograrlo.
+        const recientes = mensajesGuardados.slice(-MAX_MENSAJES_HISTORIAL);
+        const primerUsuario = recientes.findIndex((m) => m.role === "user");
+        const historial: Anthropic.MessageParam[] = (primerUsuario === -1 ? [] : recientes.slice(primerUsuario)).map(
+          (m) => ({
+            role: m.role,
+            content: m.contenido,
+          })
+        );
 
         // El modelo no sabe qué día es: sin esto resolvía "mañana" con su
         // propio año de referencia y agendaba turnos un año en el pasado
