@@ -17,7 +17,7 @@ import {
   momentoDiaAIngles,
   momentoDiaDesdeIngles,
 } from "./mapeo";
-import { resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
+import { mensajeFaltaConfirmacion, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
 // Tools portadas 1:1 desde `agent/README.md` del Vitapp original (el
 // agente LangGraph + MCP), acotadas al módulo en alcance (medicamentos).
@@ -226,7 +226,7 @@ const PROPIEDAD_PERSONA = {
 const PROPIEDAD_CONFIRMADO = {
   type: "boolean",
   description:
-    "Solo para escribir en OTRA persona: true únicamente si el usuario ya confirmó explícitamente, en un mensaje anterior, esta acción exacta para esa persona. Sin confirmación el servidor no ejecuta nada. Nunca lo pongas en true en el mismo turno en que preguntás.",
+    "Solo para escribir en OTRA persona: true si el usuario ya confirmó explícitamente, en un mensaje anterior, esta acción exacta para esa persona. Es solo una indicación: el servidor exige su propia confirmación (un mensaje posterior al que preguntó) y no ejecuta nada sin ella. Nunca lo pongas en true en el mismo turno en que preguntás.",
 } as const;
 
 // Suma `persona_id` (y `confirmado` en las de escritura) a las tools con destino.
@@ -259,6 +259,8 @@ export type ContextoTool = {
   usuarioId: string;
   /** Personas que cuida (listar_familia): único universo válido para `persona_id`. */
   familia: MiembroFamilia[];
+  /** Perfil de un familiar abierto en pantalla (ya validado contra `familia`), si lo hay. */
+  abiertoId?: string;
 };
 
 export async function ejecutarTool(
@@ -268,6 +270,11 @@ export async function ejecutarTool(
 ): Promise<ResultadoTool> {
   const destino = resolverDestino(nombre, input, ctx);
   if (!destino.ok) return { contenido: destino.contenido };
+  // Defensa en profundidad: quien llama (pedidos.ts) ya exigió la confirmación
+  // del servidor y recién ahí pasa `confirmado: true`.
+  if (destino.requiereConfirmacion && input.confirmado !== true) {
+    return { contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona") };
+  }
 
   const resultado = await ejecutarEnDestino(nombre, input, { supabase: ctx.supabase, usuarioId: destino.destinoId });
   // Las tarjetas/toasts de una escritura en otra persona dicen para quién.

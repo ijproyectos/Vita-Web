@@ -15,12 +15,16 @@ export const TOOLS_DE_ESCRITURA = new Set([
 ]);
 
 // Tools que leen o escriben datos de una persona: son las únicas que aceptan
-// `persona_id`. show_* y set_avatar_mood son efectos de interfaz, sin destino.
+// `persona_id`. set_avatar_mood es un efecto de interfaz, sin destino.
 export const TOOLS_CON_DESTINO = new Set([
   ...TOOLS_DE_ESCRITURA,
   "list_today_medications",
   "list_all_medications",
   "list_today_appointments",
+  // Efectos de interfaz que muestran datos de una persona: llevan el destino
+  // para que la tarjeta diga de quién es la rutina.
+  "show_today_medications",
+  "show_all_medications",
 ]);
 
 export type DestinoResuelto =
@@ -30,31 +34,57 @@ export type DestinoResuelto =
       destinoId: string;
       /** Nombre del miembro cuando el destino NO es quien chatea; null si es el propio usuario. */
       persona: string | null;
+      /**
+       * true cuando es una ESCRITURA sobre otra persona: la confirmación del
+       * usuario es obligatoria y la hace cumplir el servidor (lib/chat/pedidos.ts).
+       */
+      requiereConfirmacion?: boolean;
     }
   | { ok: false; contenido: string };
 
+export function mensajeFaltaConfirmacion(nombre: string): string {
+  return `FALTA CONFIRMACIÓN: esta acción es para ${nombre}, no para quien está chateando, y NO se ejecutó. Preguntale al usuario de forma explícita, nombrando a ${nombre} y la acción exacta (por ejemplo "¿Le cargo Vitamina C a las 12:00 a ${nombre}?"), y esperá su respuesta. Solo si en un mensaje POSTERIOR dice que sí, volvé a llamar a la tool con los mismos datos. Nunca vuelvas a llamarla en el mismo turno en que se lo preguntás: el servidor no la ejecuta sin una confirmación de un mensaje posterior.`;
+}
+
 /**
- * ÚNICO lugar donde se valida a quién va una tool. `persona_id` ausente o vacío
- * = el usuario logueado. Si viene, tiene que ser el propio usuario o alguien de
- * `familia` (la lista real de vínculos aceptados, nunca lo que diga el modelo).
- * Escribir en otra persona exige rol `editar` y la confirmación explícita del
- * usuario (`confirmado: true`).
- *
- * La confirmación hoy es una convención entre el prompt y el input del modelo:
- * no hay una confirmación guardada en el servidor que el modelo no pueda
- * auto-declarar. Confirmaciones duras (token de un solo uso que emite la UI)
- * quedan como mejora futura; la RLS sigue siendo la autoridad final del acceso.
+ * ÚNICO lugar donde se valida a quién va una tool. `persona_id` AUSENTE = el
+ * usuario logueado; si viene, tiene que ser un string que sea el propio usuario
+ * o alguien de `familia` (la lista real de vínculos aceptados, nunca lo que diga
+ * el modelo): un valor mal formado se rechaza, no cae al propio usuario.
+ * Escribir en otra persona exige rol `editar` y devuelve `requiereConfirmacion`:
+ * la confirmación la hace cumplir el servidor (pedidos.ts), la RLS sigue siendo
+ * la autoridad final del acceso. Si hay un perfil de familiar abierto en pantalla
+ * (`abiertoId`) y una ESCRITURA llega sin persona_id, no se asume nada: se le
+ * pide al modelo que confirme para quién es.
  */
 export function resolverDestino(
   nombreTool: string,
   input: Record<string, unknown>,
-  ctx: { usuarioId: string; familia: MiembroFamilia[] }
+  ctx: { usuarioId: string; familia: MiembroFamilia[]; abiertoId?: string }
 ): DestinoResuelto {
   const propio: DestinoResuelto = { ok: true, destinoId: ctx.usuarioId, persona: null };
   if (!TOOLS_CON_DESTINO.has(nombreTool)) return propio;
 
+  if (input.persona_id === undefined) {
+    const abierto = ctx.abiertoId ? ctx.familia.find((f) => f.id === ctx.abiertoId) : undefined;
+    if (abierto && TOOLS_DE_ESCRITURA.has(nombreTool)) {
+      return {
+        ok: false,
+        contenido: `Está abierto el perfil de ${abierto.nombre} en pantalla y no indicaste persona_id, así que NO se ejecutó nada. Preguntale al usuario si la acción es para él o ella o para ${abierto.nombre}, y recién con su respuesta volvé a llamar pasando persona_id explícito (el id de ${abierto.nombre} de la lista de Personas, o ${ctx.usuarioId} para quien chatea).`,
+      };
+    }
+    return propio;
+  }
+
   const crudo = typeof input.persona_id === "string" ? input.persona_id.trim() : "";
-  if (!crudo || crudo === ctx.usuarioId) return propio;
+  if (!crudo) {
+    return {
+      ok: false,
+      contenido:
+        "persona_id inválido: tiene que ser exactamente uno de los ids de la lista de Personas (o no pasarlo para quien chatea). No se ejecutó nada.",
+    };
+  }
+  if (crudo === ctx.usuarioId) return propio;
 
   const miembro = ctx.familia.find((f) => f.id === crudo);
   if (!miembro) {
@@ -74,12 +104,5 @@ export function resolverDestino(
     };
   }
 
-  if (input.confirmado !== true) {
-    return {
-      ok: false,
-      contenido: `FALTA CONFIRMACIÓN: esta acción es para ${miembro.nombre}, no para quien está chateando, y NO se ejecutó. Preguntale al usuario de forma explícita, nombrando a ${miembro.nombre} y la acción exacta (por ejemplo "¿Le cargo Vitamina C a las 12:00 a ${miembro.nombre}?"), y esperá su respuesta. Solo si en un mensaje POSTERIOR dice que sí, volvé a llamar a la tool con los mismos datos y confirmado: true. Nunca pongas confirmado: true en el mismo turno en que se lo preguntás.`,
-    };
-  }
-
-  return { ok: true, destinoId: miembro.id, persona: miembro.nombre };
+  return { ok: true, destinoId: miembro.id, persona: miembro.nombre, requiereConfirmacion: true };
 }

@@ -64,9 +64,10 @@ function PuntosEscribiendo() {
   );
 }
 
-// /app/medicamentos y /app/turnos listan el perfil ACTIVO. Los enlaces de
-// edición solo valen si la acción fue sobre uno mismo y el activo es el propio;
-// si fue sobre un familiar (accion.persona) la tarjeta dice para quién.
+// /app/rutina, /app/medicamentos y /app/turnos listan el perfil ACTIVO. Los
+// enlaces solo valen si la acción fue sobre uno mismo y el activo es el propio;
+// si fue sobre un familiar (accion.persona) la tarjeta dice para quién y no
+// enlaza (evita llevar a la pantalla de otra persona sin cambiar de perfil).
 function TarjetaAccion({
   accion,
   alCerrar,
@@ -95,7 +96,7 @@ function TarjetaAccion({
             {editable && typeof accion.id === "string" && (
               <EnlaceTarjeta alCerrar={alCerrar} href={`/app/medicamentos?editar=${accion.id}`} texto="Ajustar detalles" primario />
             )}
-            <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
+            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />}
           </div>
         </div>
       );
@@ -113,7 +114,7 @@ function TarjetaAccion({
             {editable && typeof accion.id === "string" && (
               <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos?editar=${accion.id}`} texto="Completar turno" primario />
             )}
-            <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
+            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />}
           </div>
         </div>
       );
@@ -121,8 +122,10 @@ function TarjetaAccion({
     case "show_all_medications":
       return (
         <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
-          <span className="text-[13.5px] font-medium text-subtle">Tu rutina está actualizada.</span>
-          <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />
+          <span className="text-[13.5px] font-medium text-subtle">
+            {persona ? `Rutina de ${persona}` : "Tu rutina está actualizada."}
+          </span>
+          {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />}
         </div>
       );
     default:
