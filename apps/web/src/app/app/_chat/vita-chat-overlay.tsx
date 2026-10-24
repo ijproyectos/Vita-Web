@@ -66,7 +66,7 @@ function etiquetaEstadoVoz(estado: EstadoVoz, hablando: boolean): string {
 // oculto vía transform, no un mount/unmount condicional) para conservar la
 // conversación en curso al cerrar y reabrir — mismo espíritu que el FAB
 // del diseño, adaptado de ruta a overlay real.
-export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
+export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean; nombreActivo: string }) {
   const { abierto, mensajeInicial, cerrar } = useChatOverlay();
   const cargadoRef = useRef(false); // no es estado reactivo — solo evita re-pedir sesiones
   const [sesionId, setSesionId] = useState<string | null>(null);
@@ -502,6 +502,12 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
             <VitaIcon name="close" size={18} />
           </button>
         </div>
+
+        {!esPropio && (
+          <div className="bg-aviso-tint px-5 py-2 text-[12.5px] font-medium text-aviso-ink">
+            Estás viendo a {nombreActivo}. vita responde sobre tu cuenta.
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {vacio && (

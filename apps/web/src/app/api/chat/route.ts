@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TOOLS, ejecutarTool } from "@/lib/ai/tools";
 import * as chat from "@/lib/chat/nucleo";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { descripcionAhoraEnAR, fechaDeHoyISO } from "@/lib/rutina/formato";
 
 export const runtime = "nodejs";
@@ -145,7 +146,23 @@ export async function POST(request: Request) {
         // El modelo no sabe qué día es: sin esto resolvía "mañana" con su
         // propio año de referencia y agendaba turnos un año en el pasado
         // (que después no aparecían en la Rutina).
-        const systemConFecha = `${SYSTEM_PROMPT}
+        // Las tools actúan SIEMPRE sobre la cuenta logueada. Si en la app se
+        // está viendo el perfil de otra persona (validado contra los vínculos
+        // reales, nunca la cookie cruda), vita tiene que saberlo para no
+        // confundir de quién son los datos que lee o escribe.
+        let contextoPerfil = "";
+        try {
+          const activo = await obtenerPerfilActivo();
+          if (!activo.esPropio) {
+            contextoPerfil = `
+
+Contexto de perfil: en la app se está viendo el perfil de ${activo.nombre}, pero vos solo podés leer y escribir los datos de la persona que está chateando (su propia cuenta), nunca los de ${activo.nombre}. Si te pide algo para ${activo.nombre}, explicale que lo que hagas se aplica a su propia cuenta y que para ${activo.nombre} use las pantallas de la app.`;
+          }
+        } catch {
+          // Sin perfil activo resoluble, se sigue con el contexto base.
+        }
+
+        const systemConFecha = `${SYSTEM_PROMPT}${contextoPerfil}
 
 Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDeHoyISO()}). Usá SIEMPRE esta fecha para resolver "hoy", "mañana", "el jueves", "el 15", etc., y pasá las fechas a las tools como YYYY-MM-DD. Un turno nunca puede quedar en una fecha que ya pasó.`;
 
