@@ -171,14 +171,14 @@ Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_c
 
 ## `acciones_agente`
 
-Reintentos del chat sin duplicar escrituras (migración 030, escrita, pendiente de aplicar; sin ella el chat funciona igual, solo sin la protección). Cada mensaje lleva un `pedido_id` generado por la app; antes de ejecutar una tool que escribe, `/api/chat` reclama una fila con el cliente de sesión. La clave es el nombre de la tool + los campos que identifican la acción, normalizados (no el input entero, que el modelo puede reformular). Si ya existe, no se re-ejecuta y se devuelve el `resultado` guardado al modelo; un claim sin resultado de más de 2 min se considera huérfano y se vuelve a reclamar. En un reintento cuyo primer intento ya guardó la respuesta de vita, el servidor la devuelve sin volver a correr el modelo. No hay job de limpieza todavía (pendiente). Tests: `supabase/tests/acciones-agente.sql`.
+Reintentos del chat sin duplicar escrituras (migración 030, escrita, pendiente de aplicar; sin ella el chat funciona igual, solo sin la protección). Cada mensaje lleva un `pedido_id` generado por la app; antes de ejecutar una tool que escribe, `/api/chat` reclama una fila con el cliente de sesión. La clave es `<destinoId>~<tool>:<campos normalizados>` (persona destino, tool y solo los campos que identifican la acción —dosis, días, hora HH:MM, lugar...—, sin tildes/mayúsculas; no el input entero, que el modelo puede reformular). Si ya existe, no se re-ejecuta y se devuelve el `resultado` guardado al modelo; un claim sin resultado de más de 2 min se considera huérfano y se vuelve a reclamar. En un reintento cuyo primer intento ya guardó la respuesta de vita, el servidor la devuelve sin volver a correr el modelo. Escribir en OTRA persona exige confirmación hecha cumplir por el servidor: sin ella se guarda una fila `pendiente:<clave>` (bajo el pedido actual); solo se ejecuta si el mensaje ACTUAL del usuario es un sí explícito ("sí…", "dale", "Para X"...) y existe una pendiente de otro pedido de menos de 10 min, que se consume y deja un marcador `confirmada:<clave>` para poder reintentar ese pedido. Un rechazo ("no", "cancelar", "para mí") borra todas las pendientes del usuario. Si un reintento repite una respuesta ya guardada, también se re-emiten las tarjetas de las escrituras de ese pedido. No hay job de limpieza todavía (pendiente). Tests: `supabase/tests/acciones-agente.sql`.
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | uuid PK | |
 | `usuario_id` | uuid FK `auth.users` on delete cascade | dueño |
 | `pedido_id` | uuid not null | el del mensaje del usuario |
-| `clave` | text not null | nombre de la tool + JSON canónico del input |
+| `clave` | text not null | `destinoId~tool:campos normalizados`; o `pendiente:<esa clave>` / `confirmada:<esa clave>` (filas de confirmación, sin `resultado`) |
 | `resultado` | jsonb | `{contenido, accionUI}`; null mientras se ejecuta |
 | `created_at` | timestamptz | índice para limpieza por antigüedad |
 
