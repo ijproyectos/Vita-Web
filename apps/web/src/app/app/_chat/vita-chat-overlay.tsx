@@ -398,17 +398,33 @@ export function VitaChatOverlay({
               copia[copia.length - 1] = { ...copia[copia.length - 1], accion: evento.action };
               return copia;
             });
-            if (evento.action.type === "medication_deleted") toast.success("Medicamento eliminado.");
-            if (evento.action.type === "all_medications_taken") toast.success("Marcaste todo como tomado.");
-            if (evento.action.type === "medication_taken") {
-              toast.success(`"${evento.action.medication_name}" marcado como tomado.`);
+            // Una escritura en un familiar dice para quién (accion.persona).
+            const persona = typeof evento.action.persona === "string" ? evento.action.persona : null;
+            const de = persona ? `de ${persona}` : "tuyas";
+            if (evento.action.type === "medication_deleted") {
+              toast.success(persona ? `Medicamento eliminado de ${persona}.` : "Medicamento eliminado.");
             }
-            if (evento.action.type === "profile_updated") toast.success("Perfil de salud actualizado.");
+            if (evento.action.type === "all_medications_taken") {
+              toast.success(persona ? `Marcaste todo como tomado para ${persona}.` : "Marcaste todo como tomado.");
+            }
+            if (evento.action.type === "medication_taken") {
+              toast.success(
+                `"${evento.action.medication_name}" marcado como tomado${persona ? ` para ${persona}` : ""}.`
+              );
+            }
+            if (evento.action.type === "profile_updated") {
+              toast.success(persona ? `Perfil de salud de ${persona} actualizado.` : "Perfil de salud actualizado.");
+            }
             if (evento.action.type === "condition_added") {
-              toast.success(`"${evento.action.label}" agregada a tus condiciones.`);
+              toast.success(`"${evento.action.label}" agregada a las condiciones ${de}.`);
             }
             if (evento.action.type === "allergy_added") {
-              toast.success(`"${evento.action.name}" agregada a tus alergias.`);
+              toast.success(`"${evento.action.name}" agregada a las alergias ${de}.`);
+            }
+            if (persona && (evento.action.type === "medication_added" || evento.action.type === "appointment_added")) {
+              toast.success(
+                evento.action.type === "medication_added" ? `Agregado a ${persona}.` : `Turno agendado para ${persona}.`
+              );
             }
           } else if ("error" in evento) {
             fallo = true;

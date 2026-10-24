@@ -64,8 +64,9 @@ function PuntosEscribiendo() {
   );
 }
 
-// El chat escribe en la cuenta logueada; /app/medicamentos y /app/turnos listan el
-// perfil ACTIVO. Los enlaces de edición solo valen si el activo es el propio.
+// /app/medicamentos y /app/turnos listan el perfil ACTIVO. Los enlaces de
+// edición solo valen si la acción fue sobre uno mismo y el activo es el propio;
+// si fue sobre un familiar (accion.persona) la tarjeta dice para quién.
 function TarjetaAccion({
   accion,
   alCerrar,
@@ -75,13 +76,15 @@ function TarjetaAccion({
   alCerrar: () => void;
   esPropio: boolean;
 }) {
+  const persona = typeof accion.persona === "string" ? accion.persona : null;
+  const editable = esPropio && !persona;
   const base = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-card";
 
   switch (accion.type) {
     case "medication_added":
       return (
         <div className={base}>
-          <CabeceraTarjeta icon="pill" texto="Medicamento agregado" />
+          <CabeceraTarjeta icon="pill" texto={persona ? `Agregado a ${persona}` : "Medicamento agregado"} />
           <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
             <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.name)}</div>
             <div className="mt-0.5 text-xs font-medium text-subtle">
@@ -89,7 +92,7 @@ function TarjetaAccion({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {esPropio && typeof accion.id === "string" && (
+            {editable && typeof accion.id === "string" && (
               <EnlaceTarjeta alCerrar={alCerrar} href={`/app/medicamentos?editar=${accion.id}`} texto="Ajustar detalles" primario />
             )}
             <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
@@ -99,7 +102,7 @@ function TarjetaAccion({
     case "appointment_added":
       return (
         <div className={base}>
-          <CabeceraTarjeta icon="stethoscope" texto="Turno agendado" />
+          <CabeceraTarjeta icon="stethoscope" texto={persona ? `Turno agendado para ${persona}` : "Turno agendado"} />
           <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
             <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.specialty)}</div>
             <div className="mt-0.5 text-xs font-medium text-subtle">
@@ -107,7 +110,7 @@ function TarjetaAccion({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {esPropio && typeof accion.id === "string" && (
+            {editable && typeof accion.id === "string" && (
               <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos?editar=${accion.id}`} texto="Completar turno" primario />
             )}
             <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
