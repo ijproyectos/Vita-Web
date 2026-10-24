@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ejecutarTool, type ResultadoTool } from "@/lib/ai/tools";
+import { resolverDestino, TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
+import type { MiembroFamilia } from "@/lib/familia/tipos";
 
 // Reintentos sin duplicar escrituras (migración 030, `acciones_agente`).
 // Cada mensaje del chat trae un `pedido_id`; antes de ejecutar una tool que
@@ -14,19 +16,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export function normalizarPedidoId(entrante: unknown): string {
   return typeof entrante === "string" && UUID_RE.test(entrante) ? entrante : crypto.randomUUID();
 }
-
-// Única fuente de verdad de qué tools escriben (verificado contra TOOLS).
-const TOOLS_DE_ESCRITURA = new Set([
-  "add_medication",
-  "update_schedule",
-  "delete_schedule",
-  "mark_taken",
-  "mark_all_taken",
-  "add_appointment",
-  "update_health_profile",
-  "add_condition",
-  "add_allergy",
-]);
 
 // Normaliza texto libre del modelo: minúsculas, sin tildes, espacios colapsados.
 // "  Ibuprofeno  " y "ibuprofeno" dan lo mismo.
@@ -90,7 +79,7 @@ const TTL_CLAIM_SIN_RESULTADO_MS = 2 * 60 * 1000;
 const MENSAJE_YA_PEDIDA =
   "Esta acción ya se había pedido en un intento anterior y puede estar hecha. No la repitas: verificá con las tools de lectura antes de volver a escribir.";
 
-type Contexto = { supabase: SupabaseClient; usuarioId: string; pedidoId: string };
+type Contexto = { supabase: SupabaseClient; usuarioId: string; pedidoId: string; familia: MiembroFamilia[] };
 
 /**
  * Como `ejecutarTool`, pero las tools de escritura se reclaman antes de
@@ -102,10 +91,19 @@ export async function ejecutarToolIdempotente(
   input: Record<string, unknown>,
   ctx: Contexto
 ): Promise<ResultadoTool> {
-  const { supabase, usuarioId, pedidoId } = ctx;
-  if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, { supabase, usuarioId });
+  const { supabase, usuarioId, pedidoId, familia } = ctx;
+  const ctxTool = { supabase, usuarioId, familia };
+  if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, ctxTool);
 
-  const clave = claveSemantica(nombre, input);
+  // Destino inválido, rol Lector o falta de confirmación: se devuelve el error
+  // al modelo ANTES de reclamar nada (si no, un "falta confirmar" ocuparía la
+  // clave y la llamada confirmada del mismo pedido quedaría como "ya pedida").
+  const destino = resolverDestino(nombre, input, ctxTool);
+  if (!destino.ok) return { contenido: destino.contenido };
+
+  // El destino va en la clave: la misma acción para dos personas distintas en
+  // un pedido son dos acciones. El claim sigue siendo del usuario logueado.
+  const clave = `${destino.destinoId}~${claveSemantica(nombre, input)}`;
   const filtro = { usuario_id: usuarioId, pedido_id: pedidoId, clave };
 
   let reclamada = false;
@@ -150,12 +148,12 @@ export async function ejecutarToolIdempotente(
     }
   } catch {
     // Sin la tabla (migración pendiente) o ante cualquier otro error: se ejecuta como siempre.
-    return ejecutarTool(nombre, input, { supabase, usuarioId });
+    return ejecutarTool(nombre, input, ctxTool);
   }
 
   let resultado: ResultadoTool;
   try {
-    resultado = await ejecutarTool(nombre, input, { supabase, usuarioId });
+    resultado = await ejecutarTool(nombre, input, ctxTool);
   } catch (e) {
     if (reclamada) await liberar(supabase, filtro);
     throw e;
