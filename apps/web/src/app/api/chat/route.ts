@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
+import { guiaDePantallasParaPrompt } from "@/lib/ai/guia-app";
 import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento } from "@/lib/chat/pedidos";
 import * as chat from "@/lib/chat/nucleo";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
@@ -27,7 +28,7 @@ const MAX_MENSAJES_HISTORIAL = 30;
 const MAX_ITEMS_HOY = 20;
 // Tools que no consultan ni cambian datos: solo disparan un efecto de UI. Si el
 // turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo.
-const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications"]);
+const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen"]);
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -48,6 +49,14 @@ Reglas:
 - Cuando el usuario pida "ver" sus medicamentos (hoy o todos), después de
   responder en texto llamá también a la tool show_today_medications o
   show_all_medications correspondiente para que la interfaz muestre la lista.
+- Pantallas de la app: si el usuario pregunta dónde está algo, cómo hacer
+  algo en la app o pide ir a una pantalla, respondé en 1-2 oraciones cómo o
+  dónde y llamá a open_screen con la clave que corresponda. Nunca inventes
+  pantallas ni funciones que no estén en esta lista. Las pantallas siempre
+  muestran el perfil activo en la app: si habla de un familiar que no es el
+  perfil activo, decile que primero lo cambie con el selector de nombre de
+  arriba y después abra la pantalla.
+${guiaDePantallasParaPrompt()}
 - Si una tool devuelve que no encontró un medicamento por nombre, decíselo
   al usuario y preguntale el nombre exacto en vez de reintentar a ciegas.
 - Si el usuario tiene el mismo medicamento a más de un horario (ej. la

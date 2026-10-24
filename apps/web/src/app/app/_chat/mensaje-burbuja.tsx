@@ -144,6 +144,20 @@ function TarjetaAccion({
           {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />}
         </div>
       );
+    case "open_screen": {
+      // Solo navegación: se muestra aunque sea de otra persona. Defensivo con el href.
+      if (typeof accion.href !== "string" || !accion.href.startsWith("/app")) return null;
+      const label = typeof accion.label === "string" && accion.label.trim() !== "" ? accion.label : "esta pantalla";
+      return (
+        <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
+          <span className="flex items-center gap-2 text-[13.5px] font-medium text-subtle">
+            <VitaIcon name="chevron-right" size={15} />
+            {label}
+          </span>
+          <EnlaceTarjeta alCerrar={alCerrar} href={accion.href} texto={`Abrir ${label}`} primario inline />
+        </div>
+      );
+    }
     default:
       return null;
   }

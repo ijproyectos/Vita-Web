@@ -17,6 +17,7 @@ import {
   momentoDiaAIngles,
   momentoDiaDesdeIngles,
 } from "./mapeo";
+import { CLAVES_PANTALLAS, pantallaPorClave } from "./guia-app";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
 // Tools portadas 1:1 desde `agent/README.md` del Vitapp original (el
@@ -198,6 +199,22 @@ const TOOLS_BASE: Anthropic.Tool[] = [
     description:
       "No consulta datos — le indica a la interfaz que muestre el widget con todos los medicamentos. Usar cuando el usuario pida ver la lista completa.",
     input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "open_screen",
+    description:
+      "No lee ni cambia datos — le muestra al usuario un botón para abrir una pantalla de la app. Usar cuando pregunte dónde está algo, cómo hacer algo en la app o pida ir a una pantalla. No usar después de una escritura (esas ya muestran su propia tarjeta).",
+    input_schema: {
+      type: "object",
+      properties: {
+        screen: {
+          type: "string",
+          enum: CLAVES_PANTALLAS,
+          description: "Clave de la pantalla a abrir, de la lista de Pantallas de la app.",
+        },
+      },
+      required: ["screen"],
+    },
   },
   {
     name: "set_avatar_mood",
@@ -484,6 +501,15 @@ async function ejecutarEnDestino(
 
     case "show_all_medications":
       return { contenido: "Mostrado.", accionUI: { type: "show_all_medications" } };
+
+    case "open_screen": {
+      // Solo claves del catálogo: nunca una ruta que arme el modelo.
+      const pantalla = pantallaPorClave(input.screen);
+      if (!pantalla) {
+        return { contenido: "Esa pantalla no existe en la app. Elegí una de la lista de Pantallas de la app." };
+      }
+      return { contenido: "Botón mostrado.", accionUI: { type: "open_screen", href: pantalla.ruta, label: pantalla.titulo } };
+    }
 
     case "set_avatar_mood": {
       const mood = String(input.mood ?? "neutral");
