@@ -425,3 +425,33 @@ export async function estadoDelReintento(
   if (ultimo?.role === "user" && ultimo.contenido === texto) return { estado: "guardado" };
   return { estado: "nuevo" };
 }
+
+/**
+ * Tarjetas de las escrituras que el primer intento de este pedido ya hizo, para
+ * re-emitirlas cuando el reintento solo reproduce el texto guardado (así el
+ * cliente muestra la tarjeta y hace router.refresh()). Salen del `resultado`
+ * guardado en `acciones_agente` (accionUI completa). Limitación: un claim sin
+ * resultado (el intento cayó entre la escritura y el guardado) no se puede
+ * reconstruir y no emite nada; nunca lanza.
+ */
+export async function accionesDelPedido(
+  supabase: SupabaseClient,
+  usuarioId: string,
+  pedidoId: string
+): Promise<NonNullable<ResultadoTool["accionUI"]>[]> {
+  try {
+    const { data, error } = await supabase
+      .from("acciones_agente")
+      .select("clave, resultado")
+      .eq("usuario_id", usuarioId)
+      .eq("pedido_id", pedidoId)
+      .order("created_at", { ascending: true });
+    if (error) return [];
+    return (data ?? [])
+      .filter((f) => !/^(pendiente|confirmada):/.test(f.clave as string))
+      .map((f) => (f.resultado as ResultadoTool | null)?.accionUI)
+      .filter((a): a is NonNullable<ResultadoTool["accionUI"]> => !!a);
+  } catch {
+    return [];
+  }
+}

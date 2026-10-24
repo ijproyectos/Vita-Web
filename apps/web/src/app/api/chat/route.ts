@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
 import { guiaDePantallasParaPrompt } from "@/lib/ai/guia-app";
-import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento } from "@/lib/chat/pedidos";
+import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento, accionesDelPedido } from "@/lib/chat/pedidos";
 import * as chat from "@/lib/chat/nucleo";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { listarFamilia } from "@/lib/familia/nucleo";
@@ -262,6 +262,7 @@ export async function POST(request: Request) {
         if (previo.estado === "respondido") {
           // Ya terminó del lado servidor: se devuelve la respuesta guardada
           // sin volver a correr el modelo (ni gastar tokens ni escribir dos veces).
+          for (const accion of await accionesDelPedido(supabase, user.id, pedidoId)) enviar({ action: accion });
           enviar({ chunk: previo.respuesta });
           enviarFin();
           return;
