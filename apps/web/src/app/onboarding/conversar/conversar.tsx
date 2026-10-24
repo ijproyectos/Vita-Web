@@ -66,8 +66,10 @@ const MEDICIONES_POR_CHIP: Record<string, MedicionesEnCasa | undefined> = {
 const RELACIONES = ["Mamá", "Papá", "Hijo/a", "Pareja", "Abuelo/a", "Otro"] as const;
 const ETIQUETA_COLOR: Record<ColorPerfil, string> = { teal: "verde agua", violeta: "violeta", ambar: "ámbar", rosa: "rosa", azul: "azul" };
 
-// Pasada esta edad vita pregunta si no fue un error de tipeo.
+// Pasada esta edad vita pregunta si no fue un error de tipeo; pasada la máxima
+// (la misma que valida el servidor) ni ofrece confirmarla, pide corregirla.
 const EDAD_SOSPECHOSA = 120;
+const EDAD_MAXIMA = 130;
 
 function articuloRelacion(relacion: string): string {
   if (relacion === "Mamá") return "tu mamá";
@@ -227,7 +229,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   // La edad se confirma antes de crear nada: un 0 o un número disparatado casi
   // siempre es un error de tipeo o de dictado.
   async function validarEdadYSeguir(relacion: string, nombre: string, edad: number | null) {
-    if (edad !== null && (!Number.isFinite(edad) || edad <= 0)) {
+    if (edad !== null && (!Number.isFinite(edad) || edad <= 0 || edad > EDAD_MAXIMA)) {
       agregarBurbujaVita(`No entendí bien la edad de ${nombre}. ¿Cuántos años tiene?`);
       setVista({ tipo: "edad-corregir", relacion, nombre });
       return;
@@ -240,10 +242,18 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     await crearPerfilYSeguir(relacion, nombre, edad);
   }
 
+  // Crear el perfil abre una cuenta real: un doble toque no puede crear dos.
+  const creandoPerfil = useRef(false);
+
   async function crearPerfilYSeguir(relacion: string, nombre: string, edad: number | null) {
+    if (creandoPerfil.current) return;
+    creandoPerfil.current = true;
     setEscribiendo(true);
-    const creado = await crearPerfilFamiliarAction({ nombre, relacion, edad });
+    const creado = await crearPerfilFamiliarAction({ nombre, relacion, edad }).catch(
+      () => ({ status: "error", message: "revisá tu conexión e intentá de nuevo" }) as const
+    );
     setEscribiendo(false);
+    creandoPerfil.current = false;
 
     if (creado.status === "error") {
       toast.error(`No pudimos crear el perfil: ${creado.message}`);
@@ -476,7 +486,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         if (guardar) {
           void guardarMedicionesEnCasaAction(guardar, esPersona ? personaId ?? undefined : undefined).then((r) => {
             if (r.status === "error") toast.error("No pudimos guardar esa respuesta, la podés cargar después.");
-          });
+          }, () => toast.error("No pudimos guardar esa respuesta, la podés cargar después."));
         }
         decir(omitido ? "Dale." : "Perfecto, cuando quieras anotar una medición, hablame y la guardo.");
         setResumen((prev) => ({ ...prev, meas: omitido ? null : valor === "Las dos" ? "Presión · Azúcar" : valor }));
