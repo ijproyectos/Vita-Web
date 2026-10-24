@@ -41,7 +41,24 @@ export type DestinoResuelto =
        */
       requiereConfirmacion?: boolean;
     }
-  | { ok: false; contenido: string };
+  | { ok: false; contenido: string; accionUI?: AccionOpciones };
+
+/**
+ * Botones de respuesta rápida bajo el mensaje de vita. Los arma el SERVIDOR (no
+ * el modelo) para que las opciones sean siempre las correctas; el cliente manda
+ * el texto exacto de la opción como un mensaje normal del usuario. No escribe nada.
+ */
+export type AccionOpciones = { type: "opciones_confirmacion"; opciones: string[] };
+
+export function opcionesConfirmarPara(nombreCrudo: string): AccionOpciones {
+  const nombre = limpiarDato(nombreCrudo);
+  return { type: "opciones_confirmacion", opciones: [`Sí, para ${nombre}`, "No, es para mí", "Cancelar"] };
+}
+
+export function opcionesElegirDestino(nombreCrudo: string): AccionOpciones {
+  const nombre = limpiarDato(nombreCrudo);
+  return { type: "opciones_confirmacion", opciones: [`Para ${nombre}`, "Para mí", "Cancelar"] };
+}
 
 export function mensajeFaltaConfirmacion(nombreCrudo: string): string {
   const nombre = limpiarDato(nombreCrudo);
@@ -77,7 +94,8 @@ export function resolverDestino(
     if (abierto && TOOLS_DE_ESCRITURA.has(nombreTool)) {
       return {
         ok: false,
-        contenido: `Está abierto el perfil de ${limpiarDato(abierto.nombre)} en pantalla y no indicaste persona_id, así que NO se ejecutó nada. Preguntale al usuario si la acción es para él o ella o para ${limpiarDato(abierto.nombre)}, y recién con su respuesta volvé a llamar pasando persona_id explícito (el id de ${limpiarDato(abierto.nombre)} de la lista de Personas, o ${ctx.usuarioId} para quien chatea).`,
+        contenido: `Está abierto el perfil de ${limpiarDato(abierto.nombre)} en pantalla y no indicaste persona_id, así que NO se ejecutó nada. Preguntale al usuario si la acción es para él o ella o para ${limpiarDato(abierto.nombre)}, y recién con su respuesta volvé a llamar pasando persona_id explícito (el id de ${limpiarDato(abierto.nombre)} de la lista de Personas, o ${ctx.usuarioId} para quien chatea). La app le muestra botones "Para ${limpiarDato(abierto.nombre)}", "Para mí" y "Cancelar".`,
+        accionUI: opcionesElegirDestino(abierto.nombre),
       };
     }
     return propio;

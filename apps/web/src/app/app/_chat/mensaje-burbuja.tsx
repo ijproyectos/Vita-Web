@@ -8,13 +8,15 @@ export type MensajeChatUI = {
   content: string;
   timestamp: string;
   accion?: { type: string; [clave: string]: unknown };
+  // Botones de respuesta rápida (confirmaciones de familia), armados por el servidor.
+  opciones?: string[];
   // Reintento sin duplicar: el pedido que se le mandó al servidor, y si no hubo respuesta.
   pedidoId?: string;
   sinRespuesta?: boolean;
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
-export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void }) {
+export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, alElegirOpcion }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void; alElegirOpcion?: (texto: string) => void }) {
   if (m.role === "user") {
     return (
       <div className="mb-2.5 flex flex-col items-end gap-1">
@@ -46,6 +48,20 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar }
         </div>
       </div>
       {m.accion && <TarjetaAccion accion={m.accion} alCerrar={alCerrar} esPropio={esPropio} />}
+      {m.opciones && m.opciones.length > 0 && alElegirOpcion && (
+        <div className="flex flex-wrap gap-2 pl-9" role="group" aria-label="Respuestas rápidas">
+          {m.opciones.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => alElegirOpcion(o)}
+              className="min-h-11 rounded-full bg-card px-4 py-2.5 text-[14.5px] font-bold text-teal-deep shadow-[inset_0_0_0_1px_var(--teal-100)]"
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

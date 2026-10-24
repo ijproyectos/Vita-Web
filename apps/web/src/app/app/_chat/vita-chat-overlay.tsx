@@ -392,6 +392,21 @@ export function VitaChatOverlay({
               setMoodAvatar(moodValido(evento.action.mood));
               continue;
             }
+            // Botones de respuesta rápida: se guardan aparte de `accion` para no
+            // pisar una tarjeta real, y no cuentan como escritura (sin refresh).
+            if (evento.action.type === "opciones_confirmacion") {
+              const opciones = Array.isArray(evento.action.opciones)
+                ? evento.action.opciones.filter((o): o is string => typeof o === "string" && o.trim() !== "")
+                : [];
+              if (opciones.length > 0) {
+                setMensajes((prev) => {
+                  const copia = [...prev];
+                  copia[copia.length - 1] = { ...copia[copia.length - 1], opciones };
+                  return copia;
+                });
+              }
+              continue;
+            }
             if (esAccionDeEscritura(evento.action.type)) huboEscritura = true;
             setMensajes((prev) => {
               const copia = [...prev];
@@ -581,7 +596,7 @@ export function VitaChatOverlay({
             Hoy · {formatoFechaCorta(fechaDeHoyISO())}
           </div>
           {mensajes.map((m, i) => (
-            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} />
+            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t) => enviar(t) : undefined} />
           ))}
           {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">

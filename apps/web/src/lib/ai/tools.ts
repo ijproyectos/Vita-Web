@@ -17,7 +17,7 @@ import {
   momentoDiaAIngles,
   momentoDiaDesdeIngles,
 } from "./mapeo";
-import { mensajeFaltaConfirmacion, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
+import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
 // Tools portadas 1:1 desde `agent/README.md` del Vitapp original (el
 // agente LangGraph + MCP), acotadas al módulo en alcance (medicamentos).
@@ -269,11 +269,14 @@ export async function ejecutarTool(
   ctx: ContextoTool
 ): Promise<ResultadoTool> {
   const destino = resolverDestino(nombre, input, ctx);
-  if (!destino.ok) return { contenido: destino.contenido };
+  if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
   // Defensa en profundidad: quien llama (pedidos.ts) ya exigió la confirmación
   // del servidor y recién ahí pasa `confirmado: true`.
   if (destino.requiereConfirmacion && input.confirmado !== true) {
-    return { contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona") };
+    return {
+      contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona"),
+      accionUI: opcionesConfirmarPara(destino.persona ?? "esa persona"),
+    };
   }
 
   const resultado = await ejecutarEnDestino(nombre, input, { supabase: ctx.supabase, usuarioId: destino.destinoId });

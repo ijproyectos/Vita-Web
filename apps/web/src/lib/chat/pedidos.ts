@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ejecutarTool, type ResultadoTool } from "@/lib/ai/tools";
-import { mensajeFaltaConfirmacion, resolverDestino, TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
+import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 
 // Reintentos sin duplicar escrituras (migración 030, `acciones_agente`).
@@ -204,6 +204,13 @@ async function claimExistente(
   }
 }
 
+// "Falta confirmar": el texto para el modelo + los botones de respuesta rápida
+// para el usuario (accionUI de solo UI, no cuenta como escritura).
+function faltaConfirmacion(persona: string | null): ResultadoTool {
+  const nombre = persona ?? "esa persona";
+  return { contenido: mensajeFaltaConfirmacion(nombre), accionUI: opcionesConfirmarPara(nombre) };
+}
+
 /**
  * Como `ejecutarTool`, pero las tools de escritura se reclaman antes de
  * ejecutarse. Cualquier falla de la contabilidad (tabla inexistente, RLS...)
@@ -222,7 +229,7 @@ export async function ejecutarToolIdempotente(
   // al modelo ANTES de reclamar nada (si no, un "falta confirmar" ocuparía la
   // clave y la llamada confirmada del mismo pedido quedaría como "ya pedida").
   const destino = resolverDestino(nombre, input, ctxTool);
-  if (!destino.ok) return { contenido: destino.contenido };
+  if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
 
   // El destino va en la clave: la misma acción para dos personas distintas en
   // un pedido son dos acciones. El claim sigue siendo del usuario logueado.
@@ -238,12 +245,10 @@ export async function ejecutarToolIdempotente(
 
     const estado = await confirmacionDelServidor(supabase, usuarioId, pedidoId, clave);
     if (estado === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
-    if (estado === "pendiente") return { contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona") };
+    if (estado === "pendiente") return faltaConfirmacion(destino.persona);
     // Sin la tabla (migración 030 sin aplicar) se cae al comportamiento previo:
     // vale el flag `confirmado` del modelo. Degradación deliberada SOLO ante tabla inexistente.
-    if (estado === "sin_tabla" && input.confirmado !== true) {
-      return { contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona") };
-    }
+    if (estado === "sin_tabla" && input.confirmado !== true) return faltaConfirmacion(destino.persona);
     // Confirmación válida: se ejecuta (ejecutarTool exige confirmado: true).
     input = { ...input, confirmado: true };
   }
