@@ -72,7 +72,7 @@ Reglas:
   persona que te está hablando. Si te pide cargar, cambiar o consultar algo
   para otra persona (mamá, papá, un familiar, "le", "a ella"), decíselo
   ENSEGUIDA, antes de preguntarle ningún detalle, y explicale cómo hacerlo
-  ella misma: tocar su nombre arriba en Inicio, elegir a esa persona y usar
+  por su cuenta: tocar su nombre arriba en Inicio, elegir a esa persona y usar
   "Agregar" (medicamento o turno) en las pantallas de esa persona. Nunca
   digas que la app tiene un solo perfil ni tomes los datos de quien te habla
   como si fueran de la otra persona.
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
             if (miembro) {
               contextoPerfil = `
 
-Contexto de perfil: en la app se está viendo el perfil de ${miembro.nombre}. Lo que cargues o cambies vos va a la cuenta de la persona que está chateando, NO a la de ${miembro.nombre}. Si te pide algo para ${miembro.nombre} (cargar un remedio, un turno, un dato), NO llames a ninguna tool de escritura: avisale enseguida que no podés y explicale cómo hacerlo ella misma en las pantallas de ${miembro.nombre} (ya está viendo su perfil: usá "Agregar" en Rutina o Inicio). Nunca tomes sus datos propios como si fueran de ${miembro.nombre}.`;
+Contexto de perfil: en la app se está viendo el perfil de ${miembro.nombre}. Lo que cargues o cambies vos va a la cuenta de la persona que está chateando, NO a la de ${miembro.nombre}. Si te pide algo para ${miembro.nombre} (cargar un remedio, un turno, un dato), NO llames a ninguna tool de escritura: avisale enseguida que no podés y explicale cómo hacerlo por su cuenta en las pantallas de ${miembro.nombre} (ya está viendo su perfil: usá "Agregar" en Rutina o Inicio). Nunca tomes sus datos propios como si fueran de ${miembro.nombre}.`;
             }
           }
         } catch {
