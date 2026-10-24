@@ -67,3 +67,65 @@ begin;
     end;
   end $$;
 rollback;
+
+-- 3 — Delete: el dueño libera su claim; otro usuario no borra filas ajenas
+begin;
+  insert into acciones_agente (usuario_id, pedido_id, clave)
+  values (:user_a, 'bbbbbbbb-0000-0000-0000-000000000003', 'dest~add_medication:x');
+
+  select set_config('request.jwt.claims', json_build_object('sub', :user_b, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  do $$
+  declare n int;
+  begin
+    delete from acciones_agente where pedido_id = 'bbbbbbbb-0000-0000-0000-000000000003';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'FAIL: otro usuario borró una fila ajena'; end if;
+    raise notice 'PASS: delete owner-only (ajeno no borra)';
+  end $$;
+
+  select set_config('request.jwt.claims', json_build_object('sub', :user_a, 'role', 'authenticated')::text, true);
+
+  do $$
+  declare n int;
+  begin
+    delete from acciones_agente where pedido_id = 'bbbbbbbb-0000-0000-0000-000000000003';
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'FAIL: el dueño no pudo borrar su claim'; end if;
+    raise notice 'PASS: el dueño libera su claim';
+  end $$;
+rollback;
+
+-- 4 — Filas pendiente:/confirmada: conviven con la acción; borrar pendientes no toca el resto
+begin;
+  select set_config('request.jwt.claims', json_build_object('sub', :user_a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  insert into acciones_agente (usuario_id, pedido_id, clave, resultado) values
+    (:user_a, 'bbbbbbbb-0000-0000-0000-000000000004', 'pendiente:dest~add_medication:x', null),
+    (:user_a, 'bbbbbbbb-0000-0000-0000-000000000004', 'confirmada:dest~add_medication:x', null),
+    (:user_a, 'bbbbbbbb-0000-0000-0000-000000000004', 'dest~add_medication:x', '{"contenido":"ok","accionUI":{"type":"medication_added"}}');
+
+  do $$
+  declare n int;
+  begin
+    select count(*) into n from acciones_agente where pedido_id = 'bbbbbbbb-0000-0000-0000-000000000004';
+    if n <> 3 then raise exception 'FAIL: la acción y sus filas de confirmación deberían convivir (%)', n; end if;
+    raise notice 'PASS: pendiente/confirmada/acción conviven con la misma clave base';
+
+    -- Mismo upsert idempotente que usa el servidor (ignoreDuplicates)
+    insert into acciones_agente (usuario_id, pedido_id, clave)
+    values (auth.uid(), 'bbbbbbbb-0000-0000-0000-000000000004', 'pendiente:dest~add_medication:x')
+    on conflict (usuario_id, pedido_id, clave) do nothing;
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'FAIL: la pendiente duplicada no debería insertarse'; end if;
+    raise notice 'PASS: la pendiente es idempotente por (usuario, pedido, clave)';
+
+    -- Rechazo: se borran las pendientes y solo ellas
+    delete from acciones_agente where usuario_id = auth.uid() and clave like 'pendiente:%';
+    select count(*) into n from acciones_agente where pedido_id = 'bbbbbbbb-0000-0000-0000-000000000004';
+    if n <> 2 then raise exception 'FAIL: borrar pendientes tocó otras filas (%)', n; end if;
+    raise notice 'PASS: el rechazo borra solo las pendientes';
+  end $$;
+rollback;
