@@ -87,7 +87,7 @@ export async function recordarleAction(elderId: string, medicamentoId: string): 
 }
 
 /**
- * "Código para que entre de nuevo": código de acceso de un solo uso (15 min)
+ * "Código para que entre de nuevo": código de acceso de un solo uso (30 min)
  * para que la persona cuidada vuelva a entrar desde otro celular. La
  * autorización final la da la RLS de `codigos_acceso` (vínculo aceptado);
  * el chequeo previo es solo para devolver un mensaje claro. Nunca lanza;

@@ -7,7 +7,7 @@ import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
 
 // Tarjeta "Código para X" de V7 (Conectar su celular): seis cajas con el
 // código, "Enviar por WhatsApp", "Copiar" y "Se lo leo por teléfono". El código
-// es real (15 min, un solo uso, dígitos); este panel solo lo muestra y lo comparte.
+// es real (30 min, un solo uso, dígitos); este panel solo lo muestra y lo comparte.
 export function PanelCodigoAcceso({
   codigo,
   expiraAt,

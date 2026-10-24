@@ -4,7 +4,7 @@
 /** Dominio NO entregable de las cuentas creadas por código (sin Gmail). */
 export const DOMINIO_CUENTA_POR_CODIGO = "usuarios.soyvita.com.ar";
 
-export const MINUTOS_VIGENCIA_CODIGO_ACCESO = 15;
+export const MINUTOS_VIGENCIA_CODIGO_ACCESO = 30;
 
 /** True si el email es el placeholder de una cuenta creada por código. */
 export function esEmailDeCuentaPorCodigo(email: string | null | undefined): boolean {
