@@ -394,21 +394,31 @@ async function liberar(supabase: SupabaseClient, filtro: Record<string, string>)
  *   guardados (el primer intento terminó); `respuesta` es el texto guardado.
  * - "guardado": solo el mensaje del usuario quedó como último: no se reinserta.
  * - "nuevo": no hay rastro del primer intento.
+ * - "desconocido": la consulta falló dos veces; el llamador decide (ver route).
  */
 export async function estadoDelReintento(
   supabase: SupabaseClient,
   usuarioId: string,
   sesionId: string,
   texto: string
-): Promise<{ estado: "nuevo" | "guardado" | "respondido"; respuesta?: string }> {
-  const { data } = await supabase
-    .from("mensajes_chat")
-    .select("role, contenido")
-    .eq("usuario_id", usuarioId)
-    .eq("sesion_id", sesionId)
-    .order("created_at", { ascending: false })
-    .limit(2);
-  const [ultimo, anterior] = data ?? [];
+): Promise<{ estado: "nuevo" | "guardado" | "respondido" | "desconocido"; respuesta?: string }> {
+  // Un solo reintento de la consulta: un error transitorio no debe decidir entre duplicar o perder el mensaje.
+  let data: { role: string; contenido: unknown }[] | null = null;
+  for (let intento = 0; intento < 2; intento++) {
+    const r = await supabase
+      .from("mensajes_chat")
+      .select("role, contenido")
+      .eq("usuario_id", usuarioId)
+      .eq("sesion_id", sesionId)
+      .order("created_at", { ascending: false })
+      .limit(2);
+    if (!r.error) {
+      data = r.data ?? [];
+      break;
+    }
+  }
+  if (data === null) return { estado: "desconocido" };
+  const [ultimo, anterior] = data;
   if (ultimo?.role === "assistant" && anterior?.role === "user" && anterior.contenido === texto) {
     return { estado: "respondido", respuesta: ultimo.contenido as string };
   }

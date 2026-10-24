@@ -266,6 +266,9 @@ export async function POST(request: Request) {
           enviarFin();
           return;
         }
+        // Si el estado es "desconocido" (la DB falló dos veces) NO se reinserta: el cliente marcó
+        // reintento, así que el primer intento probablemente ya lo guardó (mejor no duplicar que perder
+        // el contexto); si no estaba, se suma al historial en memoria más abajo.
         if (previo.estado === "nuevo") await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
 
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
@@ -281,6 +284,13 @@ export async function POST(request: Request) {
             content: m.contenido,
           })
         );
+        // Estado "desconocido": si el mensaje no quedó guardado, igual el modelo tiene que verlo.
+        if (previo.estado === "desconocido") {
+          const ultimoGuardado = mensajesGuardados[mensajesGuardados.length - 1];
+          if (!(ultimoGuardado?.role === "user" && ultimoGuardado.contenido === mensaje)) {
+            historial.push({ role: "user", content: mensaje });
+          }
+        }
 
         // El modelo no sabe qué día es: sin esto resolvía "mañana" con su
         // propio año de referencia y agendaba turnos un año en el pasado
