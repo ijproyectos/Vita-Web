@@ -364,12 +364,16 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
 
   // ---- Compartir código con la persona a cargo (V7 `f_share`) ------------------
 
+  const generandoCodigo = useRef(false);
+
   async function compartirCodigo() {
-    if (!personaId) return;
+    if (!personaId || generandoCodigo.current) return;
+    generandoCodigo.current = true;
     agregarBurbujaUsuario("Compartir código");
     setEscribiendo(true);
     const r = await generarCodigoAccesoAction(personaId).catch(() => null);
     setEscribiendo(false);
+    generandoCodigo.current = false;
 
     if (!r || r.status === "error") {
       toast.error(r?.message ?? "No pudimos generar el código. Probá de nuevo.");
@@ -483,7 +487,10 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         break;
       case "meas": {
         const guardar = MEDICIONES_POR_CHIP[valor];
-        if (guardar) {
+        if (guardar && esPersona && !personaId) {
+          // Sin el id de la persona no se guarda: iría al perfil propio.
+          toast.error("No encontramos el perfil de la persona. Recargá la página.");
+        } else if (guardar) {
           void guardarMedicionesEnCasaAction(guardar, esPersona ? personaId ?? undefined : undefined).then((r) => {
             if (r.status === "error") toast.error("No pudimos guardar esa respuesta, la podés cargar después.");
           }, () => toast.error("No pudimos guardar esa respuesta, la podés cargar después."));

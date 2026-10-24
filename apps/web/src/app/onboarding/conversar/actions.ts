@@ -88,10 +88,23 @@ export async function crearPerfilFamiliarAction(datos: {
     if (familia.length >= MAXIMO_PERFILES_A_CARGO) {
       return { status: "error", message: `Ya tenés ${MAXIMO_PERFILES_A_CARGO} perfiles a cargo, el máximo por ahora.` };
     }
+    // Reintento tras una respuesta perdida: si ya existe esa misma persona
+    // (mismo nombre y relación, a cargo y sin celular conectado) se reusa en
+    // vez de abrir otra cuenta.
+    const relacion = typeof datos.relacion === "string" ? datos.relacion : null;
+    const existente = familia.find(
+      (m) =>
+        m.rol === "editar" &&
+        !m.conectado &&
+        m.nombre.trim().toLowerCase() === nombre.toLowerCase() &&
+        (m.relacion ?? null) === relacion
+    );
+    if (existente) return { status: "success", id: existente.id, color: existente.color ?? colorLibre([]) };
+
     const color = colorLibre(familia.map((m) => m.color));
     const resultado = await familiaNucleo.crearPerfilGestionado(usuario.id, {
       nombre,
-      relacion: typeof datos.relacion === "string" ? datos.relacion : null,
+      relacion,
       color,
       anioNacimiento: edad === null ? null : new Date().getFullYear() - edad,
       condiciones: [],
