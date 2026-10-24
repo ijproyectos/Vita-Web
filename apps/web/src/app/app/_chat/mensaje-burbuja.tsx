@@ -8,16 +8,31 @@ export type MensajeChatUI = {
   content: string;
   timestamp: string;
   accion?: { type: string; [clave: string]: unknown };
+  // Reintento sin duplicar: el pedido que se le mandó al servidor, y si no hubo respuesta.
+  pedidoId?: string;
+  sinRespuesta?: boolean;
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
-export function MensajeBurbuja({ m, cargando, alCerrar, esPropio }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean }) {
+export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void }) {
   if (m.role === "user") {
     return (
-      <div className="mb-2.5 flex justify-end">
+      <div className="mb-2.5 flex flex-col items-end gap-1">
         <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-primary px-3.5 py-2.5 text-[14.5px] font-medium leading-snug text-primary-foreground">
           {m.content}
         </div>
+        {m.sinRespuesta && alReintentar && (
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-destructive">
+            <span>Sin respuesta</span>
+            <button
+              type="button"
+              onClick={() => alReintentar(m)}
+              className="rounded-full bg-card px-3 py-1 font-bold text-teal-deep shadow-item"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
       </div>
     );
   }

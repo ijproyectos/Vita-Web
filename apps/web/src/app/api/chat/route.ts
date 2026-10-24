@@ -2,7 +2,8 @@ import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { TOOLS, ejecutarTool } from "@/lib/ai/tools";
+import { TOOLS } from "@/lib/ai/tools";
+import { ejecutarToolIdempotente, normalizarPedidoId, yaGuardadoComoUltimoMensaje } from "@/lib/chat/pedidos";
 import * as chat from "@/lib/chat/nucleo";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
@@ -88,10 +89,19 @@ export async function POST(request: Request) {
     return new Response("No autenticado.", { status: 401 });
   }
 
-  const { sesionId: sesionIdEntrante, mensaje } = (await request.json()) as {
+  const {
+    sesionId: sesionIdEntrante,
+    mensaje,
+    pedidoId: pedidoIdEntrante,
+    reintento,
+  } = (await request.json()) as {
     sesionId?: string;
     mensaje: string;
+    pedidoId?: string;
+    reintento?: boolean;
   };
+  // Un cliente viejo sin pedidoId igual funciona: se genera uno del lado servidor.
+  const pedidoId = normalizarPedidoId(pedidoIdEntrante);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -133,7 +143,10 @@ export async function POST(request: Request) {
           : await chat.crearSesion(supabase, user.id);
         if (!sesionValida) enviar({ session: sesionId });
 
-        await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
+        // En un reintento el mensaje ya pudo quedar guardado: no se duplica.
+        const yaGuardado =
+          reintento === true && sesionValida && (await yaGuardadoComoUltimoMensaje(supabase, user.id, sesionId, mensaje));
+        if (!yaGuardado) await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
 
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
         // verdad), nunca se confía en lo que mande el cliente.
@@ -193,10 +206,10 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
 
           const resultadosTool: Anthropic.ToolResultBlockParam[] = [];
           for (const uso of usosDeTool) {
-            const resultado = await ejecutarTool(
+            const resultado = await ejecutarToolIdempotente(
               uso.name,
               uso.input as Record<string, unknown>,
-              { supabase, usuarioId: user.id }
+              { supabase, usuarioId: user.id, pedidoId }
             );
             if (resultado.accionUI) enviar({ action: resultado.accionUI });
             resultadosTool.push({

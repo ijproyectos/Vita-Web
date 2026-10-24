@@ -283,16 +283,31 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
     nuevoChat();
   }
 
-  async function enviar(texto: string) {
+  // Reintentar = mismo texto y MISMO pedidoId, sin burbuja de usuario nueva: el
+  // servidor reconoce el pedido y no repite lo que ya escribió.
+  function reintentar(m: MensajeChatUI) {
+    if (m.pedidoId) enviar(m.content, m.pedidoId);
+  }
+
+  async function enviar(texto: string, pedidoReintentado?: string) {
     const limpio = texto.trim();
     if (!limpio || enviando || (uso && uso.restantes <= 0)) return;
 
     const ahora = new Date().toISOString();
-    setMensajes((prev) => [
-      ...prev,
-      { role: "user", content: limpio, timestamp: ahora },
-      { role: "assistant", content: "", timestamp: ahora },
-    ]);
+    const pedidoId = pedidoReintentado ?? crypto.randomUUID();
+    let fallo = false;
+    setMensajes((prev) =>
+      pedidoReintentado
+        ? [
+            ...prev.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: false } : m)),
+            { role: "assistant" as const, content: "", timestamp: ahora },
+          ]
+        : [
+            ...prev,
+            { role: "user" as const, content: limpio, timestamp: ahora, pedidoId },
+            { role: "assistant" as const, content: "", timestamp: ahora },
+          ]
+    );
     setEntrada("");
     if (timeoutEscribiendoRef.current) clearTimeout(timeoutEscribiendoRef.current);
     setEscribiendo(false);
@@ -308,7 +323,7 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesionId, mensaje: limpio }),
+        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado }),
       });
 
       if (!res.body) throw new Error("Sin respuesta del servidor.");
@@ -387,6 +402,7 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
               toast.success(`"${evento.action.name}" agregada a tus alergias.`);
             }
           } else if ("error" in evento) {
+            fallo = true;
             toast.error(evento.error);
           }
         }
@@ -400,9 +416,20 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
         if (restante) encolarFraseVoz(restante);
       }
     } catch {
+      fallo = true;
       toast.error("No se pudo conectar con vita. Intentá de nuevo.");
     } finally {
       setEnviando(false);
+      // Sin respuesta: el mensaje queda marcado para reintentarlo con el mismo
+      // pedido; la burbuja vacía de vita se saca para no dejar un hueco.
+      if (fallo) {
+        setMensajes((prev) => {
+          const sinHueco = prev.length > 0 && prev[prev.length - 1].role === "assistant" && !prev[prev.length - 1].content
+            ? prev.slice(0, -1)
+            : prev;
+          return sinHueco.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: true } : m));
+        });
+      }
       // Las pantallas (Home, Rutina, Mi Salud...) son Server Components: sin
       // esto siguen mostrando lo de antes de que vita escribiera. Va acá y no
       // al final del try: si el stream se corta después de una escritura, el
@@ -529,7 +556,7 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
             Hoy · {formatoFechaCorta(fechaDeHoyISO())}
           </div>
           {mensajes.map((m, i) => (
-            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} />
+            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} />
           ))}
           {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">
