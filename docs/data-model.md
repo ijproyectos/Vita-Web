@@ -171,7 +171,7 @@ Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_c
 
 ## `acciones_agente`
 
-Reintentos del chat sin duplicar escrituras (migración 030, escrita, pendiente de aplicar; sin ella el chat funciona igual, solo sin la protección). Cada mensaje lleva un `pedido_id` generado por la app; antes de ejecutar una tool que escribe, `/api/chat` reclama una fila con el cliente de sesión. Si ya existe, no se re-ejecuta y se devuelve el `resultado` guardado al modelo. Tests: `supabase/tests/acciones-agente.sql`.
+Reintentos del chat sin duplicar escrituras (migración 030, escrita, pendiente de aplicar; sin ella el chat funciona igual, solo sin la protección). Cada mensaje lleva un `pedido_id` generado por la app; antes de ejecutar una tool que escribe, `/api/chat` reclama una fila con el cliente de sesión. La clave es el nombre de la tool + los campos que identifican la acción, normalizados (no el input entero, que el modelo puede reformular). Si ya existe, no se re-ejecuta y se devuelve el `resultado` guardado al modelo; un claim sin resultado de más de 2 min se considera huérfano y se vuelve a reclamar. En un reintento cuyo primer intento ya guardó la respuesta de vita, el servidor la devuelve sin volver a correr el modelo. No hay job de limpieza todavía (pendiente). Tests: `supabase/tests/acciones-agente.sql`.
 
 | Columna | Tipo | Notas |
 |---|---|---|

@@ -3,7 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { TOOLS } from "@/lib/ai/tools";
-import { ejecutarToolIdempotente, normalizarPedidoId, yaGuardadoComoUltimoMensaje } from "@/lib/chat/pedidos";
+import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento } from "@/lib/chat/pedidos";
 import * as chat from "@/lib/chat/nucleo";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
@@ -143,10 +143,19 @@ export async function POST(request: Request) {
           : await chat.crearSesion(supabase, user.id);
         if (!sesionValida) enviar({ session: sesionId });
 
-        // En un reintento el mensaje ya pudo quedar guardado: no se duplica.
-        const yaGuardado =
-          reintento === true && sesionValida && (await yaGuardadoComoUltimoMensaje(supabase, user.id, sesionId, mensaje));
-        if (!yaGuardado) await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
+        // En un reintento el primer intento pudo haber llegado más o menos lejos.
+        const previo =
+          reintento === true && sesionValida
+            ? await estadoDelReintento(supabase, user.id, sesionId, mensaje)
+            : { estado: "nuevo" as const };
+        if (previo.estado === "respondido") {
+          // Ya terminó del lado servidor: se devuelve la respuesta guardada
+          // sin volver a correr el modelo (ni gastar tokens ni escribir dos veces).
+          enviar({ chunk: previo.respuesta });
+          enviarFin();
+          return;
+        }
+        if (previo.estado === "nuevo") await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
 
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
         // verdad), nunca se confía en lo que mande el cliente.
