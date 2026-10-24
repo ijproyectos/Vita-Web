@@ -48,7 +48,9 @@ function normDosis(valor: unknown): string {
 export function clasificarRespuesta(texto: string, persona: string | null): "si" | "no" | "otro" {
   const t = norm(texto).replace(/[¿?¡!.,;:]/g, " ").replace(/\s+/g, " ").trim();
   if (!t) return "otro";
-  if (/^(no|nop|nunca|nada|cancel\w*|mejor no|para mi)\b/.test(t) || /\bpara mi\b/.test(t)) return "no";
+  // "para mí" rechaza, pero "para mi mamá" nombra a un familiar: no es un no.
+  const paraMi = /\bpara mi\b(?! (mama|papa|madre|padre|abuel[oa]|hij[oa]|ti[oa]|herman[oa]|espos[oa]|pareja|suegr[oa]|niet[oa]|viej[oa]|familiar))/;
+  if (/^(no|nop|nunca|nada|cancel\w*|mejor no)\b/.test(t) || paraMi.test(t)) return "no";
   if (/^(si|sip|dale|ok|okey|okay|confirmo|claro|de una|correcto|exacto|listo|hacelo|agregalo|cargalo)\b/.test(t)) {
     return "si";
   }
