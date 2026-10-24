@@ -392,10 +392,6 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
         }
       }
 
-      // Las pantallas (Home, Rutina, Mi Salud...) son Server Components: sin
-      // esto siguen mostrando lo de antes de que vita escribiera.
-      if (huboEscritura) router.refresh();
-
       // Lo que haya quedado sin punto final (el cierre de la respuesta,
       // que raramente termina justo en un terminador de oración) también
       // se habla — si no, la última frase de vita se pierde en silencio.
@@ -407,6 +403,11 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
       toast.error("No se pudo conectar con vita. Intentá de nuevo.");
     } finally {
       setEnviando(false);
+      // Las pantallas (Home, Rutina, Mi Salud...) son Server Components: sin
+      // esto siguen mostrando lo de antes de que vita escribiera. Va acá y no
+      // al final del try: si el stream se corta después de una escritura, el
+      // dato ya quedó guardado y la pantalla igual tiene que mostrarlo.
+      if (huboEscritura) router.refresh();
       // Siempre actualiza la entrada de la sesión activa en el drawer —
       // antes solo se agregaba cuando el servidor asignaba una sesión
       // NUEVA; seguir mandando mensajes en una sesión ya existente dejaba
