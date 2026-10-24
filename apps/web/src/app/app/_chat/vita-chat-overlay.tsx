@@ -68,7 +68,16 @@ function etiquetaEstadoVoz(estado: EstadoVoz, hablando: boolean): string {
 // oculto vía transform, no un mount/unmount condicional) para conservar la
 // conversación en curso al cerrar y reabrir — mismo espíritu que el FAB
 // del diseño, adaptado de ruta a overlay real.
-export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean; nombreActivo: string }) {
+export function VitaChatOverlay({
+  esPropio,
+  nombreActivo,
+  perfilActivoId,
+}: {
+  esPropio: boolean;
+  nombreActivo: string;
+  /** Perfil que se está viendo en la app: el servidor lo valida, nunca lo asume. */
+  perfilActivoId: string;
+}) {
   const router = useRouter();
   const { abierto, mensajeInicial, cerrar } = useChatOverlay();
   const cargadoRef = useRef(false); // no es estado reactivo — solo evita re-pedir sesiones
@@ -323,7 +332,7 @@ export function VitaChatOverlay({ esPropio, nombreActivo }: { esPropio: boolean;
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado }),
+        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId }),
       });
 
       if (!res.body) throw new Error("Sin respuesta del servidor.");
