@@ -3,22 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { colorChipPorIndice, type MedicionesEnCasa, type UsoApp } from "@/lib/perfil/tipos";
+import type { MedicionesEnCasa, UsoApp } from "@/lib/perfil/tipos";
+import { CLASES_COLOR } from "@/lib/familia/colores";
+import type { ColorPerfil } from "@/lib/familia/tipos";
+import { generarCodigoAccesoAction } from "@/app/cuidar/[elderId]/actions";
 import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
 import { ETIQUETA_MOMENTO, ORDEN_MOMENTOS } from "@/lib/rutina/momento";
 import { VitaIcon } from "@/lib/vita-icons";
 import type { MedicamentoExtraido } from "@/lib/onboarding/extraer";
-import { Burbuja, CampoEntrada, ChipBoton, ChipsMulti, EncabezadoConversar, PuntosEscribiendo, type Mensaje } from "./componentes";
+import { Burbuja, CampoEntrada, ChipBoton, ChipsMulti, EncabezadoConversar, PuntosEscribiendo, TarjetaCodigoCompartir, type Mensaje } from "./componentes";
 import {
-  contarMedicamentosPendientesAction,
-  crearPerfilPendienteAction,
+  crearPerfilFamiliarAction,
   extraerMedicamentosAction,
   extraerNombreEdadAction,
-  finalizarConCuidadoAction,
-  finalizarSoloYoAction,
+  finalizarOnboardingAction,
   guardarAlergiasPropiasAction,
   guardarCondicionesPropiasAction,
-  guardarMedicamentoPendienteAction,
   guardarMedicamentoPropioAction,
   guardarMedicionesEnCasaAction,
   guardarTurnoPropioAction,
@@ -37,9 +37,8 @@ import {
 // CLAUDE.md). El único useEffect real es el de autoscroll, que no hace
 // setState.
 
-// Pasos de salud propia (V7 `chipsFor`). Solo se preguntan sobre el perfil de
-// quien está logueada: el borrador de la persona cuidada no tiene dónde
-// guardar condiciones/alergias/turnos, así que en esa rama se saltean.
+// Pasos de salud (V7 `chipsFor`). Se preguntan igual para quien está logueada
+// y para la persona a cargo (en tercera persona): ambas son perfiles reales.
 const OPC_CONDICIONES = ["Diabetes", "Hipertensión", "Hipotiroidismo", "Otra"] as const;
 const OPC_ALERGIAS = ["Penicilina", "Aspirina", "Lactosa", "Otra"] as const;
 const OPC_SOLAS = ["Ninguna", "Saltear"] as const;
@@ -64,13 +63,18 @@ const MEDICIONES_POR_CHIP: Record<string, MedicionesEnCasa | undefined> = {
   No: "ninguna",
 };
 
-const RELACIONES = ["Mamá", "Papá", "Abuela/o", "Otro"] as const;
-const COLOR_LABEL: Record<string, string> = { teal: "teal", violet: "violeta", amber: "ámbar", rose: "rosa" };
+const RELACIONES = ["Mamá", "Papá", "Hijo/a", "Pareja", "Abuelo/a", "Otro"] as const;
+const ETIQUETA_COLOR: Record<ColorPerfil, string> = { teal: "verde agua", violeta: "violeta", ambar: "ámbar", rosa: "rosa", azul: "azul" };
+
+// Pasada esta edad vita pregunta si no fue un error de tipeo.
+const EDAD_SOSPECHOSA = 120;
 
 function articuloRelacion(relacion: string): string {
   if (relacion === "Mamá") return "tu mamá";
   if (relacion === "Papá") return "tu papá";
-  if (relacion === "Abuela/o") return "tu abuela o abuelo";
+  if (relacion === "Hijo/a") return "tu hijo o hija";
+  if (relacion === "Pareja") return "tu pareja";
+  if (relacion === "Abuelo/a") return "tu abuela o abuelo";
   return "esa persona";
 }
 
@@ -118,6 +122,8 @@ type Vista =
   | { tipo: "relacion" }
   | { tipo: "nombre-edad"; relacion: string }
   | { tipo: "nombre-edad-manual"; relacion: string; nombreSugerido: string }
+  | { tipo: "edad-confirmar"; relacion: string; nombre: string; edad: number }
+  | { tipo: "edad-corregir"; relacion: string; nombre: string }
   | { tipo: "consentimiento"; nombre: string; autorizado: boolean }
   | { tipo: "pedir-medicamentos"; contexto: "persona" | "vos" }
   | { tipo: "confirmar-medicamentos"; contexto: "persona" | "vos"; items: ItemCard[] }
@@ -128,6 +134,8 @@ type Vista =
   | { tipo: "turno-fecha"; especialidad: string }
   | { tipo: "turno-lugar"; especialidad: string; fecha: string; hora: string }
   | { tipo: "resumen-propio" }
+  | { tipo: "compartir" }
+  | { tipo: "codigo"; codigo: string }
   | { tipo: "fin" };
 
 function mensajesIniciales(usoApp: UsoApp): Mensaje[] {
@@ -155,8 +163,9 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   const [personaCompleta, setPersonaCompleta] = useState(false);
   const [nombrePersona, setNombrePersona] = useState<string | null>(null);
   const [edadPersona, setEdadPersona] = useState<number | null>(null);
-  const [resumenCantidad, setResumenCantidad] = useState(0);
-  const [perfilPendienteId, setPerfilPendienteId] = useState<string | null>(null);
+  const [relacionPersona, setRelacionPersona] = useState<string | null>(null);
+  const [colorPersona, setColorPersona] = useState<ColorPerfil>("violeta");
+  const [personaId, setPersonaId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const idRef = useRef(1);
@@ -164,6 +173,13 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [mensajes, escribiendo]);
+
+  // Sobre quién se está preguntando: la persona a cargo (tab 1) o uno mismo
+  // (tab 2, o el recorrido "yo"). `quien` es el nombre para hablar en tercera
+  // persona; null = segunda persona ("vos").
+  const esPersona = dosTabs && tabActiva === "persona";
+  const quien = esPersona ? nombrePersona ?? "esa persona" : null;
+  const q = (tercera: (nombre: string) => string, propia: string) => (quien ? tercera(quien) : propia);
 
   function nuevoId(): string {
     return `m-${idRef.current++}`;
@@ -205,12 +221,28 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       return;
     }
 
-    await crearPerfilYSeguir(relacion, resultado.nombre, resultado.edad);
+    await validarEdadYSeguir(relacion, resultado.nombre, resultado.edad);
+  }
+
+  // La edad se confirma antes de crear nada: un 0 o un número disparatado casi
+  // siempre es un error de tipeo o de dictado.
+  async function validarEdadYSeguir(relacion: string, nombre: string, edad: number | null) {
+    if (edad !== null && (!Number.isFinite(edad) || edad <= 0)) {
+      agregarBurbujaVita(`No entendí bien la edad de ${nombre}. ¿Cuántos años tiene?`);
+      setVista({ tipo: "edad-corregir", relacion, nombre });
+      return;
+    }
+    if (edad !== null && edad > EDAD_SOSPECHOSA) {
+      agregarBurbujaVita(`¿${nombre} tiene ${edad} años? Me parece mucho, ¿lo pusiste bien?`);
+      setVista({ tipo: "edad-confirmar", relacion, nombre, edad });
+      return;
+    }
+    await crearPerfilYSeguir(relacion, nombre, edad);
   }
 
   async function crearPerfilYSeguir(relacion: string, nombre: string, edad: number | null) {
     setEscribiendo(true);
-    const creado = await crearPerfilPendienteAction({ nombre, relacion, edad });
+    const creado = await crearPerfilFamiliarAction({ nombre, relacion, edad });
     setEscribiendo(false);
 
     if (creado.status === "error") {
@@ -219,14 +251,15 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       return;
     }
 
-    const color = COLOR_LABEL[colorChipPorIndice(1)] ?? "violeta";
     agregarBurbujaVita(
-      `Perfecto, voy a crear el perfil de ${nombre}. Le asigno el color ${color} para que siempre sepas cuándo estás viendo lo suyo.`
+      `Perfecto, voy a crear el perfil de ${nombre}. Le asigno el color ${ETIQUETA_COLOR[creado.color]} para que siempre sepas cuándo estás viendo lo suyo.`
     );
     setHayAvance(true);
     setNombrePersona(nombre);
     setEdadPersona(edad);
-    setPerfilPendienteId(creado.perfilPendienteId);
+    setRelacionPersona(relacion);
+    setColorPersona(creado.color);
+    setPersonaId(creado.id);
 
     window.setTimeout(() => {
       agregarBurbujaVita("Antes de seguir, necesito que me confirmes una cosa. Son datos de salud, así que los cuidamos mucho.");
@@ -235,8 +268,8 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   }
 
   function confirmarConsentimiento(nombre: string) {
-    agregarBurbujaVita(`¿Qué remedios toma ${nombre}? Decímelos como te salga, yo los ordeno.`);
-    setVista({ tipo: "pedir-medicamentos", contexto: "persona" });
+    decir(`¿${nombre} tiene alguna condición de salud? Podés marcar varias.`);
+    setVista({ tipo: "multi", paso: "cond", seleccion: [] });
   }
 
   // ---- Medicamentos (persona o "vos") --------------------------------------
@@ -270,7 +303,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       toast.error("Falta el nombre o el momento del día.");
       return;
     }
-    if (contexto === "persona" && !perfilPendienteId) {
+    if (contexto === "persona" && !personaId) {
       toast.error("No encontramos el perfil de la persona. Recargá la página.");
       return;
     }
@@ -285,10 +318,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       frecuencia: item.frecuencia.trim() || null,
     };
 
-    const resultado =
-      contexto === "persona"
-        ? await guardarMedicamentoPendienteAction(perfilPendienteId as string, datos)
-        : await guardarMedicamentoPropioAction(datos);
+    const resultado = await guardarMedicamentoPropioAction(datos, contexto === "persona" ? (personaId as string) : undefined);
 
     if (resultado.status === "error") {
       toast.error(`No se pudo guardar ${item.nombre}: ${resultado.message}`);
@@ -297,28 +327,13 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     }
 
     setHayAvance(true);
-    if (contexto === "vos") setResumen((r) => ({ ...r, meds: r.meds + 1 }));
+    setResumen((r) => ({ ...r, meds: r.meds + 1 }));
     actualizarItem(item.clientId, { guardando: false, guardado: true, editando: false });
   }
 
   function pedirOtroMedicamento(contexto: "persona" | "vos") {
     agregarBurbujaVita(contexto === "persona" ? `¿Algún otro remedio de ${nombrePersona ?? "esta persona"}?` : "¿Algún otro remedio tuyo?");
     setVista({ tipo: "pedir-medicamentos", contexto });
-  }
-
-  async function terminarMedicamentosPersona() {
-    setEscribiendo(true);
-    const conteo = perfilPendienteId ? await contarMedicamentosPendientesAction(perfilPendienteId) : null;
-    setEscribiendo(false);
-
-    setResumenCantidad(conteo?.status === "success" ? conteo.cantidad : 0);
-    setPersonaCompleta(true);
-    agregarBurbujaVita(`¡Listo! El perfil de ${nombrePersona ?? "la persona que cuidás"} quedó armado.`);
-
-    window.setTimeout(() => {
-      agregarBurbujaVita("¿Querés sumarte vos también?");
-      setVista({ tipo: "handoff-vos" });
-    }, 650);
   }
 
   async function irAVosAhora() {
@@ -328,18 +343,44 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     // "ambos" llevan al mismo destino (vincular-cuidado).
     const r = await marcarUsoAmbosAction();
     if (r.status === "error") toast.error("No pudimos actualizar tu perfil de uso, seguimos igual.");
+    setResumen(RESUMEN_VACIO);
     decir("¡Genial! Ahora vos.", "¿Tenés alguna condición de salud? Podés marcar varias.");
     setVista({ tipo: "multi", paso: "cond", seleccion: [] });
   }
 
   async function irADespues() {
-    if (!perfilPendienteId) return;
-    const r = await finalizarConCuidadoAction(perfilPendienteId);
-    if (r?.status === "error") {
-      toast.error("No pudimos guardar. Probá de nuevo.");
+    await terminarTodo();
+  }
+
+  // ---- Compartir código con la persona a cargo (V7 `f_share`) ------------------
+
+  async function compartirCodigo() {
+    if (!personaId) return;
+    agregarBurbujaUsuario("Compartir código");
+    setEscribiendo(true);
+    const r = await generarCodigoAccesoAction(personaId).catch(() => null);
+    setEscribiendo(false);
+
+    if (!r || r.status === "error") {
+      toast.error(r?.message ?? "No pudimos generar el código. Probá de nuevo.");
       return;
     }
-    setVista({ tipo: "fin" });
+    decir(`Listo, este es el código para ${nombrePersona ?? "esa persona"}.`);
+    setVista({ tipo: "codigo", codigo: r.codigo });
+  }
+
+  function noCompartirAhora() {
+    agregarBurbujaUsuario("Ahora no");
+    decir(`Vos manejás el perfil de ${nombrePersona ?? "esa persona"} y, si después querés, se lo compartís desde Familia.`);
+    preguntarSumarse();
+  }
+
+  function preguntarSumarse() {
+    setPersonaCompleta(true);
+    window.setTimeout(() => {
+      agregarBurbujaVita("¿Querés sumarte vos también?");
+      setVista({ tipo: "handoff-vos" });
+    }, 650);
   }
 
   // ---- Salud propia: condiciones -> alergias -> remedios -> turno -> mediciones
@@ -359,7 +400,13 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
 
     if (reales.length > 0) {
       setEscribiendo(true);
-      const r = paso === "cond" ? await guardarCondicionesPropiasAction(reales) : await guardarAlergiasPropiasAction(reales);
+      const destino = esPersona ? personaId ?? undefined : undefined;
+      if (esPersona && !destino) {
+        setEscribiendo(false);
+        toast.error("No encontramos el perfil de la persona. Recargá la página.");
+        return;
+      }
+      const r = paso === "cond" ? await guardarCondicionesPropiasAction(reales, destino) : await guardarAlergiasPropiasAction(reales, destino);
       setEscribiendo(false);
       if (r.status === "error") {
         toast.error(`No se pudo guardar: ${r.message}`);
@@ -373,25 +420,25 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     if (paso === "cond") {
       decir(
         sola ? "Perfecto, seguimos." : soloOtra ? "Anotado, después la completás en el perfil." : `Anotado: ${lista}. Lo voy a tener en cuenta en los controles.`,
-        "¿Alguna alergia? Podés marcar varias."
+        q((n) => `¿${n} tiene alguna alergia? Podés marcar varias.`, "¿Alguna alergia? Podés marcar varias.")
       );
       setVista({ tipo: "multi", paso: "alergia", seleccion: [] });
     } else {
       decir(
         sola ? "Buenísimo." : soloOtra ? "Anotado, después la completás en el perfil." : `Anotado: ${lista}. Te aviso si algo choca con eso.`,
-        "¿Tomás algún remedio todos los días?"
+        q((n) => `¿${n} toma algún remedio todos los días?`, "¿Tomás algún remedio todos los días?")
       );
       setVista({ tipo: "chips", paso: "med" });
     }
   }
 
   function preguntarTurno(previo: string) {
-    decir(previo, "¿Tenés algún turno médico próximo?");
+    decir(previo, q((n) => `¿${n} tiene algún turno médico próximo?`, "¿Tenés algún turno médico próximo?"));
     setVista({ tipo: "chips", paso: "turno" });
   }
 
   function preguntarMediciones(previo: string) {
-    decir(previo, "¿Te medís la presión o el azúcar en casa?");
+    decir(previo, q((n) => `¿${n} se mide la presión o el azúcar en casa?`, "¿Te medís la presión o el azúcar en casa?"));
     setVista({ tipo: "chips", paso: "meas" });
   }
 
@@ -402,8 +449,8 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     switch (paso) {
       case "med":
         if (valor === "Sí") {
-          decir("Contame cuáles — decímelos como te salga, yo los ordeno.");
-          setVista({ tipo: "pedir-medicamentos", contexto: "vos" });
+          decir(q((n) => `Contame cuáles toma ${n} — decímelos como te salga, yo los ordeno.`, "Contame cuáles — decímelos como te salga, yo los ordeno."));
+          setVista({ tipo: "pedir-medicamentos", contexto: esPersona ? "persona" : "vos" });
         } else {
           preguntarTurno(valor === "Saltear" ? "Perfecto." : "Buenísimo.");
         }
@@ -427,7 +474,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       case "meas": {
         const guardar = MEDICIONES_POR_CHIP[valor];
         if (guardar) {
-          void guardarMedicionesEnCasaAction(guardar).then((r) => {
+          void guardarMedicionesEnCasaAction(guardar, esPersona ? personaId ?? undefined : undefined).then((r) => {
             if (r.status === "error") toast.error("No pudimos guardar esa respuesta, la podés cargar después.");
           });
         }
@@ -458,7 +505,12 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   async function guardarTurno(v: { especialidad: string; fecha: string; hora: string }, lugar: string | null) {
     agregarBurbujaUsuario(lugar ?? "Lo cargo después");
     setEscribiendo(true);
-    const r = await guardarTurnoPropioAction({ ...v, lugar });
+    if (esPersona && !personaId) {
+      setEscribiendo(false);
+      toast.error("No encontramos el perfil de la persona. Recargá la página.");
+      return;
+    }
+    const r = await guardarTurnoPropioAction({ ...v, lugar }, esPersona ? personaId ?? undefined : undefined);
     setEscribiendo(false);
 
     if (r.status === "error") {
@@ -473,20 +525,24 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   }
 
   function mostrarResumenPropio() {
+    if (quien) {
+      decir(
+        `¡Listo, el perfil de ${quien} está creado! ¿Querés compartirle un código a ${quien}? Así ve sus remedios y turnos desde su celu, y vos te enterás si los toma.`
+      );
+      setVista({ tipo: "compartir" });
+      return;
+    }
     decir("¡Listo, tu perfil está creado! Todo lo demás lo podés completar cuando quieras.");
     setVista({ tipo: "resumen-propio" });
   }
 
-  function terminarMedicamentosVos() {
+  function terminarMedicamentos() {
     preguntarTurno("Listo con los remedios.");
   }
 
   // Fin del recorrido propio: marca onboarding completo y sigue al permiso.
   async function terminarTodo() {
-    const r =
-      dosTabs && perfilPendienteId
-        ? await finalizarConCuidadoAction(perfilPendienteId)
-        : await finalizarSoloYoAction();
+    const r = await finalizarOnboardingAction();
     if (r?.status === "error") {
       toast.error("No pudimos guardar. Probá de nuevo.");
       return;
@@ -503,7 +559,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         {
           label: personaCompleta ? `1 · ${nombrePersona ?? "Persona"} ✓` : `1 · ${nombrePersona ?? "La persona que cuidás"}`,
           estado: (personaCompleta ? "completo" : tabActiva === "persona" ? "activo" : "inactivo") as "activo" | "inactivo" | "completo",
-          color: "violet" as const,
+          color: colorPersona,
         },
         { label: "2 · Vos", estado: (tabActiva === "vos" ? "activo" : "inactivo") as "activo" | "inactivo", color: "teal" as const },
       ]
@@ -552,8 +608,34 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
             <FormularioNombreEdadManual
               relacion={vista.relacion}
               nombreInicial={vista.nombreSugerido}
-              onGuardar={(nombre, edad) => crearPerfilYSeguir(vista.relacion, nombre, edad)}
+              onGuardar={(nombre, edad) => validarEdadYSeguir(vista.relacion, nombre, edad)}
             />
+          </div>
+        )}
+
+        {!escribiendo && vista.tipo === "edad-confirmar" && (
+          <div className="flex flex-wrap gap-1.5 pl-[46px]">
+            <ChipBoton
+              texto="Sí, es correcto"
+              onClick={() => {
+                agregarBurbujaUsuario("Sí, es correcto");
+                void crearPerfilYSeguir(vista.relacion, vista.nombre, vista.edad);
+              }}
+            />
+            <ChipBoton
+              texto="Corregir edad"
+              onClick={() => {
+                agregarBurbujaUsuario("Corregir edad");
+                agregarBurbujaVita(`¿Cuántos años tiene ${vista.nombre}?`);
+                setVista({ tipo: "edad-corregir", relacion: vista.relacion, nombre: vista.nombre });
+              }}
+            />
+          </div>
+        )}
+
+        {!escribiendo && vista.tipo === "edad-corregir" && (
+          <div className="pl-[46px]">
+            <FormularioEdad onGuardar={(edad) => validarEdadYSeguir(vista.relacion, vista.nombre, edad)} />
           </div>
         )}
 
@@ -597,7 +679,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
               </button>
               <button
                 type="button"
-                onClick={() => (vista.contexto === "persona" ? terminarMedicamentosPersona() : terminarMedicamentosVos())}
+                onClick={terminarMedicamentos}
                 className="rounded-full bg-primary px-4 py-2 text-[12px] font-bold text-primary-foreground"
               >
                 Listo por ahora
@@ -608,7 +690,6 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
 
         {!escribiendo && vista.tipo === "handoff-vos" && (
           <div className="flex flex-col gap-3 pl-[46px]">
-            <TarjetaResumenPersona nombre={nombrePersona} edad={edadPersona} cantidad={resumenCantidad} />
             <div className="flex gap-2">
               <button type="button" onClick={irAVosAhora} className="h-12 flex-1 rounded-full bg-primary text-[14px] font-extrabold text-primary-foreground shadow-cta">
                 Sumarme yo
@@ -648,6 +729,25 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         {!escribiendo && vista.tipo === "turno-lugar" && (
           <div className="pl-[46px]">
             <ChipBoton texto="Lo cargo después" onClick={() => guardarTurno(vista, null)} />
+          </div>
+        )}
+
+        {!escribiendo && vista.tipo === "compartir" && (
+          <div className="flex flex-col gap-3 pl-[46px]">
+            <TarjetaResumenPropia resumen={resumen} titulo={`Perfil de ${nombrePersona ?? "la persona"}`} sub={subPersona(relacionPersona, edadPersona)} color={colorPersona} />
+            <div className="flex flex-wrap gap-1.5">
+              <ChipBoton texto="Compartir código" onClick={compartirCodigo} />
+              <ChipBoton texto="Ahora no" onClick={noCompartirAhora} />
+            </div>
+          </div>
+        )}
+
+        {!escribiendo && vista.tipo === "codigo" && (
+          <div className="flex flex-col gap-3 pl-[46px]">
+            <TarjetaCodigoCompartir nombre={nombrePersona ?? "esa persona"} codigo={vista.codigo} />
+            <button type="button" onClick={preguntarSumarse} className="h-12 rounded-full bg-primary text-[14px] font-extrabold text-primary-foreground shadow-cta">
+              Seguir
+            </button>
           </div>
         )}
 
@@ -720,6 +820,31 @@ function FormularioNombreEdadManual({
         type="button"
         disabled={!nombre.trim()}
         onClick={() => onGuardar(nombre.trim(), edad ? Number(edad) : null)}
+        className="rounded-full bg-primary py-2 text-[12.5px] font-bold text-primary-foreground disabled:opacity-50"
+      >
+        Guardar
+      </button>
+    </div>
+  );
+}
+
+function FormularioEdad({ onGuardar }: { onGuardar: (edad: number) => void }) {
+  const [edad, setEdad] = useState("");
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-card">
+      <input
+        value={edad}
+        onChange={(e) => setEdad(e.target.value.replace(/\D/g, "").slice(0, 3))}
+        inputMode="numeric"
+        placeholder="Edad"
+        aria-label="Edad"
+        className="rounded-[14px] bg-secondary px-3 py-2 text-[13px] outline-none"
+      />
+      <button
+        type="button"
+        disabled={!edad}
+        onClick={() => onGuardar(Number(edad))}
         className="rounded-full bg-primary py-2 text-[12.5px] font-bold text-primary-foreground disabled:opacity-50"
       >
         Guardar
@@ -858,25 +983,6 @@ function TarjetaMedicamento({
   );
 }
 
-function TarjetaResumenPersona({ nombre, edad, cantidad }: { nombre: string | null; edad: number | null; cantidad: number }) {
-  const inicial = (nombre ?? "?").trim().charAt(0).toUpperCase() || "?";
-  return (
-    <div className="flex flex-col gap-3 rounded-[22px] p-4 text-primary-foreground" style={{ background: "linear-gradient(135deg, var(--violet), var(--chip-violet-ink))" }}>
-      <div className="flex items-center gap-3">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-foreground/20 font-heading text-[18px] font-extrabold">{inicial}</div>
-        <div>
-          <div className="font-heading text-[16px] font-extrabold">{nombre ?? "Persona"}</div>
-          {edad !== null && <div className="text-[12.5px] text-primary-foreground/80">{edad} años</div>}
-        </div>
-      </div>
-      <div className="rounded-[16px] bg-primary-foreground/15 px-4 py-3 text-center">
-        <div className="font-heading text-[22px] font-extrabold">{cantidad}</div>
-        <div className="text-[11.5px] text-primary-foreground/80">{cantidad === 1 ? "remedio" : "remedios"}</div>
-      </div>
-    </div>
-  );
-}
-
 function TarjetaFechaTurno({ onConfirmar }: { onConfirmar: (fecha: string, hora: string) => void }) {
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("09:00");
@@ -909,9 +1015,24 @@ function TarjetaFechaTurno({ onConfirmar }: { onConfirmar: (fecha: string, hora:
   );
 }
 
+function subPersona(relacion: string | null, edad: number | null): string {
+  return [relacion, edad !== null ? `${edad} años` : null].filter(Boolean).join(" · ");
+}
+
 // Tarjeta de resumen (V7 `who === 'c'`): lo que quedó cargado, "Sin cargar"
-// en lo que se salteó.
-function TarjetaResumenPropia({ resumen }: { resumen: ResumenPropio }) {
+// en lo que se salteó. Sin `color` es la propia ("Tu perfil"); con `color`,
+// la de la persona a cargo.
+function TarjetaResumenPropia({
+  resumen,
+  titulo = "Tu perfil",
+  sub = "Vos",
+  color,
+}: {
+  resumen: ResumenPropio;
+  titulo?: string;
+  sub?: string;
+  color?: ColorPerfil;
+}) {
   const filas: [string, string | null][] = [
     ["Condición", resumen.cond.length ? resumen.cond.join(", ") : null],
     ["Alergia", resumen.alergias.length ? resumen.alergias.join(", ") : null],
@@ -919,18 +1040,25 @@ function TarjetaResumenPropia({ resumen }: { resumen: ResumenPropio }) {
     ["Turno", resumen.turno],
     ["Mediciones", resumen.meas],
   ];
+  const clases = color ? CLASES_COLOR[color] : null;
+  const inicial = titulo.replace(/^Perfil de /, "").trim().charAt(0).toUpperCase() || "V";
 
   return (
     <div className="flex flex-col gap-3 rounded-[20px] bg-card p-[15px] shadow-card">
       <div className="flex items-center gap-[11px]">
-        <div className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-ink font-heading text-base font-extrabold text-background">
-          V
+        <div
+          className={cn(
+            "flex size-[42px] shrink-0 items-center justify-center rounded-full font-heading text-base font-extrabold",
+            clases ? cn(clases.solido, "text-primary-foreground") : "bg-ink text-background"
+          )}
+        >
+          {clases ? inicial : "V"}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-heading text-[15.5px] font-extrabold tracking-[-0.01em]">Tu perfil</div>
-          <div className="text-xs font-medium text-subtle">Vos</div>
+          <div className="font-heading text-[15.5px] font-extrabold tracking-[-0.01em]">{titulo}</div>
+          <div className="text-xs font-medium text-subtle">{sub}</div>
         </div>
-        <div className="flex items-center gap-[5px] rounded-full bg-persona-1-tint px-2.5 py-[5px] text-[11.5px] font-extrabold text-teal-deep">
+        <div className={cn("flex items-center gap-[5px] rounded-full px-2.5 py-[5px] text-[11.5px] font-extrabold", clases ? cn(clases.fondo, clases.tinta) : "bg-persona-1-tint text-teal-deep")}>
           <VitaIcon name="check" size={12} />
           Perfil creado
         </div>
