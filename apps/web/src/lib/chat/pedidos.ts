@@ -30,6 +30,22 @@ function norm(valor: unknown): string {
 }
 
 /**
+ * Clasifica el mensaje ACTUAL del usuario como respuesta a "¿se lo cargo a X?".
+ * Solo un sí explícito (o el botón "Para X") autoriza; un rechazo gana siempre
+ * ("sí, para mí" es rechazo); cualquier otra cosa es ambigua y no autoriza.
+ */
+export function clasificarRespuesta(texto: string, persona: string | null): "si" | "no" | "otro" {
+  const t = norm(texto).replace(/[¿?¡!.,;:]/g, " ").replace(/\s+/g, " ").trim();
+  if (!t) return "otro";
+  if (/^(no|nop|nunca|nada|cancel\w*|mejor no|para mi)\b/.test(t) || /\bpara mi\b/.test(t)) return "no";
+  if (/^(si|sip|dale|ok|okey|okay|confirmo|claro|de una|correcto|exacto|listo|hacelo|agregalo|cargalo)\b/.test(t)) {
+    return "si";
+  }
+  if (persona && t === `para ${norm(persona)}`) return "si";
+  return "otro";
+}
+
+/**
  * ÚNICO lugar donde se define la clave de dedupe de cada tool de escritura.
  * El input lo genera el modelo y en un reintento puede venir reformulado
  * (otra dosis escrita distinto, un motivo nuevo...), así que NO se usa el input
@@ -86,6 +102,8 @@ type Contexto = {
   supabase: SupabaseClient;
   usuarioId: string;
   pedidoId: string;
+  /** Texto del mensaje ACTUAL del usuario: la confirmación se lee de acá, no de un pendiente viejo. */
+  mensajeUsuario: string;
   familia: MiembroFamilia[];
   /** Perfil de un familiar abierto en pantalla (ya validado), si lo hay. */
   abiertoId?: string;
@@ -99,6 +117,9 @@ function esTablaInexistente(error: unknown): boolean {
   return typeof message === "string" && /does not exist|could not find the table/i.test(message);
 }
 
+const MENSAJE_CONFIRMACION_RECHAZADA =
+  "El usuario respondió que NO (o canceló): la acción NO se ejecutó. No insistas ni la repitas; confirmale que no se hizo nada.";
+
 const MENSAJE_CONFIRMACION_NO_VERIFICADA =
   "No pude verificar la confirmación del usuario (error temporal), así que NO se ejecutó nada. Decile al usuario que lo intente de nuevo en un momento.";
 
@@ -106,9 +127,11 @@ const MENSAJE_CONFIRMACION_NO_VERIFICADA =
  * Confirmación del usuario para escribir en OTRA persona, hecha cumplir por el
  * servidor (el flag `confirmado` del modelo no alcanza). Sin confirmación válida
  * se deja una fila pendiente (clave `pendiente:<clave>`, bajo el pedido ACTUAL) y
- * se devuelve "pendiente". Solo se ejecuta si existe una pendiente con la MISMA
- * clave de un pedido ANTERIOR (otro mensaje del usuario) de menos de 10 minutos,
- * que se consume al confirmar. Dentro del mismo pedido no se confirma, salvo por
+ * se devuelve "pendiente". Solo se ejecuta si el mensaje ACTUAL del usuario es un
+ * sí explícito (`clasificarRespuesta`) Y existe una pendiente con la MISMA clave
+ * de un pedido ANTERIOR de menos de 10 minutos, que se consume al confirmar. Si
+ * el mensaje es un rechazo ("no", "cancelar", "para mí") se borran TODAS las
+ * pendientes del usuario y se devuelve "rechazada". Dentro del mismo pedido no se confirma, salvo por
  * el marcador `confirmada:<clave>` (bajo el pedido actual) que deja esta función
  * al consumir: si el primer intento se cayó tras consumir, el reintento del mismo
  * pedido lo encuentra y puede ejecutar.
@@ -119,8 +142,10 @@ async function confirmacionDelServidor(
   supabase: SupabaseClient,
   usuarioId: string,
   pedidoId: string,
-  clave: string
-): Promise<"confirmada" | "pendiente" | "sin_tabla" | "error"> {
+  clave: string,
+  mensajeUsuario: string,
+  persona: string | null
+): Promise<"confirmada" | "pendiente" | "rechazada" | "sin_tabla" | "error"> {
   const clavePendiente = `pendiente:${clave}`;
   const claveConfirmada = `confirmada:${clave}`;
   try {
@@ -134,6 +159,17 @@ async function confirmacionDelServidor(
     if (errMarcador) throw errMarcador;
     if (marcador && marcador.length > 0) return "confirmada";
 
+    const respuesta = clasificarRespuesta(mensajeUsuario, persona);
+    if (respuesta === "no") {
+      const { error: errLimpiar } = await supabase
+        .from("acciones_agente")
+        .delete()
+        .eq("usuario_id", usuarioId)
+        .like("clave", "pendiente:%");
+      if (errLimpiar) throw errLimpiar;
+      return "rechazada";
+    }
+
     const desde = new Date(Date.now() - VENTANA_CONFIRMACION_MS).toISOString();
     const { data: previas, error } = await supabase
       .from("acciones_agente")
@@ -145,7 +181,7 @@ async function confirmacionDelServidor(
       .limit(1);
     if (error) throw error;
     const previa = previas?.[0];
-    if (previa) {
+    if (previa && respuesta === "si") {
       // Se consume: solo confirma quien efectivamente borró la fila.
       const { data: borradas, error: errBorrar } = await supabase
         .from("acciones_agente")
@@ -221,7 +257,7 @@ export async function ejecutarToolIdempotente(
   input: Record<string, unknown>,
   ctx: Contexto
 ): Promise<ResultadoTool> {
-  const { supabase, usuarioId, pedidoId, familia, abiertoId } = ctx;
+  const { supabase, usuarioId, pedidoId, mensajeUsuario, familia, abiertoId } = ctx;
   const ctxTool = { supabase, usuarioId, familia, abiertoId };
   if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, ctxTool);
 
@@ -243,8 +279,9 @@ export async function ejecutarToolIdempotente(
     if (existente === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     if (existente !== "ninguno") return existente;
 
-    const estado = await confirmacionDelServidor(supabase, usuarioId, pedidoId, clave);
+    const estado = await confirmacionDelServidor(supabase, usuarioId, pedidoId, clave, mensajeUsuario, destino.persona);
     if (estado === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
+    if (estado === "rechazada") return { contenido: MENSAJE_CONFIRMACION_RECHAZADA };
     if (estado === "pendiente") return faltaConfirmacion(destino.persona);
     // Sin la tabla (migración 030 sin aplicar) se cae al comportamiento previo:
     // vale el flag `confirmado` del modelo. Degradación deliberada SOLO ante tabla inexistente.

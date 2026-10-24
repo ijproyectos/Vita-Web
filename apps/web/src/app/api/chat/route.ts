@@ -341,7 +341,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             const resultado = await ejecutarToolIdempotente(
               uso.name,
               uso.input as Record<string, unknown>,
-              { supabase, usuarioId: user.id, pedidoId, familia, abiertoId: abierto?.id }
+              { supabase, usuarioId: user.id, pedidoId, mensajeUsuario: mensaje, familia, abiertoId: abierto?.id }
             );
             if (resultado.accionUI) enviar({ action: resultado.accionUI });
             resultadosTool.push({
