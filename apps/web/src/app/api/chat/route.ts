@@ -17,6 +17,9 @@ export const runtime = "nodejs";
 // Modelo y tope de tokens en lib/ai/modelo.ts (sonnet: punto justo de
 // latencia/calidad para una conversación con tool-calling).
 const MAX_TURNOS_TOOL_USE = 6;
+// Tools que no consultan ni cambian datos: solo disparan un efecto de UI. Si el
+// turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo.
+const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications"]);
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -273,6 +276,9 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             (bloque): bloque is Anthropic.ToolUseBlock => bloque.type === "tool_use"
           );
 
+          const turnoConTexto = mensajeFinal.content.some((b) => b.type === "text" && b.text.trim() !== "");
+          const soloSinDatos = usosDeTool.every((u) => TOOLS_SIN_DATOS.has(u.name));
+
           const resultadosTool: Anthropic.ToolResultBlockParam[] = [];
           for (const uso of usosDeTool) {
             const resultado = await ejecutarToolIdempotente(
@@ -287,6 +293,10 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
               content: resultado.contenido,
             });
           }
+
+          // Ya respondió en texto y solo pidió efectos de UI: otra llamada al
+          // modelo sería gasto sin contenido nuevo. Los tokens ya se sumaron.
+          if (turnoConTexto && soloSinDatos) break;
 
           historial.push({ role: "user", content: resultadosTool });
         }
