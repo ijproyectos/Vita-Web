@@ -1,5 +1,6 @@
 import "server-only";
 
+import { limpiarDato } from "@/lib/ai/limpiar";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { TOOLS } from "@/lib/ai/tools";
@@ -104,14 +105,6 @@ Reglas:
 // que pasar en persona_id y si puede editar (Admin) o solo ver (Lector).
 // Nombre/relación los escribe el usuario (o un familiar): se limpian antes de
 // entrar al prompt para que no puedan colar líneas ni instrucciones.
-function limpiarDato(valor: string, max = 40): string {
-  return valor
-    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029"<>`]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
-
 function construirContextoPersonas(usuarioId: string, familia: MiembroFamilia[], abierto?: MiembroFamilia): string {
   if (familia.length === 0) return "";
   const lineas = familia.map((f) => {

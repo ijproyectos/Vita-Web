@@ -1,4 +1,5 @@
 import type { MiembroFamilia } from "@/lib/familia/tipos";
+import { limpiarDato } from "@/lib/ai/limpiar";
 
 // Única fuente de verdad de qué tools ESCRIBEN datos (la usan la validación
 // de destino, la confirmación y el dedupe de lib/chat/pedidos.ts).
@@ -42,7 +43,8 @@ export type DestinoResuelto =
     }
   | { ok: false; contenido: string };
 
-export function mensajeFaltaConfirmacion(nombre: string): string {
+export function mensajeFaltaConfirmacion(nombreCrudo: string): string {
+  const nombre = limpiarDato(nombreCrudo);
   return `FALTA CONFIRMACIÓN: esta acción es para ${nombre}, no para quien está chateando, y NO se ejecutó. Preguntale al usuario de forma explícita, nombrando a ${nombre} y la acción exacta (por ejemplo "¿Le cargo Vitamina C a las 12:00 a ${nombre}?"), y esperá su respuesta. Solo si en un mensaje POSTERIOR dice que sí, volvé a llamar a la tool con los mismos datos. Nunca vuelvas a llamarla en el mismo turno en que se lo preguntás: el servidor no la ejecuta sin una confirmación de un mensaje posterior.`;
 }
 
@@ -65,12 +67,17 @@ export function resolverDestino(
   const propio: DestinoResuelto = { ok: true, destinoId: ctx.usuarioId, persona: null };
   if (!TOOLS_CON_DESTINO.has(nombreTool)) return propio;
 
-  if (input.persona_id === undefined) {
+  // Ausente = undefined, null o string vacío/solo espacios (el modelo a veces manda null).
+  const ausente =
+    input.persona_id === undefined ||
+    input.persona_id === null ||
+    (typeof input.persona_id === "string" && input.persona_id.trim() === "");
+  if (ausente) {
     const abierto = ctx.abiertoId ? ctx.familia.find((f) => f.id === ctx.abiertoId) : undefined;
     if (abierto && TOOLS_DE_ESCRITURA.has(nombreTool)) {
       return {
         ok: false,
-        contenido: `Está abierto el perfil de ${abierto.nombre} en pantalla y no indicaste persona_id, así que NO se ejecutó nada. Preguntale al usuario si la acción es para él o ella o para ${abierto.nombre}, y recién con su respuesta volvé a llamar pasando persona_id explícito (el id de ${abierto.nombre} de la lista de Personas, o ${ctx.usuarioId} para quien chatea).`,
+        contenido: `Está abierto el perfil de ${limpiarDato(abierto.nombre)} en pantalla y no indicaste persona_id, así que NO se ejecutó nada. Preguntale al usuario si la acción es para él o ella o para ${limpiarDato(abierto.nombre)}, y recién con su respuesta volvé a llamar pasando persona_id explícito (el id de ${limpiarDato(abierto.nombre)} de la lista de Personas, o ${ctx.usuarioId} para quien chatea).`,
       };
     }
     return propio;
@@ -95,14 +102,15 @@ export function resolverDestino(
     };
   }
 
-  if (!TOOLS_DE_ESCRITURA.has(nombreTool)) return { ok: true, destinoId: miembro.id, persona: miembro.nombre };
+  const nombreLimpio = limpiarDato(miembro.nombre);
+  if (!TOOLS_DE_ESCRITURA.has(nombreTool)) return { ok: true, destinoId: miembro.id, persona: nombreLimpio };
 
   if (miembro.rol !== "editar") {
     return {
       ok: false,
-      contenido: `Solo podés ver los datos de ${miembro.nombre} (rol Lector): no podés cargar ni cambiar nada. Explicáselo al usuario; si quiere editar, ${miembro.nombre} tiene que darle permiso de Admin desde su cuenta. No se ejecutó nada.`,
+      contenido: `Solo podés ver los datos de ${nombreLimpio} (rol Lector): no podés cargar ni cambiar nada. Explicáselo al usuario; si quiere editar, ${nombreLimpio} tiene que darle permiso de Admin desde su cuenta. No se ejecutó nada.`,
     };
   }
 
-  return { ok: true, destinoId: miembro.id, persona: miembro.nombre, requiereConfirmacion: true };
+  return { ok: true, destinoId: miembro.id, persona: nombreLimpio, requiereConfirmacion: true };
 }

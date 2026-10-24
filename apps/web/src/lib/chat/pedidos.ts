@@ -91,23 +91,49 @@ type Contexto = {
   abiertoId?: string;
 };
 
+/** true solo si el error es CLARAMENTE "la tabla acciones_agente no existe" (migración 030 sin aplicar). */
+function esTablaInexistente(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { code, message } = error as { code?: string; message?: string };
+  if (code === "PGRST205" || code === "42P01") return true;
+  return typeof message === "string" && /does not exist|could not find the table/i.test(message);
+}
+
+const MENSAJE_CONFIRMACION_NO_VERIFICADA =
+  "No pude verificar la confirmación del usuario (error temporal), así que NO se ejecutó nada. Decile al usuario que lo intente de nuevo en un momento.";
+
 /**
  * Confirmación del usuario para escribir en OTRA persona, hecha cumplir por el
  * servidor (el flag `confirmado` del modelo no alcanza). Sin confirmación válida
  * se deja una fila pendiente (clave `pendiente:<clave>`, bajo el pedido ACTUAL) y
  * se devuelve "pendiente". Solo se ejecuta si existe una pendiente con la MISMA
  * clave de un pedido ANTERIOR (otro mensaje del usuario) de menos de 10 minutos,
- * que se consume al confirmar. Dentro del mismo pedido nunca se ejecuta.
- * "sin_tabla": la contabilidad falló (migración 030 pendiente, RLS...).
+ * que se consume al confirmar. Dentro del mismo pedido no se confirma, salvo por
+ * el marcador `confirmada:<clave>` (bajo el pedido actual) que deja esta función
+ * al consumir: si el primer intento se cayó tras consumir, el reintento del mismo
+ * pedido lo encuentra y puede ejecutar.
+ * "sin_tabla": la tabla no existe (migración 030 pendiente): se usa el flag del modelo.
+ * "error": cualquier otro error de la contabilidad: se falla cerrado (no se ejecuta).
  */
 async function confirmacionDelServidor(
   supabase: SupabaseClient,
   usuarioId: string,
   pedidoId: string,
   clave: string
-): Promise<"confirmada" | "pendiente" | "sin_tabla"> {
+): Promise<"confirmada" | "pendiente" | "sin_tabla" | "error"> {
   const clavePendiente = `pendiente:${clave}`;
+  const claveConfirmada = `confirmada:${clave}`;
   try {
+    const { data: marcador, error: errMarcador } = await supabase
+      .from("acciones_agente")
+      .select("id")
+      .eq("usuario_id", usuarioId)
+      .eq("pedido_id", pedidoId)
+      .eq("clave", claveConfirmada)
+      .limit(1);
+    if (errMarcador) throw errMarcador;
+    if (marcador && marcador.length > 0) return "confirmada";
+
     const desde = new Date(Date.now() - VENTANA_CONFIRMACION_MS).toISOString();
     const { data: previas, error } = await supabase
       .from("acciones_agente")
@@ -127,7 +153,16 @@ async function confirmacionDelServidor(
         .eq("id", previa.id)
         .select("id");
       if (errBorrar) throw errBorrar;
-      if (borradas && borradas.length > 0) return "confirmada";
+      if (borradas && borradas.length > 0) {
+        // Marcador de consumo (best-effort): permite reintentar este mismo pedido.
+        await supabase
+          .from("acciones_agente")
+          .upsert(
+            { usuario_id: usuarioId, pedido_id: pedidoId, clave: claveConfirmada },
+            { onConflict: "usuario_id,pedido_id,clave", ignoreDuplicates: true }
+          );
+        return "confirmada";
+      }
     }
     const { error: errInsert } = await supabase
       .from("acciones_agente")
@@ -137,8 +172,35 @@ async function confirmacionDelServidor(
       );
     if (errInsert) throw errInsert;
     return "pendiente";
-  } catch {
-    return "sin_tabla";
+  } catch (e) {
+    return esTablaInexistente(e) ? "sin_tabla" : "error";
+  }
+}
+
+/**
+ * Mira si esta misma acción (usuario, pedido, clave) ya fue reclamada, ANTES de
+ * pedir confirmación: un reintento de un pedido ya ejecutado devuelve lo guardado
+ * (replay) en vez de volver a preguntar.
+ */
+async function claimExistente(
+  supabase: SupabaseClient,
+  filtro: { usuario_id: string; pedido_id: string; clave: string }
+): Promise<ResultadoTool | "ninguno" | "error"> {
+  try {
+    const { data, error } = await supabase
+      .from("acciones_agente")
+      .select("resultado, created_at")
+      .match(filtro)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return "ninguno";
+    const r = data.resultado as ResultadoTool | null | undefined;
+    if (r && typeof r.contenido === "string") return r;
+    const edadMs = data.created_at ? Date.now() - new Date(data.created_at as string).getTime() : 0;
+    // Vencido (intento caído): se sigue el flujo normal, que lo libera y reclama de nuevo.
+    return edadMs > TTL_CLAIM_SIN_RESULTADO_MS ? "ninguno" : { contenido: MENSAJE_YA_PEDIDA };
+  } catch (e) {
+    return esTablaInexistente(e) ? "ninguno" : "error";
   }
 }
 
@@ -166,19 +228,25 @@ export async function ejecutarToolIdempotente(
   // un pedido son dos acciones. El claim sigue siendo del usuario logueado.
   const clave = `${destino.destinoId}~${claveSemantica(nombre, input)}`;
 
+  const filtro = { usuario_id: usuarioId, pedido_id: pedidoId, clave };
+
   if (destino.requiereConfirmacion) {
+    // Replay: si este pedido ya ejecutó (o está ejecutando) la acción, no se vuelve a preguntar.
+    const existente = await claimExistente(supabase, filtro);
+    if (existente === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
+    if (existente !== "ninguno") return existente;
+
     const estado = await confirmacionDelServidor(supabase, usuarioId, pedidoId, clave);
+    if (estado === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     if (estado === "pendiente") return { contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona") };
     // Sin la tabla (migración 030 sin aplicar) se cae al comportamiento previo:
-    // vale el flag `confirmado` del modelo. Degradación deliberada: el chat
-    // nunca se rompe por la contabilidad.
+    // vale el flag `confirmado` del modelo. Degradación deliberada SOLO ante tabla inexistente.
     if (estado === "sin_tabla" && input.confirmado !== true) {
       return { contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona") };
     }
     // Confirmación válida: se ejecuta (ejecutarTool exige confirmado: true).
     input = { ...input, confirmado: true };
   }
-  const filtro = { usuario_id: usuarioId, pedido_id: pedidoId, clave };
 
   let reclamada = false;
   try {
@@ -220,8 +288,13 @@ export async function ejecutarToolIdempotente(
     } else {
       reclamada = true;
     }
-  } catch {
-    // Sin la tabla (migración pendiente) o ante cualquier otro error: se ejecuta como siempre.
+  } catch (e) {
+    // Escritura sobre OTRA persona: solo se degrada si la tabla no existe; ante
+    // cualquier otro error se falla cerrado. Sobre uno mismo (contrato T4) se
+    // ejecuta como siempre.
+    if (destino.requiereConfirmacion && !esTablaInexistente(e)) {
+      return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
+    }
     return ejecutarTool(nombre, input, ctxTool);
   }
 
