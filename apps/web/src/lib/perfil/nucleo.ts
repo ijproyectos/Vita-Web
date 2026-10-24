@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { COLUMNAS_025, type CambiosPerfil, type Condicion, type Perfil, type UsoApp } from "./tipos";
+import { COLUMNAS_025, type CambiosPerfil, type Condicion, type MedicionesEnCasa, type Perfil, type UsoApp } from "./tipos";
 
 type Cliente = SupabaseClient;
 
@@ -165,6 +165,20 @@ export async function quitarAlergia(
   const alergias = (perfil?.alergias ?? []).filter((a) => a !== alergia);
   await actualizarPerfilCrudo(supabase, usuarioId, { alergias });
   return alergias;
+}
+
+/**
+ * Guarda "¿te medís la presión o el azúcar en casa?" (031). Si la columna
+ * todavía no existe (migración sin aplicar) no hace nada y no tira: es un dato
+ * del onboarding, nunca debe cortar el recorrido.
+ */
+export async function guardarMedicionesEnCasa(supabase: Cliente, usuarioId: string, valor: MedicionesEnCasa): Promise<void> {
+  try {
+    await escribirPerfil(supabase, usuarioId, { mediciones_en_casa: valor });
+  } catch (e) {
+    if (e instanceof ErrorColumna) return;
+    throw e;
+  }
 }
 
 /**

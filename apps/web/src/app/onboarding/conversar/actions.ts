@@ -8,6 +8,7 @@ import * as perfilesPendientesNucleo from "@/lib/onboarding/perfiles-pendientes"
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import { extraerMedicamentos, extraerNombreEdad, type MedicamentoExtraido } from "@/lib/onboarding/extraer";
+import { MEDICIONES_EN_CASA, type MedicionesEnCasa } from "@/lib/perfil/tipos";
 import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
 
 // Server Actions del onboarding conversacional nuevo — nunca lanzan (mismo
@@ -221,6 +222,20 @@ export async function guardarTurnoPropioAction(datos: {
       hora: datos.hora,
       lugar: datos.lugar?.trim() || null,
     });
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+  }
+  return { status: "success" };
+}
+
+// "¿Te medís la presión o el azúcar en casa?" (031). Si la columna no existe
+// todavía, el núcleo lo omite sin error.
+export async function guardarMedicionesEnCasaAction(valor: MedicionesEnCasa): Promise<EstadoAccion> {
+  const usuario = await requireUser();
+  if (!MEDICIONES_EN_CASA.includes(valor)) return { status: "error", message: "Respuesta inválida." };
+  const supabase = await createClient();
+  try {
+    await perfilNucleo.guardarMedicionesEnCasa(supabase, usuario.id, valor);
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
   }

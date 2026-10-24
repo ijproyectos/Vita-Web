@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { colorChipPorIndice, type UsoApp } from "@/lib/perfil/tipos";
+import { colorChipPorIndice, type MedicionesEnCasa, type UsoApp } from "@/lib/perfil/tipos";
 import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
 import { ETIQUETA_MOMENTO, ORDEN_MOMENTOS } from "@/lib/rutina/momento";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -20,6 +20,7 @@ import {
   guardarCondicionesPropiasAction,
   guardarMedicamentoPendienteAction,
   guardarMedicamentoPropioAction,
+  guardarMedicionesEnCasaAction,
   guardarTurnoPropioAction,
   marcarUsoAmbosAction,
   type DatosMedicamentoConfirmado,
@@ -54,6 +55,14 @@ const OPCIONES_CHIPS: Record<PasoChips, readonly string[]> = {
 
 type ResumenPropio = { cond: string[]; alergias: string[]; meds: number; turno: string | null; meas: string | null };
 const RESUMEN_VACIO: ResumenPropio = { cond: [], alergias: [], meds: 0, turno: null, meas: null };
+
+// Chip de mediciones -> valor de perfiles.mediciones_en_casa ("Saltear" no guarda nada).
+const MEDICIONES_POR_CHIP: Record<string, MedicionesEnCasa | undefined> = {
+  Presión: "presion",
+  Azúcar: "glucemia",
+  "Las dos": "ambas",
+  No: "ninguna",
+};
 
 const RELACIONES = ["Mamá", "Papá", "Abuela/o", "Otro"] as const;
 const COLOR_LABEL: Record<string, string> = { teal: "teal", violet: "violeta", amber: "ámbar", rose: "rosa" };
@@ -415,11 +424,18 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
           pedirFechaTurno(valor);
         }
         break;
-      case "meas":
+      case "meas": {
+        const guardar = MEDICIONES_POR_CHIP[valor];
+        if (guardar) {
+          void guardarMedicionesEnCasaAction(guardar).then((r) => {
+            if (r.status === "error") toast.error("No pudimos guardar esa respuesta, la podés cargar después.");
+          });
+        }
         decir(omitido ? "Dale." : "Perfecto, cuando quieras anotar una medición, hablame y la guardo.");
         setResumen((prev) => ({ ...prev, meas: omitido ? null : valor === "Las dos" ? "Presión · Azúcar" : valor }));
         mostrarResumenPropio();
         break;
+      }
     }
   }
 
