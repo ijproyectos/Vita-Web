@@ -3,6 +3,7 @@ import "server-only";
 import { limpiarDato } from "@/lib/ai/limpiar";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
 import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento } from "@/lib/chat/pedidos";
 import * as chat from "@/lib/chat/nucleo";
@@ -13,10 +14,8 @@ import { descripcionAhoraEnAR, fechaDeHoyISO } from "@/lib/rutina/formato";
 
 export const runtime = "nodejs";
 
-// Chat interactivo, no generación larga (a diferencia de `claude-opus-5`
-// que usa NutrIA para el plan alimentario) — sonnet es el punto justo de
-// latencia/calidad para una conversación con tool-calling.
-const MODEL = "claude-sonnet-5";
+// Modelo y tope de tokens en lib/ai/modelo.ts (sonnet: punto justo de
+// latencia/calidad para una conversación con tool-calling).
 const MAX_TURNOS_TOOL_USE = 6;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -251,8 +250,8 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
           const respuesta = anthropic.messages.stream({
-            model: MODEL,
-            max_tokens: 1024,
+            model: MODELO_IA,
+            max_tokens: MAX_TOKENS_CHAT,
             system: systemConFecha,
             tools: TOOLS,
             messages: historial,
