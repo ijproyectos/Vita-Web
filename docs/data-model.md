@@ -29,6 +29,7 @@ Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con 
 | telefono | text | `025` — "Teléfono" de Editar perfil, máx. 40 |
 | contacto_emergencia_relacion | text | `025` — "Es tu…" (Hermana, Pareja, Mamá…), máx. 40 |
 | color | text | `021_familia.sql` — clave de paleta (`teal`/`violeta`/`ambar`/`rosa`/`azul`, check), la UI la mapea a tokens `--persona-<clave>` (`lib/familia/colores.ts`). null = color por defecto |
+| mediciones_en_casa | text | `031_mediciones_en_casa.sql` (escrita, no aplicada) — respuesta del onboarding a "¿te medís la presión o el azúcar en casa?": `presion`/`glucemia`/`ambas`/`ninguna` (check); null = no respondió. No son mediciones (esas viven en `mediciones`). El trigger de 021 no la restringe: un Admin la escribe en un perfil gestionado |
 
 **Familia (021)**: además de las policies `_self`, `perfiles_select_cuidador` (`es_cuidador_de(id)`, cualquier rol) y `perfiles_update_cuidador` (`puede_editar_de(id)`). Sin policy de INSERT para el cuidador (un perfil ajeno nace solo desde el admin client — perfil gestionado — o en el login de su dueño), por eso `lib/perfil/nucleo.ts` hace update-primero y upsert solo como fallback. El trigger `perfiles_proteger_columnas_ajenas` rechaza (`columna_no_editable_por_cuidador`) que alguien que no es el dueño cambie `id`/`uso_app`/`onboarding_completado_at`/`avatar_url`/`created_at`; service_role no se restringe.
 
@@ -244,7 +245,7 @@ RLS del cuidador (aditiva; las `_all_self` no se tocan; las de cuidador de 008/0
 
 RPCs nuevas (`returns table` con columnas calificadas): `listar_familia()` (personas que cuido: vínculo, nombre, color, rol, relación, `conectado` = `auth.users.last_sign_in_at is not null`), `listar_mis_cuidadores()` (quién me cuida, con nombre y rol), `cambiar_rol_cuidador(p_vinculo_id, p_rol)` (solo la persona cuidada; `vinculos_all_elder` bloquea el update directo de una fila aceptada), `dejar_de_cuidar(p_vinculo_id)` (el cuidador revoca su propio vínculo aceptado).
 
-**Perfil gestionado** (persona sin celular): cuenta real de `auth.users` con email placeholder `gestionado-<uuid>@usuarios.soyvita.com.ar`, creada por `crearPerfilGestionado` (`lib/familia/nucleo.ts`, admin client) junto con su `perfiles` y un vínculo ya `aceptado` con `rol = 'editar'`. Más adelante entra desde su celular con un código de `codigos_acceso`. Reemplaza `perfiles_pendientes` para flujos nuevos (el camino viejo sigue funcionando).
+**Perfil gestionado** (persona sin celular): cuenta real de `auth.users` con email placeholder `gestionado-<uuid>@usuarios.soyvita.com.ar`, creada por `crearPerfilGestionado` (`lib/familia/nucleo.ts`, admin client) junto con su `perfiles` y un vínculo ya `aceptado` con `rol = 'editar'`. Más adelante entra desde su celular con un código de `codigos_acceso`. Reemplaza `perfiles_pendientes` para flujos nuevos (el camino viejo sigue funcionando): el onboarding conversacional (`/onboarding/conversar`) crea a la persona a cargo así desde que se confirman relación, nombre y edad, y le guarda condiciones, alergias, remedios, turno y `mediciones_en_casa` directo en su perfil (con el rol `editar` del vínculo). Ya no crea borradores.
 
 ### Cuidadores de una persona (`027_cuidadores_de_persona.sql`)
 
@@ -375,7 +376,7 @@ Dedupe claim-before-send de los avisos programados: `unique (tipo, ref_id, fecha
 
 ## `codigos_acceso`
 
-Código de re-ingreso de un solo uso (15 min) que el cuidador genera para la persona cuidada (cuenta creada por código, o cuenta de Google que cambió de celular). Solo se guarda el hash. Ver `019_codigos_acceso.sql`.
+Código de re-ingreso de un solo uso (30 min desde el onboarding conversacional; `MINUTOS_VIGENCIA_CODIGO_ACCESO`) que el cuidador genera para la persona cuidada (cuenta creada por código, o cuenta de Google que cambió de celular). Solo se guarda el hash. Ver `019_codigos_acceso.sql`.
 
 | columna | tipo | notas |
 |---|---|---|
