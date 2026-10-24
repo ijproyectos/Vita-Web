@@ -134,7 +134,13 @@ function esTablaInexistente(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const { code, message } = error as { code?: string; message?: string };
   if (code === "PGRST205" || code === "42P01") return true;
-  return typeof message === "string" && /does not exist|could not find the table/i.test(message);
+  // Por mensaje, solo si nombra la tabla: "does not exist" también sale para una
+  // columna o función faltante, y ahí hay que fallar cerrado.
+  return (
+    typeof message === "string" &&
+    /acciones_agente/i.test(message) &&
+    /relation .* does not exist|could not find the table/i.test(message)
+  );
 }
 
 const MENSAJE_CONFIRMACION_RECHAZADA =

@@ -582,7 +582,7 @@ export function VitaChatOverlay({
 
         {!esPropio && (
           <div className="bg-aviso-tint px-5 py-2 text-[12.5px] font-medium text-aviso-ink">
-            Estás viendo a {nombreActivo}. vita responde sobre tu cuenta.
+            Estás viendo a {nombreActivo}. Si le pedís algo, vita te pregunta si es para {nombreActivo} o para vos.
           </div>
         )}
 
