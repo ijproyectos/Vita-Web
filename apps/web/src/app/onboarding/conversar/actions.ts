@@ -9,9 +9,11 @@ import { rolSobre } from "@/lib/familia/perfil-activo";
 import { COLORES_PERFIL, type ColorPerfil } from "@/lib/familia/tipos";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
-import { extraerMedicamentos, extraerNombreEdad, type MedicamentoExtraido } from "@/lib/onboarding/extraer";
+import { extraerNombreEdad } from "@/lib/onboarding/extraer";
 import { MEDICIONES_EN_CASA, type MedicionesEnCasa } from "@/lib/perfil/tipos";
-import type { MomentoDia } from "@/lib/medicamentos/tipos";
+import type { ConComida } from "@/lib/medicamentos/tipos";
+import { COMIDAS_VALIDAS, MAX_TOMAS } from "@/lib/medicamentos/formulario";
+import { normalizarHora } from "@/lib/rutina/momento";
 
 // Server Actions del onboarding conversacional nuevo — nunca lanzan (mismo
 // criterio que ../actions.ts), cada una atrapa lo que su función de
@@ -132,26 +134,12 @@ async function destinoDeEscritura(usuarioId: string, personaId?: string): Promis
 
 // --- Medicamentos (compartido por el tab de la persona y el de "vos") ----
 
-export type ResultadoExtraerMedicamentos =
-  | { status: "success"; medicamentos: MedicamentoExtraido[] }
-  | { status: "error"; message: string };
-
-export async function extraerMedicamentosAction(texto: string): Promise<ResultadoExtraerMedicamentos> {
-  const usuario = await requireUser();
-  const resultado = await extraerMedicamentos(usuario.id, texto);
-
-  if (!resultado.ok) {
-    return { status: "error", message: resultado.error };
-  }
-  return { status: "success", medicamentos: resultado.datos };
-}
-
 export type DatosMedicamentoConfirmado = {
   nombre: string;
   dosis: string | null;
   unidad: string;
-  momentos: MomentoDia[];
   frecuencia: string | null;
+  tomas: { hora: string; conComida: ConComida }[];
 };
 
 /**
@@ -166,12 +154,26 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
 
+  // Borde del sistema: las tomas vienen del cliente, se validan como `leerTomas`.
+  const nombre = typeof datos.nombre === "string" ? datos.nombre.trim() : "";
+  if (!nombre) return { status: "error", message: "Falta el nombre del remedio." };
+  const vistas = new Set<string>();
+  const tomas: { hora: string; conComida: ConComida }[] = [];
+  for (const t of Array.isArray(datos.tomas) ? datos.tomas : []) {
+    if (tomas.length >= MAX_TOMAS) break;
+    const hora = normalizarHora(String(t?.hora));
+    if (!hora || vistas.has(hora)) continue;
+    vistas.add(hora);
+    tomas.push({ hora, conComida: COMIDAS_VALIDAS.includes(t.conComida) ? t.conComida : "no-importa" });
+  }
+  if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
+
   try {
     await medicamentosNucleo.agregarMultiMomento(supabase, destino.id, {
-      nombre: datos.nombre,
-      dosis: datos.dosis,
-      unidad: datos.unidad,
-      momentos: datos.momentos,
+      nombre,
+      dosis: datos.dosis?.trim() || null,
+      unidad: datos.unidad?.trim() || "mg",
+      tomas,
       frecuencia: datos.frecuencia,
     });
   } catch (e) {

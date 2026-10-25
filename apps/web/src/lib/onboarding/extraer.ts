@@ -15,8 +15,6 @@ const MODEL = "claude-sonnet-5";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const MOMENTOS = ["mañana", "mediodia", "tarde", "noche"] as const;
-
 const EDAD_MIN = 0;
 const EDAD_MAX = 130;
 
@@ -89,78 +87,6 @@ export async function extraerNombreEdad(
     const edad = datos.edad !== null && datos.edad >= EDAD_MIN && datos.edad <= EDAD_MAX ? datos.edad : null;
 
     return { ok: true, datos: { nombre: datos.nombre.trim(), edad } };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error desconocido." };
-  }
-}
-
-// --- Medicamentos -------------------------------------------------------
-
-const MedicamentoExtraidoSchema = z.object({
-  nombre: z.string().describe("Nombre del medicamento tal como lo dijo el usuario (ej. 'Losartán'), con la primera letra en mayúscula."),
-  dosis: z.string().nullable().describe("Cantidad/dosis como texto libre, ej. '50' o '1 comprimido'. null si no se menciona."),
-  unidad: z.string().describe("Unidad de la dosis, ej. 'mg', 'ml', 'gotas', 'comp.'. Usar 'mg' si no se especifica ninguna."),
-  momentos: z
-    .array(z.enum(MOMENTOS))
-    .describe(
-      "Uno o más momentos del día en que se toma, derivados de frases como 'a la mañana y a la noche' (un mismo medicamento puede tener varios horarios). Si no se menciona ningún momento, devolver ['mañana'] como mejor estimación."
-    ),
-  frecuencia: z.string().nullable().describe("Frecuencia descriptiva tal como la dijo el usuario, ej. 'todos los días', 'cada 8 horas'. null si no se menciona."),
-});
-
-const MedicamentosExtraidosSchema = z.object({
-  medicamentos: z
-    .array(MedicamentoExtraidoSchema)
-    .describe("Todos los medicamentos mencionados en el texto (puede ser uno o varios). Array vacío si no se reconoce ningún medicamento."),
-});
-
-export type MedicamentoExtraido = z.infer<typeof MedicamentoExtraidoSchema>;
-export type ResultadoExtraccionMedicamentos = { ok: true; datos: MedicamentoExtraido[] } | { ok: false; error: string };
-
-/**
- * Extrae una lista estructurada de medicamentos (nombre/dosis/unidad,
- * uno o más momentos del día, frecuencia) de una descripción en texto
- * libre. Nunca lanza — degrada a `{ok:false}` para que la UI caiga a
- * carga manual en vez de perder lo que la persona dijo.
- */
-export async function extraerMedicamentos(usuarioId: string, texto: string): Promise<ResultadoExtraccionMedicamentos> {
-  const textoLimpio = texto.trim();
-  if (!textoLimpio) {
-    return { ok: false, error: "No se recibió ningún texto para interpretar." };
-  }
-
-  const limite = await verificarLimiteDiario(usuarioId);
-  if (!limite.ok) {
-    return { ok: false, error: limite.mensaje };
-  }
-
-  try {
-    const mensaje = await anthropic.messages.parse({
-      model: MODEL,
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: `Una persona está describiendo, en lenguaje libre, qué medicamentos toma (puede mencionar uno o varios, cada uno con uno o más horarios). Extraé la lista estructurada de este texto: "${textoLimpio}"`,
-        },
-      ],
-      output_config: { format: zodOutputFormat(MedicamentosExtraidosSchema) },
-    });
-
-    await registrarUsoIA(usuarioId, {
-      inputTokens: mensaje.usage.input_tokens,
-      outputTokens: mensaje.usage.output_tokens,
-    });
-
-    if (!mensaje.parsed_output) {
-      return { ok: false, error: "No se pudo interpretar la respuesta del modelo." };
-    }
-
-    if (mensaje.parsed_output.medicamentos.length === 0) {
-      return { ok: false, error: "No pudimos reconocer ningún medicamento en lo que describiste." };
-    }
-
-    return { ok: true, datos: mensaje.parsed_output.medicamentos };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error desconocido." };
   }

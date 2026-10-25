@@ -31,6 +31,7 @@ function hora(iso: string | null | undefined): string {
 
 const MOMENTOS: Record<string, string> = { mañana: "Mañana", mediodia: "Mediodía", tarde: "Tarde", noche: "Noche" };
 const COMIDAS: Record<string, string> = {
+  ayunas: "En ayunas",
   antes: "Antes de comer",
   con: "Con la comida",
   despues: "Después de comer",

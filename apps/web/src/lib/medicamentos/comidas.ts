@@ -16,7 +16,7 @@ export const MOMENTOS_SELECTOR: { momento: MomentoDia; etiqueta: string; hora: s
 export type ComidaSelector = { etiqueta: string; hora: string; momento: MomentoDia; conComida: ConComida };
 
 export const COMIDAS_SELECTOR: ComidaSelector[] = [
-  { etiqueta: "En ayunas", hora: "07:00", momento: "mañana", conComida: "antes" },
+  { etiqueta: "En ayunas", hora: "07:00", momento: "mañana", conComida: "ayunas" },
   { etiqueta: "Antes del desayuno", hora: "07:30", momento: "mañana", conComida: "antes" },
   { etiqueta: "Con el desayuno", hora: "08:00", momento: "mañana", conComida: "con" },
   { etiqueta: "Después del desayuno", hora: "08:30", momento: "mañana", conComida: "despues" },

@@ -1,6 +1,6 @@
 export type MomentoDia = "mañana" | "mediodia" | "tarde" | "noche";
 
-export type ConComida = "antes" | "con" | "despues" | "no-importa";
+export type ConComida = "ayunas" | "antes" | "con" | "despues" | "no-importa";
 
 export type DiaSemana =
   | "lunes"
@@ -140,6 +140,7 @@ const COMIDA_POR_MOMENTO: Record<MomentoDia, { con: string; antes: string; despu
 /** Línea de "Indicación" del detalle: "Con el desayuno"; null si no hay indicación de comida. */
 export function indicacionDeComida(m: Pick<Medicamento, "con_comida" | "momento_dia">): string | null {
   if (m.con_comida === "no-importa") return null;
+  if (m.con_comida === "ayunas") return "En ayunas";
   return COMIDA_POR_MOMENTO[m.momento_dia]?.[m.con_comida] ?? null;
 }
 
