@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { VitaAvatar } from "@/components/vita/v-mark";
@@ -25,6 +25,10 @@ export type Mensaje = {
   // Date.now() al recibir la transcripción), no viene de ningún metadato
   // real del archivo de audio (que ya se descarta apenas se transcribe).
   audioSeg?: number;
+  // Tarjeta congelada: un widget (consentimiento, remedio, código, resumen) que
+  // quedó en el historial como solo lectura, mostrando lo que se eligió. Si está,
+  // se dibuja la tarjeta en vez de la burbuja (`texto` va vacío).
+  tarjeta?: ReactNode;
 };
 
 const ANIM_ENTRADA = "animate-in fade-in slide-in-from-bottom-1.5 duration-300";
@@ -332,7 +336,7 @@ export function CampoEntrada({
  * y compartir (hoja nativa del celular; si no hay, WhatsApp web). El código es
  * real (un solo uso) y se muestra solo acá: en la DB queda el hash.
  */
-export function TarjetaCodigoCompartir({ nombre, codigo }: { nombre: string; codigo: string }) {
+export function TarjetaCodigoCompartir({ nombre, codigo, venceA }: { nombre: string; codigo: string; venceA: string }) {
   const [copiado, setCopiado] = useState(false);
 
   function mensaje() {
@@ -385,7 +389,7 @@ export function TarjetaCodigoCompartir({ nombre, codigo }: { nombre: string; cod
         </button>
       </div>
       <p className="mt-3 text-pretty text-[11.5px] font-medium text-subtle">
-        El código vence en {MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos. Si se vence, le mandás otro desde Familia.
+        Vence a las {venceA} ({MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos desde que se generó) y sirve una sola vez. Si se vence, le mandás otro desde Familia.
       </p>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { MedicionesEnCasa, UsoApp } from "@/lib/perfil/tipos";
@@ -117,7 +117,10 @@ type Vista =
   | { tipo: "turno-lugar"; especialidad: string; fecha: string; hora: string }
   | { tipo: "resumen-propio" }
   | { tipo: "compartir" }
-  | { tipo: "codigo"; codigo: string }
+  // El código ya quedó en el historial; solo falta el botón para seguir.
+  | { tipo: "codigo-seguir" }
+  // Transición en curso (sin controles): evita tocar algo de un paso ya contestado.
+  | { tipo: "espera" }
   | { tipo: "fin" };
 
 function mensajesIniciales(usoApp: UsoApp): Mensaje[] {
@@ -176,6 +179,11 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
 
   function agregarBurbujaVita(texto: string) {
     setMensajes((prev) => [...prev, { id: nuevoId(), from: "vita", texto }]);
+  }
+
+  // Deja un widget en el historial como tarjeta de solo lectura.
+  function agregarTarjeta(tarjeta: ReactNode) {
+    setMensajes((prev) => [...prev, { id: nuevoId(), from: "vita", texto: "", tarjeta }]);
   }
 
   function decir(...textos: string[]) {
@@ -261,6 +269,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   }
 
   function confirmarConsentimiento(nombre: string) {
+    agregarTarjeta(<TarjetaConsentimiento nombre={nombre} autorizado onToggle={() => {}} onConfirmar={() => {}} congelada />);
     decir(`¿${nombre} tiene alguna condición de salud? Podés marcar varias.`);
     setVista({ tipo: "multi", paso: "cond", seleccion: [] });
   }
@@ -364,6 +373,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   }
 
   function editarMedicamento() {
+    agregarTarjeta(<TarjetaConfirmarMed borrador={borrador} etiquetaPara={esPersona ? nombrePersona ?? "la persona que cuidás" : "vos"} congelada="editado" />);
     agregarBurbujaUsuario("Editar");
     decir("Dale, lo cargamos de nuevo.");
     empezarMedicamento();
@@ -397,6 +407,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       toast.error(`No se pudo guardar ${borrador.nombre}: ${resultado.message}`);
       return;
     }
+    agregarTarjeta(<TarjetaConfirmarMed borrador={borrador} etiquetaPara={esPersona ? nombrePersona ?? "la persona que cuidás" : "vos"} congelada="guardado" />);
     agregarBurbujaUsuario("Guardar");
     setHayAvance(true);
     setResumen((r) => ({
@@ -440,17 +451,36 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       toast.error(r?.message ?? "No pudimos generar el código. Probá de nuevo.");
       return;
     }
-    decir(`Listo, este es el código para ${nombrePersona ?? "esa persona"}.`);
-    setVista({ tipo: "codigo", codigo: r.codigo });
+    const nombre = nombrePersona ?? "esa persona";
+    // La hora de vencimiento viene del servidor; la tarjeta queda en el historial.
+    const venceA = new Date(r.expiraAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    agregarTarjeta(resumenPersonaCongelado());
+    decir(`Listo, este es el código para ${nombre}.`);
+    agregarTarjeta(<TarjetaCodigoCompartir nombre={nombre} codigo={r.codigo} venceA={venceA} />);
+    setVista({ tipo: "codigo-seguir" });
+  }
+
+  function resumenPersonaCongelado() {
+    return <TarjetaResumenPropia resumen={resumen} titulo={`Perfil de ${nombrePersona ?? "la persona"}`} sub={subPersona(relacionPersona, edadPersona)} color={colorPersona} />;
+  }
+
+  function seguirTrasCodigo() {
+    agregarBurbujaUsuario("Seguir");
+    preguntarSumarse();
   }
 
   function noCompartirAhora() {
+    // Sin controles desde ya: la pregunta siguiente llega con demora y no se puede
+    // tocar "Compartir código" mientras tanto.
+    setVista({ tipo: "espera" });
+    agregarTarjeta(resumenPersonaCongelado());
     agregarBurbujaUsuario("Ahora no");
     decir(`Vos manejás el perfil de ${nombrePersona ?? "esa persona"} y, si después querés, se lo compartís desde Familia.`);
     preguntarSumarse();
   }
 
   function preguntarSumarse() {
+    setVista({ tipo: "espera" });
     setPersonaCompleta(true);
     window.setTimeout(() => {
       agregarBurbujaVita("¿Querés sumarte vos también?");
@@ -627,12 +657,13 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
   }
 
   // Fin del recorrido propio: marca onboarding completo y sigue al permiso.
-  async function terminarTodo() {
+  async function terminarTodo(tarjeta?: ReactNode) {
     const r = await finalizarOnboardingAction();
     if (r?.status === "error") {
       toast.error("No pudimos guardar. Probá de nuevo.");
       return;
     }
+    if (tarjeta) agregarTarjeta(tarjeta);
     setVista({ tipo: "fin" });
   }
 
@@ -677,9 +708,15 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       />
 
       <div ref={scrollRef} className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-3.5 pt-[18px]">
-        {mensajes.map((m, i) => (
-          <Burbuja key={m.id} m={m} conAvatar={mensajes[i + 1] ? mensajes[i + 1].from !== "vita" : !escribiendo} />
-        ))}
+        {mensajes.map((m, i) =>
+          m.tarjeta ? (
+            <div key={m.id} className="pl-[46px]">
+              {m.tarjeta}
+            </div>
+          ) : (
+            <Burbuja key={m.id} m={m} conAvatar={mensajes[i + 1] ? mensajes[i + 1].from !== "vita" || Boolean(mensajes[i + 1].tarjeta) : !escribiendo} />
+          )
+        )}
         {escribiendo && <PuntosEscribiendo />}
 
         {!escribiendo && vista.tipo === "relacion" && (
@@ -843,10 +880,9 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
           </div>
         )}
 
-        {!escribiendo && vista.tipo === "codigo" && (
+        {!escribiendo && vista.tipo === "codigo-seguir" && (
           <div className="flex flex-col gap-3 pl-[46px]">
-            <TarjetaCodigoCompartir nombre={nombrePersona ?? "esa persona"} codigo={vista.codigo} />
-            <button type="button" onClick={preguntarSumarse} className="h-12 rounded-full bg-primary text-[14px] font-extrabold text-primary-foreground shadow-cta">
+            <button type="button" onClick={seguirTrasCodigo} className="h-12 rounded-full bg-primary text-[14px] font-extrabold text-primary-foreground shadow-cta">
               Seguir
             </button>
           </div>
@@ -855,7 +891,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         {!escribiendo && vista.tipo === "resumen-propio" && (
           <div className="flex flex-col gap-3 pl-[46px]">
             <TarjetaResumenPropia resumen={resumen} />
-            <button type="button" onClick={terminarTodo} className="h-12 rounded-full bg-primary text-[15px] font-extrabold text-primary-foreground shadow-cta">
+            <button type="button" onClick={() => terminarTodo(<TarjetaResumenPropia resumen={resumen} />)} className="h-12 rounded-full bg-primary text-[15px] font-extrabold text-primary-foreground shadow-cta">
               Continuar
             </button>
           </div>
@@ -961,28 +997,45 @@ function TarjetaConsentimiento({
   autorizado,
   onToggle,
   onConfirmar,
+  congelada,
 }: {
   nombre: string;
   autorizado: boolean;
   onToggle: (v: boolean) => void;
   onConfirmar: () => void;
+  // Ya contestada: queda en el historial tildada y sin botón.
+  congelada?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-[20px] bg-card p-4 shadow-card">
       <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Perfil de {nombre}</div>
       <label className="flex items-start gap-2.5">
-        <input type="checkbox" checked={autorizado} onChange={(e) => onToggle(e.target.checked)} className="mt-0.5 size-5 shrink-0 accent-primary" />
+        <input type="checkbox" checked={autorizado} disabled={congelada} onChange={(e) => onToggle(e.target.checked)} className="mt-0.5 size-5 shrink-0 accent-primary" />
         <span className="text-[13.5px] font-semibold leading-snug">Tengo autorización de {nombre} para cargar y gestionar sus datos de salud.</span>
       </label>
       <p className="text-[12px] text-muted-foreground">Solo vos y quien vos invites pueden ver estos datos. Podés borrar el perfil cuando quieras.</p>
-      <button
-        type="button"
-        disabled={!autorizado}
-        onClick={onConfirmar}
-        className="h-12 rounded-full bg-primary text-[14px] font-bold text-primary-foreground disabled:opacity-50"
-      >
-        Confirmar
-      </button>
+      {congelada ? (
+        <MarcaCongelada texto="Aceptado" />
+      ) : (
+        <button
+          type="button"
+          disabled={!autorizado}
+          onClick={onConfirmar}
+          className="h-12 rounded-full bg-primary text-[14px] font-bold text-primary-foreground disabled:opacity-50"
+        >
+          Confirmar
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Sello de una tarjeta que ya quedó en el historial ("Aceptado", "Guardado").
+function MarcaCongelada({ texto }: { texto: string }) {
+  return (
+    <div className="flex items-center gap-[5px] self-start rounded-full bg-persona-1-tint px-2.5 py-[5px] text-[11.5px] font-extrabold text-teal-deep">
+      <VitaIcon name="check" size={12} />
+      {texto}
     </div>
   );
 }
@@ -1019,11 +1072,14 @@ function TarjetaConfirmarMed({
   etiquetaPara,
   onEditar,
   onGuardar,
+  congelada,
 }: {
   borrador: BorradorMed;
   etiquetaPara: string;
-  onEditar: () => void;
-  onGuardar: () => void;
+  onEditar?: () => void;
+  onGuardar?: () => void;
+  // Ya resuelta: queda en el historial sin botones y con el sello de lo que pasó.
+  congelada?: "guardado" | "editado";
 }) {
   return (
     <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-card">
@@ -1036,14 +1092,18 @@ function TarjetaConfirmarMed({
           </span>
         ))}
       </div>
-      <div className="flex gap-2 pt-1">
-        <button type="button" onClick={onEditar} className="flex-1 rounded-full bg-secondary py-2 text-[12.5px] font-semibold">
-          Editar
-        </button>
-        <button type="button" onClick={onGuardar} className="flex-1 rounded-full bg-primary py-2 text-[12.5px] font-bold text-primary-foreground">
-          Guardar
-        </button>
-      </div>
+      {congelada ? (
+        <MarcaCongelada texto={congelada === "guardado" ? "Guardado" : "Se vuelve a cargar"} />
+      ) : (
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onEditar} className="flex-1 rounded-full bg-secondary py-2 text-[12.5px] font-semibold">
+            Editar
+          </button>
+          <button type="button" onClick={onGuardar} className="flex-1 rounded-full bg-primary py-2 text-[12.5px] font-bold text-primary-foreground">
+            Guardar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
