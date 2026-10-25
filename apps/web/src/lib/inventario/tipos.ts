@@ -82,10 +82,13 @@ const SINONIMOS_UNIDAD: Record<string, (typeof UNIDADES_DOSIS)[number]> = {
 export function separarDosis(texto: string | null | undefined): { valor: string; unidad: string | null } {
   const t = (texto ?? "").trim();
   if (!t) return { valor: "", unidad: null };
-  // "1/2 comprimido" -> 0.5: la fracción se pasa a decimal antes de separar.
+  // "1/2 comprimido" -> 0.5. Solo una fracción propia (numerador menor): "500/30 mg"
+  // es una combinación de dos drogas y queda tal cual.
   const fraccion = t.match(/^(\d+)\s*\/\s*(\d+)(.*)$/);
-  const normalizado =
-    fraccion && Number(fraccion[2]) > 0 ? `${String(Number(fraccion[1]) / Number(fraccion[2]))}${fraccion[3]}` : t;
+  const propia = fraccion && Number(fraccion[1]) < Number(fraccion[2]);
+  const normalizado = propia
+    ? `${String(Math.round((Number(fraccion[1]) / Number(fraccion[2])) * 100) / 100)}${fraccion[3]}`
+    : t;
   const m = normalizado.match(/^(\d+(?:[.,]\d+)?)\s*([^\d\s].*)?$/);
   if (!m) return { valor: t, unidad: null };
   const numero = m[1].replace(",", ".");
