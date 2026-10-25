@@ -127,7 +127,7 @@ export const HORAS_POR_DEFECTO = ["08:00", "14:00", "22:00"];
 export function ajustarTomas(tomas: TomaForm[], cantidad: number): TomaForm[] {
   const siguiente = tomas.slice(0, cantidad);
   const usadas = new Set(siguiente.map((t) => t.hora));
-  for (const h of [...HORAS_POR_DEFECTO, "11:00", "18:00", "06:00", "20:00"]) {
+  for (const h of [...HORAS_POR_DEFECTO, "11:00", "18:00", "07:00", "20:00"]) {
     if (siguiente.length >= cantidad) break;
     if (!usadas.has(h)) {
       siguiente.push({ hora: h, conComida: "no-importa", indicacion: null });

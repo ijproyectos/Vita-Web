@@ -4,7 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { indicacionDeComida, type Medicamento, type MedicamentoConToma } from "@/lib/medicamentos/tipos";
-import { CLAVES_INDICACION, esIndicacionComida, INDICACIONES_COMIDA } from "@/lib/medicamentos/comidas";
+import { CLAVES_INDICACION, esIndicacionComida, INDICACIONES_COMIDA, type IndicacionComida } from "@/lib/medicamentos/comidas";
 import * as turnos from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
@@ -35,6 +35,30 @@ const PROPIEDAD_INDICACION_COMIDA = {
   enum: CLAVES_INDICACION,
   description: `Indicación de comida opcional: solo una de estas opciones, nunca inventes otra. ${INDICACIONES_COMIDA.map((o) => `${o.clave} = "${o.etiqueta}"`).join("; ")}. Es una observación: la hora (scheduled_time) es la que manda.`,
 };
+
+// En update_schedule además se puede borrar la indicación ("none").
+const PROPIEDAD_INDICACION_COMIDA_EDITABLE = {
+  ...PROPIEDAD_INDICACION_COMIDA,
+  enum: [...CLAVES_INDICACION, "none"],
+  description: `${PROPIEDAD_INDICACION_COMIDA.description} "none" = quitar la indicación.`,
+};
+
+const sinTildes = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
+/**
+ * Lo que mandó el modelo como indicación: clave del catálogo o su etiqueta
+ * (la que ve en los listados, ej. "Con el desayuno"). undefined = no la mandó;
+ * null = "none"; "invalida" = algo fuera del catálogo (no se guarda en silencio).
+ */
+function leerIndicacionDelModelo(valor: unknown): IndicacionComida | null | undefined | "invalida" {
+  if (valor === undefined || valor === null || valor === "") return undefined;
+  if (typeof valor !== "string") return "invalida";
+  if (sinTildes(valor) === "none") return null;
+  if (esIndicacionComida(valor)) return valor;
+  return INDICACIONES_COMIDA.find((o) => sinTildes(o.etiqueta) === sinTildes(valor))?.clave ?? "invalida";
+}
+
+const ERROR_INDICACION = `ERROR: esa indicación de comida no existe. No se guardó nada. Usá una de: ${INDICACIONES_COMIDA.map((o) => `${o.clave} ("${o.etiqueta}")`).join(", ")}, o preguntale al usuario cuál es.`;
 
 export const TOOLS: Anthropic.Tool[] = [
   {
@@ -92,7 +116,7 @@ export const TOOLS: Anthropic.Tool[] = [
             enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
           },
         },
-        meal_indication: PROPIEDAD_INDICACION_COMIDA,
+        meal_indication: PROPIEDAD_INDICACION_COMIDA_EDITABLE,
       },
       required: ["medication_name"],
     },
@@ -254,6 +278,8 @@ export async function ejecutarTool(
       // manda el modelo — evita que queden inconsistentes entre sí (ej.
       // "20hs" guardado como momento "mediodia" si el modelo se equivoca
       // al llenar el campo separado; la hora es la única fuente de verdad).
+      const indicacion = leerIndicacionDelModelo(input.meal_indication);
+      if (indicacion === "invalida") return { contenido: ERROR_INDICACION };
       const creado = await medicamentos.agregar(supabase, usuarioId, {
         nombre: String(input.name),
         dosis: (input.dose as string) ?? null,
@@ -265,7 +291,7 @@ export async function ejecutarTool(
           : [],
         // Solo claves del catálogo: lo que mande el modelo se valida acá, no se guarda tal cual.
         // Se guarda como se pidió, aunque no coincida con la hora habitual de esa comida.
-        indicacion: esIndicacionComida(input.meal_indication) ? input.meal_indication : null,
+        indicacion: indicacion ?? null,
       });
       return {
         contenido: JSON.stringify(paraModelo(creado)),
@@ -288,6 +314,9 @@ export async function ejecutarTool(
       );
       if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
 
+      const indicacion = leerIndicacionDelModelo(input.meal_indication);
+      if (indicacion === "invalida") return { contenido: ERROR_INDICACION };
+
       // Si viene scheduled_time, momentoDia se re-deriva de esa hora (misma
       // razón que en add_medication) — solo se confía en el time_of_day
       // suelto del modelo cuando no hay una hora nueva de la que derivarlo.
@@ -301,8 +330,8 @@ export async function ejecutarTool(
         diasRecurrentes: input.recurring_days
           ? diasDesdeIngles(input.recurring_days as string[])
           : undefined,
-        // Solo se toca si el modelo la manda (y es del catálogo); mover la hora no la cambia.
-        indicacion: esIndicacionComida(input.meal_indication) ? input.meal_indication : undefined,
+        // Solo se toca si el modelo la manda ("none" la borra); mover la hora no la cambia.
+        indicacion,
       });
       return { contenido: JSON.stringify(paraModelo(actualizado)) };
     }
