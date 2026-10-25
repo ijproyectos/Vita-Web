@@ -3,6 +3,8 @@ import { VitaAvatar } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 
+export type PayloadOpcion = { confirmarId: string } | { cancelarId: string };
+
 export type MensajeChatUI = {
   role: "user" | "assistant";
   content: string;
@@ -10,13 +12,17 @@ export type MensajeChatUI = {
   accion?: { type: string; [clave: string]: unknown };
   // Botones de respuesta rápida (confirmaciones de familia), armados por el servidor.
   opciones?: string[];
+  // Qué manda cada botón en el body (confirmarId/cancelarId), paralelo a `opciones`.
+  payloads?: (PayloadOpcion | null)[];
+  // En el mensaje del usuario: el payload con el que se envió (un reintento lo reenvía igual).
+  payload?: PayloadOpcion;
   // Reintento sin duplicar: el pedido que se le mandó al servidor, y si no hubo respuesta.
   pedidoId?: string;
   sinRespuesta?: boolean;
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
-export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, alElegirOpcion }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void; alElegirOpcion?: (texto: string) => void }) {
+export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, alElegirOpcion }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void; alElegirOpcion?: (texto: string, payload?: PayloadOpcion) => void }) {
   if (m.role === "user") {
     return (
       <div className="mb-2.5 flex flex-col items-end gap-1">
@@ -50,11 +56,11 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, 
       {m.accion && <TarjetaAccion accion={m.accion} alCerrar={alCerrar} esPropio={esPropio} />}
       {m.opciones && m.opciones.length > 0 && alElegirOpcion && (
         <div className="flex flex-wrap gap-2 pl-9" role="group" aria-label="Respuestas rápidas">
-          {m.opciones.map((o) => (
+          {m.opciones.map((o, idx) => (
             <button
               key={o}
               type="button"
-              onClick={() => alElegirOpcion(o)}
+              onClick={() => alElegirOpcion(o, m.payloads?.[idx] ?? undefined)}
               className="min-h-11 rounded-full bg-card px-4 py-2.5 text-[14.5px] font-bold text-teal-deep shadow-[inset_0_0_0_1px_var(--teal-100)]"
             >
               {o}

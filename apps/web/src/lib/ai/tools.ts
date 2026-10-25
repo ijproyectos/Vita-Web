@@ -15,7 +15,6 @@ import {
   diasAIngles,
   diasDesdeIngles,
   momentoDiaAIngles,
-  momentoDiaDesdeIngles,
 } from "./mapeo";
 import { CLAVES_PANTALLAS, pantallaPorClave } from "./guia-app";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
@@ -351,44 +350,11 @@ async function ejecutarEnDestino(
       };
     }
 
-    case "update_schedule": {
-      const medicamento = await medicamentos.buscarPorNombre(
-        supabase,
-        usuarioId,
-        String(input.medication_name),
-        input.medication_time_hint as string | undefined
-      );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
-
-      // Si viene scheduled_time, momentoDia se re-deriva de esa hora (misma
-      // razón que en add_medication) — solo se confía en el time_of_day
-      // suelto del modelo cuando no hay una hora nueva de la que derivarlo.
-      const actualizado = await medicamentos.actualizarHorario(supabase, usuarioId, medicamento.id, {
-        horaProgramada: input.scheduled_time as string | undefined,
-        momentoDia: input.scheduled_time
-          ? momentoDelDia(String(input.scheduled_time))
-          : input.time_of_day
-            ? momentoDiaDesdeIngles(String(input.time_of_day))
-            : undefined,
-        diasRecurrentes: input.recurring_days
-          ? diasDesdeIngles(input.recurring_days as string[])
-          : undefined,
-      });
-      return { contenido: JSON.stringify(paraModelo(actualizado)), accionUI: { type: "schedule_updated" } };
-    }
-
-    case "delete_schedule": {
-      const medicamento = await medicamentos.buscarPorNombre(
-        supabase,
-        usuarioId,
-        String(input.medication_name),
-        input.medication_time_hint as string | undefined
-      );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
-
-      await medicamentos.eliminarHorario(supabase, usuarioId, medicamento.id);
-      return { contenido: `Eliminado "${medicamento.nombre}".`, accionUI: { type: "medication_deleted" } };
-    }
+    // Borrar / cambiar un horario no se ejecuta desde acá: lo guarda y lo confirma el
+    // servidor (lib/chat/confirmaciones.ts). Defensa en profundidad si algo llegara directo.
+    case "update_schedule":
+    case "delete_schedule":
+      return { contenido: "Esta acción requiere la confirmación del usuario y no se ejecutó nada." };
 
     case "mark_taken": {
       const medicamento = await medicamentos.buscarPorNombre(

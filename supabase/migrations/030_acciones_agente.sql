@@ -14,8 +14,20 @@ create table acciones_agente (
   clave text not null,
   resultado jsonb, -- {contenido, accionUI}; null mientras la acción se está ejecutando
   created_at timestamptz not null default now(),
+  -- Acción destructiva guardada esperando el Confirmar del usuario (borrar o
+  -- cambiar el horario de un medicamento; ver lib/chat/confirmaciones.ts).
+  -- 'claim' = fila de dedupe/marcador de siempre; 'confirmacion' = acción pendiente.
+  tipo text not null default 'claim' check (tipo in ('claim', 'confirmacion')),
+  accion jsonb,       -- {tool, destinoId, medicamentoId, persona, cambios?}: lo que se ejecuta, por id
+  texto text,         -- lo que se le mostró al usuario ("¿Borro el Losartán de las 08:00?...")
+  snapshot jsonb,     -- {id, nombre, dosis, hora_programada, dias_recurrentes} visto al proponer
+  vence_at timestamptz, -- created_at + 10 min; después no se ejecuta
   unique (usuario_id, pedido_id, clave)
 );
+
+-- A lo sumo UNA confirmación pendiente por usuario: proponer otra reemplaza la anterior.
+create unique index uq_acciones_agente_una_confirmacion
+  on acciones_agente(usuario_id) where tipo = 'confirmacion';
 
 -- Pensado para limpiar filas viejas por antigüedad (solo sirven durante un
 -- reintento). Pendiente: todavía no hay job de limpieza.

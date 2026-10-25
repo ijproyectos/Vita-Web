@@ -48,7 +48,21 @@ export type DestinoResuelto =
  * el modelo) para que las opciones sean siempre las correctas; el cliente manda
  * el texto exacto de la opción como un mensaje normal del usuario. No escribe nada.
  */
-export type AccionOpciones = { type: "opciones_confirmacion"; opciones: string[] };
+export type AccionOpciones = {
+  type: "opciones_confirmacion";
+  opciones: string[];
+  /** Paralelo a `opciones`: qué manda cada botón en el body (confirmarId/cancelarId); null = solo el texto. */
+  payloads?: ({ confirmarId: string } | { cancelarId: string } | null)[];
+};
+
+/** Confirmar/Cancelar de una acción destructiva guardada (borrar o cambiar un horario). */
+export function opcionesConfirmarAccion(pendienteId: string): AccionOpciones {
+  return {
+    type: "opciones_confirmacion",
+    opciones: ["Confirmar", "Cancelar"],
+    payloads: [{ confirmarId: pendienteId }, { cancelarId: pendienteId }],
+  };
+}
 
 export function opcionesConfirmarPara(nombreCrudo: string): AccionOpciones {
   const nombre = limpiarDato(nombreCrudo);

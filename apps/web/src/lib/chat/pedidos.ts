@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ejecutarTool, type ResultadoTool } from "@/lib/ai/tools";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
+import { proponerAccionDestructiva } from "./confirmaciones";
+import { TOOLS_CON_CONFIRMACION_GUARDADA } from "./confirmaciones-logica";
 
 // Reintentos sin duplicar escrituras (migración 030, `acciones_agente`).
 // Cada mensaje del chat trae un `pedido_id`; antes de ejecutar una tool que
@@ -293,6 +295,18 @@ export async function ejecutarToolIdempotente(
   const destino = resolverDestino(nombre, input, ctxTool);
   if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
 
+  // Borrar / cambiar un horario (propio o de un familiar con rol editar): nunca se
+  // ejecuta acá. Se guarda la acción exacta y la ejecuta el servidor cuando el
+  // usuario toca Confirmar (lib/chat/confirmaciones.ts); esa confirmación
+  // reemplaza a la de familia (el texto ya nombra a la persona). Falla cerrado.
+  if (TOOLS_CON_CONFIRMACION_GUARDADA.has(nombre)) {
+    return proponerAccionDestructiva(nombre as "delete_schedule" | "update_schedule", input, destino, {
+      supabase,
+      usuarioId,
+      pedidoId,
+    });
+  }
+
   // El destino va en la clave: la misma acción para dos personas distintas en
   // un pedido son dos acciones. El claim sigue siendo del usuario logueado.
   const clave = `${destino.destinoId}~${claveSemantica(nombre, input)}`;
@@ -456,7 +470,7 @@ export async function accionesDelPedido(
       .order("created_at", { ascending: true });
     if (error) return [];
     return (data ?? [])
-      .filter((f) => !/^(pendiente|confirmada):/.test(f.clave as string))
+      .filter((f) => !/^(pendiente|confirmada|confirmar):/.test(f.clave as string))
       .map((f) => (f.resultado as ResultadoTool | null)?.accionUI)
       .filter((a): a is NonNullable<ResultadoTool["accionUI"]> => !!a);
   } catch {

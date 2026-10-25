@@ -129,3 +129,67 @@ begin;
     raise notice 'PASS: el rechazo borra solo las pendientes';
   end $$;
 rollback;
+
+-- 5 — Confirmación pendiente (borrar/cambiar horario): una sola por usuario, owner-only, check de tipo
+begin;
+  select set_config('request.jwt.claims', json_build_object('sub', :user_a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  insert into acciones_agente (usuario_id, pedido_id, clave, tipo, accion, texto, snapshot, vence_at)
+  values (:user_a, 'bbbbbbbb-0000-0000-0000-000000000005', 'confirmar:1', 'confirmacion',
+    '{"tool":"delete_schedule","destinoId":"x","medicamentoId":"y"}', '¿Borro X de las 08:00?',
+    '{"id":"y","nombre":"X","hora_programada":"08:00:00","dias_recurrentes":[]}', now() + interval '10 minutes');
+
+  do $$
+  declare n int;
+  begin
+    begin
+      insert into acciones_agente (usuario_id, pedido_id, clave, tipo, vence_at)
+      values (auth.uid(), 'bbbbbbbb-0000-0000-0000-000000000006', 'confirmar:2', 'confirmacion', now());
+      raise exception 'FAIL: el índice parcial permitió dos confirmaciones del mismo usuario';
+    exception when unique_violation then
+      raise notice 'PASS: una sola confirmación pendiente por usuario';
+    end;
+
+    -- Los claims normales no cuentan para el índice parcial
+    insert into acciones_agente (usuario_id, pedido_id, clave) values (auth.uid(), 'bbbbbbbb-0000-0000-0000-000000000005', 'k1');
+    insert into acciones_agente (usuario_id, pedido_id, clave) values (auth.uid(), 'bbbbbbbb-0000-0000-0000-000000000006', 'k2');
+    raise notice 'PASS: los claims (tipo claim) no chocan con el índice parcial';
+
+    begin
+      insert into acciones_agente (usuario_id, pedido_id, clave, tipo)
+      values (auth.uid(), gen_random_uuid(), 'k3', 'otra');
+      raise exception 'FAIL: el check de tipo aceptó un valor inválido';
+    exception when check_violation then
+      raise notice 'PASS: check de tipo';
+    end;
+
+    -- Consumo atómico: delete ... returning devuelve la fila una sola vez
+    with b as (delete from acciones_agente where usuario_id = auth.uid() and id = (select id from acciones_agente where tipo = 'confirmacion') returning id)
+    select count(*) into n from b;
+    if n <> 1 then raise exception 'FAIL: el consumo no devolvió 1 fila (%)', n; end if;
+    select count(*) into n from acciones_agente where tipo = 'confirmacion';
+    if n <> 0 then raise exception 'FAIL: la confirmación seguía después de consumirla'; end if;
+    raise notice 'PASS: la confirmación se consume una sola vez';
+  end $$;
+rollback;
+
+-- 6 — Otro usuario no ve ni consume la confirmación ajena
+begin;
+  insert into acciones_agente (usuario_id, pedido_id, clave, tipo, vence_at)
+  values (:user_a, 'bbbbbbbb-0000-0000-0000-000000000007', 'confirmar:3', 'confirmacion', now() + interval '10 minutes');
+
+  select set_config('request.jwt.claims', json_build_object('sub', :user_b, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  do $$
+  declare n int;
+  begin
+    select count(*) into n from acciones_agente where tipo = 'confirmacion';
+    if n <> 0 then raise exception 'FAIL: otro usuario ve la confirmación ajena'; end if;
+    delete from acciones_agente where tipo = 'confirmacion';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'FAIL: otro usuario consumió una confirmación ajena'; end if;
+    raise notice 'PASS: la confirmación pendiente es owner-only';
+  end $$;
+rollback;

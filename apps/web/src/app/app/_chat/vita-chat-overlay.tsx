@@ -12,7 +12,7 @@ import { HistorialDrawer } from "./historial-drawer";
 import { listarSesionesAction, listarMensajesAction, obtenerUsoHoyAction } from "./chat-actions";
 import { BarraUso, barraUsoTono, textoRestante } from "@/components/uso-ia/barra-uso";
 import type { UsoDiario } from "@/lib/uso-ia/tipos";
-import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
+import { MensajeBurbuja, type MensajeChatUI, type PayloadOpcion } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
@@ -39,6 +39,15 @@ const MOOD_A_ESTADO: Record<string, EstadoAvatar> = {
 };
 function moodValido(mood: unknown): EstadoAvatar {
   return MOOD_A_ESTADO[typeof mood === "string" ? mood : "neutral"] ?? "idle";
+}
+
+// Solo ids de texto: lo que llega por SSE no se confía tal cual.
+function payloadValido(p: unknown): PayloadOpcion | null {
+  if (!p || typeof p !== "object") return null;
+  const { confirmarId, cancelarId } = p as { confirmarId?: unknown; cancelarId?: unknown };
+  if (typeof confirmarId === "string" && confirmarId) return { confirmarId };
+  if (typeof cancelarId === "string" && cancelarId) return { cancelarId };
+  return null;
 }
 
 function mensajeBienvenida(): MensajeChatUI {
@@ -295,10 +304,10 @@ export function VitaChatOverlay({
   // Reintentar = mismo texto y MISMO pedidoId, sin burbuja de usuario nueva: el
   // servidor reconoce el pedido y no repite lo que ya escribió.
   function reintentar(m: MensajeChatUI) {
-    if (m.pedidoId) enviar(m.content, m.pedidoId);
+    if (m.pedidoId) enviar(m.content, m.pedidoId, m.payload);
   }
 
-  async function enviar(texto: string, pedidoReintentado?: string) {
+  async function enviar(texto: string, pedidoReintentado?: string, payload?: PayloadOpcion) {
     const limpio = texto.trim();
     if (!limpio || enviando || (uso && uso.restantes <= 0)) return;
 
@@ -313,7 +322,7 @@ export function VitaChatOverlay({
           ]
         : [
             ...prev,
-            { role: "user" as const, content: limpio, timestamp: ahora, pedidoId },
+            { role: "user" as const, content: limpio, timestamp: ahora, pedidoId, ...(payload ? { payload } : {}) },
             { role: "assistant" as const, content: "", timestamp: ahora },
           ]
     );
@@ -332,7 +341,7 @@ export function VitaChatOverlay({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId }),
+        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId, ...payload }),
       });
 
       if (!res.body) throw new Error("Sin respuesta del servidor.");
@@ -398,10 +407,14 @@ export function VitaChatOverlay({
               const opciones = Array.isArray(evento.action.opciones)
                 ? evento.action.opciones.filter((o): o is string => typeof o === "string" && o.trim() !== "")
                 : [];
+              // Los payloads (ids de una acción pendiente) viajan paralelos a las opciones.
+              const payloads = Array.isArray(evento.action.payloads)
+                ? (evento.action.payloads as unknown[]).map(payloadValido)
+                : undefined;
               if (opciones.length > 0) {
                 setMensajes((prev) => {
                   const copia = [...prev];
-                  copia[copia.length - 1] = { ...copia[copia.length - 1], opciones };
+                  copia[copia.length - 1] = { ...copia[copia.length - 1], opciones, payloads };
                   return copia;
                 });
               }
@@ -418,6 +431,9 @@ export function VitaChatOverlay({
             const de = persona ? `de ${persona}` : "tuyas";
             if (evento.action.type === "medication_deleted") {
               toast.success(persona ? `Medicamento eliminado de ${persona}.` : "Medicamento eliminado.");
+            }
+            if (evento.action.type === "schedule_updated") {
+              toast.success(persona ? `Horario de ${persona} actualizado.` : "Horario actualizado.");
             }
             if (evento.action.type === "all_medications_taken") {
               toast.success(persona ? `Marcaste todo como tomado para ${persona}.` : "Marcaste todo como tomado.");
@@ -596,7 +612,7 @@ export function VitaChatOverlay({
             Hoy · {formatoFechaCorta(fechaDeHoyISO())}
           </div>
           {mensajes.map((m, i) => (
-            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t) => enviar(t) : undefined} />
+            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t, p) => enviar(t, undefined, p) : undefined} />
           ))}
           {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">
