@@ -209,10 +209,10 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     await validarEdadYSeguir(relacion, resultado.nombre, resultado.edad);
   }
 
-  // La edad se confirma antes de crear nada: un 0 o un número disparatado casi
+  // La edad se confirma antes de crear nada: un número negativo o disparatado casi
   // siempre es un error de tipeo o de dictado.
   async function validarEdadYSeguir(relacion: string, nombre: string, edad: number | null) {
-    if (edad !== null && (!Number.isFinite(edad) || edad <= 0 || edad > EDAD_MAXIMA)) {
+    if (edad !== null && (!Number.isFinite(edad) || edad < 0 || edad > EDAD_MAXIMA)) {
       agregarBurbujaVita(`No entendí bien la edad de ${nombre}. ¿Cuántos años tiene?`);
       setVista({ tipo: "edad-corregir", relacion, nombre });
       return;

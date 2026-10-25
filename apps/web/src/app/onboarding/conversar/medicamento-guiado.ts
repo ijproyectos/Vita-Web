@@ -23,6 +23,7 @@ export const BORRADOR_VACIO: BorradorMed = { nombre: "", dosis: null, unidad: "m
 /** Chip de unidad -> valor de `UNIDADES_DOSIS` ("comprimidos" se guarda como "comp."). */
 export const UNIDAD_POR_CHIP: Record<string, (typeof UNIDADES_DOSIS)[number]> = {
   "Sí, mg": "mg",
+  mcg: "mcg",
   ml: "ml",
   gotas: "gotas",
   UI: "UI",

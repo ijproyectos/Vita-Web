@@ -51,7 +51,7 @@ export function acotarEntero(valor: unknown, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-export const UNIDADES_DOSIS = ["mg", "ml", "gotas", "UI", "comp."] as const;
+export const UNIDADES_DOSIS = ["mg", "mcg", "ml", "gotas", "UI", "comp."] as const;
 
 /**
  * Separa una dosis leída de un blister ("500 mg", "850mg", "5 ml") en el
@@ -69,6 +69,10 @@ const SINONIMOS_UNIDAD: Record<string, (typeof UNIDADES_DOSIS)[number]> = {
   gota: "gotas",
   gotita: "gotas",
   gotitas: "gotas",
+  "µg": "mcg",
+  ug: "mcg",
+  microgramo: "mcg",
+  microgramos: "mcg",
   miligramo: "mg",
   miligramos: "mg",
   mililitro: "ml",
@@ -78,7 +82,11 @@ const SINONIMOS_UNIDAD: Record<string, (typeof UNIDADES_DOSIS)[number]> = {
 export function separarDosis(texto: string | null | undefined): { valor: string; unidad: string | null } {
   const t = (texto ?? "").trim();
   if (!t) return { valor: "", unidad: null };
-  const m = t.match(/^(\d+(?:[.,]\d+)?)\s*([^\d\s].*)?$/);
+  // "1/2 comprimido" -> 0.5: la fracción se pasa a decimal antes de separar.
+  const fraccion = t.match(/^(\d+)\s*\/\s*(\d+)(.*)$/);
+  const normalizado =
+    fraccion && Number(fraccion[2]) > 0 ? `${String(Number(fraccion[1]) / Number(fraccion[2]))}${fraccion[3]}` : t;
+  const m = normalizado.match(/^(\d+(?:[.,]\d+)?)\s*([^\d\s].*)?$/);
   if (!m) return { valor: t, unidad: null };
   const numero = m[1].replace(",", ".");
   const unidadCruda = (m[2] ?? "").trim().toLowerCase().replace(/\.$/, "");

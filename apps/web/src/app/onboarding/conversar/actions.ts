@@ -81,7 +81,7 @@ export async function crearPerfilFamiliarAction(datos: {
   const nombre = typeof datos?.nombre === "string" ? datos.nombre.trim() : "";
   if (!nombre) return { status: "error", message: "Escribí su nombre." };
   const edad = datos.edad;
-  if (edad !== null && (!Number.isInteger(edad) || edad <= 0 || edad > EDAD_MAXIMA)) {
+  if (edad !== null && (!Number.isInteger(edad) || edad < 0 || edad > EDAD_MAXIMA)) {
     return { status: "error", message: "La edad no es válida." };
   }
 
