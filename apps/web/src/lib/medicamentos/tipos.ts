@@ -138,9 +138,16 @@ const COMIDA_POR_MOMENTO: Record<MomentoDia, { con: string; antes: string; despu
 };
 
 /** Línea de "Indicación" del detalle: "Con el desayuno"; null si no hay indicación de comida. */
-export function indicacionDeComida(m: Pick<Medicamento, "con_comida" | "momento_dia">): string | null {
+export function indicacionDeComida(
+  m: Pick<Medicamento, "con_comida" | "momento_dia"> & { hora_programada?: string | null }
+): string | null {
   if (m.con_comida === "no-importa") return null;
   if (m.con_comida === "ayunas") return "En ayunas";
+  // "Antes de dormir" se guarda como 'antes' de noche: se distingue de "antes
+  // de la cena" por la hora (el chip sugiere 23:00, la cena 20:00).
+  if (m.con_comida === "antes" && m.momento_dia === "noche" && (m.hora_programada ?? "") >= "22:30") {
+    return "Antes de dormir";
+  }
   return COMIDA_POR_MOMENTO[m.momento_dia]?.[m.con_comida] ?? null;
 }
 

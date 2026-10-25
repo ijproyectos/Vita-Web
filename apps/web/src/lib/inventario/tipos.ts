@@ -60,6 +60,21 @@ export const UNIDADES_DOSIS = ["mg", "ml", "gotas", "UI", "comp."] as const;
  * (ej. "mcg"), devuelve el texto entero como valor y unidad null — mejor
  * conservar el dato que etiquetarlo con una unidad equivocada.
  */
+// Cómo lo escribe la gente -> unidad de `UNIDADES_DOSIS` ("1 comprimido", "20 gotitas").
+const SINONIMOS_UNIDAD: Record<string, (typeof UNIDADES_DOSIS)[number]> = {
+  comprimido: "comp.",
+  comprimidos: "comp.",
+  pastilla: "comp.",
+  pastillas: "comp.",
+  gota: "gotas",
+  gotita: "gotas",
+  gotitas: "gotas",
+  miligramo: "mg",
+  miligramos: "mg",
+  mililitro: "ml",
+  mililitros: "ml",
+};
+
 export function separarDosis(texto: string | null | undefined): { valor: string; unidad: string | null } {
   const t = (texto ?? "").trim();
   if (!t) return { valor: "", unidad: null };
@@ -68,6 +83,7 @@ export function separarDosis(texto: string | null | undefined): { valor: string;
   const numero = m[1].replace(",", ".");
   const unidadCruda = (m[2] ?? "").trim().toLowerCase().replace(/\.$/, "");
   if (!unidadCruda) return { valor: numero, unidad: null };
-  const unidad = UNIDADES_DOSIS.find((u) => u.toLowerCase().replace(/\.$/, "") === unidadCruda);
+  const unidad =
+    UNIDADES_DOSIS.find((u) => u.toLowerCase().replace(/\.$/, "") === unidadCruda) ?? SINONIMOS_UNIDAD[unidadCruda];
   return unidad ? { valor: numero, unidad } : { valor: t, unidad: null };
 }
