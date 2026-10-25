@@ -16,6 +16,8 @@ import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { guiaDePantallasParaPrompt } from "@/lib/ai/guia-app";
 import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento, accionesDelPedido } from "@/lib/chat/pedidos";
 import * as chat from "@/lib/chat/nucleo";
+import { bloquesDelUsuario, bloquesDeTexto, mensajeABloques } from "@/lib/chat/bloques";
+import type { MensajeBloques } from "@/lib/memoria/tipos";
 import { confirmarPendiente, idPendiente, limpiarPendientes, opcionesPendienteDelPedido, TEXTO_CANCELADO } from "@/lib/chat/confirmaciones";
 import { clasificarTurno, pendienteEsDelTurnoAnterior } from "@/lib/chat/confirmaciones-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
@@ -236,7 +238,6 @@ export async function POST(request: Request) {
   }
 
   const {
-    sesionId: sesionIdEntrante,
     mensaje,
     pedidoId: pedidoIdEntrante,
     reintento,
@@ -244,7 +245,6 @@ export async function POST(request: Request) {
     confirmarId,
     cancelarId,
   } = (await request.json()) as {
-    sesionId?: string;
     mensaje: string;
     pedidoId?: string;
     reintento?: boolean;
@@ -330,24 +330,14 @@ export async function POST(request: Request) {
           return;
         }
 
-        // Un sesionId entrante solo se usa si de verdad es del usuario —
-        // ver el comentario en sesionPerteneceAUsuario(). Si no matchea
-        // (URL manipulada a mano, o la sesión ya no existe), se trata
-        // igual que "sin sesionId": se crea una nueva y se le avisa al
-        // cliente cuál es la real.
-        const sesionValida =
-          !!sesionIdEntrante && (await chat.sesionPerteneceAUsuario(supabase, user.id, sesionIdEntrante));
-        const sesionId = sesionValida
-          ? sesionIdEntrante!
-          : await chat.crearSesion(supabase, user.id);
+        // Hilo único: el cliente ya no elige sesión. Se escribe siempre en la más reciente del usuario
+        // (se crea una si no tiene), y la lectura recorre todas las sesiones por (created_at, id).
+        const sesionId = await chat.obtenerSesionDelHilo(supabase, user.id);
         medicion.sesionId = sesionId;
-        if (!sesionValida) enviar({ session: sesionId });
 
         // En un reintento el primer intento pudo haber llegado más o menos lejos.
         const previo =
-          reintento === true && sesionValida
-            ? await estadoDelReintento(supabase, user.id, sesionId, mensaje)
-            : { estado: "nuevo" as const };
+          reintento === true ? await estadoDelReintento(supabase, user.id, mensaje) : { estado: "nuevo" as const };
         if (previo.estado === "respondido") {
           // Ya terminó del lado servidor: se devuelve la respuesta guardada
           // sin volver a correr el modelo (ni gastar tokens ni escribir dos veces).
@@ -362,7 +352,7 @@ export async function POST(request: Request) {
         // Si el estado es "desconocido" (la DB falló dos veces) NO se reinserta: el cliente marcó
         // reintento, así que el primer intento probablemente ya lo guardó (mejor no duplicar que perder
         // el contexto); si no estaba, se suma al historial en memoria más abajo.
-        if (previo.estado === "nuevo") await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
+        if (previo.estado === "nuevo") await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje, { bloques: bloquesDelUsuario(mensaje), pedidoId });
 
         // Confirmaciones de borrar/cambiar un horario (sin modelo) y limpieza de la
         // pendiente: ver lib/chat/confirmaciones.ts. Todo antes de correr el modelo.
@@ -379,7 +369,7 @@ export async function POST(request: Request) {
             const pendiente = await idPendiente(supabase, user.id);
             if (pendiente) {
               try {
-                const msgs = await chat.listarMensajes(supabase, user.id, sesionId);
+                const { filas: msgs } = await chat.listarHilo(supabase, user.id, { limite: MAX_MENSAJES_HISTORIAL });
                 if (pendienteEsDelTurnoAnterior(pendiente.creadaAt, msgs, mensaje)) id = pendiente.id;
               } catch {
                 // Sin poder verificar el turno, no se confirma: falla cerrado.
@@ -428,17 +418,18 @@ export async function POST(request: Request) {
           }
           if (accionDirecta) enviar({ action: accionDirecta });
           enviar({ chunk: textoDirecto });
-          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoDirecto);
+          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoDirecto, { bloques: bloquesDeTexto(textoDirecto), pedidoId });
           enviarFin();
           return;
         }
 
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
         // verdad), nunca se confía en lo que mande el cliente.
-        const mensajesGuardados = await chat.listarMensajes(supabase, user.id, sesionId);
-        // Solo los últimos N, y la lista tiene que arrancar con un turno del
-        // usuario (la API lo exige): se recorta del principio hasta lograrlo.
-        const recientes = mensajesGuardados.slice(-MAX_MENSAJES_HISTORIAL);
+        // Los últimos N del hilo único (a través de todas las sesiones), en orden estable (created_at, id).
+        // La ventana por tokens y el resumen llegan con la etapa de contexto en capas.
+        const { filas: recientes } = await chat.listarHilo(supabase, user.id, { limite: MAX_MENSAJES_HISTORIAL });
+        // La lista tiene que arrancar con un turno del usuario (la API lo exige): se recorta del
+        // principio hasta lograrlo.
         const primerUsuario = recientes.findIndex((m) => m.role === "user");
         const historial: Anthropic.MessageParam[] = (primerUsuario === -1 ? [] : recientes.slice(primerUsuario)).map(
           (m) => ({
@@ -448,7 +439,7 @@ export async function POST(request: Request) {
         );
         // Estado "desconocido": si el mensaje no quedó guardado, igual el modelo tiene que verlo.
         if (previo.estado === "desconocido") {
-          const ultimoGuardado = mensajesGuardados[mensajesGuardados.length - 1];
+          const ultimoGuardado = recientes[recientes.length - 1];
           if (!(ultimoGuardado?.role === "user" && ultimoGuardado.contenido === mensaje)) {
             historial.push({ role: "user", content: mensaje });
           }
@@ -479,6 +470,10 @@ export async function POST(request: Request) {
         const systemConFecha = `${SYSTEM_PROMPT}${contextoPerfil}${contextoHoy}
 
 Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDeHoyISO()}). Usá SIEMPRE esta fecha para resolver "hoy", "mañana", "el jueves", "el 15", etc., y pasá las fechas a las tools como YYYY-MM-DD. Un turno nunca puede quedar en una fecha que ya pasó.`;
+
+        // Todos los mensajes del turno (assistant con tool_use, user con tool_result, ...) tal como se
+        // guardan en mensajes_chat.bloques, sin razonamiento.
+        const bloquesTurno: MensajeBloques[] = [];
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
           // Antes de otra vuelta del modelo: si el presupuesto ya no alcanza, se corta acá.
@@ -517,6 +512,8 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             throw e;
           }
           historial.push({ role: "assistant", content: mensajeFinal.content });
+          const delAsistente = mensajeABloques("assistant", mensajeFinal.content);
+          if (delAsistente) bloquesTurno.push(delAsistente);
           tokensInputAcumulados += mensajeFinal.usage.input_tokens;
           tokensOutputAcumulados += mensajeFinal.usage.output_tokens;
           medicion.tokensEntrada += mensajeFinal.usage.input_tokens;
@@ -551,6 +548,10 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             });
           }
 
+          // Los resultados también van al turno guardado (todo tool_use queda seguido de su tool_result).
+          const delUsuario = mensajeABloques("user", resultadosTool);
+          if (delUsuario) bloquesTurno.push(delUsuario);
+
           // Ya respondió en texto y solo pidió efectos de UI: otra llamada al
           // modelo sería gasto sin contenido nuevo. Los tokens ya se sumaron.
           if (turnoConTexto && soloSinDatos) break;
@@ -574,7 +575,11 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
         }
 
         if (textoAcumulado) {
-          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
+          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado, {
+            bloques: bloquesTurno.length > 0 ? bloquesTurno : bloquesDeTexto(textoAcumulado),
+            tokens: tokensOutputAcumulados,
+            pedidoId,
+          });
         }
 
         const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });

@@ -397,7 +397,8 @@ async function liberar(supabase: SupabaseClient, filtro: Record<string, string>)
 }
 
 /**
- * En un reintento (mismo pedido) mira cómo quedó el primer intento:
+ * En un reintento (mismo pedido) mira cómo quedó el primer intento en el hilo único del usuario (no
+ * importa en qué sesión cayó):
  * - "respondido": el mensaje del usuario Y la respuesta de vita ya están
  *   guardados (el primer intento terminó); `respuesta` es el texto guardado.
  * - "guardado": solo el mensaje del usuario quedó como último: no se reinserta.
@@ -407,7 +408,6 @@ async function liberar(supabase: SupabaseClient, filtro: Record<string, string>)
 export async function estadoDelReintento(
   supabase: SupabaseClient,
   usuarioId: string,
-  sesionId: string,
   texto: string
 ): Promise<{ estado: "nuevo" | "guardado" | "respondido" | "desconocido"; respuesta?: string }> {
   // Un solo reintento de la consulta: un error transitorio no debe decidir entre duplicar o perder el mensaje.
@@ -417,8 +417,8 @@ export async function estadoDelReintento(
       .from("mensajes_chat")
       .select("role, contenido")
       .eq("usuario_id", usuarioId)
-      .eq("sesion_id", sesionId)
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(2);
     if (!r.error) {
       data = r.data ?? [];

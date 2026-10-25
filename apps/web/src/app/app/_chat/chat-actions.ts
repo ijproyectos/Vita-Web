@@ -3,32 +3,33 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as chat from "@/lib/chat/nucleo";
+import { parsearCursor } from "@/lib/chat/cursor";
 import { obtenerUsoHoy } from "@/lib/uso-ia/nucleo";
 import type { UsoDiarioConEstado } from "@/lib/uso-ia/tipos";
-import type { MensajeChat, SesionChat } from "@/lib/chat/tipos";
+import type { PaginaHilo } from "@/lib/chat/tipos";
 
 // Server Actions consumidas por el overlay de chat (componente cliente,
 // no una página) — reemplazan el fetch en el server component que hacía
 // el viejo /app/chat/page.tsx.
 
-export async function listarSesionesAction(): Promise<SesionChat[]> {
-  const usuario = await requireUser();
-  const supabase = await createClient();
-  return chat.listarSesiones(supabase, usuario.id);
-}
+export type ResultadoHilo = ({ status: "success" } & PaginaHilo) | { status: "error"; mensaje: string };
 
-export async function listarMensajesAction(sesionId: string): Promise<MensajeChat[]> {
-  const usuario = await requireUser();
-  const supabase = await createClient();
-  return chat.listarMensajes(supabase, usuario.id, sesionId);
-}
-
-// Ya no redirige (no hay a dónde — el chat es un overlay, no una ruta) —
-// el cliente resetea su propio estado local después de llamar a esto.
-export async function eliminarHistorialAction(): Promise<void> {
-  const usuario = await requireUser();
-  const supabase = await createClient();
-  await chat.eliminarHistorial(supabase, usuario.id);
+/**
+ * Una página del hilo único del usuario (todas sus sesiones mezcladas por fecha). Sin `antes` devuelve
+ * lo más reciente; con `antes` (cursor `{created_at, id}` del mensaje más viejo ya cargado), la página
+ * anterior. Corre con la sesión del usuario (RLS). Nunca lanza.
+ */
+export async function listarHiloAction(antes?: unknown): Promise<ResultadoHilo> {
+  try {
+    const usuario = await requireUser();
+    const supabase = await createClient();
+    const cursor = antes == null ? null : parsearCursor(antes);
+    if (antes != null && !cursor) return { status: "error", mensaje: "No se pudo leer la conversación." };
+    const pagina = await chat.listarHilo(supabase, usuario.id, { antes: cursor });
+    return { status: "success", mensajes: pagina.mensajes, hayMas: pagina.hayMas };
+  } catch {
+    return { status: "error", mensaje: "No se pudo leer la conversación." };
+  }
 }
 
 // Uso diario de IA para el indicador del chat. Nunca lanza: null = ocultar.

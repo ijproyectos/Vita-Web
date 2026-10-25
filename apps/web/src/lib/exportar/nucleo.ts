@@ -224,12 +224,18 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
 
   const nombrePorMedicamento = new Map(medicamentos.map((m) => [m.id, m.nombre]));
 
+  // Desde la migración 035 un mensaje puede no colgar de ninguna sesión: se exporta igual, aparte.
+  const SIN_SESION = "sin-sesion";
   const mensajesPorSesion = new Map<string, MensajeChat[]>();
   for (const m of mensajes) {
-    const lista = mensajesPorSesion.get(m.sesion_id) ?? [];
+    const clave = m.sesion_id ?? SIN_SESION;
+    const lista = mensajesPorSesion.get(clave) ?? [];
     lista.push(m);
-    mensajesPorSesion.set(m.sesion_id, lista);
+    mensajesPorSesion.set(clave, lista);
   }
+  const sesionesExportadas = [...sesiones];
+  const sueltos = mensajesPorSesion.get(SIN_SESION);
+  if (sueltos?.length) sesionesExportadas.push({ id: SIN_SESION, created_at: sueltos[0].created_at });
 
   const perfilFila = perfilRes.data as Perfil | null;
   let perfilExportado: HistorialExportado["perfil"] = null;
@@ -292,7 +298,7 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
           return m;
         }),
     })),
-    conversaciones: sesiones
+    conversaciones: sesionesExportadas
       .map((s) => ({
         id: s.id,
         iniciada_el: s.created_at,

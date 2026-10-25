@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 export type PayloadOpcion = { confirmarId: string } | { cancelarId: string };
 
 export type MensajeChatUI = {
+  /** Id de la fila guardada (mensajes_chat.id); los mensajes de esta sesión todavía no lo tienen. */
+  id?: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;

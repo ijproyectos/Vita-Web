@@ -169,7 +169,7 @@ Filas del feed "Registros" de Mi Salud (`024_consultas_vacunas.sql`, aplicada 20
 
 Historial de chat con vita. Ver `003_chat_historial.sql`. Desde la memoria (035) es **un solo hilo por persona**: `sesiones_chat` queda solo como agrupación histórica (las sesiones viejas se muestran mezcladas por fecha, nada se borra) y el código escribe siempre en la sesión más reciente.
 
-**Migración 035 (`035_memoria.sql`, escrita, NO aplicada)** suma a `mensajes_chat`: `sesion_id` nullable, `bloques jsonb` (mensajes del turno con bloques `text`/`tool_use`/`tool_result`, nunca `thinking`; formato en `lib/memoria/tipos.ts`), `tokens int` (salida del turno, si se conoce), `pedido_id uuid`, `excluido_memoria boolean default false` (sigue visible pero no entra en búsqueda/resúmenes), `busqueda tsvector` generado (`spanish`) con índice GIN, e índice `(usuario_id, created_at, id)` para leer la ventana y paginar por cursor.
+**Migración 035 (`035_memoria.sql`, escrita, NO aplicada)** suma a `mensajes_chat`: `sesion_id` nullable, `bloques jsonb` (mensajes del turno con bloques `text`/`tool_use`/`tool_result`, nunca `thinking`; formato en `lib/memoria/tipos.ts`), `tokens int` (salida del turno, si se conoce), `pedido_id uuid`, `excluido_memoria boolean default false` (sigue visible pero no entra en búsqueda/resúmenes), `busqueda tsvector` generado (`spanish`) con índice GIN, e índice `(usuario_id, created_at, id)` para leer la ventana y paginar por cursor. Sin la migración el chat funciona igual: el servidor reintenta el insert sin las columnas nuevas.
 
 ## `memorias`
 

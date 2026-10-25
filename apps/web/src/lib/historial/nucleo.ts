@@ -62,6 +62,10 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
     if (rutas.length > 0) await supabase.storage.from(BUCKET_ESTUDIOS).remove(rutas);
   }
 
+  // Hilo único: una sesión vigente puede tener mensajes viejos, así que el corte también es por mensaje.
+  const mensajesViejos = await supabase.from("mensajes_chat").delete().eq("usuario_id", usuarioId).lt("created_at", corteTs).select("id");
+  if (mensajesViejos.error) throw new Error("No se pudieron borrar las conversaciones.");
+
   const conversaciones = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId).lt("updated_at", corteTs).select("id");
   if (conversaciones.error) throw new Error("No se pudieron borrar las conversaciones.");
 
@@ -69,6 +73,7 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
     tomas: tomas.data?.length ?? 0,
     mediciones: mediciones.data?.length ?? 0,
     estudios: viejos.length,
-    conversaciones: conversaciones.data?.length ?? 0,
+    // Cuenta sesiones borradas; si solo cayeron mensajes sueltos de la sesión vigente, cuenta 1.
+    conversaciones: conversaciones.data?.length || ((mensajesViejos.data?.length ?? 0) > 0 ? 1 : 0),
   };
 }
