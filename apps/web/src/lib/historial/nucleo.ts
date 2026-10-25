@@ -66,14 +66,24 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
   const mensajesViejos = await supabase.from("mensajes_chat").delete().eq("usuario_id", usuarioId).lt("created_at", corteTs).select("id");
   if (mensajesViejos.error) throw new Error("No se pudieron borrar las conversaciones.");
 
+  // Los mensajes y las sesiones se borran en dos pasos que no son atómicos. Si los mensajes ya cayeron y
+  // solo falla la limpieza de las sesiones que quedaron vacías, lo importante (los mensajes) está hecho:
+  // se informa éxito y el fallo se loguea (sin datos del usuario). Una sesión vacía es inofensiva y la
+  // próxima limpieza la levanta. Solo es error si no se borró ningún mensaje y la limpieza también falla.
+  const mensajesBorrados = mensajesViejos.data?.length ?? 0;
   const conversaciones = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId).lt("updated_at", corteTs).select("id");
-  if (conversaciones.error) throw new Error("No se pudieron borrar las conversaciones.");
+  if (conversaciones.error) {
+    if (mensajesBorrados === 0) throw new Error("No se pudieron borrar las conversaciones.");
+    console.warn("borrarHistorial: no se pudieron limpiar las sesiones vacías", conversaciones.error.code ?? "");
+  }
+  const sesionesBorradas = conversaciones.error ? 0 : (conversaciones.data?.length ?? 0);
 
   return {
     tomas: tomas.data?.length ?? 0,
     mediciones: mediciones.data?.length ?? 0,
     estudios: viejos.length,
-    // Cuenta sesiones borradas; si solo cayeron mensajes sueltos de la sesión vigente, cuenta 1.
-    conversaciones: conversaciones.data?.length || ((mensajesViejos.data?.length ?? 0) > 0 ? 1 : 0),
+    // "conversaciones" cuenta sesiones borradas; si solo cayeron mensajes sueltos de la sesión vigente (o la
+    // limpieza de sesiones falló después de borrar mensajes), cuenta 1: hubo conversación borrada.
+    conversaciones: sesionesBorradas || (mensajesBorrados > 0 ? 1 : 0),
   };
 }

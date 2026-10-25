@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 export type PayloadOpcion = { confirmarId: string } | { cancelarId: string };
 
 export type MensajeChatUI = {
+  /** Clave estable de React, asignada al crear el mensaje (crypto.randomUUID, o el id guardado): no cambia al anteponer páginas viejas. */
+  clave: string;
   /** Id de la fila guardada (mensajes_chat.id); los mensajes de esta sesión todavía no lo tienen. */
   id?: string;
   role: "user" | "assistant";

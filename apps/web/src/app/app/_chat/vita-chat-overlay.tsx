@@ -54,11 +54,12 @@ function payloadValido(p: unknown): PayloadOpcion | null {
 
 // Del hilo guardado al mensaje del overlay (lleva id para el cursor de "ver anteriores").
 function aMensajeUI(m: MensajeHilo): MensajeChatUI {
-  return { id: m.id, role: m.role, content: m.contenido, timestamp: m.created_at };
+  return { clave: m.id, id: m.id, role: m.role, content: m.contenido, timestamp: m.created_at };
 }
 
 // Solo se muestra con el hilo vacío; no se guarda.
 const BIENVENIDA: MensajeChatUI = {
+  clave: "bienvenida",
   role: "assistant",
   content: "Hola 👋 Soy vita. ¿Cómo puedo ayudarte hoy?",
   timestamp: new Date().toISOString(),
@@ -324,7 +325,7 @@ export function VitaChatOverlay({
   useEffect(() => {
     if (!abierto || !mensajeInicial || mensajeInicial.nonce === ultimoNonceInicial.current) return;
     ultimoNonceInicial.current = mensajeInicial.nonce;
-    setMensajes((prev) => [...prev, { role: "assistant", content: mensajeInicial.texto, timestamp: new Date().toISOString() }]);
+    setMensajes((prev) => [...prev, { clave: crypto.randomUUID(), role: "assistant", content: mensajeInicial.texto, timestamp: new Date().toISOString() }]);
     scrollAlFinal();
   }, [abierto, mensajeInicial]);
 
@@ -349,12 +350,12 @@ export function VitaChatOverlay({
       pedidoReintentado
         ? [
             ...prev.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: false } : m)),
-            { role: "assistant" as const, content: "", timestamp: ahora },
+            { clave: crypto.randomUUID(), role: "assistant" as const, content: "", timestamp: ahora },
           ]
         : [
             ...prev,
-            { role: "user" as const, content: limpio, timestamp: ahora, pedidoId, ...(payload ? { payload } : {}) },
-            { role: "assistant" as const, content: "", timestamp: ahora },
+            { clave: crypto.randomUUID(), role: "user" as const, content: limpio, timestamp: ahora, pedidoId, ...(payload ? { payload } : {}) },
+            { clave: crypto.randomUUID(), role: "assistant" as const, content: "", timestamp: ahora },
           ]
     );
     setEntrada("");
@@ -647,12 +648,12 @@ export function VitaChatOverlay({
             </>
           )}
           {agruparPorDia(mensajes).map((grupo) => (
-            <div key={grupo.clave || grupo.items[0].indice}>
+            <div key={grupo.clave || grupo.items[0].item.clave}>
               <div className="eyebrow pb-3.5 pt-1 text-center text-subtle" suppressHydrationWarning>
                 {etiquetaDiaHilo(grupo.items[0].item.timestamp)}
               </div>
               {grupo.items.map(({ item: m, indice: i }) => (
-                <MensajeBurbuja key={m.id ?? `l${i}`} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t, p) => enviar(t, undefined, p) : undefined} />
+                <MensajeBurbuja key={m.clave} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t, p) => enviar(t, undefined, p) : undefined} />
               ))}
             </div>
           ))}
