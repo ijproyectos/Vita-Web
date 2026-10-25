@@ -10,6 +10,7 @@ import type { DatosActualizarHorario } from "@/lib/medicamentos/tipos";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import {
   esAccionGuardada,
+  esTablaInexistente,
   hhmm,
   pendienteVigente,
   resolverMedicamento,
@@ -34,6 +35,9 @@ const MENSAJE_NO_VERIFICADA =
 
 const TEXTO_NO_VERIFICADA = "No pude confirmarlo por un problema temporal, así que no cambié nada. Probá de nuevo en un momento.";
 const TEXTO_NADA_PENDIENTE = "No hay nada pendiente de confirmar (ya se confirmó, se canceló o venció). Si querés, pedímelo de nuevo.";
+const TEXTO_PROCESANDO = "Todavía lo estoy procesando. Probá de nuevo en unos segundos.";
+// Un claim de confirmación sin resultado más viejo que esto es de un intento caído.
+const TTL_CLAIM_EN_CURSO_MS = 2 * 60 * 1000;
 const TEXTO_VENCIDA = "Pasó demasiado tiempo desde que te lo pregunté, así que no cambié nada. Pedímelo de nuevo si querés.";
 const TEXTO_CAMBIO_ENTRE_MEDIO = "Ese medicamento cambió mientras tanto, así que no toqué nada. Pedímelo de nuevo para que lo revise.";
 const TEXTO_SIN_PERMISO = "Ya no tenés permiso para editar a esa persona, así que no cambié nada.";
@@ -161,8 +165,9 @@ export async function limpiarPendientes(supabase: Cliente, usuarioId: string): P
       .select("id");
     if (error) throw error;
     return data?.length ?? 0;
-  } catch {
-    return null;
+  } catch (e) {
+    // Sin la tabla no puede haber pendientes que limpiar (los destructivos fallan cerrados igual).
+    return esTablaInexistente(e) ? 0 : null;
   }
 }
 
@@ -210,11 +215,14 @@ export async function opcionesPendienteDelPedido(
 export type SalidaConfirmacion = { texto: string; accionUI?: AccionUI };
 
 /**
- * Confirmar: consume la pendiente (delete…select por id y dueño: solo la gana
- * quien borra la fila), revisa vencimiento, permiso y que la fila siga igual a
- * lo que se mostró, y ejecuta por id con las funciones del núcleo. Idempotente
- * por pedido: el claim `ejecutada:<id>` guarda el resultado y un reintento lo
- * reproduce. Cualquier duda = no se ejecuta nada. Nunca lanza.
+ * Confirmar, en este orden: (1) claim del pedido `ejecutada:<id>` (claim-before-
+ * execute: un reintento en vuelo recibe "procesando", uno terminado recibe lo
+ * guardado); (2) consumir la pendiente (delete…select por id y dueño: solo la
+ * gana quien borra la fila); (3) vencimiento, permiso y que la fila siga igual
+ * a lo que se mostró; (4) ejecutar por id con el núcleo. Si algo LANZA antes de
+ * dejar un resultado, se repone la pendiente y se libera el claim para que
+ * "Reintentar" funcione; como borrar/actualizar por id son idempotentes y el
+ * snapshot se revalida, un reintento nunca ejecuta dos veces. Nunca lanza.
  */
 export async function confirmarPendiente(
   supabase: Cliente,
@@ -223,21 +231,52 @@ export async function confirmarPendiente(
   pendienteId: string,
   familia: MiembroFamilia[]
 ): Promise<SalidaConfirmacion> {
-  const claveClaim = `ejecutada:${pendienteId}`;
-  const filtro = { usuario_id: usuarioId, pedido_id: pedidoId, clave: claveClaim };
-  try {
-    // Reintento del mismo pedido: si ya se ejecutó (o se rechazó) se reproduce lo guardado.
-    const { data: previo, error: errPrevio } = await supabase
+  const filtro = { usuario_id: usuarioId, pedido_id: pedidoId, clave: `ejecutada:${pendienteId}` };
+  const reclamar = async () => {
+    const { data, error } = await supabase
       .from("acciones_agente")
-      .select("resultado")
-      .match(filtro)
+      .upsert(filtro, { onConflict: "usuario_id,pedido_id,clave", ignoreDuplicates: true })
+      .select("id")
       .maybeSingle();
-    if (errPrevio) throw errPrevio;
-    if (previo) {
-      const r = previo.resultado as ResultadoTool | null;
-      if (r && typeof r.contenido === "string") return { texto: r.contenido, accionUI: r.accionUI };
-      return { texto: "Esa confirmación no llegó a completarse. Revisá tu rutina y pedímelo de nuevo si hace falta." };
+    if (error) throw error;
+    return !!data;
+  };
+  const liberar = async () => {
+    try {
+      await supabase.from("acciones_agente").delete().match(filtro);
+    } catch {
+      // Best-effort: un claim sin resultado vence solo (2 min).
     }
+  };
+  const guardar = async (salida: SalidaConfirmacion): Promise<SalidaConfirmacion> => {
+    try {
+      const resultado: ResultadoTool = { contenido: salida.texto, ...(salida.accionUI ? { accionUI: salida.accionUI } : {}) };
+      await supabase.from("acciones_agente").update({ resultado }).match(filtro);
+    } catch {
+      // Best-effort: la pendiente ya está consumida, no se puede ejecutar dos veces.
+    }
+    return salida;
+  };
+
+  let reclamado = false;
+  let consumida: Record<string, unknown> | null = null;
+  try {
+    if (!(await reclamar())) {
+      const { data: previo, error: errPrevio } = await supabase
+        .from("acciones_agente")
+        .select("resultado, created_at")
+        .match(filtro)
+        .maybeSingle();
+      if (errPrevio) throw errPrevio;
+      const r = previo?.resultado as ResultadoTool | null | undefined;
+      if (r && typeof r.contenido === "string") return { texto: r.contenido, accionUI: r.accionUI };
+      const edadMs = previo?.created_at ? Date.now() - new Date(previo.created_at as string).getTime() : 0;
+      if (!previo || edadMs <= TTL_CLAIM_EN_CURSO_MS) return { texto: TEXTO_PROCESANDO };
+      // Claim huérfano de un intento caído (la pendiente se repuso o ya no está): se retoma.
+      await liberar();
+      if (!(await reclamar())) return { texto: TEXTO_PROCESANDO };
+    }
+    reclamado = true;
 
     const { data: consumidas, error: errConsumo } = await supabase
       .from("acciones_agente")
@@ -245,40 +284,21 @@ export async function confirmarPendiente(
       .eq("id", pendienteId)
       .eq("usuario_id", usuarioId)
       .eq("tipo", "confirmacion")
-      .select("accion, snapshot, vence_at");
+      .select("pedido_id, clave, accion, texto, snapshot, vence_at");
     if (errConsumo) throw errConsumo;
-    const fila = consumidas?.[0];
-    if (!fila) return { texto: TEXTO_NADA_PENDIENTE };
+    consumida = (consumidas?.[0] as Record<string, unknown> | undefined) ?? null;
+    if (!consumida) return guardar({ texto: TEXTO_NADA_PENDIENTE });
 
-    // Desde acá la pendiente ya no existe: cada salida deja su resultado en el claim.
-    const { data: claim, error: errClaim } = await supabase
-      .from("acciones_agente")
-      .upsert(filtro, { onConflict: "usuario_id,pedido_id,clave", ignoreDuplicates: true })
-      .select("id")
-      .maybeSingle();
-    if (errClaim) throw errClaim;
-    if (!claim) return { texto: TEXTO_NADA_PENDIENTE };
-
-    const guardar = async (salida: SalidaConfirmacion): Promise<SalidaConfirmacion> => {
-      try {
-        const resultado: ResultadoTool = { contenido: salida.texto, ...(salida.accionUI ? { accionUI: salida.accionUI } : {}) };
-        await supabase.from("acciones_agente").update({ resultado }).match(filtro);
-      } catch {
-        // Best-effort: la pendiente ya está consumida, no se puede ejecutar dos veces.
-      }
-      return salida;
-    };
-
-    const accion = fila.accion;
+    const accion = consumida.accion;
     if (!esAccionGuardada(accion)) return guardar({ texto: TEXTO_NO_VERIFICADA });
-    if (!pendienteVigente(fila.vence_at as string | null, Date.now())) return guardar({ texto: TEXTO_VENCIDA });
+    if (!pendienteVigente(consumida.vence_at as string | null, Date.now())) return guardar({ texto: TEXTO_VENCIDA });
 
     // El destino tiene que seguir siendo el propio usuario o alguien con rol editar.
     const permitido =
       accion.destinoId === usuarioId || familia.some((f) => f.id === accion.destinoId && f.rol === "editar");
     if (!permitido) return guardar({ texto: TEXTO_SIN_PERMISO });
 
-    const snapshot = fila.snapshot as SnapshotMedicamento | null;
+    const snapshot = consumida.snapshot as SnapshotMedicamento | null;
     const actual = await medicamentos.obtenerPorId(supabase, accion.destinoId, accion.medicamentoId);
     if (!snapshot || !actual || !snapshotCoincide(snapshot, actual)) {
       return guardar({ texto: TEXTO_CAMBIO_ENTRE_MEDIO });
@@ -292,6 +312,26 @@ export async function confirmarPendiente(
     await medicamentos.actualizarHorario(supabase, accion.destinoId, accion.medicamentoId, accion.cambios ?? {});
     return guardar({ texto: textoExito(accion, snapshot), accionUI: { type: "schedule_updated", ...conPersona } });
   } catch {
+    // Falló sin dejar un resultado: se repone la pendiente (si ya se había consumida) y se libera
+    // el claim para que el reintento pueda volver a confirmar.
+    if (consumida) {
+      try {
+        await supabase.from("acciones_agente").insert({
+          id: pendienteId,
+          usuario_id: usuarioId,
+          pedido_id: consumida.pedido_id,
+          clave: consumida.clave,
+          tipo: "confirmacion",
+          accion: consumida.accion,
+          texto: consumida.texto,
+          snapshot: consumida.snapshot,
+          vence_at: consumida.vence_at,
+        });
+      } catch {
+        // Si ya hay otra pendiente (índice único) o falla, queda sin reponer: no se ejecuta nada.
+      }
+    }
+    if (reclamado) await liberar();
     return { texto: TEXTO_NO_VERIFICADA };
   }
 }

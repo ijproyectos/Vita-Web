@@ -5,7 +5,7 @@ import { ejecutarTool, type ResultadoTool } from "@/lib/ai/tools";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { proponerAccionDestructiva } from "./confirmaciones";
-import { TOOLS_CON_CONFIRMACION_GUARDADA } from "./confirmaciones-logica";
+import { esTablaInexistente, TOOLS_CON_CONFIRMACION_GUARDADA } from "./confirmaciones-logica";
 
 // Reintentos sin duplicar escrituras (migración 030, `acciones_agente`).
 // Cada mensaje del chat trae un `pedido_id`; antes de ejecutar una tool que
@@ -130,20 +130,6 @@ type Contexto = {
   /** Perfil de un familiar abierto en pantalla (ya validado), si lo hay. */
   abiertoId?: string;
 };
-
-/** true solo si el error es CLARAMENTE "la tabla acciones_agente no existe" (migración 030 sin aplicar). */
-function esTablaInexistente(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const { code, message } = error as { code?: string; message?: string };
-  if (code === "PGRST205" || code === "42P01") return true;
-  // Por mensaje, solo si nombra la tabla: "does not exist" también sale para una
-  // columna o función faltante, y ahí hay que fallar cerrado.
-  return (
-    typeof message === "string" &&
-    /acciones_agente/i.test(message) &&
-    /relation .* does not exist|could not find the table/i.test(message)
-  );
-}
 
 const MENSAJE_CONFIRMACION_RECHAZADA =
   "El usuario respondió que NO (o canceló): la acción NO se ejecutó. No insistas ni la repitas; confirmale que no se hizo nada.";

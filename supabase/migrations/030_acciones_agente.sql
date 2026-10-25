@@ -1,3 +1,4 @@
+-- Nota: esta migración nunca se aplicó en ningún entorno, por eso se edita en el lugar (columnas de confirmación incluidas) en vez de sumar una 031.
 -- Reintentos del chat sin duplicar escrituras.
 -- Cada mensaje del chat lleva un `pedido_id` generado por la app. Antes de
 -- ejecutar una tool que ESCRIBE (add_medication, mark_taken...), el servidor

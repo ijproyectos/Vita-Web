@@ -32,6 +32,8 @@ const MAX_ITEMS_HOY = 20;
 // turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo.
 const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen"]);
 
+const TEXTO_LIMPIEZA_FALLIDA = "No pude confirmar que se canceló lo pendiente por un problema temporal. Probá de nuevo en un momento.";
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `Sos vita, la asistente de salud de vita. Hablás en español rioplatense,
@@ -317,12 +319,15 @@ export async function POST(request: Request) {
             accionDirecta = salida.accionUI;
           } else {
             // Un "sí" tipeado sin nada pendiente es un mensaje más para el modelo.
-            await limpiarPendientes(supabase, user.id);
+            if ((await limpiarPendientes(supabase, user.id)) === null) textoDirecto = TEXTO_LIMPIEZA_FALLIDA;
           }
         } else {
           // Cancelar, un "no" o CUALQUIER otro mensaje: la pendiente deja de valer antes de que corra el modelo (G3).
           const borradas = await limpiarPendientes(supabase, user.id);
-          if (turno === "cancelar_id" || (turno === "no_tipeado" && (borradas ?? 0) > 0)) textoDirecto = TEXTO_CANCELADO;
+          // Si la limpieza falló, la pendiente podría seguir confirmable: no se afirma que se canceló
+          // ni se corre el modelo (un "sí" posterior la ejecutaría). Se corta el turno y que reintente.
+          if (borradas === null) textoDirecto = TEXTO_LIMPIEZA_FALLIDA;
+          else if (turno === "cancelar_id" || (turno === "no_tipeado" && (borradas ?? 0) > 0)) textoDirecto = TEXTO_CANCELADO;
         }
         if (textoDirecto !== null) {
           // Turno resuelto por el servidor: sin llamada al modelo ni tokens que contar.

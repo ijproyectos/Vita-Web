@@ -404,13 +404,14 @@ export function VitaChatOverlay({
             // Botones de respuesta rápida: se guardan aparte de `accion` para no
             // pisar una tarjeta real, y no cuentan como escritura (sin refresh).
             if (evento.action.type === "opciones_confirmacion") {
-              const opciones = Array.isArray(evento.action.opciones)
-                ? evento.action.opciones.filter((o): o is string => typeof o === "string" && o.trim() !== "")
-                : [];
-              // Los payloads (ids de una acción pendiente) viajan paralelos a las opciones.
-              const payloads = Array.isArray(evento.action.payloads)
-                ? (evento.action.payloads as unknown[]).map(payloadValido)
-                : undefined;
+              // Opción y payload se filtran JUNTOS (pares) para que los índices siempre coincidan.
+              const crudas = Array.isArray(evento.action.opciones) ? (evento.action.opciones as unknown[]) : [];
+              const crudosPayloads = Array.isArray(evento.action.payloads) ? (evento.action.payloads as unknown[]) : null;
+              const pares = crudas
+                .map((o, i) => ({ o, p: crudosPayloads ? payloadValido(crudosPayloads[i]) : null }))
+                .filter((x): x is { o: string; p: PayloadOpcion | null } => typeof x.o === "string" && x.o.trim() !== "");
+              const opciones = pares.map((x) => x.o);
+              const payloads = crudosPayloads ? pares.map((x) => x.p) : undefined;
               if (opciones.length > 0) {
                 setMensajes((prev) => {
                   const copia = [...prev];
