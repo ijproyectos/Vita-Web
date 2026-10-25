@@ -414,6 +414,10 @@ Código de re-ingreso de un solo uso (15 min) que el cuidador genera para la per
 
 Throttling anti fuerza bruta de /login por código: `id` (identity), `ip_hash` (HMAC-SHA256 de la IP con secreto del servidor, nunca la IP cruda), `creado_at`. Máx. 10 intentos por IP en 15 min; limpieza oportunista de filas de más de 1 día. **RLS habilitada sin policies** y `revoke all` a `anon`/`authenticated`: solo `service_role`.
 
+## `registros_chat`
+
+Un registro por respuesta del chat con vita (migración `033`, escrita, NO aplicada): latencia, vueltas del modelo, tools usadas, tokens reales y errores, más `version_prompt` (hash de 12 hex de la plantilla estática del system prompt + tools + modelo). **No guarda** texto de mensajes, inputs/outputs de tools ni mensajes de error crudos. Columnas: `id`, `usuario_id` (cascade), `pedido_id`, `sesion_id` (uuid sin FK), `created_at`, `version_prompt`, `modelo`, `latencia_ms`, `latencia_primer_token_ms` (null sin texto), `vueltas_modelo`, `tools text[]` (solo nombres), `escrituras`, `tokens_entrada/salida/cache_lectura/cache_escritura`, `resultado` (`ok|error|limite|confirmacion|cancelacion|replay`), `error_codigo` (corto: `anthropic_529`, `timeout`, `stream_abort`, `db`, `interno`). **RLS** habilitada sin policies: solo `service_role` (best-effort, vía `after`). Índices por `created_at` y `(usuario_id, created_at)`. Retención de 90 días: seguimiento manual (pg_cron), no implementado. Consultas: `supabase/queries/registros-chat-resumen.sql`.
+
 ## Fuera de alcance (sin tabla, decisión — ver CLAUDE.md)
 
 - Login con Apple.
