@@ -90,7 +90,7 @@ Adherencia — una fila por medicamento+fecha. Sin cambios respecto al pase ante
 | tomado | boolean | |
 | tomado_en | timestamptz | null si no se tomó |
 
-unique `(medicamento_id, fecha)`.
+unique `(medicamento_id, fecha)`. Desde la migración 032 `fecha` es la fecha de pared **AR** de la dosis (antes: fecha UTC del momento de marcar); la 032 migra las filas existentes y borra las de `tomado = false`.
 
 ## `turnos`
 
