@@ -18,6 +18,8 @@ import type { BloqueGuardado, BloquesTurno, Memoria, ResumenConversacion } from 
 export const TOPE_TOKENS_MEMORIAS = 1500;
 export const TOPE_TOKENS_RESUMEN = 1200;
 export const TOPE_SUAVE_VENTANA = 4000;
+/** Fracción del tope suave a partir de la cual se pide un resumen (M5): se resume antes de llegar al tope. */
+export const FRACCION_PEDIR_RESUMEN = 0.7;
 export const TOPE_DURO_VENTANA = 8000;
 /** Largo máximo de un resultado de tool de turnos anteriores que vuelve a viajar. */
 export const MAX_CHARS_RESULTADO_ANTERIOR = 600;
@@ -275,7 +277,7 @@ export type VentanaReciente = {
   tokens: number;
   /** Filas que se dejaron afuera por el tope duro (siguen alcanzables con buscar_memoria). */
   filasDescartadas: number;
-  /** Pasó el tope suave: es la señal para pedir un resumen (M5). */
+  /** Pasó el 70% del tope suave: es la señal para pedir un resumen (M5). */
   superaTopeSuave: boolean;
 };
 
@@ -303,7 +305,7 @@ export function construirVentana(
 
   const mensajes = sanearHistorial(porFila.slice(desde).flatMap((f) => f.mensajes));
   const tokens = mensajes.reduce((s, m) => s + estimarTokensMensaje(m), 0);
-  return { mensajes, tokens, filasDescartadas: desde, superaTopeSuave: tokens > topeSuave };
+  return { mensajes, tokens, filasDescartadas: desde, superaTopeSuave: tokens > topeSuave * FRACCION_PEDIR_RESUMEN };
 }
 
 /** Copia con el punto de caché en el último bloque del último mensaje (el último antes del turno actual). */

@@ -24,6 +24,7 @@ import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-
 import { armarTurnoActual, conPuntoDeCache, construirBloqueMemorias, construirBloqueResumen, construirVentana, MAX_FILAS_VENTANA, sinTurnoActual } from "@/lib/memoria/contexto";
 import { REGLA_CONTEXTO_VIVO, REGLAS_MEMORIA } from "@/lib/memoria/prompt";
 import { cargarMemoriasParaContexto, cargarResumen, estadoMemoria } from "@/lib/memoria/nucleo";
+import { pedirResumen } from "@/lib/memoria/resumen";
 import { parsearCursor } from "@/lib/chat/cursor";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
@@ -275,12 +276,15 @@ export async function POST(request: Request) {
   // Variante del prompt de ESTA respuesta: se fija cuando se sabe si la memoria está activa (el `after` de
   // abajo la lee recién al cerrar la respuesta).
   let versionPrompt = VERSION_PROMPT_CON_MEMORIA;
+  // Resumen incremental (M5): si la ventana pasó el 70% del tope suave, se encola 'resumir' y se deja
+  // trabajando al trabajador DESPUÉS de cerrada la respuesta (best effort; el cron de cada minuto es el respaldo).
+  const resumenPedido: { versionResumen: number | null } = { versionResumen: null };
   let cerrarRegistro: () => void = () => {};
   after(
     new Promise<void>((resolver) => {
       cerrarRegistro = resolver;
-    }).then(() =>
-      registrarRespuestaChat(
+    }).then(async () => {
+      await registrarRespuestaChat(
         construirFilaRegistro({
           usuarioId: user.id,
           pedidoId,
@@ -291,8 +295,9 @@ export async function POST(request: Request) {
           medicion,
           toolsDeEscritura: TOOLS_DE_ESCRITURA,
         })
-      )
-    )
+      );
+      if (resumenPedido.versionResumen !== null) await pedirResumen(user.id, resumenPedido.versionResumen);
+    })
   );
 
   // Límite de pedidos por usuario/IP (migración 034; falla abierto). Va antes de gastar nada: 429 con el
@@ -491,6 +496,7 @@ export async function POST(request: Request) {
         // se manda como turno actual, junto con la capa 5. Nunca viaja dos veces.
         const previas = sinTurnoActual(filas, { pedidoId, mensaje });
         const ventana = construirVentana(previas);
+        if (memoria.activa && ventana.superaTopeSuave) resumenPedido.versionResumen = resumen?.version ?? 0;
 
         // Capa 5: perfil vivo y datos del día, en un bloque rotulado al comienzo del último mensaje del usuario
         // (no en `system`, que invalidaría el caché de los mensajes; Sonnet 5 no admite mensajes de sistema a
