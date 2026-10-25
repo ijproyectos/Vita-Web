@@ -105,7 +105,7 @@ export async function guardarMensaje(
   role: RolMensaje,
   contenido: string,
   extra: { bloques?: BloquesTurno; tokens?: number | null; pedidoId?: string } = {}
-): Promise<void> {
+): Promise<string | null> {
   const base = { usuario_id: usuarioId, sesion_id: sesionId, role, contenido };
   const conMemoria = {
     ...base,
@@ -113,10 +113,10 @@ export async function guardarMensaje(
     ...(extra.tokens != null && extra.tokens > 0 ? { tokens: extra.tokens } : {}),
     ...(extra.pedidoId ? { pedido_id: extra.pedidoId } : {}),
   };
-  let { error } = await supabase.from("mensajes_chat").insert(conMemoria);
+  let { data: fila, error } = await supabase.from("mensajes_chat").insert(conMemoria).select("id").maybeSingle();
   // Sin la migración 035 las columnas nuevas no existen: se guarda igual como antes (nada se pierde del hilo).
   if (error && Object.keys(conMemoria).length > Object.keys(base).length && esColumnaInexistente(error)) {
-    ({ error } = await supabase.from("mensajes_chat").insert(base));
+    ({ data: fila, error } = await supabase.from("mensajes_chat").insert(base).select("id").maybeSingle());
   }
 
   if (error) throw new Error(`No se pudo guardar el mensaje: ${error.message}`);
@@ -129,6 +129,26 @@ export async function guardarMensaje(
     .eq("usuario_id", usuarioId);
 
   if (errorUpdate) throw new Error(`No se pudo actualizar la sesión: ${errorUpdate.message}`);
+  // Id de la fila guardada (null si la base no lo devolvió): el recuerdo guarda de qué mensaje salió.
+  return (fila as { id?: string } | null)?.id ?? null;
+}
+
+/** Id de la fila del usuario de un pedido (para reintentos que no reinsertan). null si no está o falla la lectura. */
+export async function idMensajeDelPedido(supabase: Cliente, usuarioId: string, pedidoId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("mensajes_chat")
+      .select("id")
+      .eq("usuario_id", usuarioId)
+      .eq("pedido_id", pedidoId)
+      .eq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error) return null;
+    return (data?.[0] as { id?: string } | undefined)?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**

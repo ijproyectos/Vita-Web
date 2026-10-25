@@ -5,7 +5,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MAX_TOKENS_RESUMEN, MODELO_RESUMEN } from "@/lib/ai/modelo";
 import { claveDia } from "@/lib/chat/dias";
-import { filtroPosteriorA, parsearCursor } from "@/lib/chat/cursor";
+import { filtroAnteriorA, filtroPosteriorA, parsearCursor } from "@/lib/chat/cursor";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { clasificarError } from "@/lib/chat/registros-logica";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,6 +13,8 @@ import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import {
   armarPromptResumen,
   elegirCorte,
+  MAX_CHARS_MENSAJE,
+  MAX_CHARS_NUEVOS,
   MAX_FILAS_LECTURA,
   SchemaResumen,
   SISTEMA_RESUMEN,
@@ -167,13 +169,155 @@ export async function procesarCola(admin: Admin = createAdminClient(), opciones:
 
 async function ejecutarTarea(admin: Admin, tarea: TareaTomada, timeoutMs: number): Promise<Resultado> {
   if (tarea.tipo === "resumir") return resumirConversacion(admin, tarea, timeoutMs);
+  if (tarea.tipo === "regenerar") return regenerarResumen(admin, tarea, timeoutMs);
   return { ok: false, codigo: "tipo_no_soportado" };
 }
 
 // ---------------------------------------------------------------------------
 // Resumen incremental
 // ---------------------------------------------------------------------------
-type FilaResumen = { resumen: string; pendientes: unknown; cubre_hasta_mensaje_id: string | null; cubre_hasta_created_at: string | null; version: number };
+type FilaResumen = { invalidado?: boolean; resumen: string; pendientes: unknown; cubre_hasta_mensaje_id: string | null; cubre_hasta_created_at: string | null; version: number };
+
+type SalidaHaiku = { validado: ReturnType<typeof validarSalidaResumen>; codigoError: string | null };
+
+/** Una llamada a Haiku (sin reintentos del SDK) + uso diario + fila de registros_chat. Nunca lanza. */
+async function llamarHaiku(usuarioId: string, entrada: string, timeoutMs: number): Promise<SalidaHaiku> {
+  const inicio = performance.now();
+  let tokensEntrada = 0;
+  let tokensSalida = 0;
+  let codigoError: string | null = null;
+  let validado: ReturnType<typeof validarSalidaResumen> = null;
+  try {
+    // Haiku 5.5: razonamiento adaptativo prendido por defecto (effort "low" para que no se coma el margen); sin
+    // temperature/top_p (no se admiten valores distintos del default). La salida va por salida estructurada y
+    // se vuelve a validar con zod: no se confía en que el esquema alcance.
+    const mensaje = await anthropic.messages.parse(
+      {
+        model: MODELO_RESUMEN,
+        max_tokens: MAX_TOKENS_RESUMEN,
+        system: SISTEMA_RESUMEN,
+        messages: [{ role: "user", content: entrada }],
+        output_config: { effort: "low", format: zodOutputFormat(SchemaResumen) },
+      },
+      { timeout: timeoutMs, maxRetries: 0 }
+    );
+    tokensEntrada = mensaje.usage.input_tokens;
+    tokensSalida = mensaje.usage.output_tokens;
+    if (mensaje.stop_reason === "max_tokens") codigoError = "resumen_truncado";
+    else if (mensaje.stop_reason === "refusal") codigoError = "resumen_rechazado";
+    else {
+      validado = validarSalidaResumen(mensaje.parsed_output);
+      if (!validado) codigoError = "resumen_invalido";
+    }
+  } catch (e) {
+    codigoError = clasificarError(e);
+  }
+
+  // Costo: los tokens REALES de la llamada cuentan en el uso diario de la persona (es trabajo de fondo, pero lo
+  // paga su cupo) y queda una fila en registros_chat (solo métricas: sin texto, tools = ['resumen']).
+  if (tokensEntrada > 0 || tokensSalida > 0) await registrarUsoIA(usuarioId, { inputTokens: tokensEntrada, outputTokens: tokensSalida });
+  await registrarRespuestaChat({
+    usuario_id: usuarioId,
+    pedido_id: null,
+    sesion_id: null,
+    version_prompt: VERSION_PROMPT_RESUMEN,
+    modelo: MODELO_RESUMEN,
+    latencia_ms: Math.max(0, Math.round(performance.now() - inicio)),
+    latencia_primer_token_ms: null,
+    vueltas_modelo: 1,
+    tools: ["resumen"],
+    escrituras: 0,
+    tokens_entrada: tokensEntrada,
+    tokens_salida: tokensSalida,
+    tokens_cache_lectura: 0,
+    tokens_cache_escritura: 0,
+    resultado: codigoError ? "error" : "ok",
+    error_codigo: codigoError,
+  });
+  return { validado, codigoError };
+}
+
+// ---------------------------------------------------------------------------
+// Regenerar (tras dejar de recordar / eliminar / Borrar historial)
+// ---------------------------------------------------------------------------
+/**
+ * Rearma el resumen DESDE CERO con los mensajes no excluidos hasta el corte actual (`cubre_hasta`), que no cambia.
+ * Mientras el resumen está invalidado el chat no manda ninguno a Claude. Lee como mucho las últimas MAX_FILAS_LECTURA
+ * filas anteriores al corte y se queda con las más nuevas que entren en MAX_CHARS_NUEVOS (una sola llamada): lo más
+ * viejo sigue alcanzable por buscar_memoria. Se guarda solo si la versión no cambió y sigue invalidado.
+ */
+async function regenerarResumen(admin: Admin, tarea: TareaTomada, timeoutMs: number): Promise<Resultado> {
+  const usuarioId = tarea.usuario_id;
+  const { data: perfil, error: errPerfil } = await admin.from("perfiles").select("memoria_activa").eq("id", usuarioId).maybeSingle();
+  if (errPerfil) return { ok: false, codigo: "db" };
+  // Apagada: queda invalidado; al prenderla, el chat vuelve a pedir la regeneración.
+  if (!perfil || perfil.memoria_activa !== true) return { ok: true, nota: "memoria_apagada" };
+  const limite = await verificarLimiteDiario(usuarioId);
+  if (!limite.ok) return { ok: true, nota: "limite_diario" };
+
+  const { data: actual, error: errResumen } = await admin.from("resumen_conversacion").select("*").eq("usuario_id", usuarioId).maybeSingle();
+  if (errResumen) return { ok: false, codigo: "db" };
+  const previo = actual as (FilaResumen & { invalidado?: boolean }) | null;
+  if (!previo || previo.invalidado !== true) return { ok: true, nota: "nada_que_regenerar" };
+
+  const cursor = previo.cubre_hasta_mensaje_id && previo.cubre_hasta_created_at
+    ? parsearCursor({ created_at: previo.cubre_hasta_created_at, id: previo.cubre_hasta_mensaje_id })
+    : null;
+  let mensajes: FilaResumible[] = [];
+  if (cursor) {
+    // Hasta el corte inclusive, sin lo excluido; las más nuevas primero y después se da vuelta.
+    const { data: filas, error: errFilas } = await admin
+      .from("mensajes_chat")
+      .select("id, role, contenido, created_at, excluido_memoria")
+      .eq("usuario_id", usuarioId)
+      .eq("excluido_memoria", false)
+      .or(`${filtroAnteriorA(cursor)},id.eq.${cursor.id}`)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(MAX_FILAS_LECTURA);
+    if (errFilas) return { ok: false, codigo: "db" };
+    let chars = 0;
+    for (const f of (filas ?? []) as FilaResumible[]) {
+      if (f.contenido.trim() === "") continue;
+      chars += Math.min(f.contenido.length, MAX_CHARS_MENSAJE);
+      if (chars > MAX_CHARS_NUEVOS) break;
+      mensajes.push(f);
+    }
+    mensajes = mensajes.reverse();
+    // El resumen arranca en un mensaje de la persona.
+    while (mensajes.length > 0 && mensajes[0].role !== "user") mensajes.shift();
+  }
+
+  let resumen = "";
+  let pendientes: string[] = [];
+  if (mensajes.length > 0) {
+    const entrada = armarPromptResumen(
+      { resumenAnterior: "", pendientesAnteriores: [], mensajes },
+      (iso) => claveDia(iso) || iso.slice(0, 10)
+    );
+    const { validado, codigoError } = await llamarHaiku(usuarioId, entrada, timeoutMs);
+    if (codigoError || !validado) return { ok: false, codigo: codigoError ?? "resumen_invalido" };
+    resumen = validado.resumen;
+    pendientes = validado.pendientes;
+  }
+  // Sin mensajes que resumir (se borraron o se excluyeron todos) el resumen queda vacío y vigente.
+
+  const { data: guardado, error: errGuardar } = await admin.rpc("guardar_resumen_regenerado", {
+    p_usuario: usuarioId,
+    p_resumen: resumen,
+    p_pendientes: pendientes,
+    p_version_esperada: previo.version,
+  });
+  if (errGuardar) return { ok: false, codigo: faltaMigracion(errGuardar) ? "sin_migracion" : "db" };
+  const fila = (Array.isArray(guardado) ? guardado[0] : guardado) as { o_guardado?: boolean } | undefined;
+  // No se guardó: la persona volvió a olvidar algo mientras se calculaba (cambió la versión). Esa acción encoló otra tarea.
+  return { ok: true, nota: fila?.o_guardado ? "guardado" : "descartado_version" };
+}
+
+/** Encola 'regenerar' (siempre; ver 038) y, si el presupuesto alcanza, deja trabajando al trabajador sobre esa persona. */
+export async function pedirRegeneracion(usuarioId: string, presupuestoMs = 0): Promise<void> {
+  await pedirResumen(usuarioId, 0, { tipo: "regenerar", presupuestoMs });
+}
 
 async function resumirConversacion(admin: Admin, tarea: TareaTomada, timeoutMs: number): Promise<Resultado> {
   const usuarioId = tarea.usuario_id;
@@ -191,6 +335,8 @@ async function resumirConversacion(admin: Admin, tarea: TareaTomada, timeoutMs: 
   if (errResumen) return { ok: false, codigo: "db" };
   const previo = actual as FilaResumen | null;
   const version = previo?.version ?? 0;
+  // Resumen invalidado (se olvidó algo): lo rearma 'regenerar', no una continuación de lo viejo.
+  if (previo?.invalidado === true) return { ok: true, nota: "invalidado" };
   // La tarea se encoló mirando otra versión: otro resumen ya se guardó desde entonces. Se descarta; el chat vuelve a
   // pedir uno si la ventana sigue grande.
   if (tarea.version_esperada !== null && tarea.version_esperada !== version) return { ok: true, nota: "version_vieja" };
@@ -215,56 +361,7 @@ async function resumirConversacion(admin: Admin, tarea: TareaTomada, timeoutMs: 
       { resumenAnterior: resumen, pendientesAnteriores: pendientes, mensajes: corte.mensajes },
       (iso) => claveDia(iso) || iso.slice(0, 10)
     );
-    const inicio = performance.now();
-    let tokensEntrada = 0;
-    let tokensSalida = 0;
-    let codigoError: string | null = null;
-    let validado: ReturnType<typeof validarSalidaResumen> = null;
-    try {
-      // Haiku 5.5: razonamiento adaptativo prendido por defecto (effort "low" para que no se coma el margen); sin
-      // temperature/top_p (no se admiten valores distintos del default). La salida va por salida estructurada y
-      // se vuelve a validar con zod: no se confía en que el esquema alcance.
-      const mensaje = await anthropic.messages.parse({
-        model: MODELO_RESUMEN,
-        max_tokens: MAX_TOKENS_RESUMEN,
-        system: SISTEMA_RESUMEN,
-        messages: [{ role: "user", content: entrada }],
-        output_config: { effort: "low", format: zodOutputFormat(SchemaResumen) },
-      }, { timeout: timeoutMs, maxRetries: 0 });
-      tokensEntrada = mensaje.usage.input_tokens;
-      tokensSalida = mensaje.usage.output_tokens;
-      if (mensaje.stop_reason === "max_tokens") codigoError = "resumen_truncado";
-      else if (mensaje.stop_reason === "refusal") codigoError = "resumen_rechazado";
-      else {
-        validado = validarSalidaResumen(mensaje.parsed_output);
-        if (!validado) codigoError = "resumen_invalido";
-      }
-    } catch (e) {
-      codigoError = clasificarError(e);
-    }
-
-    // Costo: los tokens REALES de la llamada cuentan en el uso diario de la persona (es trabajo de fondo, pero lo
-    // paga su cupo) y queda una fila en registros_chat (solo métricas: sin texto, tools = ['resumen']).
-    if (tokensEntrada > 0 || tokensSalida > 0) await registrarUsoIA(usuarioId, { inputTokens: tokensEntrada, outputTokens: tokensSalida });
-    await registrarRespuestaChat({
-      usuario_id: usuarioId,
-      pedido_id: null,
-      sesion_id: null,
-      version_prompt: VERSION_PROMPT_RESUMEN,
-      modelo: MODELO_RESUMEN,
-      latencia_ms: Math.max(0, Math.round(performance.now() - inicio)),
-      latencia_primer_token_ms: null,
-      vueltas_modelo: 1,
-      tools: ["resumen"],
-      escrituras: 0,
-      tokens_entrada: tokensEntrada,
-      tokens_salida: tokensSalida,
-      tokens_cache_lectura: 0,
-      tokens_cache_escritura: 0,
-      resultado: codigoError ? "error" : "ok",
-      error_codigo: codigoError,
-    });
-
+    const { validado, codigoError } = await llamarHaiku(usuarioId, entrada, timeoutMs);
     if (codigoError || !validado) return { ok: false, codigo: codigoError ?? "resumen_invalido" };
     resumen = validado.resumen;
     pendientes = validado.pendientes;

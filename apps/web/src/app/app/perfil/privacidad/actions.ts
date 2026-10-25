@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { pedirRegeneracion } from "@/lib/memoria/resumen";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { borrarHistorial } from "@/lib/historial/nucleo";
@@ -17,6 +19,8 @@ export async function borrarHistorialAction(rango: string, confirmacion: string)
     const supabase = await createClient();
     const borrado = await borrarHistorial(supabase, usuario.id, rango);
     revalidatePath("/app", "layout");
+    // El resumen del chat quedó invalidado: se rearma en segundo plano con lo que quedó (el cron lo toma si esto falla).
+    if (borrado.resumenInvalidado) after(() => pedirRegeneracion(usuario.id));
     return { status: "success", borrado };
   } catch (e) {
     return { status: "error", mensaje: e instanceof Error ? e.message : "No se pudo borrar el historial." };

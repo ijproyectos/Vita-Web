@@ -133,6 +133,8 @@ type Contexto = {
   familia: MiembroFamilia[];
   /** Perfil de un familiar abierto en pantalla (ya validado), si lo hay. */
   abiertoId?: string;
+  /** Fila del mensaje del usuario de este turno (origen de los recuerdos que se guarden). */
+  mensajeOrigenId?: string | null;
 };
 
 const MENSAJE_CONFIRMACION_RECHAZADA =
@@ -275,8 +277,8 @@ export async function ejecutarToolIdempotente(
   input: Record<string, unknown>,
   ctx: Contexto
 ): Promise<ResultadoTool> {
-  const { supabase, usuarioId, pedidoId, mensajeUsuario, familia, abiertoId } = ctx;
-  const ctxTool = { supabase, usuarioId, familia, abiertoId };
+  const { supabase, usuarioId, pedidoId, mensajeUsuario, familia, abiertoId, mensajeOrigenId } = ctx;
+  const ctxTool = { supabase, usuarioId, familia, abiertoId, mensajeOrigenId };
   if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, ctxTool);
 
   // Destino inválido, rol Lector o falta de confirmación: se devuelve el error

@@ -339,6 +339,8 @@ export type ContextoTool = {
   familia: MiembroFamilia[];
   /** Perfil de un familiar abierto en pantalla (ya validado contra `familia`), si lo hay. */
   abiertoId?: string;
+  /** Fila del mensaje del usuario de este turno: el recuerdo guardado apunta a ella (`mensaje_origen_id`). */
+  mensajeOrigenId?: string | null;
 };
 
 export async function ejecutarTool(
@@ -382,7 +384,7 @@ async function ejecutarToolMemoria(nombre: "recordar" | "buscar_memoria", input:
   const familia = ctx.familia.map((f) => ({ id: f.id, nombre: f.nombre }));
 
   if (nombre === "recordar") {
-    const r = await recordarMemoria(ctx.supabase, ctx.usuarioId, familia, input as { sobre: unknown; clave: unknown; texto: unknown; tipo: unknown });
+    const r = await recordarMemoria(ctx.supabase, ctx.usuarioId, familia, input as { sobre: unknown; clave: unknown; texto: unknown; tipo: unknown }, ctx.mensajeOrigenId ?? null);
     if (!r.ok) return { contenido: MENSAJES_RECORDAR[r.motivo] ?? MENSAJES_RECORDAR.error };
     if ("igual" in r) return { contenido: "Ya estaba guardado igual: no hizo falta volver a guardarlo." };
     const sobreNombre = r.sobre.tipo === "yo" ? null : r.sobre.nombre;

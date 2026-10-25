@@ -23,7 +23,7 @@ type Cliente = SupabaseClient;
 type MiembroMinimo = { id: string; nombre: string };
 
 /** Error de "no existe la tabla/columna/función": la migración correspondiente no se aplicó. */
-function faltaMigracion(error: { code?: string; message?: string } | null | undefined): boolean {
+export function faltaMigracion(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
   const { code, message } = error;
   if (code === "42P01" || code === "42703" || code === "42883" || code === "PGRST205" || code === "PGRST204" || code === "PGRST202") return true;
@@ -89,7 +89,7 @@ export async function cargarResumen(supabase: Cliente, usuarioId: string): Promi
 // ---------------------------------------------------------------------------
 // recordar
 // ---------------------------------------------------------------------------
-type FilaMemoriaVigente = Pick<Memoria, "id" | "sobre_tipo" | "sobre_perfil_id" | "sobre_nombre" | "texto" | "tipo" | "vence_at">;
+export type FilaMemoriaVigente = Pick<Memoria, "id" | "sobre_tipo" | "sobre_perfil_id" | "sobre_nombre" | "texto" | "tipo" | "vence_at">;
 
 export type ResultadoRecordar =
   | { ok: true; id: string; texto: string; sobre: SobreResuelto; tipo: TipoMemoria; corrige: { id: string; texto: string | null } | null; primera: boolean }
@@ -105,7 +105,8 @@ export async function recordarMemoria(
   supabase: Cliente,
   usuarioId: string,
   familia: MiembroMinimo[],
-  input: { sobre: unknown; clave: unknown; texto: unknown; tipo: unknown }
+  input: { sobre: unknown; clave: unknown; texto: unknown; tipo: unknown },
+  mensajeOrigenId: string | null = null
 ): Promise<ResultadoRecordar> {
   const estado = await estadoMemoria(supabase, usuarioId);
   if (!estado.activa) return { ok: false, motivo: "apagada" };
@@ -134,7 +135,7 @@ export async function recordarMemoria(
   const previoVencido = !!previo && previo.tipo === "pasajero" && (!previo.vence_at || new Date(previo.vence_at).getTime() <= Date.now());
   if (previo && !previoVencido && previo.texto === texto.texto && previo.tipo === tipo) return { ok: true, igual: true };
 
-  const guardado = await guardarAtomico(supabase, usuarioId, sobre, clave, texto.texto, tipo, venceAt, previo);
+  const guardado = await guardarAtomico(supabase, usuarioId, sobre, clave, texto.texto, tipo, venceAt, previo, mensajeOrigenId);
   if (!guardado) return { ok: false, motivo: "error" };
 
   // Primera vez: el servidor marca el aviso como visto. El update condicional es el "reclamo": solo quien
@@ -165,7 +166,7 @@ export async function recordarMemoria(
   };
 }
 
-async function guardarAtomico(
+export async function guardarAtomico(
   supabase: Cliente,
   usuarioId: string,
   sobre: SobreResuelto,
@@ -173,7 +174,9 @@ async function guardarAtomico(
   texto: string,
   tipo: TipoMemoria,
   venceAt: string | null,
-  previo: FilaMemoriaVigente | undefined
+  previo: FilaMemoriaVigente | undefined,
+  mensajeOrigenId: string | null,
+  origen: "chat" | "usuario" = "chat"
 ): Promise<{ id: string; corrigeId: string | null; textoAnterior: string | null } | null> {
   const rpc = await supabase.rpc("guardar_memoria", {
     p_sobre_tipo: sobre.tipo,
@@ -183,11 +186,16 @@ async function guardarAtomico(
     p_texto: texto,
     p_tipo: tipo,
     p_vence_at: venceAt,
-    p_mensaje_origen_id: null,
+    p_mensaje_origen_id: mensajeOrigenId,
   });
   if (!rpc.error) {
     const fila = (Array.isArray(rpc.data) ? rpc.data[0] : rpc.data) as { o_id?: string; o_corrige_id?: string | null; o_texto_anterior?: string | null } | undefined;
     if (!fila?.o_id) return null;
+    // La RPC de 036 siempre escribe origen 'chat'; una corrección hecha por la persona lo deja como 'usuario'.
+    if (origen === "usuario") {
+      const { error: errOrigen } = await supabase.from("memorias").update({ origen }).eq("id", fila.o_id).eq("usuario_id", usuarioId);
+      if (errOrigen) console.warn("guardar_memoria: no se pudo marcar el origen", errOrigen.code ?? "");
+    }
     return { id: fila.o_id, corrigeId: fila.o_corrige_id ?? null, textoAnterior: fila.o_texto_anterior ?? null };
   }
   if (!faltaMigracion(rpc.error)) {
@@ -221,7 +229,8 @@ async function guardarAtomico(
       tipo,
       vence_at: venceAt,
       corrige_id: reemplazadoId,
-      origen: "chat",
+      origen,
+      mensaje_origen_id: mensajeOrigenId,
     })
     .select("id")
     .single();

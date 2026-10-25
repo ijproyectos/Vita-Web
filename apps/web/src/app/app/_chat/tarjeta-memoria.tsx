@@ -106,7 +106,7 @@ export function TarjetaMemoria({ datos, alCerrar }: { datos: Datos; alCerrar: ()
           {estado === "deshaciendo" ? "Deshaciendo…" : "Deshacer"}
         </button>
         <Link
-          href="/app/perfil/privacidad"
+          href="/app/perfil/privacidad/memoria"
           onClick={alCerrar}
           className="inline-flex items-center gap-1 rounded-full px-3 py-2 font-heading text-[12.5px] font-bold text-teal-deep"
         >

@@ -44,7 +44,8 @@ export function AccionesDatos({ personas }: { personas: PersonaDatos[] }) {
       if (r.status === "success") {
         const b = r.borrado;
         toast.success(
-          `Historial borrado: ${b.tomas} tomas, ${b.mediciones} mediciones, ${b.estudios} estudios y ${b.conversaciones} conversaciones.`
+          `Historial borrado: ${b.tomas} tomas, ${b.mediciones} mediciones, ${b.estudios} estudios y ${b.conversaciones} conversaciones` +
+            (b.recuerdos > 0 ? `, y ${b.recuerdos} ${b.recuerdos === 1 ? "recuerdo" : "recuerdos"} de vita que salieron de ellas.` : ".")
         );
         setConfirmando(false);
         setTexto("");
@@ -126,8 +127,8 @@ export function AccionesDatos({ personas }: { personas: PersonaDatos[] }) {
         <h2 className="eyebrow px-0.5 pb-[9px] text-subtle">Borrar historial</h2>
         <div className="flex flex-col gap-3.5 rounded-[20px] bg-card p-4 shadow-card">
           <p className="text-pretty text-[12.5px] font-medium leading-[1.45] text-slate-brand">
-            Borra tomas, mediciones, estudios (con sus fotos) y conversaciones con vita viejos. Tu cuenta, tus remedios, tus
-            turnos y tu perfil de salud siguen como están.
+            Borra tomas, mediciones, estudios (con sus fotos) y conversaciones con vita viejos, y también lo que vita recuerda
+            de esas conversaciones. Tu cuenta, tus remedios, tus turnos y tu perfil de salud siguen como están.
           </p>
           <Segmentado
             chico
@@ -155,7 +156,7 @@ export function AccionesDatos({ personas }: { personas: PersonaDatos[] }) {
             <div className="flex flex-col gap-2.5 border-t border-foreground/[0.06] pt-3">
               <p className="text-pretty text-[13.5px] font-bold leading-[1.4]">
                 Vas a borrar {rango === "all" ? "todo el historial (menos las tomas de hoy)" : `el historial ${rangoActual.frase}`}: tomas,
-                mediciones, estudios y conversaciones con vita. No se puede deshacer.
+                mediciones, estudios y conversaciones con vita, y los recuerdos de vita que salieron de esas conversaciones. No se puede deshacer.
               </p>
               <input
                 value={texto}

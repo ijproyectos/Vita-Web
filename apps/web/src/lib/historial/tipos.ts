@@ -12,7 +12,16 @@ export function esRangoBorrado(v: unknown): v is RangoBorrado {
   return v === "1y" || v === "6m" || v === "all";
 }
 
-export type CantidadesBorradas = { tomas: number; mediciones: number; estudios: number; conversaciones: number };
+export type CantidadesBorradas = {
+  tomas: number;
+  mediciones: number;
+  estudios: number;
+  conversaciones: number;
+  /** Recuerdos de vita que salieron de los mensajes borrados (quedan borrados sin texto). */
+  recuerdos: number;
+  /** Se borraron mensajes: el resumen del chat se invalidó y hay que regenerarlo. */
+  resumenInvalidado: boolean;
+};
 
 export type EstadoBorrado =
   | { status: "success"; borrado: CantidadesBorradas }

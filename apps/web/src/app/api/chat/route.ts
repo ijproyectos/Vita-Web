@@ -279,7 +279,7 @@ export async function POST(request: Request) {
   let versionPrompt = VERSION_PROMPT_CON_MEMORIA;
   // Resumen incremental (M5): si la ventana pasó el 70% del tope suave, se encola 'resumir' y se deja
   // trabajando al trabajador DESPUÉS de cerrada la respuesta (best effort; el cron de cada minuto es el respaldo).
-  const resumenPedido: { versionResumen: number | null } = { versionResumen: null };
+  const resumenPedido: { versionResumen: number | null; regenerar: boolean } = { versionResumen: null, regenerar: false };
   let cerrarRegistro: () => void = () => {};
   after(
     new Promise<void>((resolver) => {
@@ -297,11 +297,14 @@ export async function POST(request: Request) {
           toolsDeEscritura: TOOLS_DE_ESCRITURA,
         })
       );
-      if (resumenPedido.versionResumen !== null) {
+      if (resumenPedido.regenerar || resumenPedido.versionResumen !== null) {
         // Oportunista: solo trabaja si a esta función le queda tiempo para una llamada completa a Haiku (maxDuration
         // 30 s menos lo que ya gastó la respuesta menos un margen); si no, la tarea queda encolada para el cron.
         const restanteMs = 30_000 - (performance.now() - inicioMs) - 2_000;
-        await pedirResumen(user.id, resumenPedido.versionResumen, { presupuestoMs: Math.min(20_000, restanteMs) });
+        await pedirResumen(user.id, resumenPedido.versionResumen ?? 0, {
+          tipo: resumenPedido.regenerar ? "regenerar" : "resumir",
+          presupuestoMs: Math.min(20_000, restanteMs),
+        });
       }
     })
   );
@@ -377,7 +380,11 @@ export async function POST(request: Request) {
         // Si el estado es "desconocido" (la DB falló dos veces) NO se reinserta: el cliente marcó
         // reintento, así que el primer intento probablemente ya lo guardó (mejor no duplicar que perder
         // el contexto); si no estaba, se suma al historial en memoria más abajo.
-        if (previo.estado === "nuevo") await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje, { bloques: bloquesDelUsuario(mensaje), pedidoId });
+        // Id de la fila del usuario de este turno: los recuerdos que guarde `recordar` apuntan a él (dejar de recordar /
+        // eliminar llegan a la fuente desde ahí). En un reintento que no reinserta se busca por pedido.
+        let mensajeOrigenId: string | null = null;
+        if (previo.estado === "nuevo") mensajeOrigenId = await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje, { bloques: bloquesDelUsuario(mensaje), pedidoId });
+        else mensajeOrigenId = await chat.idMensajeDelPedido(supabase, user.id, pedidoId);
 
         // Confirmaciones de borrar/cambiar un horario (sin modelo) y limpieza de la
         // pendiente: ver lib/chat/confirmaciones.ts. Todo antes de correr el modelo.
@@ -486,7 +493,11 @@ export async function POST(request: Request) {
           { type: "text", text: memoria.activa ? SYSTEM_CON_MEMORIA : SYSTEM_BASE, cache_control: { type: "ephemeral" } },
         ];
         const bloqueRecuerdos = memoria.activa ? construirBloqueMemorias(recuerdos, familia) : null;
-        const bloqueResumen = construirBloqueResumen(resumen);
+        // Resumen invalidado (la persona pidió olvidar algo): no se manda el viejo hasta que 'regenerar' lo rearme. Si la tarea
+        // se perdió, este pedido la vuelve a encolar. La ventana sigue empezando en el mismo corte.
+        const resumenInvalidado = resumen?.invalidado === true;
+        if (memoria.activa && resumenInvalidado) resumenPedido.regenerar = true;
+        const bloqueResumen = resumenInvalidado ? null : construirBloqueResumen(resumen);
         if (bloqueRecuerdos) system.push({ type: "text", text: bloqueRecuerdos.texto });
         if (bloqueResumen) system.push({ type: "text", text: bloqueResumen.texto });
         if (bloqueRecuerdos || bloqueResumen) system[system.length - 1].cache_control = { type: "ephemeral" };
@@ -504,7 +515,7 @@ export async function POST(request: Request) {
         const ventana = construirVentana(previas);
         // Solo se pide un resumen si hay algo que se pueda resumir (hay filas de sobra más allá de las últimas y el corte
         // cae justo antes de un mensaje de la persona): si no, el trabajador no haría nada y se repetiría en cada turno.
-        if (memoria.activa && ventana.superaTopeSuave) {
+        if (memoria.activa && !resumenInvalidado && ventana.superaTopeSuave) {
           const hayCorte = elegirCorte(previas.map((f) => ({ id: f.id, role: f.role, contenido: f.contenido, created_at: f.created_at, excluido_memoria: false }))) !== null;
           if (hayCorte) resumenPedido.versionResumen = resumen?.version ?? 0;
         }
@@ -583,7 +594,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             const resultado = await ejecutarToolIdempotente(
               uso.name,
               uso.input as Record<string, unknown>,
-              { supabase, usuarioId: user.id, pedidoId, mensajeUsuario: mensaje, familia, abiertoId: abierto?.id }
+              { supabase, usuarioId: user.id, pedidoId, mensajeUsuario: mensaje, familia, abiertoId: abierto?.id, mensajeOrigenId }
             );
             if (resultado.accionUI) enviar({ action: resultado.accionUI });
             if (resultado.accionUI && TOOLS_DE_ESCRITURA.has(uso.name)) escriturasHechas++;

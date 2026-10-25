@@ -42,6 +42,8 @@ export type ResumenConversacion = {
   cubre_hasta_mensaje_id: string | null;
   cubre_hasta_created_at: string | null;
   version: number;
+  /** 038: true = se olvidó algo y el resumen está vacío hasta que 'regenerar' lo rearme; no se manda a Claude. */
+  invalidado?: boolean;
   updated_at: string;
 };
 

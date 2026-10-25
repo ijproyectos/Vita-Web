@@ -33,11 +33,22 @@ export default async function PrivacidadPage() {
           <DatoGuardado icon="vial" label="Estudios" sub="Los archivos que subís y su resumen" />
           <DatoGuardado icon="heart" label="Perfil de salud" sub="Condiciones, alergias, medidas y cobertura" />
           <DatoGuardado icon="sparkle" label="Conversaciones con vita" sub="Lo que le escribís al asistente" />
+          <DatoGuardado icon="lock" label="Recuerdos de vita" sub="Lo que le contás y quiere tener presente. Solo los ves vos" />
         </div>
         <p className="px-1 pt-2.5 text-pretty text-xs font-medium leading-[1.45] text-slate-brand">
           No vendemos ni compartimos tus datos con nadie fuera de tu familia.
         </p>
       </section>
+
+      <Grupo titulo="Memoria de vita">
+        <FilaNav
+          icon="sparkle"
+          tono="teal"
+          label="Lo que vita recuerda de vos"
+          sub="Verlo, corregirlo, borrarlo o apagarlo"
+          href="/app/perfil/privacidad/memoria"
+        />
+      </Grupo>
 
       <AccionesDatos personas={personas} />
 
