@@ -8,7 +8,15 @@ import { marcarTomadoAction } from "@/app/app/rutina/actions";
 // "Toma vencida" (V7, Home): una dosis de hoy (o de ayer, hasta las 00:30) que ya pasó de hora y no se
 // marcó. "Marcar tomada" usa la misma acción de siempre (descuenta stock,
 // respeta el rol). Quien solo mira (rol "ver") ve el aviso pero no el botón.
-export type DosisVencida = { id: string; nombre: string; dosis: string; hora: string; deAyer?: boolean };
+export type DosisVencida = {
+  id: string;
+  nombre: string;
+  dosis: string;
+  hora: string;
+  deAyer?: boolean;
+  /** Fecha AR ("YYYY-MM-DD") de la dosis de ayer, la que se graba al marcarla. */
+  fecha?: string;
+};
 
 export function TarjetaDosisVencida({ vencidas, puedeEditar }: { vencidas: DosisVencida[]; puedeEditar: boolean }) {
   const router = useRouter();
@@ -22,7 +30,7 @@ export function TarjetaDosisVencida({ vencidas, puedeEditar }: { vencidas: Dosis
   function marcar() {
     startTransition(async () => {
       try {
-        const r = await marcarTomadoAction(primera.id, true);
+        const r = await marcarTomadoAction(primera.id, true, primera.deAyer ? primera.fecha : undefined);
         if (r.status === "error") {
           toast.error(r.message);
           return;

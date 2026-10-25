@@ -9,7 +9,6 @@ import {
   esDosisVencida,
   fechaAyerEnAR,
   fechaEnAR,
-  fechaEnUTC,
   horaEnAR,
 } from "@/lib/medicamentos/nucleo";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
@@ -48,16 +47,10 @@ type FilaMedicamento = {
  * de TODOS los elders con al menos un cuidador vinculado — ninguna RLS
  * de este proyecto permite eso desde una sesión de usuario.
  *
- * **Date gotcha (load-bearing):** `marcarTomado()` (lib/medicamentos/
- * nucleo.ts) graba `medicamentos_tomas.fecha` con `fechaEnUTC()` —
- * fecha UTC — mientras que `hora_programada` es hora de pared AR. Entre
- * las 21:00 y 23:59 AR el reloj UTC ya cruzó la medianoche: una dosis
- * confirmada a las 20:50 AR pudo quedar con `fecha` = el día UTC de ese
- * momento, pero si este detector corre a las 21:05 AR (00:05 UTC del día
- * siguiente) y solo mirara el día UTC de `ahora`, buscaría la
- * confirmación un día tarde y jamás la encontraría — falso positivo. Por
- * eso la confirmación se busca en `fecha IN (hoyUTC, ayerUTC)`, nunca
- * solo `hoyUTC`.
+ * `marcarTomado()` (lib/medicamentos/nucleo.ts) graba
+ * `medicamentos_tomas.fecha` con la fecha AR de la dosis (migración 032), la
+ * misma que `hora_programada`, así que la confirmación se busca por
+ * (dosis, fechaAR) sin ningún desfase con el día UTC.
  */
 export async function detectarDosisVencidas(
   admin: Cliente,
@@ -66,8 +59,6 @@ export async function detectarDosisVencidas(
 ): Promise<DosisVencida[]> {
   const diaHoy = diaSemanaDe(ahora);
   const horaAR = horaEnAR(ahora);
-  const hoyUTC = fechaEnUTC(ahora);
-  const ayerUTC = fechaEnUTC(new Date(ahora.getTime() - 24 * 60 * 60 * 1000));
 
   const { data: medicamentos, error } = await admin
     .from("medicamentos")
@@ -138,9 +129,9 @@ export async function detectarDosisVencidas(
 
   const { data: tomas, error: errorTomas } = await admin
     .from("medicamentos_tomas")
-    .select("medicamento_id")
+    .select("medicamento_id, fecha")
     .eq("tomado", true)
-    .in("fecha", [hoyUTC, ayerUTC])
+    .in("fecha", [hoyAR, ayerAR])
     .in(
       "medicamento_id",
       conCuidadores.map((m) => m.id)
@@ -150,10 +141,12 @@ export async function detectarDosisVencidas(
     throw new Error(`No se pudieron leer las tomas confirmadas: ${errorTomas.message}`);
   }
 
+  // Por (dosis, fecha AR): la de ayer y la de hoy del mismo medicamento (ventana
+  // de medianoche) se confirman por separado.
   const confirmadas = new Set(
-    ((tomas ?? []) as { medicamento_id: string }[]).map((t) => t.medicamento_id)
+    ((tomas ?? []) as { medicamento_id: string; fecha: string }[]).map((t) => `${t.medicamento_id}|${t.fecha}`)
   );
-  const vencidas = conCuidadores.filter((m) => !confirmadas.has(m.id));
+  const vencidas = conCuidadores.filter((m) => !confirmadas.has(`${m.id}|${m.fechaAR}`));
   if (vencidas.length === 0) return [];
 
   // Los emails solo hacen falta para el canal Resend (hoy apagado): sin
@@ -193,7 +186,6 @@ export async function detectarDosisVencidas(
       dosis: m.dosis,
       unidad: m.unidad,
       horaProgramada: m.hora_programada,
-      fecha: hoyUTC,
       fechaAR: m.fechaAR,
       elderNombre: nombrePorElder.get(m.usuario_id) ?? "Tu familiar",
       cuidadorIds,

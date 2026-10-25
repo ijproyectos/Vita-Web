@@ -66,7 +66,7 @@ export default async function HomePage() {
     // Hasta las 00:30 AR, las de ayer que quedaron sin tomar van primero.
     ...[...deAyer]
       .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
-      .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5), deAyer: true })),
+      .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5), deAyer: true, fecha: medicamentos.fechaAyerEnAR() })),
     ...[...medsHoy]
       .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
       .filter((m) => !m.tomado && medicamentos.esDosisVencida(m.hora_programada, ahora, 0))

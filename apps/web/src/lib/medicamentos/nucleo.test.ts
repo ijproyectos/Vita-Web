@@ -13,6 +13,9 @@ const {
   fechaEnAR,
   fechaAyerEnAR,
   filtrarDosisDeAyerVencidas,
+  fechaDeTomaEnAR,
+  diasDeAdherencia,
+  marcarTomado,
   horaEnAR,
   FIN_VENTANA_MEDIANOCHE,
 } = await import("./nucleo");
@@ -124,5 +127,109 @@ describe("horaEnAR / fechaEnAR (independientes del TZ del equipo)", () => {
     const ahora = horaEnAR(new Date("2026-10-10T12:00:00Z")); // 09:00 AR
     expect(esDosisVencida("08:30", ahora, 30)).toBe(true);
     expect(esDosisVencida("08:30", ahora, 31)).toBe(false);
+  });
+});
+
+describe("fechaDeTomaEnAR (fecha con la que se graba una toma)", () => {
+  // Instantes fijos: la salida no depende del TZ del equipo.
+  const noche = new Date("2026-10-11T01:30:00Z"); // 22:30 AR del 10/10 (ya es 11/10 en UTC)
+  const casiMedianoche = new Date("2026-10-11T02:59:00Z"); // 23:59 AR del 10/10
+  const ventana = new Date("2026-10-11T03:10:00Z"); // 00:10 AR del 11/10
+  const finVentana = new Date("2026-10-11T03:30:00Z"); // 00:30 AR del 11/10
+
+  it("sin fecha de dosis usa el día AR de hoy, no el UTC (21:00-23:59 AR)", () => {
+    expect(fechaDeTomaEnAR(noche)).toBe("2026-10-10");
+    expect(fechaDeTomaEnAR(casiMedianoche)).toBe("2026-10-10");
+    expect(fechaDeTomaEnAR(ventana)).toBe("2026-10-11");
+  });
+  it("acepta hoy AR explícito", () => {
+    expect(fechaDeTomaEnAR(noche, "2026-10-10")).toBe("2026-10-10");
+  });
+  it("acepta ayer AR solo dentro de la ventana 00:00-00:29", () => {
+    expect(fechaDeTomaEnAR(ventana, "2026-10-10")).toBe("2026-10-10");
+    expect(fechaDeTomaEnAR(new Date("2026-10-11T03:00:00Z"), "2026-10-10")).toBe("2026-10-10");
+    expect(fechaDeTomaEnAR(finVentana, "2026-10-10")).toBe("2026-10-11");
+  });
+  it("ayer fuera de la ventana cae a hoy", () => {
+    expect(fechaDeTomaEnAR(new Date("2026-10-11T12:00:00Z"), "2026-10-10")).toBe("2026-10-11");
+    expect(fechaDeTomaEnAR(noche, "2026-10-09")).toBe("2026-10-10");
+  });
+  it("rechaza fechas inválidas, futuras o más viejas que ayer", () => {
+    expect(fechaDeTomaEnAR(ventana, "2026-10-09")).toBe("2026-10-11");
+    expect(fechaDeTomaEnAR(ventana, "2026-10-12")).toBe("2026-10-11");
+    expect(fechaDeTomaEnAR(ventana, "ayer")).toBe("2026-10-11");
+    expect(fechaDeTomaEnAR(ventana, "2026-10-10T00:00:00Z")).toBe("2026-10-11");
+    expect(fechaDeTomaEnAR(ventana, "")).toBe("2026-10-11");
+  });
+});
+
+describe("diasDeAdherencia (claves por día AR)", () => {
+  it("21:00-23:59 AR sigue en el día AR (no salta al de UTC)", () => {
+    const r = diasDeAdherencia(new Date("2026-10-11T02:59:00Z"), 3); // 23:59 AR sábado 10/10
+    expect(r).toEqual([
+      { fecha: "2026-10-10", dia: "sabado" },
+      { fecha: "2026-10-09", dia: "viernes" },
+      { fecha: "2026-10-08", dia: "jueves" },
+    ]);
+  });
+  it("00:10 AR ya es el día nuevo", () => {
+    const r = diasDeAdherencia(new Date("2026-10-11T03:10:00Z"), 2);
+    expect(r).toEqual([
+      { fecha: "2026-10-11", dia: "domingo" },
+      { fecha: "2026-10-10", dia: "sabado" },
+    ]);
+  });
+});
+
+describe("marcarTomado graba la fecha AR", () => {
+  // Cliente falso: registra el upsert; el UPDATE no encuentra fila.
+  function clienteFalso() {
+    const upserts: Record<string, unknown>[] = [];
+    const updates: { eq: [string, unknown][] } = { eq: [] };
+    const cadena = (resultado: unknown) => {
+      const c: Record<string, unknown> = {};
+      c.update = () => c;
+      c.eq = (col: string, val: unknown) => {
+        updates.eq.push([col, val]);
+        return c;
+      };
+      c.upsert = (fila: Record<string, unknown>) => {
+        upserts.push(fila);
+        return c;
+      };
+      c.select = () => Promise.resolve(resultado);
+      c.maybeSingle = () => Promise.resolve({ data: null });
+      return c;
+    };
+    const supabase = { from: () => cadena({ data: [], error: null }) };
+    return { supabase: supabase as never, upserts, updates };
+  }
+
+  it("a las 22:30 AR escribe el día AR aunque UTC ya sea el siguiente", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-11T01:30:00Z"));
+    try {
+      const { supabase, upserts, updates } = clienteFalso();
+      await marcarTomado(supabase, "u1", "m1", true);
+      expect(upserts[0].fecha).toBe("2026-10-10");
+      expect(updates.eq).toContainEqual(["fecha", "2026-10-10"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("con la fecha de ayer dentro de la ventana escribe ayer; fuera cae a hoy", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-11T03:10:00Z"));
+      let c = clienteFalso();
+      await marcarTomado(c.supabase, "u1", "m1", true, "2026-10-10");
+      expect(c.upserts[0].fecha).toBe("2026-10-10");
+      vi.setSystemTime(new Date("2026-10-11T15:00:00Z"));
+      c = clienteFalso();
+      await marcarTomado(c.supabase, "u1", "m1", true, "2026-10-10");
+      expect(c.upserts[0].fecha).toBe("2026-10-11");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

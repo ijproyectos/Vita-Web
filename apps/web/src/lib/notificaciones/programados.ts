@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { diaSemanaDe, fechaEnAR, fechaEnUTC, horaEnAR } from "@/lib/medicamentos/nucleo";
+import { diaSemanaDe, fechaEnAR, horaEnAR } from "@/lib/medicamentos/nucleo";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
 import { esStockBajo } from "@/lib/inventario/tipos";
 import {
@@ -95,26 +95,19 @@ const MAX_MIN_DESDE_POSPUESTA = 45;
 
 /**
  * Dosis (de las `medicamentoIds`) que el usuario ya confirmó HOY según el
- * calendario AR. `medicamentos_tomas.fecha` es UTC, así que una toma de las
- * 22:00 de ayer puede tener fecha de "hoy" UTC: se compara la fecha AR de
- * `tomado_en`, no `fecha`, para no tomar por confirmada la dosis de la
- * mañana por una de anoche.
+ * calendario AR (`medicamentos_tomas.fecha` ya es la fecha AR de la dosis).
  */
-async function tomadasHoyAR(admin: Cliente, medicamentoIds: string[], ahora: Date, hoyAR: string): Promise<Set<string>> {
+async function tomadasHoyAR(admin: Cliente, medicamentoIds: string[], hoyAR: string): Promise<Set<string>> {
   const tomadas = new Set<string>();
   if (medicamentoIds.length === 0) return tomadas;
-  const hoyUTC = fechaEnUTC(ahora);
-  const ayerUTC = fechaEnUTC(new Date(ahora.getTime() - 24 * 60 * 60 * 1000));
   const { data, error } = await admin
     .from("medicamentos_tomas")
-    .select("medicamento_id, tomado_en")
+    .select("medicamento_id")
     .eq("tomado", true)
-    .in("fecha", [hoyUTC, ayerUTC])
+    .eq("fecha", hoyAR)
     .in("medicamento_id", medicamentoIds);
   if (error) throw new Error(`No se pudieron leer las tomas: ${error.message}`);
-  for (const t of (data ?? []) as { medicamento_id: string; tomado_en: string | null }[]) {
-    if (!t.tomado_en || fechaEnAR(new Date(t.tomado_en)) === hoyAR) tomadas.add(t.medicamento_id);
-  }
+  for (const t of (data ?? []) as { medicamento_id: string }[]) tomadas.add(t.medicamento_id);
   return tomadas;
 }
 
@@ -214,7 +207,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
       ...alertasAbiertas.map((a) => a.medicamento_id),
     ]),
   ];
-  const tomadas = await tomadasHoyAR(admin, idsAConsultar, ahora, hoyAR);
+  const tomadas = await tomadasHoyAR(admin, idsAConsultar, hoyAR);
 
   // Turnos de hoy y mañana + stock.
   const { data: turnosData } = await admin
@@ -483,7 +476,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
   // Resumen del día: "Elsa tomó 4 de 5 hoy" con las tomas REALES de hoy (AR).
   if (hacerResumen) {
     const ids = [...medsDePersona.values()].flat().map((m) => m.id);
-    const tomadas = await tomadasHoyAR(admin, ids, c.ahora, hoyAR);
+    const tomadas = await tomadasHoyAR(admin, ids, hoyAR);
     for (const [personaId, meds] of medsDePersona) {
       const cuidadores = cuidadoresDe.get(personaId);
       if (!cuidadores || meds.length === 0) continue;

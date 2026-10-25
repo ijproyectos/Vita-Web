@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DOMINIO_CUENTA_POR_CODIGO } from "@/lib/acceso-codigo/tipos";
 import type { Condicion } from "@/lib/perfil/tipos";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
-import { aplicaHoy, esDosisVencida, fechaEnUTC, filtrarDosisDeAyerVencidas, FIN_VENTANA_MEDIANOCHE, horaEnAR } from "@/lib/medicamentos/nucleo";
+import { aplicaHoy, esDosisVencida, fechaAyerEnAR, fechaEnAR, filtrarDosisDeAyerVencidas, FIN_VENTANA_MEDIANOCHE, horaEnAR } from "@/lib/medicamentos/nucleo";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
 import {
   esColorPerfil,
@@ -69,21 +69,20 @@ export async function estadoHoyPorPerfil(supabase: Cliente, ids: string[]): Prom
   try {
     const [meds, tomas] = await Promise.all([
       supabase.from("medicamentos").select("*").in("usuario_id", ids),
-      supabase.from("medicamentos_tomas").select("medicamento_id, tomado").in("usuario_id", ids).eq("fecha", fechaEnUTC()),
+      supabase.from("medicamentos_tomas").select("medicamento_id, tomado").in("usuario_id", ids).eq("fecha", fechaEnAR()),
     ]);
     if (meds.error || tomas.error) return salida;
     const tomadas = new Set((tomas.data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string));
     const ahora = horaEnAR();
     // Ventana de medianoche: hasta las 00:30 AR cuentan también las dosis de
-    // ayer sin tomar (la toma puede estar en la fecha UTC de ayer o de hoy).
+    // ayer sin tomar (la toma de ayer está en la fecha AR de ayer).
     let tomadasVentana = tomadas;
     if (ahora < FIN_VENTANA_MEDIANOCHE) {
-      const ayerUTC = fechaEnUTC(new Date(Date.now() - 24 * 60 * 60 * 1000));
       const { data, error } = await supabase
         .from("medicamentos_tomas")
         .select("medicamento_id, tomado")
         .in("usuario_id", ids)
-        .eq("fecha", ayerUTC);
+        .eq("fecha", fechaAyerEnAR());
       if (!error) {
         tomadasVentana = new Set([...tomadas, ...(data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string)]);
       }

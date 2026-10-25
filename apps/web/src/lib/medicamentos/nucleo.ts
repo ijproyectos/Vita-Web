@@ -41,14 +41,14 @@ const DIAS_POR_INDICE: DiaSemana[] = [
  * Día de la semana (en español, minúsculas) de una fecha dada, en el
  * calendario de Argentina — exportada porque el detector de dosis
  * vencidas necesita el día correspondiente a un `ahora` explícito, igual
- * criterio que `fechaEnUTC`.
+ * criterio que `fechaEnAR`.
  *
  * OJO: NO se puede usar `fecha.getDay()` directo — depende del huso
  * horario del proceso (Netlify/Node corren en UTC), así que entre las
  * 21:00 y 23:59 hora AR (00:00-02:59 UTC del día siguiente) devolvería el
  * día de mañana, no el de hoy en Argentina — exactamente la misma clase
- * de desfase que `fechaEnUTC`/`horaEnAR` ya documentan para
- * `medicamentos_tomas.fecha`, pero en el día de la semana. Se reconstruye
+ * de desfase UTC/AR que `horaEnAR` documenta para la hora, pero en el día
+ * de la semana. Se reconstruye
  * la fecha a partir de sus componentes Y/M/D ya en huso AR (vía
  * `Intl.DateTimeFormat`) antes de pedir `getDay()`, para que el resultado
  * no dependa del huso del proceso.
@@ -70,24 +70,10 @@ function diaDeHoy(): DiaSemana {
 }
 
 /**
- * Fecha en formato "YYYY-MM-DD", en UTC — mismo criterio usado en toda la
- * app para `medicamentos_tomas.fecha` (marcarTomado, listarHoy,
- * calcularAdherencia). Exportada (con `fecha` explícito, default
- * `new Date()`) porque el detector de dosis vencidas
- * (lib/notificaciones/nucleo.ts) necesita calcular esta misma fecha a
- * partir de un instante `ahora` recibido por parámetro, no del reloj del
- * proceso — para no reimplementar el mismo slice en otro archivo.
- */
-export function fechaEnUTC(fecha: Date = new Date()): string {
-  return fecha.toISOString().slice(0, 10); // "YYYY-MM-DD"
-}
-
-/**
- * Fecha "YYYY-MM-DD" de pared en Argentina. A diferencia de `fechaEnUTC`
- * (que solo existe por compatibilidad con `medicamentos_tomas.fecha`), esta
- * es la que corresponde a "el día de la dosis" para el usuario: la usan los
- * recordatorios y el dedupe de alertas push, que no deben duplicarse ni
- * perderse al cruzar la medianoche UTC (21:00 AR).
+ * Fecha "YYYY-MM-DD" de pared en Argentina: "el día de la dosis" para el
+ * usuario. Es la que usa `medicamentos_tomas.fecha` (migración 032; antes era
+ * UTC) y también los recordatorios y el dedupe de alertas push, que no deben
+ * duplicarse ni perderse al cruzar la medianoche UTC (21:00 AR).
  */
 export function fechaEnAR(fecha: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -99,7 +85,7 @@ export function fechaEnAR(fecha: Date = new Date()): string {
 }
 
 function fechaDeHoy(): string {
-  return fechaEnUTC();
+  return fechaEnAR();
 }
 
 /**
@@ -123,8 +109,8 @@ export function horaEnAR(fecha: Date = new Date()): string {
  * Predicado puro: ¿una dosis programada a `horaProgramada` ("HH:MM", hora
  * AR) está vencida a `ahoraHHMM` ("HH:MM", ya convertida a hora AR — ver
  * `horaEnAR`), dado un margen de gracia en minutos? No conoce fechas ni
- * confirmaciones — quien llama resuelve eso (ver el comentario sobre el
- * desfase UTC/AR en `detectarDosisVencidas`, lib/notificaciones/nucleo.ts).
+ * confirmaciones — quien llama resuelve eso (ver `detectarDosisVencidas`,
+ * lib/notificaciones/nucleo.ts).
  */
 export function esDosisVencida(
   horaProgramada: string,
@@ -184,10 +170,9 @@ export function aplicaEnDia(medicamento: Pick<Medicamento, "dias_recurrentes">, 
  * el día de la semana de ayer (AR), no figuran en `tomadas` (ids de
  * medicamento con `tomado=true`) y superan la gracia cruzando las 00:00.
  * Pura; `[]` fuera de la ventana. Quien arma `tomadas` debe mirar
- * `medicamentos_tomas.fecha IN (hoyUTC, ayerUTC)`: `marcarTomado` graba la
- * fecha UTC del momento de marcar, así que una dosis de ayer marcada antes de
- * las 21:00 AR queda en ayerUTC y marcada después (o ya pasada la medianoche)
- * en hoyUTC.
+ * `medicamentos_tomas.fecha = ayerAR` (o hoy AR si ya se marcó pasada la
+ * medianoche sin indicar la fecha de la dosis): `marcarTomado` graba la fecha
+ * AR de la dosis.
  */
 export function filtrarDosisDeAyerVencidas<T extends Pick<Medicamento, "hora_programada" | "dias_recurrentes"> & { id: string }>(
   meds: T[],
@@ -227,7 +212,7 @@ export async function listarVencidasDeAyer(
       .select("medicamento_id")
       .eq("usuario_id", usuarioId)
       .eq("tomado", true)
-      .in("fecha", [fechaEnUTC(ahora), fechaEnUTC(new Date(ahora.getTime() - 24 * 60 * 60 * 1000))]);
+      .in("fecha", [fechaEnAR(ahora), fechaAyerEnAR(ahora)]);
     if (error) return [];
     const tomadas = new Set((data ?? []).map((t) => t.medicamento_id as string));
     return filtrarDosisDeAyerVencidas(todos, tomadas, ahora, minutosGracia);
@@ -294,7 +279,7 @@ export async function listarHoy(
 }
 
 /**
- * Tomas registradas desde `desdeFecha` ("YYYY-MM-DD", UTC) hasta hoy: alimenta
+ * Tomas registradas desde `desdeFecha` ("YYYY-MM-DD", AR) hasta hoy: alimenta
  * la semana del detalle del medicamento y el Historial de la Rutina. Nunca
  * lanza: una lectura fallida devuelve [] (la UI muestra "sin tomas").
  */
@@ -606,16 +591,54 @@ export async function eliminarGrupo(supabase: Cliente, usuarioId: string, ids: s
   }
 }
 
+/**
+ * Fecha AR con la que se graba (o se busca) la toma marcada en `ahora`. Sin
+ * `fechaDosis` es el día AR de hoy. `fechaDosis` ("YYYY-MM-DD") permite marcar
+ * una dosis de AYER (tarjeta "Era ayer", /cuidar) pero solo dentro de la
+ * ventana 00:00-00:29 AR y solo si es exactamente ayer AR: cualquier otro
+ * valor (inválido, futuro, más viejo, ayer fuera de ventana) cae a hoy — el
+ * cliente nunca decide una fecha arbitraria.
+ */
+export function fechaDeTomaEnAR(ahora: Date, fechaDosis?: string): string {
+  const hoy = fechaEnAR(ahora);
+  if (
+    fechaDosis &&
+    fechaDosis === fechaAyerEnAR(ahora) &&
+    horaEnAR(ahora) < FIN_VENTANA_MEDIANOCHE
+  ) {
+    return fechaDosis;
+  }
+  return hoy;
+}
+
+/**
+ * Los últimos `dias` días AR (de hoy hacia atrás) con su fecha "YYYY-MM-DD" y
+ * día de la semana: las claves de `calcularAdherencia`, sin depender del huso
+ * del proceso.
+ */
+export function diasDeAdherencia(ahora: Date, dias: number): { fecha: string; dia: DiaSemana }[] {
+  return Array.from({ length: dias }, (_, i) => {
+    const instante = new Date(ahora.getTime() - i * 24 * 60 * 60 * 1000); // AR sin horario de verano
+    return { fecha: fechaEnAR(instante), dia: diaSemanaDe(instante) };
+  });
+}
+
+/**
+ * `fechaDosis`: ver `fechaDeTomaEnAR` (opcional, solo hoy o ayer dentro de la
+ * ventana de medianoche; si no, hoy AR).
+ */
 export async function marcarTomado(
   supabase: Cliente,
   usuarioId: string,
   medicamentoId: string,
-  tomado = true
+  tomado = true,
+  fechaDosis?: string
 ): Promise<void> {
-  const fecha = fechaDeHoy();
+  const ahora = new Date();
+  const fecha = fechaDeTomaEnAR(ahora, fechaDosis);
   const estadoNuevo = {
     tomado,
-    tomado_en: tomado ? new Date().toISOString() : null,
+    tomado_en: tomado ? ahora.toISOString() : null,
   };
 
   // Transición atómica: el UPDATE condicionado al estado opuesto devuelve la
@@ -706,9 +729,9 @@ export async function calcularAdherencia(
     return { porcentaje: 0, rachaDias: 0, medicamentos: [] };
   }
 
-  const desde = new Date();
-  desde.setDate(desde.getDate() - (dias - 1));
-  const desdeStr = desde.toISOString().slice(0, 10);
+  const ahora = new Date();
+  const diasVentana = diasDeAdherencia(ahora, dias);
+  const desdeStr = diasVentana[diasVentana.length - 1].fecha;
 
   const { data: tomas, error } = await supabase
     .from("medicamentos_tomas")
@@ -733,17 +756,12 @@ export async function calcularAdherencia(
     ])
   );
 
-  const dow: DiaSemana[] = DIAS_POR_INDICE;
   let totalTomados = 0;
   let totalEsperados = 0;
   let rachaDias = 0;
   let rachaRota = false;
 
-  for (let i = 0; i < dias; i++) {
-    const fecha = new Date();
-    fecha.setDate(fecha.getDate() - i);
-    const fechaStr = fecha.toISOString().slice(0, 10);
-    const diaSemana = dow[fecha.getDay()];
+  for (const { fecha: fechaStr, dia: diaSemana } of diasVentana) {
     const tomadosHoy = tomasPorFecha.get(fechaStr) ?? new Set<string>();
 
     const esperadosHoy = medicamentos.filter(

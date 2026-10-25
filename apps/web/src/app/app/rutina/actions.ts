@@ -32,13 +32,18 @@ async function duenioEditable(
   return { ok: true, usuarioId: duenio };
 }
 
-export async function marcarTomadoAction(medicamentoId: string, tomado: boolean): Promise<EstadoAccion> {
+/**
+ * `fechaDosis` (opcional, "YYYY-MM-DD"): la tarjeta "Era ayer" marca la dosis
+ * de AYER; `marcarTomado` re-valida (`fechaDeTomaEnAR`) que sea ayer AR y que
+ * estemos en la ventana 00:00-00:29, si no cae a hoy — el cliente no decide.
+ */
+export async function marcarTomadoAction(medicamentoId: string, tomado: boolean, fechaDosis?: string): Promise<EstadoAccion> {
   await requireUser();
   const supabase = await createClient();
   try {
     const objetivo = await duenioEditable(supabase, medicamentoId);
     if (!objetivo.ok) return { status: "error", message: objetivo.message };
-    await medicamentos.marcarTomado(supabase, objetivo.usuarioId, medicamentoId, tomado);
+    await medicamentos.marcarTomado(supabase, objetivo.usuarioId, medicamentoId, tomado, fechaDosis);
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "No se pudo registrar la toma." };
   }
