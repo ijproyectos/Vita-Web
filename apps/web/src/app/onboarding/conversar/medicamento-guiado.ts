@@ -38,6 +38,9 @@ export type LecturaDosis =
 
 /** Lee lo que escribió quien responde "¿De cuánto es?": "50 mg", "50" o algo que no es una dosis. */
 export function leerDosis(texto: string): LecturaDosis {
+  // Combinación de dos drogas ("500/30 mg", "10/20 mg"): se guarda tal cual.
+  const combinacion = texto.trim().match(/^(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?)+)\s*(mg|mcg|ml)$/i);
+  if (combinacion) return { tipo: "completa", valor: combinacion[1].replace(/\s+/g, ""), unidad: combinacion[2].toLowerCase() };
   const { valor, unidad } = separarDosis(texto);
   if (!/^\d+(\.\d+)?$/.test(valor)) return { tipo: "ilegible" };
   return unidad ? { tipo: "completa", valor, unidad } : { tipo: "sin-unidad", numero: valor };
