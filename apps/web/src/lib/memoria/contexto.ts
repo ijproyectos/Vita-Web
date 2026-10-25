@@ -204,6 +204,9 @@ export function sanearHistorial(entrada: MensajeAPI[]): MensajeAPI[] {
     role: m.role,
     content: m.content.filter((b) => b.type !== "text" || b.text.trim() !== ""),
   }));
+  // Antes de validar pares: un assistant al principio se va a descartar (paso 4), así que su
+  // tool_use no puede contar como par del tool_result que le sigue.
+  while (msgs.length > 0 && msgs[0].role !== "user") msgs.shift();
 
   // 2. Pares: un id es válido solo si el assistant lo usa Y el mensaje user siguiente lo contesta.
   const pares = new Set<string>();
@@ -231,8 +234,19 @@ export function sanearHistorial(entrada: MensajeAPI[]): MensajeAPI[] {
     if (m.role === "user") m.content = [...m.content.filter((b) => b.type === "tool_result"), ...m.content.filter((b) => b.type !== "tool_result")];
   }
 
-  // 4. Tiene que empezar por el usuario.
-  while (unidos.length > 0 && unidos[0].role !== "user") unidos.shift();
+  // 4. Tiene que empezar por el usuario, y ese primer mensaje no puede traer tool_result
+  // (no hay tool_use antes): se sacan y, si queda vacío, se descarta y se repite.
+  for (;;) {
+    while (unidos.length > 0 && unidos[0].role !== "user") unidos.shift();
+    if (unidos.length === 0) break;
+    const sinHuerfanos = unidos[0].content.filter((b) => b.type !== "tool_result");
+    if (sinHuerfanos.length === unidos[0].content.length) break;
+    if (sinHuerfanos.length > 0) {
+      unidos[0] = { role: "user", content: sinHuerfanos };
+      break;
+    }
+    unidos.shift();
+  }
   return unidos;
 }
 
