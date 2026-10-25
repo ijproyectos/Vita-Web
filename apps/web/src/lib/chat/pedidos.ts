@@ -104,6 +104,10 @@ function claveSemantica(nombre: string, input: Record<string, unknown>): string 
     case "add_allergy":
       campos = [input.name];
       break;
+    case "recordar":
+      // Mismo tema sobre la misma persona dentro del pedido = la misma acción (el texto puede venir reformulado).
+      campos = [input.sobre, input.clave];
+      break;
     default:
       campos = [JSON.stringify(input)];
   }

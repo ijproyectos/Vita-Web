@@ -3,7 +3,7 @@ import { limpiarDato } from "@/lib/ai/limpiar";
 
 // Única fuente de verdad de qué tools ESCRIBEN datos (la usan la validación
 // de destino, la confirmación y el dedupe de lib/chat/pedidos.ts).
-export const TOOLS_DE_ESCRITURA = new Set([
+const ESCRITURAS_DE_DATOS = [
   "add_medication",
   "update_schedule",
   "delete_schedule",
@@ -13,12 +13,17 @@ export const TOOLS_DE_ESCRITURA = new Set([
   "update_health_profile",
   "add_condition",
   "add_allergy",
-]);
+];
+
+// `recordar` (memoria) también ESCRIBE, así que entra al dedupe por pedido y al conteo de escrituras del
+// registro. Pero NO tiene destino: la memoria es siempre del dueño que la cuenta (el "sobre quién" va en
+// el propio input) y no pide confirmación de familia. Por eso no entra a TOOLS_CON_DESTINO.
+export const TOOLS_DE_ESCRITURA = new Set([...ESCRITURAS_DE_DATOS, "recordar"]);
 
 // Tools que leen o escriben datos de una persona: son las únicas que aceptan
 // `persona_id`. set_avatar_mood es un efecto de interfaz, sin destino.
 export const TOOLS_CON_DESTINO = new Set([
-  ...TOOLS_DE_ESCRITURA,
+  ...ESCRITURAS_DE_DATOS,
   "list_today_medications",
   "list_all_medications",
   "list_today_appointments",

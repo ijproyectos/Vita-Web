@@ -7,6 +7,7 @@ import { parsearCursor } from "@/lib/chat/cursor";
 import { obtenerUsoHoy } from "@/lib/uso-ia/nucleo";
 import type { UsoDiarioConEstado } from "@/lib/uso-ia/tipos";
 import type { PaginaHilo } from "@/lib/chat/tipos";
+import { deshacerMemoria } from "@/lib/memoria/nucleo";
 
 // Server Actions consumidas por el overlay de chat (componente cliente,
 // no una página) — reemplazan el fetch en el server component que hacía
@@ -36,4 +37,23 @@ export async function listarHiloAction(antes?: unknown): Promise<ResultadoHilo> 
 export async function obtenerUsoHoyAction(): Promise<UsoDiarioConEstado | null> {
   const usuario = await requireUser();
   return obtenerUsoHoy(usuario.id);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * "Deshacer" de la tarjeta de un recuerdo recién guardado. Con la sesión del usuario (RLS owner-only): el
+ * recuerdo queda borrado sin texto y, si corregía a otro, el anterior vuelve a estar vigente. Nunca lanza.
+ */
+export async function deshacerMemoriaAction(id: string): Promise<{ status: "success" } | { status: "error"; mensaje: string }> {
+  const error = { status: "error" as const, mensaje: "No se pudo deshacer." };
+  try {
+    if (typeof id !== "string" || !UUID_RE.test(id)) return error;
+    const usuario = await requireUser();
+    const supabase = await createClient();
+    const deshecho = await deshacerMemoria(supabase, usuario.id, id);
+    return deshecho ? { status: "success" } : error;
+  } catch {
+    return error;
+  }
 }

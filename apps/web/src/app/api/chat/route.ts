@@ -5,7 +5,7 @@ import { limpiarDato } from "@/lib/ai/limpiar";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
-import { TOOLS } from "@/lib/ai/tools";
+import { TOOLS, TOOLS_CON_MEMORIA } from "@/lib/ai/tools";
 import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
 import { alcanzaParaOtraVuelta, MARGEN_CIERRE_MS, msHastaElCorte, REINTENTOS_SDK, restanteMs, textoCortePorTiempo, timeoutSdkMs } from "@/lib/ai/presupuesto";
 import { clasificarErrorProveedor, mensajeErrorProveedor } from "@/lib/ai/errores-proveedor";
@@ -22,7 +22,7 @@ import { confirmarPendiente, idPendiente, limpiarPendientes, opcionesPendienteDe
 import { clasificarTurno, pendienteEsDelTurnoAnterior } from "@/lib/chat/confirmaciones-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { armarTurnoActual, conPuntoDeCache, construirBloqueMemorias, construirBloqueResumen, construirVentana, MAX_FILAS_VENTANA } from "@/lib/memoria/contexto";
-import { REGLA_CONTEXTO_VIVO } from "@/lib/memoria/prompt";
+import { REGLA_CONTEXTO_VIVO, REGLAS_MEMORIA } from "@/lib/memoria/prompt";
 import { cargarMemoriasParaContexto, cargarResumen, estadoMemoria } from "@/lib/memoria/nucleo";
 import { parsearCursor } from "@/lib/chat/cursor";
 import { listarFamilia } from "@/lib/familia/nucleo";
@@ -172,11 +172,17 @@ ${REGLA_CONTEXTO_VIVO}
   lo menciones ni lo narres — es un efecto puramente visual que el usuario
   no debe ver en el texto.`;
 
-// Versión del prompt para registros_chat: hash de la plantilla ESTÁTICA (SYSTEM_BASE, que se arma una sola vez
-// al cargar el módulo; la guía de pantallas es constante) + TOOLS + modelo. Todo lo que cambia por request
-// (recuerdos, resumen, ventana, Personas, Hoy, fecha) va en otras capas y NO entra al hash, así que la
-// versión no cambia por request ni por usuario. (No se exporta: un route.ts solo puede exportar handlers.)
-const VERSION_PROMPT = calcularVersionPrompt(SYSTEM_BASE, TOOLS, MODELO_IA);
+// Con la memoria activa se suman las reglas de memoria al prompt y las tools recordar/buscar_memoria.
+// Los dos textos son constantes de módulo, sin datos por request.
+const SYSTEM_CON_MEMORIA = `${SYSTEM_BASE}\n${REGLAS_MEMORIA}`;
+
+// Versión del prompt para registros_chat: hash de la plantilla ESTÁTICA (SYSTEM_BASE / SYSTEM_CON_MEMORIA,
+// que se arman una sola vez al cargar el módulo; la guía de pantallas es constante) + tools + modelo, una
+// por variante. Todo lo que cambia por request (recuerdos, resumen, ventana, Personas, Hoy, fecha) va en
+// otras capas y NO entra al hash, así que la versión no cambia por request ni por usuario.
+// (No se exporta: un route.ts solo puede exportar handlers.)
+const VERSION_PROMPT_CON_MEMORIA = calcularVersionPrompt(SYSTEM_CON_MEMORIA, TOOLS_CON_MEMORIA, MODELO_IA);
+const VERSION_PROMPT_SIN_MEMORIA = calcularVersionPrompt(SYSTEM_BASE, TOOLS, MODELO_IA);
 
 // Bloque "Personas" del contexto: a quién puede ayudar vita, con el id que tiene
 // que pasar en persona_id y si puede editar (Admin) o solo ver (Lector).
@@ -266,6 +272,9 @@ export async function POST(request: Request) {
   // inserta con `after`, o sea cuando la respuesta ya se envió; nunca demora lo que ve el usuario.
   const inicioMs = performance.now();
   const medicion = medicionInicial();
+  // Variante del prompt de ESTA respuesta: se fija cuando se sabe si la memoria está activa (el `after` de
+  // abajo la lee recién al cerrar la respuesta).
+  let versionPrompt = VERSION_PROMPT_CON_MEMORIA;
   let cerrarRegistro: () => void = () => {};
   after(
     new Promise<void>((resolver) => {
@@ -275,7 +284,7 @@ export async function POST(request: Request) {
         construirFilaRegistro({
           usuarioId: user.id,
           pedidoId,
-          versionPrompt: VERSION_PROMPT,
+          versionPrompt,
           modelo: MODELO_IA,
           inicioMs,
           finMs: performance.now(),
@@ -452,8 +461,10 @@ export async function POST(request: Request) {
 
         // Contexto en capas (lib/memoria/contexto.ts). Orden por estabilidad, para el caché de la API:
         // 1 reglas+tools -> 2 recuerdos -> 3 resumen -> 4 ventana reciente -> 5 perfil vivo y hoy.
-        // Con la memoria apagada (o sin la migración 035) no hay capas 2-3: como antes.
+        // Con la memoria apagada (o sin la migración 035) no hay tools de memoria ni capas 2-3: como antes.
         const memoria = await estadoMemoria(supabase, user.id);
+        versionPrompt = memoria.activa ? VERSION_PROMPT_CON_MEMORIA : VERSION_PROMPT_SIN_MEMORIA;
+        const tools = memoria.activa ? TOOLS_CON_MEMORIA : TOOLS;
         const [recuerdos, resumen] = memoria.activa
           ? await Promise.all([cargarMemoriasParaContexto(supabase, user.id), cargarResumen(supabase, user.id)])
           : [[], null];
@@ -461,7 +472,7 @@ export async function POST(request: Request) {
         // Capa 1 (punto de caché al final del bloque estático), capas 2 y 3 (punto de caché al final de lo
         // último que haya: cambian poco). Un bloque de texto vacío no es válido: solo se agregan si hay algo.
         const system: Anthropic.TextBlockParam[] = [
-          { type: "text", text: SYSTEM_BASE, cache_control: { type: "ephemeral" } },
+          { type: "text", text: memoria.activa ? SYSTEM_CON_MEMORIA : SYSTEM_BASE, cache_control: { type: "ephemeral" } },
         ];
         const bloqueRecuerdos = memoria.activa ? construirBloqueMemorias(recuerdos, familia) : null;
         const bloqueResumen = construirBloqueResumen(resumen);
@@ -504,7 +515,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
               model: MODELO_IA,
               max_tokens: MAX_TOKENS_CHAT,
               system,
-              tools: TOOLS,
+              tools,
               messages: historial,
             },
             { signal: controlador.signal, timeout: timeoutSdkMs(inicioMs, performance.now()) }
