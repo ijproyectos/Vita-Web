@@ -56,8 +56,8 @@ describe("normalizarHora", () => {
     },
   );
 
-  it("OJO: los segundos no se validan (08:00:99 se acepta)", () => {
-    // Comportamiento actual: el grupo de segundos es \d{2} sin rango.
-    expect(normalizarHora("08:00:99")).toBe("08:00");
+  // Bug conocido: el grupo de segundos es \d{2} sin rango. Pasarlo a it al arreglarlo.
+  it.fails("rechaza segundos fuera de rango (08:00:99)", () => {
+    expect(normalizarHora("08:00:99")).toBeNull();
   });
 });

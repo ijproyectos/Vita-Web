@@ -23,8 +23,9 @@ describe("esDosisVencida", () => {
     expect(esDosisVencida("08:50", "09:10", 20)).toBe(true);
     expect(esDosisVencida("08:50", "09:09", 20)).toBe(false);
   });
-  it("OJO: no contempla pasar medianoche (23:50 vs 00:10 no es vencida)", () => {
-    expect(esDosisVencida("23:50", "00:10", 0)).toBe(false);
+  // Bug conocido: no contempla pasar medianoche. it.fails falla el día que se arregle: pasarlo a it.
+  it.fails("una dosis de las 23:50 está vencida a las 00:10", () => {
+    expect(esDosisVencida("23:50", "00:10", 0)).toBe(true);
   });
 });
 

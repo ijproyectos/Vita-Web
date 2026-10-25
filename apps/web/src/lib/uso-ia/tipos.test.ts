@@ -24,9 +24,11 @@ describe("calcularUso", () => {
     expect(calcularUso(1, 3).porcentajeUsado).toBe(33);
     expect(calcularUso(2, 3).porcentajeUsado).toBe(67);
   });
-  it("OJO: límite 0 -> 0/0 = NaN, el porcentaje queda NaN (Math.min/max propagan NaN)", () => {
-    const r = calcularUso(0, 0);
-    expect(r.porcentajeUsado).toBeNaN();
-    expect(r.agotado).toBe(true);
+  it("límite 0 cuenta como agotado", () => {
+    expect(calcularUso(0, 0).agotado).toBe(true);
+  });
+  // Bug conocido: 0/0 deja el porcentaje en NaN (Math.min/max lo propagan). Pasarlo a it al arreglarlo.
+  it.fails("límite 0 da un porcentaje numérico", () => {
+    expect(Number.isFinite(calcularUso(0, 0).porcentajeUsado)).toBe(true);
   });
 });
