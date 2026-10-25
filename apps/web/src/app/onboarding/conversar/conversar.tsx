@@ -65,8 +65,9 @@ const OPCIONES_CHIPS: Record<PasoChips, readonly string[]> = {
   meas: ["Presión", "Azúcar", "Las dos", "No", "Saltear"],
 };
 
-type ResumenPropio = { cond: string[]; alergias: string[]; meds: number; turno: string | null; meas: string | null };
-const RESUMEN_VACIO: ResumenPropio = { cond: [], alergias: [], meds: 0, turno: null, meas: null };
+// `meds`: un renglón por toma guardada ("Losartán 50 mg · 08:00 · Con el desayuno").
+type ResumenPropio = { cond: string[]; alergias: string[]; meds: string[]; turno: string | null; meas: string | null };
+const RESUMEN_VACIO: ResumenPropio = { cond: [], alergias: [], meds: [], turno: null, meas: null };
 
 // Chip de mediciones -> valor de perfiles.mediciones_en_casa ("Saltear" no guarda nada).
 const MEDICIONES_POR_CHIP: Record<string, MedicionesEnCasa | undefined> = {
@@ -398,7 +399,10 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     }
     agregarBurbujaUsuario("Guardar");
     setHayAvance(true);
-    setResumen((r) => ({ ...r, meds: r.meds + 1 }));
+    setResumen((r) => ({
+      ...r,
+      meds: [...r.meds, ...borrador.tomas.map((t) => [tituloMed(borrador), lineaDeToma(t)].join(" · "))],
+    }));
     decir(q((n) => `Anotado. ¿${n} toma algún otro remedio?`, "Anotado. ¿Tomás algún otro remedio?"));
     setVista({ tipo: "chips", paso: "med-otro" });
   }
@@ -1094,12 +1098,12 @@ function TarjetaResumenPropia({
   sub?: string;
   color?: ColorPerfil;
 }) {
-  const filas: [string, string | null][] = [
-    ["Condición", resumen.cond.length ? resumen.cond.join(", ") : null],
-    ["Alergia", resumen.alergias.length ? resumen.alergias.join(", ") : null],
-    ["Remedio", resumen.meds > 0 ? `${resumen.meds} ${resumen.meds === 1 ? "remedio" : "remedios"}` : null],
-    ["Turno", resumen.turno],
-    ["Mediciones", resumen.meas],
+  const filas: [string, string[]][] = [
+    ["Condición", resumen.cond.length ? [resumen.cond.join(", ")] : []],
+    ["Alergia", resumen.alergias.length ? [resumen.alergias.join(", ")] : []],
+    ["Remedio", resumen.meds],
+    ["Turno", resumen.turno ? [resumen.turno] : []],
+    ["Mediciones", resumen.meas ? [resumen.meas] : []],
   ];
   const clases = color ? CLASES_COLOR[color] : null;
   const inicial = titulo.replace(/^Perfil de /, "").trim().charAt(0).toUpperCase() || "V";
@@ -1128,7 +1132,9 @@ function TarjetaResumenPropia({
         {filas.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-3 border-b border-line-soft py-[9px]">
             <span className="text-[13px] font-semibold text-slate-brand">{k}</span>
-            <span className={cn("text-right text-[13px] font-bold", v ? "text-foreground" : "text-subtle")}>{v ?? "Sin cargar"}</span>
+            <span className={cn("flex min-w-0 flex-col text-right text-[13px] font-bold", v.length ? "text-foreground" : "text-subtle")}>
+              {v.length ? v.map((linea, i) => <span key={i}>{linea}</span>) : "Sin cargar"}
+            </span>
           </div>
         ))}
       </div>
