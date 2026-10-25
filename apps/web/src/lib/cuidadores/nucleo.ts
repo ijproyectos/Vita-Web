@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { esDosisVencida, horaEnAR, listarHoy } from "@/lib/medicamentos/nucleo";
+import { esDosisVencida, horaEnAR, listarHoy, listarVencidasDeAyer } from "@/lib/medicamentos/nucleo";
 import type {
   DosisVencidaCuidador,
   ElderVinculado,
@@ -387,7 +387,8 @@ const GRACIA_MIN_POPUP = 30; // mismo margen que el resto del dominio (notificac
  * gracia), de todos los elders vinculados a este cuidador — para el
  * popup de alerta dentro de la app (pedido explícito del usuario: por
  * ahora sin email, solo un aviso visible al entrar a /cuidar). Reutiliza
- * `listarHoy`/`esDosisVencida`/`horaEnAR` sin cambios — la RLS aditiva de
+ * `listarHoy`/`esDosisVencida`/`horaEnAR` sin cambios (más, hasta las 00:30 AR,
+ * las de ayer sin tomar: `listarVencidasDeAyer`) — la RLS aditiva de
  * 008_cuidadores.sql ya resuelve qué filas puede leer este cuidador, así
  * que un `listarHoy(supabase, elder.elderId)` por cada elder alcanza, sin
  * necesitar el cliente `service_role` que sí usa el cron (ver
@@ -415,6 +416,18 @@ export async function listarDosisVencidasDeMisElders(
           horaProgramada: m.hora_programada,
         });
       }
+    }
+    // Ventana de medianoche (00:00-00:29 AR): las de ayer sin tomar siguen vencidas.
+    for (const m of await listarVencidasDeAyer(supabase, elder.elderId, new Date(), graciaMin)) {
+      resultados.push({
+        elderId: elder.elderId,
+        elderNombre: elder.nombre,
+        medicamentoId: m.id,
+        nombre: m.nombre,
+        dosis: m.dosis,
+        unidad: m.unidad,
+        horaProgramada: m.hora_programada,
+      });
     }
   }
 

@@ -2,7 +2,16 @@ import "server-only";
 
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { diaSemanaDe, esDosisVencida, fechaEnAR, fechaEnUTC, horaEnAR } from "@/lib/medicamentos/nucleo";
+import {
+  aplicaEnDia,
+  diaSemanaDe,
+  esDosisDeAyerVencida,
+  esDosisVencida,
+  fechaAyerEnAR,
+  fechaEnAR,
+  fechaEnUTC,
+  horaEnAR,
+} from "@/lib/medicamentos/nucleo";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
 import type { DosisVencida, ResultadoAlertaDosis } from "./tipos";
 
@@ -82,11 +91,25 @@ export async function detectarDosisVencidas(
     }
   }
 
-  const candidatos = ((medicamentos ?? []) as FilaMedicamento[]).filter((m) => {
-    const dias = m.dias_recurrentes ?? [];
-    const aplicaHoy = dias.length === 0 || dias.includes(diaHoy);
-    return aplicaHoy && esDosisVencida(m.hora_programada, horaAR, graciaPorElder.get(m.usuario_id) ?? graciaMin);
-  });
+  // Cada candidato lleva la fecha AR de SU dosis: en la ventana de medianoche
+  // (00:00-00:29 AR) también cuentan las de AYER sin tomar, y esas reclaman
+  // el dedupe de `alertas_dosis` con la fecha de ayer para no chocar con la
+  // misma dosis de hoy. Un medicamento puede aparecer dos veces (ayer y hoy).
+  const hoyAR = fechaEnAR(ahora);
+  const ayerAR = fechaAyerEnAR(ahora);
+  const diaAyer = diaSemanaDe(new Date(ahora.getTime() - 24 * 60 * 60 * 1000));
+  type Candidato = FilaMedicamento & { fechaAR: string };
+  const candidatos: Candidato[] = [];
+  for (const m of (medicamentos ?? []) as FilaMedicamento[]) {
+    const gracia = graciaPorElder.get(m.usuario_id) ?? graciaMin;
+    const fila = { dias_recurrentes: m.dias_recurrentes ?? [] };
+    if (aplicaEnDia(fila, diaHoy) && esDosisVencida(m.hora_programada, horaAR, gracia)) {
+      candidatos.push({ ...m, fechaAR: hoyAR });
+    }
+    if (aplicaEnDia(fila, diaAyer) && esDosisDeAyerVencida(m.hora_programada, horaAR, gracia)) {
+      candidatos.push({ ...m, fechaAR: ayerAR });
+    }
+  }
 
   if (candidatos.length === 0) return [];
 
@@ -161,8 +184,6 @@ export async function detectarDosisVencidas(
     if (primero) nombrePorElder.set(p.id, primero);
   }
 
-  const hoyAR = fechaEnAR(ahora);
-
   return vencidas.map((m) => {
     const cuidadorIds = cuidadoresPorElder.get(m.usuario_id) ?? [];
     return {
@@ -173,7 +194,7 @@ export async function detectarDosisVencidas(
       unidad: m.unidad,
       horaProgramada: m.hora_programada,
       fecha: hoyUTC,
-      fechaAR: hoyAR,
+      fechaAR: m.fechaAR,
       elderNombre: nombrePorElder.get(m.usuario_id) ?? "Tu familiar",
       cuidadorIds,
       destinatarios: cuidadorIds

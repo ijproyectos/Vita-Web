@@ -139,6 +139,103 @@ export function esDosisVencida(
   return aMinutos(ahoraHHMM) - aMinutos(horaProgramada) >= minutosGracia;
 }
 
+/**
+ * Fin de la ventana de medianoche (hora AR): hasta las 00:30 las dosis de
+ * AYER que nadie tomó siguen contando como vencidas (decisión del usuario).
+ * Pasada esa hora dejan de contar — y de alertar.
+ */
+export const FIN_VENTANA_MEDIANOCHE = "00:30";
+
+/**
+ * Predicado puro: ¿una dosis de AYER ("HH:MM", hora AR) sigue vencida a
+ * `ahoraHHMM` (hora AR de hoy)? Solo dentro de la ventana 00:00-00:29 AR y
+ * con el mismo margen de gracia, contado cruzando la medianoche (23:50 a las
+ * 00:10 son 20 minutos). Fuera de la ventana siempre `false`, así que una
+ * dosis futura de HOY nunca se confunde con una vencida (un "+24 h"
+ * genérico en `esDosisVencida` lo haría). Igual que `esDosisVencida`, quien
+ * llama resuelve días aplicables y confirmaciones (ver
+ * `filtrarDosisDeAyerVencidas`).
+ */
+export function esDosisDeAyerVencida(
+  horaProgramada: string,
+  ahoraHHMM: string,
+  minutosGracia: number
+): boolean {
+  if (ahoraHHMM >= FIN_VENTANA_MEDIANOCHE) return false;
+  const aMinutos = (hhmm: string): number => {
+    const [horas, minutos] = hhmm.split(":").map(Number);
+    return horas * 60 + minutos;
+  };
+  return aMinutos(ahoraHHMM) + 24 * 60 - aMinutos(horaProgramada) >= minutosGracia;
+}
+
+/** Fecha AR "YYYY-MM-DD" del día anterior al de `fecha` (AR no tiene horario de verano: 24 h exactas). */
+export function fechaAyerEnAR(fecha: Date = new Date()): string {
+  return fechaEnAR(new Date(fecha.getTime() - 24 * 60 * 60 * 1000));
+}
+
+/** ¿El medicamento aplica el día de la semana (AR) de `dia`? Sin días = todos. */
+export function aplicaEnDia(medicamento: Pick<Medicamento, "dias_recurrentes">, dia: DiaSemana): boolean {
+  return medicamento.dias_recurrentes.length === 0 || medicamento.dias_recurrentes.includes(dia);
+}
+
+/**
+ * Dosis de AYER aún vencidas en la ventana de medianoche: las que aplicaban
+ * el día de la semana de ayer (AR), no figuran en `tomadas` (ids de
+ * medicamento con `tomado=true`) y superan la gracia cruzando las 00:00.
+ * Pura; `[]` fuera de la ventana. Quien arma `tomadas` debe mirar
+ * `medicamentos_tomas.fecha IN (hoyUTC, ayerUTC)`: `marcarTomado` graba la
+ * fecha UTC del momento de marcar, así que una dosis de ayer marcada antes de
+ * las 21:00 AR queda en ayerUTC y marcada después (o ya pasada la medianoche)
+ * en hoyUTC.
+ */
+export function filtrarDosisDeAyerVencidas<T extends Pick<Medicamento, "hora_programada" | "dias_recurrentes"> & { id: string }>(
+  meds: T[],
+  tomadas: Set<string>,
+  ahora: Date,
+  minutosGracia: number
+): T[] {
+  const horaAhora = horaEnAR(ahora);
+  if (horaAhora >= FIN_VENTANA_MEDIANOCHE) return [];
+  const diaAyer = diaSemanaDe(new Date(ahora.getTime() - 24 * 60 * 60 * 1000));
+  return meds.filter(
+    (m) =>
+      aplicaEnDia(m, diaAyer) &&
+      !tomadas.has(m.id) &&
+      esDosisDeAyerVencida(m.hora_programada, horaAhora, minutosGracia)
+  );
+}
+
+/**
+ * Dosis de ayer sin tomar y aún vencidas de UNA persona (ver
+ * `filtrarDosisDeAyerVencidas`). Fuera de la ventana no consulta nada.
+ * Nunca lanza: ante un error de lectura devuelve [] (se degrada al
+ * comportamiento previo, sin dosis de ayer).
+ */
+export async function listarVencidasDeAyer(
+  supabase: Cliente,
+  usuarioId: string,
+  ahora: Date = new Date(),
+  minutosGracia = 0
+): Promise<Medicamento[]> {
+  if (horaEnAR(ahora) >= FIN_VENTANA_MEDIANOCHE) return [];
+  try {
+    const todos = await listarTodos(supabase, usuarioId);
+    if (todos.length === 0) return [];
+    const { data, error } = await supabase
+      .from("medicamentos_tomas")
+      .select("medicamento_id")
+      .eq("usuario_id", usuarioId)
+      .eq("tomado", true)
+      .in("fecha", [fechaEnUTC(ahora), fechaEnUTC(new Date(ahora.getTime() - 24 * 60 * 60 * 1000))]);
+    if (error) return [];
+    const tomadas = new Set((data ?? []).map((t) => t.medicamento_id as string));
+    return filtrarDosisDeAyerVencidas(todos, tomadas, ahora, minutosGracia);
+  } catch {
+    return [];
+  }
+}
+
 export function aplicaHoy(medicamento: Medicamento): boolean {
   return (
     medicamento.dias_recurrentes.length === 0 ||

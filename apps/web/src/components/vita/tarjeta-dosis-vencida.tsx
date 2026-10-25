@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { marcarTomadoAction } from "@/app/app/rutina/actions";
 
-// "Toma vencida" (V7, Home): una dosis de hoy que ya pasó de hora y no se
+// "Toma vencida" (V7, Home): una dosis de hoy (o de ayer, hasta las 00:30) que ya pasó de hora y no se
 // marcó. "Marcar tomada" usa la misma acción de siempre (descuenta stock,
 // respeta el rol). Quien solo mira (rol "ver") ve el aviso pero no el botón.
-export type DosisVencida = { id: string; nombre: string; dosis: string; hora: string };
+export type DosisVencida = { id: string; nombre: string; dosis: string; hora: string; deAyer?: boolean };
 
 export function TarjetaDosisVencida({ vencidas, puedeEditar }: { vencidas: DosisVencida[]; puedeEditar: boolean }) {
   const router = useRouter();
@@ -48,7 +48,7 @@ export function TarjetaDosisVencida({ vencidas, puedeEditar }: { vencidas: Dosis
             {primera.nombre}
             {primera.dosis ? ` · ${primera.dosis}` : ""}
           </div>
-          <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Era a las {primera.hora} hs · sin marcar</div>
+          <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Era {primera.deAyer ? "ayer " : ""}a las {primera.hora} hs · sin marcar</div>
         </div>
       </div>
       {puedeEditar && (

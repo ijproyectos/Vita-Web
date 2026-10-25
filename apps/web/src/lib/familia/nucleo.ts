@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DOMINIO_CUENTA_POR_CODIGO } from "@/lib/acceso-codigo/tipos";
 import type { Condicion } from "@/lib/perfil/tipos";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
-import { aplicaHoy, esDosisVencida, fechaEnUTC, horaEnAR } from "@/lib/medicamentos/nucleo";
+import { aplicaHoy, esDosisVencida, fechaEnUTC, filtrarDosisDeAyerVencidas, FIN_VENTANA_MEDIANOCHE, horaEnAR } from "@/lib/medicamentos/nucleo";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
 import {
   esColorPerfil,
@@ -74,11 +74,32 @@ export async function estadoHoyPorPerfil(supabase: Cliente, ids: string[]): Prom
     if (meds.error || tomas.error) return salida;
     const tomadas = new Set((tomas.data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string));
     const ahora = horaEnAR();
+    // Ventana de medianoche: hasta las 00:30 AR cuentan también las dosis de
+    // ayer sin tomar (la toma puede estar en la fecha UTC de ayer o de hoy).
+    let tomadasVentana = tomadas;
+    if (ahora < FIN_VENTANA_MEDIANOCHE) {
+      const ayerUTC = fechaEnUTC(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      const { data, error } = await supabase
+        .from("medicamentos_tomas")
+        .select("medicamento_id, tomado")
+        .in("usuario_id", ids)
+        .eq("fecha", ayerUTC);
+      if (!error) {
+        tomadasVentana = new Set([...tomadas, ...(data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string)]);
+      }
+    }
     for (const id of ids) {
       const deHoy = ((meds.data ?? []) as Medicamento[])
         .filter((m) => m.usuario_id === id && aplicaHoy(m))
         .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
-      const vencida = deHoy.find((m) => !tomadas.has(m.id) && esDosisVencida(m.hora_programada, ahora, 0));
+      const deAyer = filtrarDosisDeAyerVencidas(
+        ((meds.data ?? []) as Medicamento[]).filter((m) => m.usuario_id === id),
+        tomadasVentana,
+        new Date(),
+        0
+      ).sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
+      const vencida =
+        deAyer[0] ?? deHoy.find((m) => !tomadas.has(m.id) && esDosisVencida(m.hora_programada, ahora, 0));
       salida.set(id, {
         tomadas: deHoy.filter((m) => tomadas.has(m.id)).length,
         total: deHoy.length,
