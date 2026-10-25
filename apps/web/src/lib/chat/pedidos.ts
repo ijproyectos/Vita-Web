@@ -116,6 +116,8 @@ type Contexto = {
   supabase: SupabaseClient;
   usuarioId: string;
   pedidoId: string;
+  /** Sesión de chat de este pedido: las confirmaciones pendientes solo valen dentro de ella. */
+  sesionId: string;
   /** Texto del mensaje ACTUAL del usuario: la confirmación se lee de acá, no de un pendiente viejo. */
   mensajeUsuario: string;
   /** `clasificarRespuesta(mensajeUsuario)`, calculada UNA vez por request en la route. */
@@ -155,6 +157,8 @@ type AccionPendiente = {
   persona: string;
   /** Nació de "FALTA DESTINO": un "sí" genérico no alcanza si hay más de una pendiente. */
   origenDestino?: boolean;
+  /** Sesión de chat donde se preguntó: otra sesión nunca puede confirmarla. */
+  sesionId?: string;
 };
 
 function sinMarcas(input: Record<string, unknown>): Record<string, unknown> {
@@ -248,10 +252,11 @@ async function confirmacionDelServidor(p: {
   clave: string;
   respuesta: "si" | "no" | "otro";
   confirmacionId?: string;
+  sesionId: string;
   atada: boolean;
   accion: AccionPendiente;
 }): Promise<EstadoConfirmacion> {
-  const { supabase, usuarioId, pedidoId, clave, respuesta, confirmacionId, atada, accion } = p;
+  const { supabase, usuarioId, pedidoId, clave, respuesta, confirmacionId, sesionId, atada, accion } = p;
   const clavePendiente = `pendiente:${clave}`;
   const claveConfirmada = `confirmada:${clave}`;
   try {
@@ -284,9 +289,10 @@ async function confirmacionDelServidor(p: {
       .neq("pedido_id", pedidoId)
       .gte("created_at", desde)
       .order("created_at", { ascending: false })
-      .limit(1);
+      .limit(20);
     if (error) throw error;
-    const previa = previas?.[0];
+    // Solo cuentan pendientes de ESTA sesión de chat (las sin sesión, viejas, no valen).
+    const previa = previas?.find((f) => pendienteDe(f.resultado)?.sesionId === sesionId);
     if (previa) {
       const guardada = pendienteDe(previa.resultado);
       let autorizada = !!confirmacionId && confirmacionId === previa.id;
@@ -297,14 +303,14 @@ async function confirmacionDelServidor(p: {
           // Acción atada: el "sí" tipeado vale solo si es la única pendiente vigente.
           const { data: vigentes, error: errVigentes } = await supabase
             .from("acciones_agente")
-            .select("id")
+            .select("id, resultado")
             .eq("usuario_id", usuarioId)
             .like("clave", "pendiente:%")
             .neq("pedido_id", pedidoId)
             .gte("created_at", desde)
-            .limit(2);
+            .limit(50);
           if (errVigentes) throw errVigentes;
-          autorizada = (vigentes?.length ?? 0) === 1;
+          autorizada = (vigentes ?? []).filter((f) => pendienteDe(f.resultado)?.sesionId === sesionId).length === 1;
         }
       }
       if (autorizada) {
@@ -387,7 +393,7 @@ async function responderFaltaDestino(
   input: Record<string, unknown>,
   candidatos: { id: string; nombre: string }[],
   base: { contenido: string },
-  ctx: { supabase: SupabaseClient; usuarioId: string; pedidoId: string }
+  ctx: { supabase: SupabaseClient; usuarioId: string; pedidoId: string; sesionId: string }
 ): Promise<ResultadoTool> {
   const ids: (string | null)[] = [];
   for (const c of candidatos) {
@@ -398,6 +404,7 @@ async function responderFaltaDestino(
       destinoId: c.id,
       persona: limpiarDato(c.nombre),
       origenDestino: true,
+      sesionId: ctx.sesionId,
     });
     ids.push(guardada.id);
   }
@@ -415,7 +422,7 @@ export async function ejecutarToolIdempotente(
   input: Record<string, unknown>,
   ctx: Contexto
 ): Promise<ResultadoTool> {
-  const { supabase, usuarioId, pedidoId, mensajeUsuario, respuestaUsuario, confirmacionId, familia, abiertoId } = ctx;
+  const { supabase, usuarioId, pedidoId, sesionId, mensajeUsuario, respuestaUsuario, confirmacionId, familia, abiertoId } = ctx;
   const ctxTool = { supabase, usuarioId, familia, abiertoId };
   if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, ctxTool);
 
@@ -425,7 +432,7 @@ export async function ejecutarToolIdempotente(
   const destino = resolverDestino(nombre, input, { ...ctxTool, mensajeUsuario });
   if (!destino.ok) {
     if (destino.faltaDestino) {
-      return responderFaltaDestino(nombre, input, destino.faltaDestino.candidatos, destino, { supabase, usuarioId, pedidoId });
+      return responderFaltaDestino(nombre, input, destino.faltaDestino.candidatos, destino, { supabase, usuarioId, pedidoId, sesionId });
     }
     return { contenido: destino.contenido, accionUI: destino.accionUI };
   }
@@ -449,8 +456,9 @@ export async function ejecutarToolIdempotente(
       clave,
       respuesta: respuestaUsuario,
       confirmacionId,
+      sesionId,
       atada: TOOLS_CONFIRMACION_ATADA.has(nombre),
-      accion: { tool: nombre, input: sinMarcas(input), destinoId: destino.destinoId, persona: destino.persona ?? "" },
+      accion: { tool: nombre, input: sinMarcas(input), destinoId: destino.destinoId, persona: destino.persona ?? "", sesionId },
     });
     if (estado.estado === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     if (estado.estado === "sin_tabla") return noDisponible(destino.persona);

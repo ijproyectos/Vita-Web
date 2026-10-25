@@ -133,12 +133,16 @@ ${guiaDePantallasParaPrompt()}
   asumí que es para ese familiar y confirmalo. Si el nombre no está en la
   lista o hay dos que coinciden, preguntá para quién es en vez de adivinar.
   Pasá siempre el id exacto de la lista en persona_id, nunca el nombre.
-  Para ESCRIBIR (cargar, cambiar, borrar, marcar) en otra persona primero
-  confirmá con el usuario, nombrando a la persona y la acción exacta ("¿Le
-  cargo Vitamina C a las 12:00 a Elsa?"), y llamá a la tool con
-  confirmado: true solo cuando responda que sí en un mensaje posterior: nunca
-  en el mismo turno en que preguntás (el servidor además no ejecuta nada sin
-  esa confirmación en un mensaje posterior). Leer datos de un familiar no necesita
+  Para ESCRIBIR (cargar, cambiar, borrar, marcar) en otra persona llamá a la
+  tool DIRECTO, con persona_id y todos los datos, en cuanto el usuario lo
+  pida: NO le pidas confirmación por texto antes de llamarla. El servidor no
+  ejecuta nada sin confirmación y responde FALTA CONFIRMACIÓN (la app muestra
+  los botones): ahí hacé UNA sola pregunta corta nombrando a la persona y la
+  acción exacta ("¿Le cargo Vitamina C a las 12:00 a Elsa?") y esperá. Volvé
+  a llamar a la tool con confirmado: true solo cuando el usuario responda que
+  sí (o toque el botón) en un mensaje posterior, nunca en el mismo turno en
+  que preguntás. Si el usuario ya dijo todo en su pedido, no repreguntes
+  datos ni confirmes dos veces. Leer datos de un familiar no necesita
   confirmación. Si el rol es Lector, solo podés consultar: explicale que no
   podés cambiar nada y que esa persona le tiene que dar permiso de Admin. Si
   una tool dice que no tenés acceso, decíselo sin insistir. Nunca digas que la
@@ -147,8 +151,8 @@ ${guiaDePantallasParaPrompt()}
 - Botones de respuesta: cuando falta confirmar una escritura en otra persona,
   la app le muestra al usuario botones debajo de tu mensaje: "Sí, para X", "No,
   es para mí" y "Cancelar"; y cuando no dijo para quién y hay un perfil abierto,
-  "Para X", "Para mí" y "Cancelar". Seguí haciendo la pregunta de confirmación
-  en tu texto, pero sabé cómo interpretar cada respuesta (el usuario también
+  "Para X", "Para mí" y "Cancelar". Hacé la pregunta de confirmación
+  una sola vez en tu texto, pero sabé cómo interpretar cada respuesta (el usuario también
   puede escribirla, un "sí" tipeado vale igual): "Sí, para X" o "Para X" es
   confirmar/elegir a X (ejecutá la acción para X, con persona_id de X y
   confirmado: true si corresponde); "No, es para mí" o "Para mí" es hacerla
@@ -433,6 +437,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
                 supabase,
                 usuarioId: user.id,
                 pedidoId,
+                sesionId,
                 mensajeUsuario: mensaje,
                 respuestaUsuario,
                 confirmacionId,

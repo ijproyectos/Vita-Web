@@ -97,7 +97,7 @@ export function opcionesElegirDestino(nombresCrudos: string | string[], ids?: (s
 
 export function mensajeFaltaConfirmacion(nombreCrudo: string): string {
   const nombre = limpiarDato(nombreCrudo);
-  return `FALTA CONFIRMACIÓN: esta acción es para ${nombre}, no para quien está chateando, y NO se ejecutó. Preguntale al usuario de forma explícita, nombrando a ${nombre} y la acción exacta (por ejemplo "¿Le cargo Vitamina C a las 12:00 a ${nombre}?"), y esperá su respuesta. Solo si en un mensaje POSTERIOR dice que sí, volvé a llamar a la tool con los mismos datos. Nunca vuelvas a llamarla en el mismo turno en que se lo preguntás: el servidor no la ejecuta sin una confirmación de un mensaje posterior.`;
+  return `FALTA CONFIRMACIÓN: esta acción es para ${nombre}, no para quien está chateando, y NO se ejecutó. La app ya le muestra al usuario los botones de confirmación: hacé UNA sola pregunta breve, nombrando a ${nombre} y la acción exacta (por ejemplo "¿Le cargo Vitamina C a las 12:00 a ${nombre}?"), y esperá su respuesta. No la repitas ni agregues otra confirmación aparte. Solo si en un mensaje POSTERIOR dice que sí (o toca el botón), volvé a llamar a la tool con los mismos datos. Nunca vuelvas a llamarla en el mismo turno en que se lo preguntás.`;
 }
 
 /**

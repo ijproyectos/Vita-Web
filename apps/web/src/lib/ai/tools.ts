@@ -244,7 +244,7 @@ const PROPIEDAD_PERSONA = {
 const PROPIEDAD_CONFIRMADO = {
   type: "boolean",
   description:
-    "Solo para escribir en OTRA persona: true si el usuario ya confirmó explícitamente, en un mensaje anterior, esta acción exacta para esa persona. Es solo una indicación: el servidor exige su propia confirmación (un mensaje posterior al que preguntó) y no ejecuta nada sin ella. Nunca lo pongas en true en el mismo turno en que preguntás.",
+    "Solo para escribir en OTRA persona: true si el usuario ya confirmó explícitamente, en un mensaje anterior, esta acción exacta para esa persona. Es solo una indicación: el servidor exige su propia confirmación (botones que la app le muestra al usuario) y no ejecuta nada sin ella. No preguntes por texto antes de llamar a la tool: llamala directo con persona_id y el servidor pide la confirmación.",
 } as const;
 
 // Suma `persona_id` (y `confirmado` en las de escritura) a las tools con destino.
