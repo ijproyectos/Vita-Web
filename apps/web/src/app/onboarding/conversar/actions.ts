@@ -12,7 +12,8 @@ import * as turnosNucleo from "@/lib/turnos/nucleo";
 import { extraerNombreEdad } from "@/lib/onboarding/extraer";
 import { MEDICIONES_EN_CASA, type MedicionesEnCasa } from "@/lib/perfil/tipos";
 import type { ConComida } from "@/lib/medicamentos/tipos";
-import { COMIDAS_VALIDAS, MAX_TOMAS } from "@/lib/medicamentos/formulario";
+import { MAX_TOMAS, normalizarComida } from "@/lib/medicamentos/formulario";
+import type { ComidaToma, IndicacionComida } from "@/lib/medicamentos/comidas";
 import { normalizarHora } from "@/lib/rutina/momento";
 
 // Server Actions del onboarding conversacional nuevo — nunca lanzan (mismo
@@ -139,7 +140,7 @@ export type DatosMedicamentoConfirmado = {
   dosis: string | null;
   unidad: string;
   frecuencia: string | null;
-  tomas: { hora: string; conComida: ConComida }[];
+  tomas: { hora: string; conComida: ConComida; indicacion?: IndicacionComida | null }[];
 };
 
 /**
@@ -158,13 +159,13 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   const nombre = typeof datos.nombre === "string" ? datos.nombre.trim() : "";
   if (!nombre) return { status: "error", message: "Falta el nombre del remedio." };
   const vistas = new Set<string>();
-  const tomas: { hora: string; conComida: ConComida }[] = [];
+  const tomas: ({ hora: string } & ComidaToma)[] = [];
   for (const t of Array.isArray(datos.tomas) ? datos.tomas : []) {
     if (tomas.length >= MAX_TOMAS) break;
     const hora = normalizarHora(String(t?.hora));
     if (!hora || vistas.has(hora)) continue;
     vistas.add(hora);
-    tomas.push({ hora, conComida: COMIDAS_VALIDAS.includes(t.conComida) ? t.conComida : "no-importa" });
+    tomas.push({ hora, ...normalizarComida(t.conComida, t.indicacion) });
   }
   if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
 

@@ -8,7 +8,8 @@ import { CLASES_COLOR } from "@/lib/familia/colores";
 import type { ColorPerfil } from "@/lib/familia/tipos";
 import { generarCodigoAccesoAction } from "@/app/cuidar/[elderId]/actions";
 import { cantidadDeTomas, FRECUENCIAS_MEDICAMENTO } from "@/lib/medicamentos/comidas";
-import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
+import type { ComidaToma, OpcionComida } from "@/lib/medicamentos/comidas";
+import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import { ETIQUETA_MOMENTO, normalizarHora, ORDEN_MOMENTOS } from "@/lib/rutina/momento";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Burbuja, CampoEntrada, ChipBoton, ChipsMulti, EncabezadoConversar, PuntosEscribiendo, TarjetaCodigoCompartir, type Mensaje } from "./componentes";
@@ -107,7 +108,7 @@ type Vista =
   | { tipo: "med-unidad"; numero: string }
   | { tipo: "med-momento"; toma: number }
   | { tipo: "med-comida"; toma: number; momento: MomentoDia }
-  | { tipo: "med-hora"; toma: number; sugerida: string; conComida: ConComida; etiqueta: string | null; otra: boolean }
+  | { tipo: "med-hora"; toma: number; sugerida: string; comida: ComidaToma; otra: boolean }
   | { tipo: "med-confirmar" }
   | { tipo: "handoff-vos" }
   | { tipo: "multi"; paso: "cond" | "alergia"; seleccion: string[] }
@@ -338,11 +339,12 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     setVista({ tipo: "med-comida", toma, momento });
   }
 
-  function responderComidaMed(toma: number, momento: MomentoDia, comida: { etiqueta: string; hora: string; conComida: ConComida } | null) {
-    agregarBurbujaUsuario(comida?.etiqueta ?? "No importa");
-    const sugerida = comida?.hora ?? horaSugeridaSinComida(momento);
+  function responderComidaMed(toma: number, momento: MomentoDia, opcion: OpcionComida | null) {
+    agregarBurbujaUsuario(opcion?.etiqueta ?? "No importa");
+    // La hora sugerida es aproximada: la que se confirme manda y la indicación queda como se eligió.
+    const sugerida = opcion?.hora ?? horaSugeridaSinComida(momento);
     decir("¿A qué hora exactamente?");
-    setVista({ tipo: "med-hora", toma, sugerida, conComida: comida?.conComida ?? "no-importa", etiqueta: comida?.etiqueta ?? null, otra: false });
+    setVista({ tipo: "med-hora", toma, sugerida, comida: { conComida: opcion?.conComida ?? "no-importa", indicacion: opcion?.clave ?? null }, otra: false });
   }
 
   function responderHoraMed(v: Extract<Vista, { tipo: "med-hora" }>, hora: string) {
@@ -356,7 +358,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
       return;
     }
     agregarBurbujaUsuario(normal);
-    const tomas = [...borrador.tomas.slice(0, v.toma), { hora: normal, conComida: v.conComida, etiqueta: v.etiqueta }];
+    const tomas = [...borrador.tomas.slice(0, v.toma), { hora: normal, ...v.comida }];
     setBorrador((b) => ({ ...b, tomas }));
 
     const total = cantidadDeTomas(borrador.frecuencia);
@@ -396,7 +398,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         dosis: borrador.dosis,
         unidad: borrador.unidad,
         frecuencia: borrador.frecuencia || null,
-        tomas: borrador.tomas.map((t) => ({ hora: t.hora, conComida: t.conComida })),
+        tomas: borrador.tomas.map((t) => ({ hora: t.hora, conComida: t.conComida, indicacion: t.indicacion })),
       },
       esPersona ? (personaId as string) : undefined
     ).catch(() => ({ status: "error", message: "revisá tu conexión e intentá de nuevo" }) as const);
@@ -799,7 +801,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
         {!escribiendo && vista.tipo === "med-comida" && (
           <div className="flex flex-wrap gap-1.5 pl-[46px]">
             {comidasDelMomento(vista.momento).map((c) => (
-              <ChipBoton key={c.etiqueta} texto={c.etiqueta} onClick={() => responderComidaMed(vista.toma, vista.momento, c)} />
+              <ChipBoton key={c.clave} texto={c.etiqueta} onClick={() => responderComidaMed(vista.toma, vista.momento, c)} />
             ))}
             <ChipBoton texto="No importa" onClick={() => responderComidaMed(vista.toma, vista.momento, null)} />
           </div>

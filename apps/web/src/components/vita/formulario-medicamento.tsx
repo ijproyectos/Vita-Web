@@ -146,6 +146,7 @@ export function FormularioMedicamento({
           <span key={i} hidden>
             <input type="hidden" name="tomaHora" value={t.hora} />
             <input type="hidden" name="tomaComida" value={t.conComida} />
+            <input type="hidden" name="tomaIndicacion" value={t.indicacion ?? ""} />
           </span>
         ))}
         <div className="mt-4 flex items-start gap-[11px]">

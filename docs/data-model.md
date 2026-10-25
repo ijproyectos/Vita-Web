@@ -43,11 +43,12 @@ Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con 
 | dosis | text | opcional |
 | unidad | text | default 'mg' |
 | hora_programada | text | "HH:MM" |
-| momento_dia | text | check: mañana / mediodia / tarde / noche |
+| momento_dia | text | check: mañana / mediodia / tarde / noche. Se deriva de la hora (`momentoDelDia`): mañana 07–12, mediodía 12–14, tarde 14–20, noche 20–07 |
 | condicion | text | opcional, legacy — no se pide en el form actual |
 | dias_recurrentes | text[] | días de la semana; vacío = todos los días. No se pide en el form actual (default `[]`), sigue disponible vía chat |
 | frecuencia | text | descriptiva ("1 vez al día"...) — no gobierna el scheduling real |
-| con_comida | text | check: antes / con / despues / no-importa |
+| con_comida | text | check: antes / con / despues / no-importa. Legacy: desde la 031 se escribe derivada de `indicacion` (ayunas y antes-* -> antes) |
+| indicacion | text | `031_mediciones_en_casa.sql` (escrita, no aplicada) — clave del catálogo `lib/medicamentos/comidas.ts` (check: ayunas, antes/con/despues-desayuno, -almuerzo, -merienda, -cena, antes-dormir); null = sin indicación. Observación guardada tal cual se eligió: la hora manda y la clave nunca se re-deduce ni se resetea al mover la hora. La app reintenta sin la columna si no existe; las filas viejas se muestran por `con_comida` |
 | duracion | text | label libre ("7 días" / "Indefinido"...) |
 | notas | text | |
 

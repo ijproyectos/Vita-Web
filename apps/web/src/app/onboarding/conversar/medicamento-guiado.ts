@@ -1,13 +1,13 @@
-import { COMIDAS_SELECTOR, type ComidaSelector } from "@/lib/medicamentos/comidas";
-import { HORA_POR_MOMENTO, type ConComida, type MomentoDia } from "@/lib/medicamentos/tipos";
+import { indicacionesDelMomento, opcionDeIndicacion, type ComidaToma, type OpcionComida } from "@/lib/medicamentos/comidas";
+import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
 import { separarDosis, UNIDADES_DOSIS } from "@/lib/inventario/tipos";
 
 // Piezas puras del paso guiado de remedios del onboarding (una pregunta por
-// vez). Las tablas de comidas y frecuencias NO se repiten acá: vienen de
+// vez). El catálogo de comidas y las frecuencias NO se repiten acá: vienen de
 // `lib/medicamentos/comidas.ts`, las mismas del formulario manual.
 
-/** Una toma ya respondida: hora, relación con la comida y el texto con el que se eligió. */
-export type TomaGuiada = { hora: string; conComida: ConComida; etiqueta: string | null };
+/** Una toma ya respondida: hora + comida elegida (clave del catálogo y su con_comida). */
+export type TomaGuiada = { hora: string } & ComidaToma;
 
 export type BorradorMed = {
   nombre: string;
@@ -46,9 +46,9 @@ export function leerDosis(texto: string): LecturaDosis {
   return unidad ? { tipo: "completa", valor, unidad } : { tipo: "sin-unidad", numero: valor };
 }
 
-/** Comidas que se ofrecen para un momento del día (las del selector de hora del formulario). */
-export function comidasDelMomento(momento: MomentoDia): ComidaSelector[] {
-  return COMIDAS_SELECTOR.filter((c) => c.momento === momento);
+/** Opciones de comida que se ofrecen para un momento del día (las del catálogo, como en el selector de hora). */
+export function comidasDelMomento(momento: MomentoDia): OpcionComida[] {
+  return indicacionesDelMomento(momento);
 }
 
 /** Hora sugerida de "No importa" para un momento: la misma que usa el alta por momento. */
@@ -70,5 +70,5 @@ export function tituloMed(b: Pick<BorradorMed, "nombre" | "dosis" | "unidad">): 
 
 /** "08:00 · Con el desayuno" (sin indicación si no importa). */
 export function lineaDeToma(t: TomaGuiada): string {
-  return [t.hora, t.etiqueta].filter(Boolean).join(" · ");
+  return [t.hora, opcionDeIndicacion(t.indicacion)?.etiqueta].filter(Boolean).join(" · ");
 }
