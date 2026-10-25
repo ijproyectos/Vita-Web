@@ -2,8 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BloquesTurno } from "@/lib/memoria/tipos";
-import { filtroAnteriorA, type CursorHilo } from "./cursor";
+import { filtroAnteriorA, filtroPosteriorA, type CursorHilo } from "./cursor";
 import type { MensajeChat, PaginaHilo, RolMensaje } from "./tipos";
+import type { FilaVentana } from "@/lib/memoria/contexto";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts: funciones puras
 // (supabase, usuarioId, ...) => resultado, sin acoplarse a la ruta de API
@@ -72,6 +73,29 @@ export async function listarHilo(
     hayMas,
     mensajes: pagina.map((m) => ({ id: m.id, role: m.role, contenido: m.contenido, created_at: m.created_at })),
   };
+}
+
+/**
+ * Filas para la ventana reciente del contexto (capa 4): las últimas `limite` del hilo único, en orden
+ * ascendente, con sus bloques (text/tool_use/tool_result) y tokens. Con `despuesDe` (el cursor `cubre_hasta`
+ * del resumen confirmado) solo las estrictamente posteriores. Sin la migración 035 (sin esas columnas) cae a
+ * la lectura de siempre, solo con el texto.
+ */
+export async function listarVentana(
+  supabase: Cliente,
+  usuarioId: string,
+  opciones: { limite: number; despuesDe?: CursorHilo | null }
+): Promise<FilaVentana[]> {
+  const leer = async (columnas: string) => {
+    let consulta = supabase.from("mensajes_chat").select(columnas).eq("usuario_id", usuarioId);
+    if (opciones.despuesDe) consulta = consulta.or(filtroPosteriorA(opciones.despuesDe));
+    return consulta.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(opciones.limite);
+  };
+
+  let { data, error } = await leer("id, role, contenido, created_at, bloques, tokens");
+  if (error && esColumnaInexistente(error)) ({ data, error } = await leer("id, role, contenido, created_at"));
+  if (error) throw new Error(`No se pudieron leer los mensajes: ${error.message}`);
+  return ((data ?? []) as unknown as FilaVentana[]).slice().reverse();
 }
 
 export async function guardarMensaje(

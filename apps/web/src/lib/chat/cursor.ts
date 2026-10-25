@@ -27,3 +27,8 @@ export function cursorDelMasViejo<T extends CursorHilo>(paginaAscendente: T[]): 
   const primero = paginaAscendente[0];
   return primero ? { created_at: primero.created_at, id: primero.id } : null;
 }
+
+/** Filtro `or` de PostgREST para "estrictamente posterior al cursor" en orden (created_at, id). */
+export function filtroPosteriorA(cursor: CursorHilo): string {
+  return `created_at.gt."${cursor.created_at}",and(created_at.eq."${cursor.created_at}",id.gt.${cursor.id})`;
+}
