@@ -217,16 +217,35 @@ describe("marcarTomado graba la fecha AR", () => {
       vi.useRealTimers();
     }
   });
-  it("con la fecha de ayer dentro de la ventana escribe ayer; fuera cae a hoy", async () => {
+  it("con la fecha de ayer dentro de la ventana escribe ayer", async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-10-11T03:10:00Z"));
-      let c = clienteFalso();
+      const c = clienteFalso();
       await marcarTomado(c.supabase, "u1", "m1", true, "2026-10-10");
       expect(c.upserts[0].fecha).toBe("2026-10-10");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("con la fecha de ayer fuera de la ventana falla y no marca la de hoy", async () => {
+    vi.useFakeTimers();
+    try {
       vi.setSystemTime(new Date("2026-10-11T15:00:00Z"));
-      c = clienteFalso();
-      await marcarTomado(c.supabase, "u1", "m1", true, "2026-10-10");
+      const c = clienteFalso();
+      await expect(marcarTomado(c.supabase, "u1", "m1", true, "2026-10-10")).rejects.toThrow();
+      expect(c.upserts).toHaveLength(0);
+      expect(c.updates.eq).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("la fecha de hoy explícita se acepta siempre", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-11T15:00:00Z"));
+      const c = clienteFalso();
+      await marcarTomado(c.supabase, "u1", "m1", true, "2026-10-11");
       expect(c.upserts[0].fecha).toBe("2026-10-11");
     } finally {
       vi.useRealTimers();

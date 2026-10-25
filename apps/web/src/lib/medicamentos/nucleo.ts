@@ -212,7 +212,9 @@ export async function listarVencidasDeAyer(
       .select("medicamento_id")
       .eq("usuario_id", usuarioId)
       .eq("tomado", true)
-      .in("fecha", [fechaEnAR(ahora), fechaAyerEnAR(ahora)]);
+      // Solo la fecha de ayer: mismo criterio que el detector del cron. Una
+      // toma con fecha de hoy es la dosis de hoy, no cubre la de ayer.
+      .eq("fecha", fechaAyerEnAR(ahora));
     if (error) return [];
     const tomadas = new Set((data ?? []).map((t) => t.medicamento_id as string));
     return filtrarDosisDeAyerVencidas(todos, tomadas, ahora, minutosGracia);
@@ -636,6 +638,11 @@ export async function marcarTomado(
 ): Promise<void> {
   const ahora = new Date();
   const fecha = fechaDeTomaEnAR(ahora, fechaDosis);
+  // Una tarjeta "Era ayer" tocada después de las 00:30 no puede caer en
+  // silencio sobre la dosis de HOY: se rechaza y quien llama avisa.
+  if (fechaDosis && fecha !== fechaDosis) {
+    throw new Error("Esa toma era de ayer y ya no se puede marcar. Recargá la pantalla.");
+  }
   const estadoNuevo = {
     tomado,
     tomado_en: tomado ? ahora.toISOString() : null,

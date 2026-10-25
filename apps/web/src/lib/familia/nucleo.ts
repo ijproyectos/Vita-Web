@@ -76,7 +76,8 @@ export async function estadoHoyPorPerfil(supabase: Cliente, ids: string[]): Prom
     const ahora = horaEnAR();
     // Ventana de medianoche: hasta las 00:30 AR cuentan también las dosis de
     // ayer sin tomar (la toma de ayer está en la fecha AR de ayer).
-    let tomadasVentana = tomadas;
+    // null = no se pudo leer ayer: sin dosis de ayer (como listarVencidasDeAyer), nunca falsas alarmas.
+    let tomadasAyer: Set<string> | null = null;
     if (ahora < FIN_VENTANA_MEDIANOCHE) {
       const { data, error } = await supabase
         .from("medicamentos_tomas")
@@ -84,19 +85,21 @@ export async function estadoHoyPorPerfil(supabase: Cliente, ids: string[]): Prom
         .in("usuario_id", ids)
         .eq("fecha", fechaAyerEnAR());
       if (!error) {
-        tomadasVentana = new Set([...tomadas, ...(data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string)]);
+        tomadasAyer = new Set((data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string));
       }
     }
     for (const id of ids) {
       const deHoy = ((meds.data ?? []) as Medicamento[])
         .filter((m) => m.usuario_id === id && aplicaHoy(m))
         .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
-      const deAyer = filtrarDosisDeAyerVencidas(
-        ((meds.data ?? []) as Medicamento[]).filter((m) => m.usuario_id === id),
-        tomadasVentana,
-        new Date(),
-        0
-      ).sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
+      const deAyer = tomadasAyer
+        ? filtrarDosisDeAyerVencidas(
+            ((meds.data ?? []) as Medicamento[]).filter((m) => m.usuario_id === id),
+            tomadasAyer,
+            new Date(),
+            0
+          ).sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
+        : [];
       const vencida =
         deAyer[0] ?? deHoy.find((m) => !tomadas.has(m.id) && esDosisVencida(m.hora_programada, ahora, 0));
       salida.set(id, {
