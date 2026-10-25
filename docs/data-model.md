@@ -167,7 +167,23 @@ Filas del feed "Registros" de Mi Salud (`024_consultas_vacunas.sql`, aplicada 20
 
 ## `sesiones_chat` / `mensajes_chat`
 
-Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_chat_historial.sql`.
+Historial de chat con vita. Ver `003_chat_historial.sql`. Desde la memoria (035) es **un solo hilo por persona**: `sesiones_chat` queda solo como agrupación histórica (las sesiones viejas se muestran mezcladas por fecha, nada se borra) y el código escribe siempre en la sesión más reciente.
+
+**Migración 035 (`035_memoria.sql`, escrita, NO aplicada)** suma a `mensajes_chat`: `sesion_id` nullable, `bloques jsonb` (mensajes del turno con bloques `text`/`tool_use`/`tool_result`, nunca `thinking`; formato en `lib/memoria/tipos.ts`), `tokens int` (salida del turno, si se conoce), `pedido_id uuid`, `excluido_memoria boolean default false` (sigue visible pero no entra en búsqueda/resúmenes), `busqueda tsvector` generado (`spanish`) con índice GIN, e índice `(usuario_id, created_at, id)` para leer la ventana y paginar por cursor.
+
+## `memorias`
+
+`035`. Un recuerdo por fila, **del dueño** (`usuario_id` = quien lo contó). `sobre_tipo` (`yo` \| `familiar` \| `otro`), `sobre_perfil_id` (perfil del familiar si se sabe, sin FK), `sobre_nombre` (nombre libre), `clave` (tema estable: misma clave = corregir), `texto` (corto), `tipo` (`estable` \| `pasajero`; el pasajero siempre tiene `vence_at` = +3 días y nunca es destacado), `estado` (`vigente` \| `reemplazado` \| `borrado`), `corrige_id` (self FK), `destacado`, `usos`, `origen` (`chat` \| `consolidacion` \| `usuario`), `mensaje_origen_id` (sin FK), `busqueda` tsvector español + GIN. Índice único parcial: un solo `vigente` por (dueño, sobre quién normalizado, clave). Check: `borrado` ⇒ `texto` null o vacío (un borrado no conserva el texto). **RLS**: owner-only (select/insert/update/delete con `usuario_id = auth.uid()`), **sin policies de cuidador**: ni la persona cuidada ni otros cuidadores ven los recuerdos. Cascada al borrar la cuenta. El perfil, condiciones y medicamentos NO se copian acá: se leen en vivo.
+
+## `resumen_conversacion`
+
+`035`. Una fila por persona (`usuario_id` PK): `resumen`, `pendientes jsonb` (asuntos abiertos de la charla), `cubre_hasta_mensaje_id` + `cubre_hasta_created_at` (cursor hasta donde cubre), `version` (se reemplaza solo si no cambió), `updated_at`. RLS owner-only, sin policies de cuidador.
+
+## `tareas_memoria`
+
+`035`. Cola de segundo plano: `tipo` (`resumir` \| `regenerar` \| `consolidar`), `estado` (`pendiente` \| `en_curso` \| `hecha` \| `fallida`), `reservada_hasta` (reserva vencible), `intentos`, `version_esperada`, `error`. Índice único parcial: una sola `pendiente` por (persona, tipo). RLS habilitada **sin policies** (solo `service_role`, el trabajador). Tests de toda la memoria: `supabase/tests/memoria.sql` (no corrido al escribirlo).
+
+`perfiles` suma (035) `memoria_activa boolean not null default true` (apagarla = no se guardan recuerdos nuevos ni se usan los existentes, sin borrarlos) y `memoria_aviso_visto_at timestamptz` (aviso de la primera vez).
 
 ## `acciones_agente`
 
