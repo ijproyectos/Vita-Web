@@ -3,7 +3,8 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
-import type { Medicamento, MedicamentoConToma } from "@/lib/medicamentos/tipos";
+import { indicacionDeComida, type Medicamento, type MedicamentoConToma } from "@/lib/medicamentos/tipos";
+import { CLAVES_INDICACION, esIndicacionComida, INDICACIONES_COMIDA } from "@/lib/medicamentos/comidas";
 import * as turnos from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
@@ -27,6 +28,14 @@ import {
 // Familia (021): las tools actúan SIEMPRE sobre la cuenta logueada, nunca
 // sobre el perfil activo (cookie `vita_perfil`). Que vita cargue datos de
 // otra persona necesitaría un destino explícito por tool — decisión aparte.
+// Indicación de comida opcional de add_medication / update_schedule: SOLO las
+// opciones del catálogo (lib/medicamentos/comidas.ts), con su etiqueta en la descripción.
+const PROPIEDAD_INDICACION_COMIDA = {
+  type: "string" as const,
+  enum: CLAVES_INDICACION,
+  description: `Indicación de comida opcional: solo una de estas opciones, nunca inventes otra. ${INDICACIONES_COMIDA.map((o) => `${o.clave} = "${o.etiqueta}"`).join("; ")}. Es una observación: la hora (scheduled_time) es la que manda.`,
+};
+
 export const TOOLS: Anthropic.Tool[] = [
   {
     name: "list_today_medications",
@@ -57,6 +66,7 @@ export const TOOLS: Anthropic.Tool[] = [
           },
           description: "Días de la semana en que aplica. Vacío u omitido = todos los días.",
         },
+        meal_indication: PROPIEDAD_INDICACION_COMIDA,
       },
       required: ["name", "scheduled_time", "time_of_day"],
     },
@@ -82,6 +92,7 @@ export const TOOLS: Anthropic.Tool[] = [
             enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
           },
         },
+        meal_indication: PROPIEDAD_INDICACION_COMIDA,
       },
       required: ["medication_name"],
     },
@@ -252,6 +263,9 @@ export async function ejecutarTool(
         diasRecurrentes: input.recurring_days
           ? diasDesdeIngles(input.recurring_days as string[])
           : [],
+        // Solo claves del catálogo: lo que mande el modelo se valida acá, no se guarda tal cual.
+        // Se guarda como se pidió, aunque no coincida con la hora habitual de esa comida.
+        indicacion: esIndicacionComida(input.meal_indication) ? input.meal_indication : null,
       });
       return {
         contenido: JSON.stringify(paraModelo(creado)),
@@ -287,6 +301,8 @@ export async function ejecutarTool(
         diasRecurrentes: input.recurring_days
           ? diasDesdeIngles(input.recurring_days as string[])
           : undefined,
+        // Solo se toca si el modelo la manda (y es del catálogo); mover la hora no la cambia.
+        indicacion: esIndicacionComida(input.meal_indication) ? input.meal_indication : undefined,
       });
       return { contenido: JSON.stringify(paraModelo(actualizado)) };
     }
@@ -440,6 +456,7 @@ function paraModelo(m: Medicamento | MedicamentoConToma) {
     time_of_day: momentoDiaAIngles(m.momento_dia),
     condition: m.condicion,
     recurring_days: diasAIngles(m.dias_recurrentes),
+    meal_indication: indicacionDeComida(m),
     ...("tomado" in m ? { taken: m.tomado } : {}),
   };
 }
