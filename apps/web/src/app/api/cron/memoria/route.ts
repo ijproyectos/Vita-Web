@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { procesarCola } from "@/lib/memoria/resumen";
+import { PRESUPUESTO_CRON_MS, procesarCola, TIMEOUT_LLAMADA_CRON_MS } from "@/lib/memoria/resumen";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -19,13 +19,13 @@ function secretoValido(recibido: string | null, esperado: string): boolean {
 /**
  * Trabajador de la cola de memoria (migración 037). Lo invoca Supabase Cron (`pg_cron`/`pg_net`) cada minuto y
  * es el respaldo del `after()` del chat. Sin sesión de usuario: autenticado solo por `x-cron-secret`. Toma hasta
- * 3 tareas por tick (`tomar_tarea_memoria`, con reserva de 2 minutos) y devuelve solo conteos, nunca contenido.
+ * 3 tareas por tick (`tomar_tarea_memoria`, con reserva de 2 minutos) mientras quede tiempo para una llamada completa dentro de `maxDuration` y devuelve solo conteos, nunca contenido.
  */
 export async function POST(request: Request) {
   const secretoEsperado = process.env.CRON_SECRET;
   if (!secretoEsperado || !secretoValido(request.headers.get("x-cron-secret"), secretoEsperado)) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
-  const resumen = await procesarCola(createAdminClient(), { maxTareas: 3, presupuestoMs: 45_000 });
+  const resumen = await procesarCola(createAdminClient(), { maxTareas: 3, presupuestoMs: PRESUPUESTO_CRON_MS, timeoutLlamadaMs: TIMEOUT_LLAMADA_CRON_MS });
   return NextResponse.json({ ok: true, ...resumen });
 }

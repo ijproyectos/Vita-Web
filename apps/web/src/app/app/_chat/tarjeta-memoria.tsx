@@ -33,16 +33,26 @@ export function datosDeMemoria(accion: { [clave: string]: unknown }): Datos | nu
 
 type Estado = "listo" | "deshaciendo" | "deshecho" | "error";
 
+
 // Tarjeta "Me acuerdo de esto" bajo el mensaje de vita cuando guarda un recuerdo. Deshacer corre con la
 // sesión de la persona (Server Action): borra el recuerdo y, si corregía otro, restaura el anterior.
 export function TarjetaMemoria({ datos, alCerrar }: { datos: Datos; alCerrar: () => void }) {
   const [estado, setEstado] = useState<Estado>("listo");
+  // Si el recuerdo anterior no pudo volver, no se dice que se volvió atrás.
+  const [volvioAlAnterior, setVolvioAlAnterior] = useState(true);
+  const [errorTexto, setErrorTexto] = useState<string | null>(null);
 
   async function deshacer() {
     setEstado("deshaciendo");
     try {
       const r = await deshacerMemoriaAction(datos.id);
-      setEstado(r.status === "success" ? "deshecho" : "error");
+      if (r.status === "success") {
+        setVolvioAlAnterior(r.restaurado);
+        setEstado("deshecho");
+      } else {
+        setErrorTexto(r.mensaje);
+        setEstado("error");
+      }
     } catch {
       setEstado("error");
     }
@@ -55,7 +65,7 @@ export function TarjetaMemoria({ datos, alCerrar }: { datos: Datos; alCerrar: ()
       <div className={base}>
         <div className="flex items-center gap-2 text-[13.5px] font-medium text-subtle">
           <VitaIcon name="check" size={15} />
-          Listo, ya no lo recuerdo{datos.corrige ? ". Volví a lo que recordaba antes." : "."}
+          Listo, ya no lo recuerdo{datos.corrige && volvioAlAnterior ? ". Volví a lo que recordaba antes." : "."}
         </div>
       </div>
     );
@@ -84,7 +94,7 @@ export function TarjetaMemoria({ datos, alCerrar }: { datos: Datos; alCerrar: ()
         </p>
       )}
       {estado === "error" && (
-        <p className="mt-2 text-[12.5px] font-semibold text-destructive">No pude deshacerlo. Probá de nuevo o borralo desde Privacidad.</p>
+        <p className="mt-2 text-[12.5px] font-semibold text-destructive">{errorTexto ?? "No pude deshacerlo. Probá de nuevo o borralo desde Privacidad."}</p>
       )}
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <button

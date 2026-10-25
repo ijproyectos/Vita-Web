@@ -6,6 +6,10 @@
 -- Requisitos previos: 035 aplicada, la ruta /api/cron/memoria deployada, y CRON_SECRET / SUPABASE_SERVICE_ROLE_KEY /
 -- ANTHROPIC_API_KEY cargadas en Netlify. Rollback del job: select cron.unschedule('memoria-cola');
 --
+-- Revisión F3 (sigue sin aplicar, por eso se edita en lugar de sumar otra migración): `tomar_tarea_memoria` recibe
+-- `p_usuario` opcional. El `after()` del chat lo usa para tomar SOLO la tarea de quien chateó; el cron lo deja en null
+-- y toma cualquiera.
+--
 -- Cuatro funciones SECURITY DEFINER que solo ejecuta service_role (el trabajador de segundo plano; `tareas_memoria`
 -- no tiene policies a propósito). Ninguna recibe texto: solo ids, versiones y el resumen ya producido.
 --   encolar_tarea_memoria     idempotente: el índice único parcial deja UNA tarea pendiente por (persona, tipo).
@@ -59,11 +63,11 @@ $$;
 -- ---------------------------------------------------------------------------
 -- tomar_tarea_memoria
 -- ---------------------------------------------------------------------------
--- Toma la tarea más vieja que se pueda trabajar: 'pendiente', o 'en_curso' con la reserva vencida (el trabajador
--- anterior murió o se colgó). No toma una tarea de una persona que ya tiene otra en curso con reserva vigente
+-- Toma la tarea más vieja que se pueda trabajar (de `p_usuario` si viene; si es null, de cualquiera): 'pendiente', o
+-- 'en_curso' con la reserva vencida (el trabajador anterior murió o se colgó). No toma una tarea de una persona que ya tiene otra en curso con reserva vigente
 -- (dos trabajadores sobre la misma persona serían trabajo tirado). A la quinta reserva sin éxito la tarea pasa a
 -- 'fallida'. Devuelve cero filas si no hay nada para hacer.
-create or replace function tomar_tarea_memoria()
+create or replace function tomar_tarea_memoria(p_usuario uuid default null)
 returns table (o_id uuid, o_usuario_id uuid, o_tipo text, o_version_esperada int, o_intentos int)
 language plpgsql
 security definer
@@ -81,6 +85,7 @@ begin
     select t.id, t.intentos into v_id, v_intentos
       from tareas_memoria t
      where (t.estado = 'pendiente' or (t.estado = 'en_curso' and t.reservada_hasta < now()))
+       and (p_usuario is null or t.usuario_id = p_usuario)
        and not exists (
          select 1 from tareas_memoria o
           where o.usuario_id = t.usuario_id and o.id <> t.id
@@ -218,11 +223,11 @@ $$;
 -- Permisos: solo service_role
 -- ---------------------------------------------------------------------------
 revoke all on function encolar_tarea_memoria(uuid, text, int) from public, anon, authenticated;
-revoke all on function tomar_tarea_memoria() from public, anon, authenticated;
+revoke all on function tomar_tarea_memoria(uuid) from public, anon, authenticated;
 revoke all on function completar_tarea_memoria(uuid, boolean, text) from public, anon, authenticated;
 revoke all on function guardar_resumen(uuid, text, jsonb, uuid, timestamptz, int) from public, anon, authenticated;
 grant execute on function encolar_tarea_memoria(uuid, text, int) to service_role;
-grant execute on function tomar_tarea_memoria() to service_role;
+grant execute on function tomar_tarea_memoria(uuid) to service_role;
 grant execute on function completar_tarea_memoria(uuid, boolean, text) to service_role;
 grant execute on function guardar_resumen(uuid, text, jsonb, uuid, timestamptz, int) to service_role;
 

@@ -39,7 +39,9 @@ type Admin = SupabaseClient;
 export type TareaTomada = { id: string; usuario_id: string; tipo: string; version_esperada: number | null; intentos: number };
 type Resultado = { ok: true; nota: string } | { ok: false; codigo: string };
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 45_000 });
+// Sin reintentos del SDK: el reintento es la propia cola (la tarea vuelve a 'pendiente' y se toma en el próximo tick),
+// así el peor caso de una llamada es exactamente su timeout y cabe en el presupuesto de quien la dispara.
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
 const VERSION_PROMPT_RESUMEN = "resumen-v1";
 
 /** Error de "no existe la función/tabla": la migración 037 (o la 035) no se aplicó. */
@@ -49,21 +51,44 @@ function faltaMigracion(error: { code?: string; message?: string } | null | unde
 }
 
 // ---------------------------------------------------------------------------
+// Presupuestos de tiempo
+// ---------------------------------------------------------------------------
+/** Timeout de UNA llamada a Haiku según quién dispara. El trabajo pesado es del cron; el `after()` es oportunista. */
+export const TIMEOUT_LLAMADA_CRON_MS = 25_000;
+export const TIMEOUT_LLAMADA_CHAT_MS = 15_000;
+/** Lo que queda para escribir en la base y cerrar después de la llamada. */
+export const MARGEN_CIERRE_MS = 3_000;
+/** Presupuesto total del cron: `maxDuration` 60 s menos ~10 s de margen. */
+export const PRESUPUESTO_CRON_MS = 50_000;
+
+// ---------------------------------------------------------------------------
 // Encolar y disparar (lo llama el chat, best effort)
 // ---------------------------------------------------------------------------
 /**
- * Encola 'resumir' para la persona (idempotente) y deja trabajando al trabajador un rato. Se usa desde `after()`:
- * nunca lanza, nunca demora la respuesta, y si algo falla el cron de cada minuto toma la cola igual.
+ * Encola 'resumir' (o 'regenerar') para la persona (idempotente) y, si el presupuesto que le queda a quien llama
+ * alcanza para una llamada completa, deja trabajando al trabajador sobre la tarea DE ESA PERSONA. Se usa desde
+ * `after()`: nunca lanza, nunca demora la respuesta, y si algo falla o no alcanza el tiempo el cron de cada minuto
+ * toma la cola igual.
  */
-export async function pedirResumen(usuarioId: string, versionResumen: number): Promise<void> {
+export async function pedirResumen(
+  usuarioId: string,
+  versionResumen: number,
+  opciones: { tipo?: "resumir" | "regenerar"; presupuestoMs?: number } = {}
+): Promise<void> {
   try {
     const admin = createAdminClient();
-    const { error } = await admin.rpc("encolar_tarea_memoria", { p_usuario: usuarioId, p_tipo: "resumir", p_version_esperada: versionResumen });
+    const { error } = await admin.rpc("encolar_tarea_memoria", {
+      p_usuario: usuarioId,
+      p_tipo: opciones.tipo ?? "resumir",
+      p_version_esperada: opciones.tipo === "regenerar" ? null : versionResumen,
+    });
     if (error) {
       if (!faltaMigracion(error)) console.warn("memoria: no se pudo encolar el resumen", error.code ?? "");
       return;
     }
-    await procesarCola(admin, { maxTareas: 1, presupuestoMs: 40_000 });
+    const presupuestoMs = opciones.presupuestoMs ?? 0;
+    if (presupuestoMs < TIMEOUT_LLAMADA_CHAT_MS + MARGEN_CIERRE_MS) return; // no alcanza: lo hace el cron
+    await procesarCola(admin, { maxTareas: 1, presupuestoMs, timeoutLlamadaMs: TIMEOUT_LLAMADA_CHAT_MS, usuarioId });
   } catch {
     console.warn("memoria: falló el disparo del resumen");
   }
@@ -73,20 +98,31 @@ export async function pedirResumen(usuarioId: string, versionResumen: number): P
 // Cola
 // ---------------------------------------------------------------------------
 export type ResumenCola = { procesadas: number; hechas: number; falladas: number };
+type OpcionesCola = {
+  maxTareas?: number;
+  /** Tiempo total del que dispone quien llama, desde ahora. */
+  presupuestoMs?: number;
+  /** Timeout de UNA llamada al modelo. Antes de tomar cada tarea tiene que quedar este tiempo + el margen de cierre. */
+  timeoutLlamadaMs?: number;
+  /** Solo tareas de esta persona (el `after()` del chat). Sin esto, cualquiera (el cron). */
+  usuarioId?: string;
+};
 
-/** Toma y procesa tareas hasta `maxTareas` o hasta que se acabe el presupuesto de tiempo. Nunca lanza. */
-export async function procesarCola(
-  admin: Admin = createAdminClient(),
-  opciones: { maxTareas?: number; presupuestoMs?: number } = {}
-): Promise<ResumenCola> {
+/** Toma y procesa tareas hasta `maxTareas` o hasta que no quede tiempo para otra llamada completa. Nunca lanza. */
+export async function procesarCola(admin: Admin = createAdminClient(), opciones: OpcionesCola = {}): Promise<ResumenCola> {
   const maxTareas = opciones.maxTareas ?? 3;
-  const limiteMs = performance.now() + (opciones.presupuestoMs ?? 45_000);
+  const timeoutLlamadaMs = opciones.timeoutLlamadaMs ?? TIMEOUT_LLAMADA_CRON_MS;
+  const limiteMs = performance.now() + (opciones.presupuestoMs ?? PRESUPUESTO_CRON_MS);
   const resumen: ResumenCola = { procesadas: 0, hechas: 0, falladas: 0 };
 
-  while (resumen.procesadas < maxTareas && performance.now() < limiteMs) {
+  while (resumen.procesadas < maxTareas) {
+    // No se toma una tarea (esto cuenta un intento y la reserva) si no queda tiempo para una llamada completa.
+    const restanteMs = limiteMs - performance.now();
+    if (restanteMs < timeoutLlamadaMs + MARGEN_CIERRE_MS) break;
+
     let tarea: TareaTomada | null = null;
     try {
-      const { data, error } = await admin.rpc("tomar_tarea_memoria");
+      const { data, error } = await admin.rpc("tomar_tarea_memoria", { p_usuario: opciones.usuarioId ?? null });
       if (error) {
         if (!faltaMigracion(error)) console.warn("memoria: no se pudo tomar una tarea", error.code ?? "");
         break;
@@ -102,9 +138,11 @@ export async function procesarCola(
     }
 
     resumen.procesadas++;
+    // El timeout de la llamada nunca pasa de lo que queda menos el margen de cierre.
+    const timeoutMs = Math.min(timeoutLlamadaMs, limiteMs - performance.now() - MARGEN_CIERRE_MS);
     let resultado: Resultado;
     try {
-      resultado = tarea.tipo === "resumir" ? await resumirConversacion(admin, tarea) : { ok: false, codigo: "tipo_no_soportado" };
+      resultado = await ejecutarTarea(admin, tarea, timeoutMs);
     } catch (e) {
       resultado = { ok: false, codigo: clasificarError(e) };
     }
@@ -113,7 +151,13 @@ export async function procesarCola(
 
     try {
       // Si la reserva venció y otro retomó la tarea, esto no la pisa (la RPC solo actúa sobre 'en_curso').
-      await admin.rpc("completar_tarea_memoria", { p_id: tarea.id, p_ok: resultado.ok, p_error: resultado.ok ? null : resultado.codigo });
+      const { data: encontrada, error: errCompletar } = await admin.rpc("completar_tarea_memoria", {
+        p_id: tarea.id,
+        p_ok: resultado.ok,
+        p_error: resultado.ok ? null : resultado.codigo,
+      });
+      if (errCompletar) console.warn("memoria: no se pudo completar la tarea", errCompletar.code ?? "");
+      else if (encontrada === false) console.warn("memoria: la tarea ya no estaba en curso (la retomó otro trabajador)");
     } catch {
       console.warn("memoria: no se pudo completar la tarea");
     }
@@ -121,12 +165,17 @@ export async function procesarCola(
   return resumen;
 }
 
+async function ejecutarTarea(admin: Admin, tarea: TareaTomada, timeoutMs: number): Promise<Resultado> {
+  if (tarea.tipo === "resumir") return resumirConversacion(admin, tarea, timeoutMs);
+  return { ok: false, codigo: "tipo_no_soportado" };
+}
+
 // ---------------------------------------------------------------------------
 // Resumen incremental
 // ---------------------------------------------------------------------------
 type FilaResumen = { resumen: string; pendientes: unknown; cubre_hasta_mensaje_id: string | null; cubre_hasta_created_at: string | null; version: number };
 
-async function resumirConversacion(admin: Admin, tarea: TareaTomada): Promise<Resultado> {
+async function resumirConversacion(admin: Admin, tarea: TareaTomada, timeoutMs: number): Promise<Resultado> {
   const usuarioId = tarea.usuario_id;
 
   // Memoria apagada: no se resume nada (los mensajes no se usan). Sin la columna (035) tampoco hay nada que hacer.
@@ -181,7 +230,7 @@ async function resumirConversacion(admin: Admin, tarea: TareaTomada): Promise<Re
         system: SISTEMA_RESUMEN,
         messages: [{ role: "user", content: entrada }],
         output_config: { effort: "low", format: zodOutputFormat(SchemaResumen) },
-      });
+      }, { timeout: timeoutMs, maxRetries: 0 });
       tokensEntrada = mensaje.usage.input_tokens;
       tokensSalida = mensaje.usage.output_tokens;
       if (mensaje.stop_reason === "max_tokens") codigoError = "resumen_truncado";

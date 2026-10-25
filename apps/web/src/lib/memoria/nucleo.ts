@@ -248,16 +248,22 @@ async function guardarAtomico(
 // Deshacer (tarjeta del chat)
 // ---------------------------------------------------------------------------
 /**
- * Deshace un recuerdo recién guardado: queda 'borrado' sin texto y, si corregía a otro, el anterior vuelve a
- * ser el vigente. true = se deshizo; false = ya no estaba vigente (se corrigió o borró desde otro lado).
+ * Resultado de deshacer:
+ *  - 'ok': se deshizo (y, si corregía a otro, el anterior volvió a ser el vigente);
+ *  - 'no_encontrado': ya no estaba vigente (se corrigió o borró desde otro lado), no se tocó nada;
+ *  - 'restauracion_fallida': el nuevo quedó borrado pero NO se pudo restaurar el anterior (solo en el camino sin 036);
+ *  - 'error': no se pudo saber/hacer por un problema de la base.
  */
-export async function deshacerMemoria(supabase: Cliente, usuarioId: string, id: string): Promise<boolean | null> {
+export type ResultadoDeshacer = "ok" | "no_encontrado" | "restauracion_fallida" | "error";
+
+/** Deshace un recuerdo recién guardado: queda 'borrado' sin texto y, si corregía a otro, el anterior vuelve a ser el vigente. */
+export async function deshacerMemoria(supabase: Cliente, usuarioId: string, id: string): Promise<ResultadoDeshacer> {
   const rpc = await supabase.rpc("deshacer_memoria", { p_id: id });
   if (!rpc.error) {
     const fila = (Array.isArray(rpc.data) ? rpc.data[0] : rpc.data) as { o_deshecho?: boolean } | undefined;
-    return fila?.o_deshecho === true;
+    return fila?.o_deshecho === true ? "ok" : "no_encontrado";
   }
-  if (!faltaMigracion(rpc.error)) return null;
+  if (!faltaMigracion(rpc.error)) return "error";
 
   // Sin 036: primero se borra el nuevo (sin texto) y recién después se restaura el anterior, así nunca hay dos vigentes.
   const { data, error } = await supabase
@@ -267,8 +273,8 @@ export async function deshacerMemoria(supabase: Cliente, usuarioId: string, id: 
     .eq("usuario_id", usuarioId)
     .eq("estado", "vigente")
     .select("corrige_id");
-  if (error) return null;
-  if (!data || data.length === 0) return false;
+  if (error) return "error";
+  if (!data || data.length === 0) return "no_encontrado";
   const corrigeId = (data[0] as { corrige_id: string | null }).corrige_id;
   if (corrigeId) {
     const { data: restaurado, error: errRestaurar } = await supabase
@@ -281,10 +287,10 @@ export async function deshacerMemoria(supabase: Cliente, usuarioId: string, id: 
     if (errRestaurar || !restaurado || restaurado.length === 0) {
       // El nuevo ya quedó borrado pero el anterior no volvió: no se puede decir "volví a lo que recordaba".
       console.error("deshacer_memoria: no se pudo restaurar el recuerdo anterior", errRestaurar?.code ?? "sin_filas");
-      return null;
+      return "restauracion_fallida";
     }
   }
-  return true;
+  return "ok";
 }
 
 // ---------------------------------------------------------------------------

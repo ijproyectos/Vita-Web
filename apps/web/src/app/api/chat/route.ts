@@ -25,6 +25,7 @@ import { armarTurnoActual, conPuntoDeCache, construirBloqueMemorias, construirBl
 import { REGLA_CONTEXTO_VIVO, REGLAS_MEMORIA } from "@/lib/memoria/prompt";
 import { cargarMemoriasParaContexto, cargarResumen, estadoMemoria } from "@/lib/memoria/nucleo";
 import { pedirResumen } from "@/lib/memoria/resumen";
+import { elegirCorte } from "@/lib/memoria/resumen-logica";
 import { parsearCursor } from "@/lib/chat/cursor";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
@@ -296,7 +297,12 @@ export async function POST(request: Request) {
           toolsDeEscritura: TOOLS_DE_ESCRITURA,
         })
       );
-      if (resumenPedido.versionResumen !== null) await pedirResumen(user.id, resumenPedido.versionResumen);
+      if (resumenPedido.versionResumen !== null) {
+        // Oportunista: solo trabaja si a esta función le queda tiempo para una llamada completa a Haiku (maxDuration
+        // 30 s menos lo que ya gastó la respuesta menos un margen); si no, la tarea queda encolada para el cron.
+        const restanteMs = 30_000 - (performance.now() - inicioMs) - 2_000;
+        await pedirResumen(user.id, resumenPedido.versionResumen, { presupuestoMs: Math.min(20_000, restanteMs) });
+      }
     })
   );
 
@@ -496,7 +502,12 @@ export async function POST(request: Request) {
         // se manda como turno actual, junto con la capa 5. Nunca viaja dos veces.
         const previas = sinTurnoActual(filas, { pedidoId, mensaje });
         const ventana = construirVentana(previas);
-        if (memoria.activa && ventana.superaTopeSuave) resumenPedido.versionResumen = resumen?.version ?? 0;
+        // Solo se pide un resumen si hay algo que se pueda resumir (hay filas de sobra más allá de las últimas y el corte
+        // cae justo antes de un mensaje de la persona): si no, el trabajador no haría nada y se repetiría en cada turno.
+        if (memoria.activa && ventana.superaTopeSuave) {
+          const hayCorte = elegirCorte(previas.map((f) => ({ id: f.id, role: f.role, contenido: f.contenido, created_at: f.created_at, excluido_memoria: false }))) !== null;
+          if (hayCorte) resumenPedido.versionResumen = resumen?.version ?? 0;
+        }
 
         // Capa 5: perfil vivo y datos del día, en un bloque rotulado al comienzo del último mensaje del usuario
         // (no en `system`, que invalidaría el caché de los mensajes; Sonnet 5 no admite mensajes de sistema a
