@@ -1,6 +1,6 @@
 import "server-only";
 
-import { after } from "next/server";
+import { after, NextResponse } from "next/server";
 import { limpiarDato } from "@/lib/ai/limpiar";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +11,8 @@ import { alcanzaParaOtraVuelta, msHastaElCorte, REINTENTOS_SDK, restanteMs, text
 import { clasificarErrorProveedor, mensajeErrorProveedor } from "@/lib/ai/errores-proveedor";
 import { detectarEmergencia, textoEmergenciaRespaldo } from "@/lib/ai/emergencia-respaldo";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
+import { verificarLimitePedidos } from "@/lib/limites/nucleo";
+import { LIMITES_CHAT } from "@/lib/limites/logica";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { guiaDePantallasParaPrompt } from "@/lib/ai/guia-app";
 import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento, accionesDelPedido } from "@/lib/chat/pedidos";
@@ -279,6 +281,19 @@ export async function POST(request: Request) {
       )
     )
   );
+
+  // Límite de pedidos por usuario/IP (migración 034; falla abierto). Va antes de gastar nada: 429 con el
+  // mensaje que el overlay muestra. Se registra como 'limite'/'pedidos' (distinto del límite de tokens).
+  const pedidos = await verificarLimitePedidos({ usuarioId: user.id, headers: request.headers, limites: LIMITES_CHAT });
+  if (!pedidos.ok) {
+    medicion.resultado = "limite";
+    medicion.errorCodigo = "pedidos";
+    cerrarRegistro();
+    return NextResponse.json(
+      { error: pedidos.mensaje },
+      { status: 429, headers: { "Retry-After": String(pedidos.reintentarEnSegundos) } }
+    );
+  }
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

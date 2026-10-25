@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { LIMITES_VOZ } from "@/lib/limites/logica";
+import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { createClient } from "@/lib/supabase/server";
 import { generarAudio } from "@/lib/voz/nucleo";
 
@@ -19,6 +21,15 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+  }
+
+  // Límite de pedidos por usuario (migración 034; falla abierto).
+  const pedidos = await verificarLimitePedidos({ usuarioId: user.id, headers: request.headers, limites: LIMITES_VOZ });
+  if (!pedidos.ok) {
+    return NextResponse.json(
+      { error: pedidos.mensaje },
+      { status: 429, headers: { "Retry-After": String(pedidos.reintentarEnSegundos) } }
+    );
   }
 
   const { texto } = (await request.json().catch(() => ({}))) as { texto?: string };
