@@ -1,5 +1,4 @@
--- Vitapp — Onboarding: "¿Te medís la presión o el azúcar en casa?" y
--- 'ayunas' como valor de medicamentos.con_comida (ver la última sección).
+-- Vitapp — Onboarding: "¿Te medís la presión o el azúcar en casa?".
 --
 --   perfiles.mediciones_en_casa   'presion' | 'glucemia' | 'ambas' | 'ninguna'
 --                                 (null = no respondió o salteó la pregunta)
@@ -21,19 +20,3 @@
 alter table perfiles
   add column if not exists mediciones_en_casa text
     check (mediciones_en_casa is null or mediciones_en_casa in ('presion', 'glucemia', 'ambas', 'ninguna'));
-
--- "En ayunas" como valor propio de la relación con la comida (el paso guiado de
--- remedios del onboarding lo ofrece; antes se guardaba como 'antes').
--- `medicamentos.con_comida` (004) y `medicamentos_pendientes.con_comida` (012)
--- tienen un check inline sin nombre propio: Postgres los nombra
--- <tabla>_<columna>_check. Mientras esta migración no esté aplicada, la app
--- reintenta con 'antes' si el insert rechaza 'ayunas'.
-alter table medicamentos drop constraint if exists medicamentos_con_comida_check;
-alter table medicamentos
-  add constraint medicamentos_con_comida_check
-  check (con_comida in ('ayunas', 'antes', 'con', 'despues', 'no-importa'));
-
-alter table medicamentos_pendientes drop constraint if exists medicamentos_pendientes_con_comida_check;
-alter table medicamentos_pendientes
-  add constraint medicamentos_pendientes_con_comida_check
-  check (con_comida in ('ayunas', 'antes', 'con', 'despues', 'no-importa'));

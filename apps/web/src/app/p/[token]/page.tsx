@@ -23,7 +23,6 @@ const MOMENTOS = [
   { clave: "noche", label: "Noche" },
 ] as const;
 const COMIDAS: Record<string, string> = {
-  ayunas: "En ayunas",
   antes: "Antes de comer",
   con: "Con la comida",
   despues: "Después de comer",

@@ -5,7 +5,7 @@ import type { ConComida } from "./tipos";
 // del cuidador): campos `tomaHora` y `tomaComida` en pares, en el mismo orden.
 // Es el borde del sistema: se valida todo, no se confía en el cliente.
 
-export const COMIDAS_VALIDAS: ConComida[] = ["ayunas", "antes", "con", "despues", "no-importa"];
+export const COMIDAS_VALIDAS: ConComida[] = ["antes", "con", "despues", "no-importa"];
 export const MAX_TOMAS = 6;
 
 export function leerTomas(formData: FormData): { hora: string; conComida: ConComida }[] {

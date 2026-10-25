@@ -319,15 +319,7 @@ export async function agregarMultiMomento(
     notas: datos.notas ?? null,
   }));
 
-  let { data, error } = await supabase.from("medicamentos").insert(filas).select();
-  // 'ayunas' llega con la migración 031: si todavía no está aplicada, el check
-  // de con_comida lo rechaza y se reintenta como 'antes' (lo más cercano).
-  if (error && filas.some((f) => f.con_comida === "ayunas") && /con_comida/.test(error.message)) {
-    ({ data, error } = await supabase
-      .from("medicamentos")
-      .insert(filas.map((f) => (f.con_comida === "ayunas" ? { ...f, con_comida: "antes" as const } : f)))
-      .select());
-  }
+  const { data, error } = await supabase.from("medicamentos").insert(filas).select();
   if (error) throw new Error(`No se pudo crear el medicamento: ${error.message}`);
   return data as Medicamento[];
 }

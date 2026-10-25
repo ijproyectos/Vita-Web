@@ -1,6 +1,6 @@
 export type MomentoDia = "mañana" | "mediodia" | "tarde" | "noche";
 
-export type ConComida = "ayunas" | "antes" | "con" | "despues" | "no-importa";
+export type ConComida = "antes" | "con" | "despues" | "no-importa";
 
 export type DiaSemana =
   | "lunes"
@@ -142,7 +142,6 @@ export function indicacionDeComida(
   m: Pick<Medicamento, "con_comida" | "momento_dia"> & { hora_programada?: string | null }
 ): string | null {
   if (m.con_comida === "no-importa") return null;
-  if (m.con_comida === "ayunas") return "En ayunas";
   // "Antes de dormir" se guarda como 'antes' de noche: se distingue de "antes
   // de la cena" por la hora (el chip sugiere 23:00, la cena 20:00).
   if (m.con_comida === "antes" && m.momento_dia === "noche" && (m.hora_programada ?? "") >= "22:30") {
