@@ -38,12 +38,14 @@ group by 1, 2
 order by 3 desc;
 
 -- 4) Costo aproximado por día.
--- TODO: PRECIOS SIN VERIFICAR. No se inventaron: completar con los precios vigentes (USD por millón de
--- tokens) de https://docs.claude.com/en/docs/about-claude/pricing para cada modelo ANTES de confiar en
--- esta columna. Mientras sean null, usd_aprox da null (no 0).
+-- Precios en USD por millón de tokens, API directa de Anthropic, vigentes al 2026-10-06
+-- (https://docs.claude.com/en/docs/about-claude/pricing): entrada, salida, lectura de caché (0,1×
+-- entrada) y escritura de caché de 5 minutos (1,25× entrada). Revisarlos si cambia el modelo o la
+-- tarifa; un modelo que no esté en la tabla da usd_aprox null (no 0).
 with precios (modelo, usd_entrada_por_mtok, usd_salida_por_mtok, usd_cache_lectura_por_mtok, usd_cache_escritura_por_mtok) as (
   values
-    ('claude-sonnet-5', null::numeric, null::numeric, null::numeric, null::numeric) -- TODO valores
+    ('claude-sonnet-5', 2.00::numeric, 10.00::numeric, 0.20::numeric, 2.50::numeric),
+    ('claude-sonnet-5-5', 2.00::numeric, 10.00::numeric, 0.20::numeric, 2.50::numeric)
 )
 select
   (r.created_at at time zone 'America/Argentina/Buenos_Aires')::date as dia,
