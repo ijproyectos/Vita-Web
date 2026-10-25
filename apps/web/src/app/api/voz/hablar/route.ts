@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { generarAudio } from "@/lib/voz/nucleo";
 
 export const runtime = "nodejs";
+// Segundos; literal estático. Mismo criterio y caveat de Netlify que lib/ai/presupuesto.ts.
+export const maxDuration = 30;
 
 // Tope de caracteres por pedido. El cliente manda una oración por vez
 // (extraerFrasesListas), muy por debajo de esto; evita que se use el endpoint

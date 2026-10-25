@@ -8,6 +8,10 @@ import type { ResultadoAudio, ResultadoTranscripcion } from "./tipos";
 // Mismo criterio que lib/estudios/extraer.ts para Anthropic: un solo
 // archivo server-only, nunca lanza, quien llama siempre puede degradar
 // (acá, dejar que el usuario tipee) si esto falla.
+// Tope de cada llamada a un proveedor de voz: corta antes que maxDuration de las rutas (30 s) para
+// poder devolver un {error} prolijo en vez de que la plataforma mate la función.
+const TIMEOUT_PROVEEDOR_VOZ_MS = 20_000;
+
 const ENDPOINT_TRANSCRIPCIONES = "https://api.groq.com/openai/v1/audio/transcriptions";
 
 /**
@@ -33,6 +37,7 @@ export async function transcribirAudio(audio: Buffer | Blob, mimeType: string): 
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: cuerpo,
+      signal: AbortSignal.timeout(TIMEOUT_PROVEEDOR_VOZ_MS),
     });
 
     if (!respuesta.ok) {
@@ -96,6 +101,7 @@ export async function generarAudio(texto: string): Promise<ResultadoAudio> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ text: limpio }),
+      signal: AbortSignal.timeout(TIMEOUT_PROVEEDOR_VOZ_MS),
     });
 
     if (!respuesta.ok) {

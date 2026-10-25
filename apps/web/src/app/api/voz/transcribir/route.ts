@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { transcribirAudio } from "@/lib/voz/nucleo";
 
 export const runtime = "nodejs";
+// Segundos; literal estático. Mismo criterio y caveat de Netlify que lib/ai/presupuesto.ts.
+export const maxDuration = 30;
 
 // Un turno de voz son segundos de audio; 10 MB es holgado y corta abusos.
 const MAX_BYTES_AUDIO = 10 * 1024 * 1024;

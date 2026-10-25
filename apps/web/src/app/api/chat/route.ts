@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
 import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
+import { alcanzaParaOtraVuelta, msHastaElCorte, REINTENTOS_SDK, restanteMs, textoCortePorTiempo } from "@/lib/ai/presupuesto";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { guiaDePantallasParaPrompt } from "@/lib/ai/guia-app";
@@ -23,6 +24,9 @@ import { textoDosis } from "@/lib/medicamentos/tipos";
 import { listarDeHoy } from "@/lib/turnos/nucleo";
 
 export const runtime = "nodejs";
+// Segundos; tiene que ser un literal (Next lo lee estático). Va por encima de PRESUPUESTO_RESPUESTA_MS
+// (lib/ai/presupuesto.ts): ahí está explicado que el límite real de Netlify es plan-dependiente y no verificado.
+export const maxDuration = 30;
 
 // Modelo y tope de tokens en lib/ai/modelo.ts (sonnet: punto justo de
 // latencia/calidad para una conversación con tool-calling).
@@ -38,7 +42,7 @@ const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "s
 
 const TEXTO_LIMPIEZA_FALLIDA = "No pude confirmar que se canceló lo pendiente por un problema temporal. Probá de nuevo en un momento.";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: REINTENTOS_SDK });
 
 const SYSTEM_PROMPT = `Sos vita, la asistente de salud de vita. Hablás en español rioplatense,
 usás "vos", tono cálido y breve (1-3 oraciones). Ayudás al usuario a
@@ -292,6 +296,13 @@ export async function POST(request: Request) {
       // MAX_TURNOS_TOOL_USE llamadas reales a Anthropic por mensaje del
       // usuario), así que el límite diario se chequea acá antes de nada.
 
+      // Corte duro del presupuesto: si una llamada al modelo se cuelga, este controlador la aborta.
+      const controlador = new AbortController();
+      const temporizadorCorte = setTimeout(() => controlador.abort(), msHastaElCorte(inicioMs, performance.now()));
+      let cortePorTiempo = false;
+      let fallaPorTiempo = false;
+      let escriturasHechas = 0; // tarjetas de escritura ya emitidas: lo hecho no se pierde si se corta
+
       try {
         const limite = await verificarLimiteDiario(user.id);
         if (!limite.ok) {
@@ -454,13 +465,21 @@ export async function POST(request: Request) {
 Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDeHoyISO()}). Usá SIEMPRE esta fecha para resolver "hoy", "mañana", "el jueves", "el 15", etc., y pasá las fechas a las tools como YYYY-MM-DD. Un turno nunca puede quedar en una fecha que ya pasó.`;
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
-          const respuesta = anthropic.messages.stream({
-            model: MODELO_IA,
-            max_tokens: MAX_TOKENS_CHAT,
-            system: systemConFecha,
-            tools: TOOLS,
-            messages: historial,
-          });
+          // Antes de otra vuelta del modelo: si el presupuesto ya no alcanza, se corta acá.
+          if (turno > 0 && !alcanzaParaOtraVuelta(restanteMs(inicioMs, performance.now()))) {
+            cortePorTiempo = true;
+            break;
+          }
+          const respuesta = anthropic.messages.stream(
+            {
+              model: MODELO_IA,
+              max_tokens: MAX_TOKENS_CHAT,
+              system: systemConFecha,
+              tools: TOOLS,
+              messages: historial,
+            },
+            { signal: controlador.signal, timeout: msHastaElCorte(inicioMs, performance.now()) }
+          );
 
           medicion.vueltas++;
           respuesta.on("text", (texto) => {
@@ -469,7 +488,17 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             enviar({ chunk: texto });
           });
 
-          const mensajeFinal = await respuesta.finalMessage();
+          let mensajeFinal: Anthropic.Message;
+          try {
+            mensajeFinal = await respuesta.finalMessage();
+          } catch (e) {
+            // El corte del presupuesto abortó la llamada: no es un error del proveedor.
+            if (controlador.signal.aborted) {
+              cortePorTiempo = true;
+              break;
+            }
+            throw e;
+          }
           historial.push({ role: "assistant", content: mensajeFinal.content });
           tokensInputAcumulados += mensajeFinal.usage.input_tokens;
           tokensOutputAcumulados += mensajeFinal.usage.output_tokens;
@@ -497,6 +526,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
               { supabase, usuarioId: user.id, pedidoId, mensajeUsuario: mensaje, familia, abiertoId: abierto?.id }
             );
             if (resultado.accionUI) enviar({ action: resultado.accionUI });
+            if (resultado.accionUI && TOOLS_DE_ESCRITURA.has(uso.name)) escriturasHechas++;
             resultadosTool.push({
               type: "tool_result",
               tool_use_id: uso.id,
@@ -511,12 +541,28 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
           historial.push({ role: "user", content: resultadosTool });
         }
 
+        if (cortePorTiempo) {
+          // Si no se llegó a nada (ni texto ni escrituras), es una falla para reintentar; si ya hay algo,
+          // se cierra con una nota corta y lo hecho queda (las tarjetas ya salieron). Se registra como
+          // 'error'/'tiempo' en ambos casos: la respuesta no llegó completa.
+          medicion.resultado = "error";
+          medicion.errorCodigo = "tiempo";
+          if (!textoAcumulado && escriturasHechas === 0) {
+            fallaPorTiempo = true;
+          } else {
+            const nota = `${textoAcumulado ? "\n\n" : ""}${textoCortePorTiempo(escriturasHechas)}`;
+            textoAcumulado += nota;
+            enviar({ chunk: nota });
+          }
+        }
+
         if (textoAcumulado) {
           await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
         }
 
         const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
         if (usoNuevo) enviarUso(usoNuevo);
+        if (fallaPorTiempo) enviar({ error: "Se me hizo largo y no pude responderte. Probá de nuevo." });
         enviarFin();
       } catch (e) {
         // Registra lo consumido hasta el turno que falló -- una excepción a
@@ -529,6 +575,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
         enviar({ error: e instanceof Error ? e.message : "Error desconocido." });
         enviarFin();
       } finally {
+        clearTimeout(temporizadorCorte);
         try {
           controller.close();
         } finally {
