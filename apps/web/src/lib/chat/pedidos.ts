@@ -2,7 +2,16 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ejecutarTool, type ResultadoTool } from "@/lib/ai/tools";
-import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
+import {
+  mensajeFaltaConfirmacion,
+  opcionesConfirmarPara,
+  opcionesElegirDestino,
+  resolverDestino,
+  TOOLS_CONFIRMACION_ATADA,
+  TOOLS_DE_ESCRITURA,
+} from "@/lib/ai/destino";
+import { limpiarDato } from "@/lib/ai/limpiar";
+import { clasificarRespuesta } from "@/lib/ai/respuesta";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 
 // Reintentos sin duplicar escrituras (migración 030, `acciones_agente`).
@@ -40,23 +49,8 @@ function normDosis(valor: unknown): string {
   return norm(valor).replace(/\s+/g, "");
 }
 
-/**
- * Clasifica el mensaje ACTUAL del usuario como respuesta a "¿se lo cargo a X?".
- * Solo un sí explícito (o el botón "Para X") autoriza; un rechazo gana siempre
- * ("sí, para mí" es rechazo); cualquier otra cosa es ambigua y no autoriza.
- */
-export function clasificarRespuesta(texto: string, persona: string | null): "si" | "no" | "otro" {
-  const t = norm(texto).replace(/[¿?¡!.,;:]/g, " ").replace(/\s+/g, " ").trim();
-  if (!t) return "otro";
-  // "para mí" rechaza, pero "para mi mamá" nombra a un familiar: no es un no.
-  const paraMi = /\bpara mi\b(?! (mama|papa|madre|padre|abuel[oa]|hij[oa]|ti[oa]|herman[oa]|espos[oa]|pareja|suegr[oa]|niet[oa]|viej[oa]|familiar))/;
-  if (/^(no|nop|nunca|nada|cancel\w*|mejor no)\b/.test(t) || paraMi.test(t)) return "no";
-  if (/^(si|sip|dale|ok|okey|okay|confirmo|claro|de una|correcto|exacto|listo|hacelo|agregalo|cargalo)\b/.test(t)) {
-    return "si";
-  }
-  if (persona && t === `para ${norm(persona)}`) return "si";
-  return "otro";
-}
+// La lectura sí/no del mensaje del usuario vive en lib/ai/respuesta.ts (pura, probable).
+export { clasificarRespuesta };
 
 /**
  * ÚNICO lugar donde se define la clave de dedupe de cada tool de escritura.
@@ -116,7 +110,7 @@ const MENSAJE_YA_PEDIDA =
   "Esta acción ya se había pedido en un intento anterior y puede estar hecha. No la repitas: verificá con las tools de lectura antes de volver a escribir.";
 
 // Una confirmación pendiente (pregunta hecha al usuario) solo vale este rato.
-const VENTANA_CONFIRMACION_MS = 10 * 60 * 1000;
+const VENTANA_CONFIRMACION_MS = 5 * 60 * 1000;
 
 type Contexto = {
   supabase: SupabaseClient;
@@ -124,6 +118,10 @@ type Contexto = {
   pedidoId: string;
   /** Texto del mensaje ACTUAL del usuario: la confirmación se lee de acá, no de un pendiente viejo. */
   mensajeUsuario: string;
+  /** `clasificarRespuesta(mensajeUsuario)`, calculada UNA vez por request en la route. */
+  respuestaUsuario: "si" | "no" | "otro";
+  /** Id de la acción pendiente cuyo botón tocó el usuario (validado como uuid), si lo hay. */
+  confirmacionId?: string;
   familia: MiembroFamilia[];
   /** Perfil de un familiar abierto en pantalla (ya validado), si lo hay. */
   abiertoId?: string;
@@ -149,43 +147,124 @@ const MENSAJE_CONFIRMACION_RECHAZADA =
 const MENSAJE_CONFIRMACION_NO_VERIFICADA =
   "No pude verificar la confirmación del usuario (error temporal), así que NO se ejecutó nada. Decile al usuario que lo intente de nuevo en un momento.";
 
-/**
- * Confirmación del usuario para escribir en OTRA persona, hecha cumplir por el
- * servidor (el flag `confirmado` del modelo no alcanza). Sin confirmación válida
- * se deja una fila pendiente (clave `pendiente:<clave>`, bajo el pedido ACTUAL) y
- * se devuelve "pendiente". Solo se ejecuta si el mensaje ACTUAL del usuario es un
- * sí explícito (`clasificarRespuesta`) Y existe una pendiente con la MISMA clave
- * de un pedido ANTERIOR de menos de 10 minutos, que se consume al confirmar. Si
- * el mensaje es un rechazo ("no", "cancelar", "para mí") se borran TODAS las
- * pendientes del usuario y se devuelve "rechazada". Dentro del mismo pedido no se confirma, salvo por
- * el marcador `confirmada:<clave>` (bajo el pedido actual) que deja esta función
- * al consumir: si el primer intento se cayó tras consumir, el reintento del mismo
- * pedido lo encuentra y puede ejecutar.
- * "sin_tabla": la tabla no existe (migración 030 pendiente): se usa el flag del modelo.
- * "error": cualquier otro error de la contabilidad: se falla cerrado (no se ejecuta).
- */
-async function confirmacionDelServidor(
+type AccionPendiente = {
+  tool: string;
+  /** Input del modelo SIN `confirmado` ni `persona_id`: es lo que se ejecuta al confirmar. */
+  input: Record<string, unknown>;
+  destinoId: string;
+  persona: string;
+  /** Nació de "FALTA DESTINO": un "sí" genérico no alcanza si hay más de una pendiente. */
+  origenDestino?: boolean;
+};
+
+function sinMarcas(input: Record<string, unknown>): Record<string, unknown> {
+  const { confirmado: _c, persona_id: _p, ...resto } = input;
+  void _c;
+  void _p;
+  return resto;
+}
+
+/** Borra TODAS las pendientes del usuario (un "no"/"cancelar" las invalida). Nunca lanza. */
+export async function purgarPendientes(supabase: SupabaseClient, usuarioId: string): Promise<void> {
+  try {
+    await supabase.from("acciones_agente").delete().eq("usuario_id", usuarioId).like("clave", "pendiente:%");
+  } catch {
+    // Best-effort: confirmacionDelServidor vuelve a descartarlas ante un "no".
+  }
+}
+
+async function guardarPendiente(
   supabase: SupabaseClient,
   usuarioId: string,
   pedidoId: string,
   clave: string,
-  mensajeUsuario: string,
-  persona: string | null
-): Promise<"confirmada" | "pendiente" | "rechazada" | "sin_tabla" | "error"> {
+  accion: AccionPendiente
+): Promise<{ estado: "ok"; id: string | null } | { estado: "sin_tabla" | "error"; id: null }> {
+  const clavePendiente = `pendiente:${clave}`;
+  try {
+    // Una sola pendiente vigente por acción: las de pedidos anteriores se reemplazan.
+    const { error: errBorrar } = await supabase
+      .from("acciones_agente")
+      .delete()
+      .eq("usuario_id", usuarioId)
+      .eq("clave", clavePendiente)
+      .neq("pedido_id", pedidoId);
+    if (errBorrar) throw errBorrar;
+    const { error } = await supabase
+      .from("acciones_agente")
+      .upsert(
+        { usuario_id: usuarioId, pedido_id: pedidoId, clave: clavePendiente, resultado: { pendiente: accion } },
+        { onConflict: "usuario_id,pedido_id,clave", ignoreDuplicates: true }
+      );
+    if (error) throw error;
+    const { data, error: errLeer } = await supabase
+      .from("acciones_agente")
+      .select("id")
+      .eq("usuario_id", usuarioId)
+      .eq("pedido_id", pedidoId)
+      .eq("clave", clavePendiente)
+      .maybeSingle();
+    if (errLeer) throw errLeer;
+    return { estado: "ok", id: (data?.id as string | undefined) ?? null };
+  } catch (e) {
+    return { estado: esTablaInexistente(e) ? "sin_tabla" : "error", id: null };
+  }
+}
+
+function pendienteDe(resultado: unknown): AccionPendiente | null {
+  const p = (resultado as { pendiente?: AccionPendiente } | null | undefined)?.pendiente;
+  return p && typeof p.tool === "string" && p.input && typeof p.input === "object" ? p : null;
+}
+
+type EstadoConfirmacion =
+  | { estado: "confirmada"; accion: AccionPendiente | null }
+  | { estado: "pendiente"; id: string | null }
+  | { estado: "rechazada" }
+  | { estado: "sin_tabla" }
+  | { estado: "error" };
+
+/**
+ * Confirmación del usuario para escribir en OTRA persona, hecha cumplir por el
+ * servidor (el flag `confirmado` del modelo no vale nada). Sin confirmación válida
+ * se deja una fila `pendiente:<clave>` (bajo el pedido ACTUAL, con la acción
+ * exacta en `resultado`) y se devuelve "pendiente" con su id. Se ejecuta solo si
+ * existe una pendiente con la MISMA clave de un pedido ANTERIOR de menos de 5 min
+ * (que se consume) Y además:
+ * - el usuario tocó su botón (`confirmacionId` == id de la pendiente), o
+ * - su mensaje ACTUAL es un sí explícito (`respuesta`), salvo que la acción sea
+ *   clínica/destructiva (`atada`) o nacida de "FALTA DESTINO": ahí el "sí" tipeado
+ *   solo vale si esa es la ÚNICA pendiente vigente (un "sí" genérico no puede
+ *   ejecutar otra acción).
+ * Un "no" borra TODAS las pendientes y devuelve "rechazada". Dentro del mismo
+ * pedido no se confirma, salvo por el marcador `confirmada:<clave>` que deja esta
+ * función al consumir (permite reintentar el pedido).
+ * "sin_tabla": la tabla no existe (030 pendiente) y "error": cualquier otro fallo
+ * de la contabilidad. Ambos FALLAN CERRADO para otra persona: no se ejecuta.
+ */
+async function confirmacionDelServidor(p: {
+  supabase: SupabaseClient;
+  usuarioId: string;
+  pedidoId: string;
+  clave: string;
+  respuesta: "si" | "no" | "otro";
+  confirmacionId?: string;
+  atada: boolean;
+  accion: AccionPendiente;
+}): Promise<EstadoConfirmacion> {
+  const { supabase, usuarioId, pedidoId, clave, respuesta, confirmacionId, atada, accion } = p;
   const clavePendiente = `pendiente:${clave}`;
   const claveConfirmada = `confirmada:${clave}`;
   try {
     const { data: marcador, error: errMarcador } = await supabase
       .from("acciones_agente")
-      .select("id")
+      .select("id, resultado")
       .eq("usuario_id", usuarioId)
       .eq("pedido_id", pedidoId)
       .eq("clave", claveConfirmada)
       .limit(1);
     if (errMarcador) throw errMarcador;
-    if (marcador && marcador.length > 0) return "confirmada";
+    if (marcador && marcador.length > 0) return { estado: "confirmada", accion: pendienteDe(marcador[0].resultado) };
 
-    const respuesta = clasificarRespuesta(mensajeUsuario, persona);
     if (respuesta === "no") {
       const { error: errLimpiar } = await supabase
         .from("acciones_agente")
@@ -193,49 +272,66 @@ async function confirmacionDelServidor(
         .eq("usuario_id", usuarioId)
         .like("clave", "pendiente:%");
       if (errLimpiar) throw errLimpiar;
-      return "rechazada";
+      return { estado: "rechazada" };
     }
 
     const desde = new Date(Date.now() - VENTANA_CONFIRMACION_MS).toISOString();
     const { data: previas, error } = await supabase
       .from("acciones_agente")
-      .select("id")
+      .select("id, resultado")
       .eq("usuario_id", usuarioId)
       .eq("clave", clavePendiente)
       .neq("pedido_id", pedidoId)
       .gte("created_at", desde)
+      .order("created_at", { ascending: false })
       .limit(1);
     if (error) throw error;
     const previa = previas?.[0];
-    if (previa && respuesta === "si") {
-      // Se consume: solo confirma quien efectivamente borró la fila.
-      const { data: borradas, error: errBorrar } = await supabase
-        .from("acciones_agente")
-        .delete()
-        .eq("id", previa.id)
-        .select("id");
-      if (errBorrar) throw errBorrar;
-      if (borradas && borradas.length > 0) {
-        // Marcador de consumo (best-effort): permite reintentar este mismo pedido.
-        await supabase
+    if (previa) {
+      const guardada = pendienteDe(previa.resultado);
+      let autorizada = !!confirmacionId && confirmacionId === previa.id;
+      if (!autorizada && respuesta === "si") {
+        if (!atada && !guardada?.origenDestino) {
+          autorizada = true;
+        } else {
+          // Acción atada: el "sí" tipeado vale solo si es la única pendiente vigente.
+          const { data: vigentes, error: errVigentes } = await supabase
+            .from("acciones_agente")
+            .select("id")
+            .eq("usuario_id", usuarioId)
+            .like("clave", "pendiente:%")
+            .neq("pedido_id", pedidoId)
+            .gte("created_at", desde)
+            .limit(2);
+          if (errVigentes) throw errVigentes;
+          autorizada = (vigentes?.length ?? 0) === 1;
+        }
+      }
+      if (autorizada) {
+        // Se consume: solo confirma quien efectivamente borró la fila.
+        const { data: borradas, error: errBorrar } = await supabase
           .from("acciones_agente")
-          .upsert(
-            { usuario_id: usuarioId, pedido_id: pedidoId, clave: claveConfirmada },
-            { onConflict: "usuario_id,pedido_id,clave", ignoreDuplicates: true }
-          );
-        return "confirmada";
+          .delete()
+          .eq("id", previa.id)
+          .select("id");
+        if (errBorrar) throw errBorrar;
+        if (borradas && borradas.length > 0) {
+          // Marcador de consumo (best-effort): permite reintentar este mismo pedido.
+          await supabase
+            .from("acciones_agente")
+            .upsert(
+              { usuario_id: usuarioId, pedido_id: pedidoId, clave: claveConfirmada, resultado: { pendiente: guardada ?? accion } },
+              { onConflict: "usuario_id,pedido_id,clave", ignoreDuplicates: true }
+            );
+          return { estado: "confirmada", accion: guardada };
+        }
       }
     }
-    const { error: errInsert } = await supabase
-      .from("acciones_agente")
-      .upsert(
-        { usuario_id: usuarioId, pedido_id: pedidoId, clave: clavePendiente },
-        { onConflict: "usuario_id,pedido_id,clave", ignoreDuplicates: true }
-      );
-    if (errInsert) throw errInsert;
-    return "pendiente";
+    const nueva = await guardarPendiente(supabase, usuarioId, pedidoId, clave, accion);
+    if (nueva.estado !== "ok") return { estado: nueva.estado };
+    return { estado: "pendiente", id: nueva.id };
   } catch (e) {
-    return esTablaInexistente(e) ? "sin_tabla" : "error";
+    return { estado: esTablaInexistente(e) ? "sin_tabla" : "error" };
   }
 }
 
@@ -268,30 +364,71 @@ async function claimExistente(
 
 // "Falta confirmar": el texto para el modelo + los botones de respuesta rápida
 // para el usuario (accionUI de solo UI, no cuenta como escritura).
-function faltaConfirmacion(persona: string | null): ResultadoTool {
+function faltaConfirmacion(persona: string | null, confirmacionId?: string | null): ResultadoTool {
   const nombre = persona ?? "esa persona";
-  return { contenido: mensajeFaltaConfirmacion(nombre), accionUI: opcionesConfirmarPara(nombre) };
+  return { contenido: mensajeFaltaConfirmacion(nombre), accionUI: opcionesConfirmarPara(nombre, confirmacionId) };
+}
+
+// Fail-closed: sin poder verificar la confirmación NO se toca a otra persona,
+// ni siquiera si el modelo dice `confirmado: true`.
+function noDisponible(persona: string | null): ResultadoTool {
+  return {
+    contenido: `NO DISPONIBLE: no puedo modificar datos de ${limpiarDato(persona ?? "esa persona")} ahora (no se puede verificar la confirmación). No se ejecutó nada. Decile al usuario que lo intente más tarde o lo cargue desde la app.`,
+  };
+}
+
+/**
+ * Falta saber para quién es una escritura (guardia de destino equivocado): se
+ * guarda una pendiente por candidato y los botones "Para X" quedan atados a ella,
+ * así tocar "Para X" completa la acción en UNA ronda (sin una segunda confirmación).
+ */
+async function responderFaltaDestino(
+  nombre: string,
+  input: Record<string, unknown>,
+  candidatos: { id: string; nombre: string }[],
+  base: { contenido: string },
+  ctx: { supabase: SupabaseClient; usuarioId: string; pedidoId: string }
+): Promise<ResultadoTool> {
+  const ids: (string | null)[] = [];
+  for (const c of candidatos) {
+    const clave = `${c.id}~${claveSemantica(nombre, input)}`;
+    const guardada = await guardarPendiente(ctx.supabase, ctx.usuarioId, ctx.pedidoId, clave, {
+      tool: nombre,
+      input: sinMarcas(input),
+      destinoId: c.id,
+      persona: limpiarDato(c.nombre),
+      origenDestino: true,
+    });
+    ids.push(guardada.id);
+  }
+  return { contenido: base.contenido, accionUI: opcionesElegirDestino(candidatos.map((c) => c.nombre), ids) };
 }
 
 /**
  * Como `ejecutarTool`, pero las tools de escritura se reclaman antes de
  * ejecutarse. Cualquier falla de la contabilidad (tabla inexistente, RLS...)
- * degrada a ejecutar la tool como antes: el chat nunca se rompe por esto.
+ * degrada a ejecutar la tool como antes SOLO para escrituras sobre uno mismo;
+ * sobre otra persona falla cerrado ("NO DISPONIBLE"): el chat sigue andando.
  */
 export async function ejecutarToolIdempotente(
   nombre: string,
   input: Record<string, unknown>,
   ctx: Contexto
 ): Promise<ResultadoTool> {
-  const { supabase, usuarioId, pedidoId, mensajeUsuario, familia, abiertoId } = ctx;
+  const { supabase, usuarioId, pedidoId, mensajeUsuario, respuestaUsuario, confirmacionId, familia, abiertoId } = ctx;
   const ctxTool = { supabase, usuarioId, familia, abiertoId };
   if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, ctxTool);
 
   // Destino inválido, rol Lector o falta de confirmación: se devuelve el error
   // al modelo ANTES de reclamar nada (si no, un "falta confirmar" ocuparía la
   // clave y la llamada confirmada del mismo pedido quedaría como "ya pedida").
-  const destino = resolverDestino(nombre, input, ctxTool);
-  if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
+  const destino = resolverDestino(nombre, input, { ...ctxTool, mensajeUsuario });
+  if (!destino.ok) {
+    if (destino.faltaDestino) {
+      return responderFaltaDestino(nombre, input, destino.faltaDestino.candidatos, destino, { supabase, usuarioId, pedidoId });
+    }
+    return { contenido: destino.contenido, accionUI: destino.accionUI };
+  }
 
   // El destino va en la clave: la misma acción para dos personas distintas en
   // un pedido son dos acciones. El claim sigue siendo del usuario logueado.
@@ -305,15 +442,24 @@ export async function ejecutarToolIdempotente(
     if (existente === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     if (existente !== "ninguno") return existente;
 
-    const estado = await confirmacionDelServidor(supabase, usuarioId, pedidoId, clave, mensajeUsuario, destino.persona);
-    if (estado === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
-    if (estado === "rechazada") return { contenido: MENSAJE_CONFIRMACION_RECHAZADA };
-    if (estado === "pendiente") return faltaConfirmacion(destino.persona);
-    // Sin la tabla (migración 030 sin aplicar) se cae al comportamiento previo:
-    // vale el flag `confirmado` del modelo. Degradación deliberada SOLO ante tabla inexistente.
-    if (estado === "sin_tabla" && input.confirmado !== true) return faltaConfirmacion(destino.persona);
-    // Confirmación válida: se ejecuta (ejecutarTool exige confirmado: true).
-    input = { ...input, confirmado: true };
+    const estado = await confirmacionDelServidor({
+      supabase,
+      usuarioId,
+      pedidoId,
+      clave,
+      respuesta: respuestaUsuario,
+      confirmacionId,
+      atada: TOOLS_CONFIRMACION_ATADA.has(nombre),
+      accion: { tool: nombre, input: sinMarcas(input), destinoId: destino.destinoId, persona: destino.persona ?? "" },
+    });
+    if (estado.estado === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
+    if (estado.estado === "sin_tabla") return noDisponible(destino.persona);
+    if (estado.estado === "rechazada") return { contenido: MENSAJE_CONFIRMACION_RECHAZADA };
+    if (estado.estado === "pendiente") return faltaConfirmacion(destino.persona, estado.id);
+    // Confirmación válida: se ejecuta lo que el usuario confirmó (la acción
+    // GUARDADA, no lo que el modelo reformule ahora). ejecutarTool exige confirmado: true.
+    const guardada = estado.accion && estado.accion.tool === nombre ? estado.accion.input : sinMarcas(input);
+    input = { ...guardada, persona_id: destino.destinoId, confirmado: true };
   }
 
   let reclamada = false;
@@ -357,11 +503,10 @@ export async function ejecutarToolIdempotente(
       reclamada = true;
     }
   } catch (e) {
-    // Escritura sobre OTRA persona: solo se degrada si la tabla no existe; ante
-    // cualquier otro error se falla cerrado. Sobre uno mismo (contrato T4) se
-    // ejecuta como siempre.
-    if (destino.requiereConfirmacion && !esTablaInexistente(e)) {
-      return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
+    // Escritura sobre OTRA persona: SIEMPRE falla cerrado (tabla inexistente o
+    // cualquier otro error). Sobre uno mismo (contrato T4) se ejecuta como siempre.
+    if (destino.requiereConfirmacion) {
+      return esTablaInexistente(e) ? noDisponible(destino.persona) : { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     }
     return ejecutarTool(nombre, input, ctxTool);
   }

@@ -129,3 +129,55 @@ begin;
     raise notice 'PASS: el rechazo borra solo las pendientes';
   end $$;
 rollback;
+
+-- 5 — UPDATE solo sobre `resultado` (column grant); pendientes con la acción guardada en `resultado`
+begin;
+  select set_config('request.jwt.claims', json_build_object('sub', :user_a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  insert into acciones_agente (usuario_id, pedido_id, clave, resultado) values
+    (:user_a, 'bbbbbbbb-0000-0000-0000-000000000005', 'pendiente:dest~mark_taken:x|',
+     '{"pendiente":{"tool":"mark_taken","input":{"medication_name":"X"},"destinoId":"d","persona":"Elsa"}}');
+
+  do $$
+  declare n int;
+  begin
+    update acciones_agente set resultado = '{"contenido":"ok"}'::jsonb
+      where pedido_id = 'bbbbbbbb-0000-0000-0000-000000000005';
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'FAIL: el dueño no pudo completar el resultado'; end if;
+    raise notice 'PASS: el dueño actualiza resultado';
+
+    begin
+      update acciones_agente set created_at = now() + interval '1 day'
+        where pedido_id = 'bbbbbbbb-0000-0000-0000-000000000005';
+      raise exception 'FAIL: el dueño pudo reescribir created_at';
+    exception when insufficient_privilege then
+      raise notice 'PASS: update restringido a la columna resultado';
+    end;
+
+    begin
+      update acciones_agente set clave = 'otra' where pedido_id = 'bbbbbbbb-0000-0000-0000-000000000005';
+      raise exception 'FAIL: el dueño pudo reescribir clave';
+    exception when insufficient_privilege then
+      raise notice 'PASS: la clave no se puede reescribir';
+    end;
+  end $$;
+rollback;
+
+-- 6 — Retención: el cron (service_role) borra lo de más de 48 h y deja lo reciente
+begin;
+  insert into acciones_agente (usuario_id, pedido_id, clave, created_at) values
+    (:user_a, 'bbbbbbbb-0000-0000-0000-000000000006', 'viejo', now() - interval '49 hours'),
+    (:user_a, 'bbbbbbbb-0000-0000-0000-000000000006', 'reciente', now() - interval '1 hour');
+
+  do $$
+  declare n int;
+  begin
+    delete from acciones_agente where created_at < now() - interval '48 hours'
+      and pedido_id = 'bbbbbbbb-0000-0000-0000-000000000006';
+    get diagnostics n = row_count;
+    if n <> 1 then raise exception 'FAIL: la purga debía borrar solo la fila vieja (%)', n; end if;
+    raise notice 'PASS: la purga de 48 h borra solo lo viejo';
+  end $$;
+rollback;

@@ -10,13 +10,17 @@ export type MensajeChatUI = {
   accion?: { type: string; [clave: string]: unknown };
   // Botones de respuesta rápida (confirmaciones de familia), armados por el servidor.
   opciones?: string[];
+  // Opción afirmativa -> id de la acción pendiente en el servidor (confirmación atada).
+  vinculos?: Record<string, string>;
+  // Si este mensaje del usuario salió de un botón atado: se reenvía igual al reintentar.
+  confirmacionId?: string;
   // Reintento sin duplicar: el pedido que se le mandó al servidor, y si no hubo respuesta.
   pedidoId?: string;
   sinRespuesta?: boolean;
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
-export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, alElegirOpcion }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void; alElegirOpcion?: (texto: string) => void }) {
+export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, alElegirOpcion }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void; alElegirOpcion?: (texto: string, confirmacionId?: string) => void }) {
   if (m.role === "user") {
     return (
       <div className="mb-2.5 flex flex-col items-end gap-1">
@@ -54,7 +58,7 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, 
             <button
               key={o}
               type="button"
-              onClick={() => alElegirOpcion(o)}
+              onClick={() => alElegirOpcion(o, m.vinculos?.[o])}
               className="min-h-11 rounded-full bg-card px-4 py-2.5 text-[14.5px] font-bold text-teal-deep shadow-[inset_0_0_0_1px_var(--teal-100)]"
             >
               {o}
@@ -146,7 +150,7 @@ function TarjetaAccion({
       );
     case "open_screen": {
       // Solo navegación: se muestra aunque sea de otra persona. Defensivo con el href.
-      if (typeof accion.href !== "string" || !accion.href.startsWith("/app")) return null;
+      if (typeof accion.href !== "string" || !(accion.href === "/app" || accion.href.startsWith("/app/"))) return null;
       const label = typeof accion.label === "string" && accion.label.trim() !== "" ? accion.label : "esta pantalla";
       return (
         <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>

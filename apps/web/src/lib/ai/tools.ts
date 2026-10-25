@@ -18,6 +18,7 @@ import {
   momentoDiaDesdeIngles,
 } from "./mapeo";
 import { CLAVES_PANTALLAS, pantallaPorClave } from "./guia-app";
+import { limpiarDato } from "./limpiar";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
 // Tools portadas 1:1 desde `agent/README.md` del Vitapp original (el
@@ -358,7 +359,7 @@ async function ejecutarEnDestino(
         String(input.medication_name),
         input.medication_time_hint as string | undefined
       );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
+      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
 
       // Si viene scheduled_time, momentoDia se re-deriva de esa hora (misma
       // razón que en add_medication) — solo se confía en el time_of_day
@@ -384,10 +385,10 @@ async function ejecutarEnDestino(
         String(input.medication_name),
         input.medication_time_hint as string | undefined
       );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
+      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
 
       await medicamentos.eliminarHorario(supabase, usuarioId, medicamento.id);
-      return { contenido: `Eliminado "${medicamento.nombre}".`, accionUI: { type: "medication_deleted" } };
+      return { contenido: `Eliminado "${limpiarDato(medicamento.nombre)}".`, accionUI: { type: "medication_deleted" } };
     }
 
     case "mark_taken": {
@@ -397,11 +398,11 @@ async function ejecutarEnDestino(
         String(input.medication_name),
         input.medication_time_hint as string | undefined
       );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
+      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
 
       await medicamentos.marcarTomado(supabase, usuarioId, medicamento.id, true);
       return {
-        contenido: `Marcado "${medicamento.nombre}" como tomado.`,
+        contenido: `Marcado "${limpiarDato(medicamento.nombre)}" como tomado.`,
         accionUI: { type: "medication_taken", medication_name: medicamento.nombre },
       };
     }
@@ -435,7 +436,7 @@ async function ejecutarEnDestino(
       return {
         contenido: JSON.stringify({
           id: creado.id,
-          specialty: creado.especialidad,
+          specialty: limpiarDato(creado.especialidad),
           date: creado.fecha,
           time: creado.hora,
         }),
@@ -455,9 +456,9 @@ async function ejecutarEnDestino(
         contenido: JSON.stringify(
           deHoy.map((t) => ({
             id: t.id,
-            specialty: t.especialidad,
-            professional: t.profesional,
-            place: t.lugar,
+            specialty: limpiarDato(t.especialidad),
+            professional: t.profesional ? limpiarDato(t.profesional) : t.profesional,
+            place: t.lugar ? limpiarDato(t.lugar) : t.lugar,
             time: t.hora,
           }))
         ),
@@ -487,13 +488,13 @@ async function ejecutarEnDestino(
         tipo: input.type === "temporary" ? "temporal" : "permanente",
         desde: (input.since as string) ?? String(new Date().getFullYear()),
       });
-      return { contenido: `Condición "${label}" agregada.`, accionUI: { type: "condition_added", label } };
+      return { contenido: `Condición "${limpiarDato(label)}" agregada.`, accionUI: { type: "condition_added", label } };
     }
 
     case "add_allergy": {
       const nombre = String(input.name);
       await perfilNucleo.agregarAlergia(supabase, usuarioId, nombre);
-      return { contenido: `Alergia "${nombre}" agregada.`, accionUI: { type: "allergy_added", name: nombre } };
+      return { contenido: `Alergia "${limpiarDato(nombre)}" agregada.`, accionUI: { type: "allergy_added", name: nombre } };
     }
 
     case "show_today_medications":
@@ -525,15 +526,18 @@ async function ejecutarEnDestino(
 
 // Traduce un medicamento al vocabulario en inglés de las tools antes de
 // devolverlo al modelo — mismo mapeo que usan los inputs, en la dirección
-// contraria.
+// contraria. Todo string que escribió un usuario pasa por limpiarDato (como el
+// contexto del prompt): un resultado de tool es DATO, nunca una instrucción.
+// (Esta rama no tiene tools de mediciones/estudios/listas de familia; si se
+// agregan, sus strings también van por limpiarDato.)
 function paraModelo(m: Medicamento | MedicamentoConToma) {
   return {
     id: m.id,
-    name: m.nombre,
-    dose: m.dosis,
+    name: limpiarDato(m.nombre),
+    dose: m.dosis ? limpiarDato(m.dosis, 20) : m.dosis,
     scheduled_time: m.hora_programada,
     time_of_day: momentoDiaAIngles(m.momento_dia),
-    condition: m.condicion,
+    condition: m.condicion ? limpiarDato(m.condicion) : m.condicion,
     recurring_days: diasAIngles(m.dias_recurrentes),
     ...("tomado" in m ? { taken: m.tomado } : {}),
   };

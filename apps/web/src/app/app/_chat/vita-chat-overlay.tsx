@@ -295,10 +295,10 @@ export function VitaChatOverlay({
   // Reintentar = mismo texto y MISMO pedidoId, sin burbuja de usuario nueva: el
   // servidor reconoce el pedido y no repite lo que ya escribió.
   function reintentar(m: MensajeChatUI) {
-    if (m.pedidoId) enviar(m.content, m.pedidoId);
+    if (m.pedidoId) enviar(m.content, m.pedidoId, m.confirmacionId);
   }
 
-  async function enviar(texto: string, pedidoReintentado?: string) {
+  async function enviar(texto: string, pedidoReintentado?: string, confirmacionId?: string) {
     const limpio = texto.trim();
     if (!limpio || enviando || (uso && uso.restantes <= 0)) return;
 
@@ -313,7 +313,7 @@ export function VitaChatOverlay({
           ]
         : [
             ...prev,
-            { role: "user" as const, content: limpio, timestamp: ahora, pedidoId },
+            { role: "user" as const, content: limpio, timestamp: ahora, pedidoId, confirmacionId },
             { role: "assistant" as const, content: "", timestamp: ahora },
           ]
     );
@@ -332,7 +332,7 @@ export function VitaChatOverlay({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId }),
+        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId, confirmacionId }),
       });
 
       if (!res.body) throw new Error("Sin respuesta del servidor.");
@@ -356,7 +356,7 @@ export function VitaChatOverlay({
           const evento = JSON.parse(payload) as
             | { chunk: string }
             | { action: { type: string; [clave: string]: unknown } }
-            | { error: string }
+            | { error: string; sinReintento?: boolean }
             | { session: string }
             | { uso: UsoDiario };
 
@@ -398,10 +398,17 @@ export function VitaChatOverlay({
               const opciones = Array.isArray(evento.action.opciones)
                 ? evento.action.opciones.filter((o): o is string => typeof o === "string" && o.trim() !== "")
                 : [];
+              // Solo ids de opciones que existen (uuid): lo demás se ignora.
+              const vinculos: Record<string, string> = {};
+              if (evento.action.vinculos && typeof evento.action.vinculos === "object") {
+                for (const [k, v] of Object.entries(evento.action.vinculos as Record<string, unknown>)) {
+                  if (opciones.includes(k) && typeof v === "string") vinculos[k] = v;
+                }
+              }
               if (opciones.length > 0) {
                 setMensajes((prev) => {
                   const copia = [...prev];
-                  copia[copia.length - 1] = { ...copia[copia.length - 1], opciones };
+                  copia[copia.length - 1] = { ...copia[copia.length - 1], opciones, vinculos };
                   return copia;
                 });
               }
@@ -442,8 +449,27 @@ export function VitaChatOverlay({
               );
             }
           } else if ("error" in evento) {
-            fallo = true;
-            toast.error(evento.error);
+            if (evento.sinReintento) {
+              // Error que no se arregla reintentando (límite diario, mensaje inválido):
+              // sin "Sin respuesta / Reintentar". Si vita todavía no dijo nada, el
+              // mensaje queda como su respuesta en el chat; si ya dijo algo
+              // (p. ej. el texto de emergencia), va como aviso.
+              const textoError = evento.error;
+              if (textoAcumulado) {
+                toast.error(textoError);
+              } else {
+                textoAcumulado = textoError;
+                setMensajes((prev) => {
+                  const copia = [...prev];
+                  const ultimo = copia[copia.length - 1];
+                  if (ultimo?.role === "assistant" && !ultimo.content) copia[copia.length - 1] = { ...ultimo, content: textoError };
+                  return copia;
+                });
+              }
+            } else {
+              fallo = true;
+              toast.error(evento.error);
+            }
           }
         }
       }

@@ -1,5 +1,6 @@
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { limpiarDato } from "@/lib/ai/limpiar";
+import { mencionaFamiliar } from "@/lib/ai/respuesta";
 
 // Única fuente de verdad de qué tools ESCRIBEN datos (la usan la validación
 // de destino, la confirmación y el dedupe de lib/chat/pedidos.ts).
@@ -14,6 +15,12 @@ export const TOOLS_DE_ESCRITURA = new Set([
   "add_condition",
   "add_allergy",
 ]);
+
+// Escrituras CLÍNICAS o destructivas: sobre otra persona, la confirmación tiene
+// que estar ATADA a esa acción exacta (el botón con el id de la pendiente, o un
+// "sí" tipeado mientras sea la única pendiente). `mark_all_taken` además
+// silencia la alerta de dosis vencida a los cuidadores.
+export const TOOLS_CONFIRMACION_ATADA = new Set(["mark_taken", "mark_all_taken", "delete_schedule"]);
 
 // Tools que leen o escriben datos de una persona: son las únicas que aceptan
 // `persona_id`. set_avatar_mood es un efecto de interfaz, sin destino.
@@ -41,23 +48,51 @@ export type DestinoResuelto =
        */
       requiereConfirmacion?: boolean;
     }
-  | { ok: false; contenido: string; accionUI?: AccionOpciones };
+  | {
+      ok: false;
+      contenido: string;
+      accionUI?: AccionOpciones;
+      /**
+       * Falta saber para quién es la escritura: pedidos.ts guarda una pendiente por
+       * candidato y arma los botones "Para X" atados a ellas (una sola ronda).
+       */
+      faltaDestino?: { candidatos: { id: string; nombre: string }[] };
+    };
 
 /**
  * Botones de respuesta rápida bajo el mensaje de vita. Los arma el SERVIDOR (no
  * el modelo) para que las opciones sean siempre las correctas; el cliente manda
  * el texto exacto de la opción como un mensaje normal del usuario. No escribe nada.
+ * `vinculos` ata una opción afirmativa (texto de la opción -> id de la acción
+ * pendiente guardada en el servidor): al tocarla el cliente manda además ese id
+ * como `confirmacionId`, y solo así se confirma una acción atada.
  */
-export type AccionOpciones = { type: "opciones_confirmacion"; opciones: string[] };
+export type AccionOpciones = { type: "opciones_confirmacion"; opciones: string[]; vinculos?: Record<string, string> };
 
-export function opcionesConfirmarPara(nombreCrudo: string): AccionOpciones {
+export function opcionesConfirmarPara(nombreCrudo: string, confirmacionId?: string | null): AccionOpciones {
   const nombre = limpiarDato(nombreCrudo);
-  return { type: "opciones_confirmacion", opciones: [`Sí, para ${nombre}`, "No, es para mí", "Cancelar"] };
+  const afirmativa = `Sí, para ${nombre}`;
+  return {
+    type: "opciones_confirmacion",
+    opciones: [afirmativa, "No, es para mí", "Cancelar"],
+    ...(confirmacionId ? { vinculos: { [afirmativa]: confirmacionId } } : {}),
+  };
 }
 
-export function opcionesElegirDestino(nombreCrudo: string): AccionOpciones {
-  const nombre = limpiarDato(nombreCrudo);
-  return { type: "opciones_confirmacion", opciones: [`Para ${nombre}`, "Para mí", "Cancelar"] };
+/** `ids[i]` es el id de la pendiente de `nombres[i]` (opcional). */
+export function opcionesElegirDestino(nombresCrudos: string | string[], ids?: (string | null | undefined)[]): AccionOpciones {
+  const lista = Array.isArray(nombresCrudos) ? nombresCrudos : [nombresCrudos];
+  const nombres = lista.map((n) => limpiarDato(n));
+  const vinculos: Record<string, string> = {};
+  nombres.forEach((n, i) => {
+    const id = ids?.[i];
+    if (id) vinculos[`Para ${n}`] = id;
+  });
+  return {
+    type: "opciones_confirmacion",
+    opciones: [...nombres.map((n) => `Para ${n}`), "Para mí", "Cancelar"],
+    ...(Object.keys(vinculos).length > 0 ? { vinculos } : {}),
+  };
 }
 
 export function mensajeFaltaConfirmacion(nombreCrudo: string): string {
@@ -79,7 +114,7 @@ export function mensajeFaltaConfirmacion(nombreCrudo: string): string {
 export function resolverDestino(
   nombreTool: string,
   input: Record<string, unknown>,
-  ctx: { usuarioId: string; familia: MiembroFamilia[]; abiertoId?: string }
+  ctx: { usuarioId: string; familia: MiembroFamilia[]; abiertoId?: string; mensajeUsuario?: string }
 ): DestinoResuelto {
   const propio: DestinoResuelto = { ok: true, destinoId: ctx.usuarioId, persona: null };
   if (!TOOLS_CON_DESTINO.has(nombreTool)) return propio;
@@ -90,15 +125,31 @@ export function resolverDestino(
     input.persona_id === null ||
     (typeof input.persona_id === "string" && input.persona_id.trim() === "");
   if (ausente) {
+    if (!TOOLS_DE_ESCRITURA.has(nombreTool)) return propio;
     const abierto = ctx.abiertoId ? ctx.familia.find((f) => f.id === ctx.abiertoId) : undefined;
-    if (abierto && TOOLS_DE_ESCRITURA.has(nombreTool)) {
+    // Guardia de destino equivocado: sin persona_id una escritura cae en la cuenta
+    // propia. Si hay un perfil de familiar abierto, o el mensaje nombra a un
+    // familiar ("mi mamá", el nombre de alguien de la lista), no se asume nada.
+    const mencion = ctx.mensajeUsuario ? mencionaFamiliar(ctx.mensajeUsuario, ctx.familia) : { menciona: false, candidatos: [] };
+    const candidatos = abierto ? [abierto] : mencion.menciona ? mencion.candidatos : [];
+    if (candidatos.length === 0) return propio;
+
+    const editables = candidatos.filter((c) => c.rol === "editar").slice(0, 3);
+    if (editables.length === 0) {
+      const lector = limpiarDato(candidatos[0].nombre);
       return {
         ok: false,
-        contenido: `Está abierto el perfil de ${limpiarDato(abierto.nombre)} en pantalla y no indicaste persona_id, así que NO se ejecutó nada. Preguntale al usuario si la acción es para él o ella o para ${limpiarDato(abierto.nombre)}, y recién con su respuesta volvé a llamar pasando persona_id explícito (el id de ${limpiarDato(abierto.nombre)} de la lista de Personas, o ${ctx.usuarioId} para quien chatea). La app le muestra botones "Para ${limpiarDato(abierto.nombre)}", "Para mí" y "Cancelar".`,
-        accionUI: opcionesElegirDestino(abierto.nombre),
+        contenido: `Solo podés ver los datos de ${lector} (rol Lector): no podés cargar ni cambiar nada. Si la acción era para vos, repetí el pedido aclarando que es para vos (persona_id ${ctx.usuarioId}); si no, explicáselo al usuario. No se ejecutó nada.`,
       };
     }
-    return propio;
+    const nombres = editables.map((c) => limpiarDato(c.nombre));
+    const lista = nombres.join(" / ");
+    return {
+      ok: false,
+      contenido: `FALTA DESTINO: ${abierto ? `está abierto el perfil de ${lista} en pantalla` : `el mensaje nombra a un familiar (${lista})`} y no indicaste persona_id, así que NO se ejecutó nada. Preguntale al usuario "¿Es para vos o para ${nombres[0]}?" y esperá su respuesta. La app le muestra botones ${nombres.map((n) => `"Para ${n}"`).join(", ")}, "Para mí" y "Cancelar"; con "Para ${nombres[0]}" la acción se confirma sola: volvé a llamar a la tool con el persona_id de esa persona (de la lista de Personas) y los mismos datos. Con "Para mí" llamala con persona_id = ${ctx.usuarioId}.`,
+      accionUI: opcionesElegirDestino(nombres),
+      faltaDestino: { candidatos: editables.map((c) => ({ id: c.id, nombre: c.nombre })) },
+    };
   }
 
   const crudo = typeof input.persona_id === "string" ? input.persona_id.trim() : "";
