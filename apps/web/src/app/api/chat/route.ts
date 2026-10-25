@@ -9,7 +9,6 @@ import { TOOLS } from "@/lib/ai/tools";
 import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
 import { alcanzaParaOtraVuelta, msHastaElCorte, REINTENTOS_SDK, restanteMs, textoCortePorTiempo } from "@/lib/ai/presupuesto";
 import { clasificarErrorProveedor, mensajeErrorProveedor } from "@/lib/ai/errores-proveedor";
-import { detectarEmergencia, textoEmergenciaRespaldo } from "@/lib/ai/emergencia-respaldo";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { LIMITES_CHAT } from "@/lib/limites/logica";
@@ -318,14 +317,6 @@ export async function POST(request: Request) {
       const temporizadorCorte = setTimeout(() => controlador.abort(), msHastaElCorte(inicioMs, performance.now()));
       let cortePorTiempo = false;
       let fallaPorTiempo = false;
-      // Si el modelo falla y el mensaje describe una emergencia, igual se muestra la guía del 107/911.
-      const emitirRespaldoEmergencia = () => {
-        const tipo = detectarEmergencia(mensaje ?? "");
-        if (!tipo) return;
-        // Solo se muestra: NO se guarda como respuesta del asistente, porque entonces el Reintentar del
-        // mismo pedido lo trataría como "ya respondido" y repetiría la guía en vez de volver a correr el modelo.
-        enviar({ chunk: textoEmergenciaRespaldo(tipo) });
-      };
       let escriturasHechas = 0; // tarjetas de escritura ya emitidas: lo hecho no se pierde si se corta
 
       try {
@@ -587,10 +578,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
 
         const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
         if (usoNuevo) enviarUso(usoNuevo);
-        if (fallaPorTiempo) {
-          emitirRespaldoEmergencia();
-          enviar({ error: "Se me hizo largo y no pude responderte. Probá de nuevo." });
-        }
+        if (fallaPorTiempo) enviar({ error: "Se me hizo largo y no pude responderte. Probá de nuevo." });
         enviarFin();
       } catch (e) {
         // Registra lo consumido hasta el turno que falló -- una excepción a
@@ -600,7 +588,6 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
         medicion.errorCodigo = clasificarError(e);
         const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
         if (usoNuevo) enviarUso(usoNuevo);
-        emitirRespaldoEmergencia();
         enviar({ error: mensajeErrorProveedor(clasificarErrorProveedor(e)) });
         enviarFin();
       } finally {
