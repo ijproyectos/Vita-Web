@@ -156,7 +156,27 @@ export type FilaVentana = {
   created_at: string;
   bloques?: BloquesTurno | null;
   tokens?: number | null;
+  /** Pedido de la app que originó la fila (035); los dos lados de un turno lo comparten. */
+  pedido_id?: string | null;
 };
+
+/**
+ * Saca de la ventana el turno actual (que se manda aparte, con la capa 5), para que nunca viaje dos veces.
+ * Con `pedidoId` y filas que lo traen: se van TODAS las filas de ese pedido (el mensaje y lo que se haya
+ * guardado después, p. ej. la nota de corte por tiempo de un intento anterior del mismo pedido: el reintento
+ * genera la respuesta de nuevo). Sin ese dato (filas viejas o sin 035): se va el mensaje más nuevo del usuario si
+ * dice exactamente lo mismo, junto con lo que se haya guardado después (solo puede ser del asistente).
+ */
+export function sinTurnoActual(filas: FilaVentana[], actual: { pedidoId: string | null; mensaje: string }): FilaVentana[] {
+  if (actual.pedidoId && filas.some((f) => f.pedido_id === actual.pedidoId)) {
+    return filas.filter((f) => f.pedido_id !== actual.pedidoId);
+  }
+  for (let i = filas.length - 1; i >= 0; i--) {
+    if (filas[i].role !== "user") continue;
+    return filas[i].contenido === actual.mensaje ? filas.slice(0, i) : filas;
+  }
+  return filas;
+}
 
 function resultadoAnterior(contenido: string, fecha: string, maxChars: number): string {
   const recorte = contenido.length > maxChars ? `${contenido.slice(0, maxChars)}… [recortado]` : contenido;

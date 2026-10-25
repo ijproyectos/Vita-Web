@@ -89,7 +89,7 @@ export async function cargarResumen(supabase: Cliente, usuarioId: string): Promi
 // ---------------------------------------------------------------------------
 // recordar
 // ---------------------------------------------------------------------------
-type FilaMemoriaVigente = Pick<Memoria, "id" | "sobre_tipo" | "sobre_perfil_id" | "sobre_nombre" | "texto" | "tipo">;
+type FilaMemoriaVigente = Pick<Memoria, "id" | "sobre_tipo" | "sobre_perfil_id" | "sobre_nombre" | "texto" | "tipo" | "vence_at">;
 
 export type ResultadoRecordar =
   | { ok: true; id: string; texto: string; sobre: SobreResuelto; tipo: TipoMemoria; corrige: { id: string; texto: string | null } | null; primera: boolean }
@@ -123,13 +123,16 @@ export async function recordarMemoria(
   const claveDeSobre = claveSobreResuelto(sobre);
   const { data: previos, error: errPrevios } = await supabase
     .from("memorias")
-    .select("id, sobre_tipo, sobre_perfil_id, sobre_nombre, texto, tipo")
+    .select("id, sobre_tipo, sobre_perfil_id, sobre_nombre, texto, tipo, vence_at")
     .eq("usuario_id", usuarioId)
     .eq("estado", "vigente")
     .eq("clave", clave);
   if (errPrevios) return { ok: false, motivo: faltaMigracion(errPrevios) ? "no_disponible" : "error" };
   const previo = ((previos ?? []) as FilaMemoriaVigente[]).find((p) => claveSobre(p) === claveDeSobre);
-  if (previo && previo.texto === texto.texto && previo.tipo === tipo) return { ok: true, igual: true };
+  // Un pasajero vencido (vence_at <= ahora) sigue 'vigente' en la tabla pero ya no cuenta: no es "lo mismo", se
+  // guarda uno nuevo (que además lo reemplaza, y así el índice de un solo vigente no frena el alta).
+  const previoVencido = !!previo && previo.tipo === "pasajero" && (!previo.vence_at || new Date(previo.vence_at).getTime() <= Date.now());
+  if (previo && !previoVencido && previo.texto === texto.texto && previo.tipo === tipo) return { ok: true, igual: true };
 
   const guardado = await guardarAtomico(supabase, usuarioId, sobre, clave, texto.texto, tipo, venceAt, previo);
   if (!guardado) return { ok: false, motivo: "error" };
@@ -224,7 +227,17 @@ async function guardarAtomico(
     .single();
   if (errInsert || !nuevo) {
     if (reemplazadoId) {
-      await supabase.from("memorias").update({ estado: "vigente" }).eq("id", reemplazadoId).eq("usuario_id", usuarioId).eq("estado", "reemplazado");
+      const { data: restaurado, error: errRestaurar } = await supabase
+        .from("memorias")
+        .update({ estado: "vigente" })
+        .eq("id", reemplazadoId)
+        .eq("usuario_id", usuarioId)
+        .eq("estado", "reemplazado")
+        .select("id");
+      if (errRestaurar || !restaurado || restaurado.length === 0) {
+        // El recuerdo anterior quedó 'reemplazado' sin que exista el nuevo: no se puede dejar pasar en silencio.
+        console.error("guardar_memoria: falló el insert y no se pudo restaurar el recuerdo anterior", errRestaurar?.code ?? "sin_filas");
+      }
     }
     return null;
   }
@@ -258,7 +271,18 @@ export async function deshacerMemoria(supabase: Cliente, usuarioId: string, id: 
   if (!data || data.length === 0) return false;
   const corrigeId = (data[0] as { corrige_id: string | null }).corrige_id;
   if (corrigeId) {
-    await supabase.from("memorias").update({ estado: "vigente" }).eq("id", corrigeId).eq("usuario_id", usuarioId).eq("estado", "reemplazado");
+    const { data: restaurado, error: errRestaurar } = await supabase
+      .from("memorias")
+      .update({ estado: "vigente" })
+      .eq("id", corrigeId)
+      .eq("usuario_id", usuarioId)
+      .eq("estado", "reemplazado")
+      .select("id");
+    if (errRestaurar || !restaurado || restaurado.length === 0) {
+      // El nuevo ya quedó borrado pero el anterior no volvió: no se puede decir "volví a lo que recordaba".
+      console.error("deshacer_memoria: no se pudo restaurar el recuerdo anterior", errRestaurar?.code ?? "sin_filas");
+      return null;
+    }
   }
   return true;
 }

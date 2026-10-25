@@ -21,7 +21,7 @@ import type { MensajeBloques } from "@/lib/memoria/tipos";
 import { confirmarPendiente, idPendiente, limpiarPendientes, opcionesPendienteDelPedido, TEXTO_CANCELADO } from "@/lib/chat/confirmaciones";
 import { clasificarTurno, pendienteEsDelTurnoAnterior } from "@/lib/chat/confirmaciones-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
-import { armarTurnoActual, conPuntoDeCache, construirBloqueMemorias, construirBloqueResumen, construirVentana, MAX_FILAS_VENTANA } from "@/lib/memoria/contexto";
+import { armarTurnoActual, conPuntoDeCache, construirBloqueMemorias, construirBloqueResumen, construirVentana, MAX_FILAS_VENTANA, sinTurnoActual } from "@/lib/memoria/contexto";
 import { REGLA_CONTEXTO_VIVO, REGLAS_MEMORIA } from "@/lib/memoria/prompt";
 import { cargarMemoriasParaContexto, cargarResumen, estadoMemoria } from "@/lib/memoria/nucleo";
 import { parsearCursor } from "@/lib/chat/cursor";
@@ -487,9 +487,9 @@ export async function POST(request: Request) {
           ? parsearCursor({ created_at: resumen.cubre_hasta_created_at, id: resumen.cubre_hasta_mensaje_id })
           : null;
         const filas = await chat.listarVentana(supabase, user.id, { limite: MAX_FILAS_VENTANA, despuesDe: cubreHasta });
-        // El mensaje actual ya se guardó arriba: sale de la ventana y se manda como turno actual, junto con la capa 5.
-        const ultima = filas[filas.length - 1];
-        const previas = ultima?.role === "user" && ultima.contenido === mensaje ? filas.slice(0, -1) : filas;
+        // El mensaje actual ya se guardó arriba: sale de la ventana (por pedido, o por texto si no hay datos) y
+        // se manda como turno actual, junto con la capa 5. Nunca viaja dos veces.
+        const previas = sinTurnoActual(filas, { pedidoId, mensaje });
         const ventana = construirVentana(previas);
 
         // Capa 5: perfil vivo y datos del día, en un bloque rotulado al comienzo del último mensaje del usuario

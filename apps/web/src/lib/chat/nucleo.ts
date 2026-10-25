@@ -92,7 +92,7 @@ export async function listarVentana(
     return consulta.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(opciones.limite);
   };
 
-  let { data, error } = await leer("id, role, contenido, created_at, bloques, tokens");
+  let { data, error } = await leer("id, role, contenido, created_at, bloques, tokens, pedido_id");
   if (error && esColumnaInexistente(error)) ({ data, error } = await leer("id, role, contenido, created_at"));
   if (error) throw new Error(`No se pudieron leer los mensajes: ${error.message}`);
   return ((data ?? []) as unknown as FilaVentana[]).slice().reverse();
