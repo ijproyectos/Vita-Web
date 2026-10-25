@@ -52,5 +52,8 @@ export function superaLimite(cuenta: number, maximo: number): boolean {
 
 /** IP del cliente desde los headers del request (Netlify primero), o null si no se puede saber. */
 export function ipDeHeaders(headers: Headers): string | null {
-  return headers.get("x-nf-client-connection-ip") ?? headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const nf = headers.get("x-nf-client-connection-ip")?.trim();
+  if (nf) return nf;
+  const reenviada = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return reenviada || null;
 }

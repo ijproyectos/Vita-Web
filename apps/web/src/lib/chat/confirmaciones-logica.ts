@@ -150,21 +150,28 @@ export function textoExito(accion: AccionGuardada, snapshot: SnapshotMedicamento
 
 /**
  * G3 para el "sí" tipeado: la pendiente solo se confirma si se propuso en el turno INMEDIATAMENTE
- * anterior de esta sesión. Señal: después de que se creó la pendiente, la sesión tiene la respuesta de
- * vita (>= 1 mensaje del asistente) y como mucho UN mensaje del usuario (el "sí" actual). Si hubo otro
+ * anterior de esta sesión. Invariante: después de que se creó la pendiente, la sesión tiene la respuesta de
+ * vita (>= 1 mensaje del asistente) y NINGÚN mensaje del usuario aparte del "sí" actual (que se excluye
+ * si ya está guardado, para que valga en ambos órdenes). Si hubo otro
  * mensaje del usuario en el medio, o la pendiente es de otra sesión, es vieja (por ejemplo, sobrevivió a
  * una limpieza fallida) y un "sí" suelto no la confirma. Ante cualquier duda, false (falla cerrado).
  */
 export function pendienteEsDelTurnoAnterior(
   pendienteCreadaAt: string | null | undefined,
-  mensajes: { role: string; created_at: string }[]
+  mensajes: { role: string; created_at: string; contenido?: string }[],
+  mensajeActual?: string
 ): boolean {
   const desde = pendienteCreadaAt ? new Date(pendienteCreadaAt).getTime() : NaN;
   if (!Number.isFinite(desde)) return false;
   const despues = mensajes.filter((m) => new Date(m.created_at).getTime() > desde);
-  const usuario = despues.filter((m) => m.role === "user").length;
+  const delUsuario = despues.filter((m) => m.role === "user");
+  // El "sí" actual puede o no estar ya guardado cuando se lee la lista (la ruta lo guarda antes, pero un
+  // reintento con estado "desconocido" no lo reinserta): se descarta SOLO el último mensaje del usuario si
+  // coincide con el actual, y entonces no puede quedar ningún otro entre la pendiente y él.
+  const ultimo = delUsuario[delUsuario.length - 1];
+  const otros = mensajeActual !== undefined && ultimo?.contenido === mensajeActual ? delUsuario.length - 1 : delUsuario.length;
   const asistente = despues.filter((m) => m.role === "assistant").length;
-  return asistente >= 1 && usuario <= 1;
+  return asistente >= 1 && otros === 0;
 }
 
 export type TurnoConfirmacion = "confirmar_id" | "cancelar_id" | "si_tipeado" | "no_tipeado" | "otro";

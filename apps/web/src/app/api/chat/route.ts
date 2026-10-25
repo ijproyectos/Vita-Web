@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
 import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
-import { alcanzaParaOtraVuelta, msHastaElCorte, REINTENTOS_SDK, restanteMs, textoCortePorTiempo } from "@/lib/ai/presupuesto";
+import { alcanzaParaOtraVuelta, MARGEN_CIERRE_MS, msHastaElCorte, REINTENTOS_SDK, restanteMs, textoCortePorTiempo, timeoutSdkMs } from "@/lib/ai/presupuesto";
 import { clasificarErrorProveedor, mensajeErrorProveedor } from "@/lib/ai/errores-proveedor";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { verificarLimitePedidos } from "@/lib/limites/nucleo";
@@ -380,7 +380,7 @@ export async function POST(request: Request) {
             if (pendiente) {
               try {
                 const msgs = await chat.listarMensajes(supabase, user.id, sesionId);
-                if (pendienteEsDelTurnoAnterior(pendiente.creadaAt, msgs)) id = pendiente.id;
+                if (pendienteEsDelTurnoAnterior(pendiente.creadaAt, msgs, mensaje)) id = pendiente.id;
               } catch {
                 // Sin poder verificar el turno, no se confirma: falla cerrado.
               }
@@ -494,7 +494,7 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
               tools: TOOLS,
               messages: historial,
             },
-            { signal: controlador.signal, timeout: msHastaElCorte(inicioMs, performance.now()) }
+            { signal: controlador.signal, timeout: timeoutSdkMs(inicioMs, performance.now()) }
           );
 
           medicion.vueltas++;
@@ -509,7 +509,8 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             mensajeFinal = await respuesta.finalMessage();
           } catch (e) {
             // El corte del presupuesto abortó la llamada: no es un error del proveedor.
-            if (controlador.signal.aborted) {
+            const pasadoElCorte = controlador.signal.aborted || (e instanceof Anthropic.APIConnectionTimeoutError && restanteMs(inicioMs, performance.now()) <= MARGEN_CIERRE_MS);
+            if (pasadoElCorte) {
               cortePorTiempo = true;
               break;
             }

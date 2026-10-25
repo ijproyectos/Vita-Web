@@ -252,7 +252,11 @@ export async function confirmarPendiente(
   };
   const guardar = async (salida: SalidaConfirmacion): Promise<SalidaConfirmacion> => {
     try {
-      const resultado: ResultadoTool = { contenido: salida.texto, ...(salida.accionUI ? { accionUI: salida.accionUI } : {}) };
+      const resultado: ResultadoTool & { codigo?: string } = {
+        contenido: salida.texto,
+        ...(salida.accionUI ? { accionUI: salida.accionUI } : {}),
+        ...(salida.codigo ? { codigo: salida.codigo } : {}),
+      };
       await supabase.from("acciones_agente").update({ resultado }).match(filtro);
     } catch {
       // Best-effort: la pendiente ya está consumida, no se puede ejecutar dos veces.
@@ -270,8 +274,10 @@ export async function confirmarPendiente(
         .match(filtro)
         .maybeSingle();
       if (errPrevio) throw errPrevio;
-      const r = previo?.resultado as ResultadoTool | null | undefined;
-      if (r && typeof r.contenido === "string") return { texto: r.contenido, accionUI: r.accionUI };
+      const r = previo?.resultado as (ResultadoTool & { codigo?: string }) | null | undefined;
+      if (r && typeof r.contenido === "string") {
+        return { texto: r.contenido, accionUI: r.accionUI, ...(typeof r.codigo === "string" ? { codigo: r.codigo } : {}) };
+      }
       const edadMs = previo?.created_at ? Date.now() - new Date(previo.created_at as string).getTime() : 0;
       if (!previo || edadMs <= TTL_CLAIM_EN_CURSO_MS) return { texto: TEXTO_PROCESANDO, codigo: "confirmacion_procesando" };
       // Claim huérfano de un intento caído (la pendiente se repuso o ya no está): se retoma.
