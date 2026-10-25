@@ -171,17 +171,18 @@ export async function limpiarPendientes(supabase: Cliente, usuarioId: string): P
   }
 }
 
-/** Id de la pendiente del usuario (para un "sí" tipeado), o null si no hay o falló. */
-export async function idPendiente(supabase: Cliente, usuarioId: string): Promise<string | null> {
+/** Id y fecha de creación de la pendiente del usuario (para un "sí" tipeado), o null si no hay o falló. */
+export async function idPendiente(supabase: Cliente, usuarioId: string): Promise<{ id: string; creadaAt: string } | null> {
   try {
     const { data, error } = await supabase
       .from("acciones_agente")
-      .select("id")
+      .select("id, created_at")
       .eq("usuario_id", usuarioId)
       .eq("tipo", "confirmacion")
       .limit(1);
     if (error) throw error;
-    return (data?.[0]?.id as string | undefined) ?? null;
+    const fila = data?.[0];
+    return fila ? { id: fila.id as string, creadaAt: fila.created_at as string } : null;
   } catch {
     return null;
   }
@@ -212,7 +213,8 @@ export async function opcionesPendienteDelPedido(
   }
 }
 
-export type SalidaConfirmacion = { texto: string; accionUI?: AccionUI };
+/** `codigo` solo viene cuando la confirmación NO se ejecutó (para registros_chat.error_codigo). */
+export type SalidaConfirmacion = { texto: string; accionUI?: AccionUI; codigo?: string };
 
 /**
  * Confirmar, en este orden: (1) claim del pedido `ejecutada:<id>` (claim-before-
@@ -271,10 +273,10 @@ export async function confirmarPendiente(
       const r = previo?.resultado as ResultadoTool | null | undefined;
       if (r && typeof r.contenido === "string") return { texto: r.contenido, accionUI: r.accionUI };
       const edadMs = previo?.created_at ? Date.now() - new Date(previo.created_at as string).getTime() : 0;
-      if (!previo || edadMs <= TTL_CLAIM_EN_CURSO_MS) return { texto: TEXTO_PROCESANDO };
+      if (!previo || edadMs <= TTL_CLAIM_EN_CURSO_MS) return { texto: TEXTO_PROCESANDO, codigo: "confirmacion_procesando" };
       // Claim huérfano de un intento caído (la pendiente se repuso o ya no está): se retoma.
       await liberar();
-      if (!(await reclamar())) return { texto: TEXTO_PROCESANDO };
+      if (!(await reclamar())) return { texto: TEXTO_PROCESANDO, codigo: "confirmacion_procesando" };
     }
     reclamado = true;
 
@@ -287,21 +289,21 @@ export async function confirmarPendiente(
       .select("pedido_id, clave, accion, texto, snapshot, vence_at");
     if (errConsumo) throw errConsumo;
     consumida = (consumidas?.[0] as Record<string, unknown> | undefined) ?? null;
-    if (!consumida) return guardar({ texto: TEXTO_NADA_PENDIENTE });
+    if (!consumida) return guardar({ texto: TEXTO_NADA_PENDIENTE, codigo: "confirmacion_nada_pendiente" });
 
     const accion = consumida.accion;
-    if (!esAccionGuardada(accion)) return guardar({ texto: TEXTO_NO_VERIFICADA });
-    if (!pendienteVigente(consumida.vence_at as string | null, Date.now())) return guardar({ texto: TEXTO_VENCIDA });
+    if (!esAccionGuardada(accion)) return guardar({ texto: TEXTO_NO_VERIFICADA, codigo: "confirmacion_no_verificada" });
+    if (!pendienteVigente(consumida.vence_at as string | null, Date.now())) return guardar({ texto: TEXTO_VENCIDA, codigo: "confirmacion_vencida" });
 
     // El destino tiene que seguir siendo el propio usuario o alguien con rol editar.
     const permitido =
       accion.destinoId === usuarioId || familia.some((f) => f.id === accion.destinoId && f.rol === "editar");
-    if (!permitido) return guardar({ texto: TEXTO_SIN_PERMISO });
+    if (!permitido) return guardar({ texto: TEXTO_SIN_PERMISO, codigo: "confirmacion_sin_permiso" });
 
     const snapshot = consumida.snapshot as SnapshotMedicamento | null;
     const actual = await medicamentos.obtenerPorId(supabase, accion.destinoId, accion.medicamentoId);
     if (!snapshot || !actual || !snapshotCoincide(snapshot, actual)) {
-      return guardar({ texto: TEXTO_CAMBIO_ENTRE_MEDIO });
+      return guardar({ texto: TEXTO_CAMBIO_ENTRE_MEDIO, codigo: "confirmacion_cambio" });
     }
 
     const conPersona = accion.persona ? { persona: accion.persona } : {};
@@ -332,6 +334,6 @@ export async function confirmarPendiente(
       }
     }
     if (reclamado) await liberar();
-    return { texto: TEXTO_NO_VERIFICADA };
+    return { texto: TEXTO_NO_VERIFICADA, codigo: "confirmacion_no_verificada" };
   }
 }

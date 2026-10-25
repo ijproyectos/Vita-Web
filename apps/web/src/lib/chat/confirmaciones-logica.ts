@@ -148,6 +148,25 @@ export function textoExito(accion: AccionGuardada, snapshot: SnapshotMedicamento
   return `Listo, cambié ${que} de las ${hora}${DE_PERSONA(accion.persona)}.${nueva}`;
 }
 
+/**
+ * G3 para el "sí" tipeado: la pendiente solo se confirma si se propuso en el turno INMEDIATAMENTE
+ * anterior de esta sesión. Señal: después de que se creó la pendiente, la sesión tiene la respuesta de
+ * vita (>= 1 mensaje del asistente) y como mucho UN mensaje del usuario (el "sí" actual). Si hubo otro
+ * mensaje del usuario en el medio, o la pendiente es de otra sesión, es vieja (por ejemplo, sobrevivió a
+ * una limpieza fallida) y un "sí" suelto no la confirma. Ante cualquier duda, false (falla cerrado).
+ */
+export function pendienteEsDelTurnoAnterior(
+  pendienteCreadaAt: string | null | undefined,
+  mensajes: { role: string; created_at: string }[]
+): boolean {
+  const desde = pendienteCreadaAt ? new Date(pendienteCreadaAt).getTime() : NaN;
+  if (!Number.isFinite(desde)) return false;
+  const despues = mensajes.filter((m) => new Date(m.created_at).getTime() > desde);
+  const usuario = despues.filter((m) => m.role === "user").length;
+  const asistente = despues.filter((m) => m.role === "assistant").length;
+  return asistente >= 1 && usuario <= 1;
+}
+
 export type TurnoConfirmacion = "confirmar_id" | "cancelar_id" | "si_tipeado" | "no_tipeado" | "otro";
 
 // El mensaje ENTERO tiene que ser la respuesta: "si me olvido de..." o "no, mejor

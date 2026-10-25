@@ -13,7 +13,7 @@ import { guiaDePantallasParaPrompt } from "@/lib/ai/guia-app";
 import { ejecutarToolIdempotente, normalizarPedidoId, estadoDelReintento, accionesDelPedido } from "@/lib/chat/pedidos";
 import * as chat from "@/lib/chat/nucleo";
 import { confirmarPendiente, idPendiente, limpiarPendientes, opcionesPendienteDelPedido, TEXTO_CANCELADO } from "@/lib/chat/confirmaciones";
-import { clasificarTurno } from "@/lib/chat/confirmaciones-logica";
+import { clasificarTurno, pendienteEsDelTurnoAnterior } from "@/lib/chat/confirmaciones-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
@@ -342,8 +342,23 @@ export async function POST(request: Request) {
         const turno = clasificarTurno({ confirmarId, cancelarId, mensaje });
         let textoDirecto: string | null = null;
         let accionDirecta: Awaited<ReturnType<typeof confirmarPendiente>>["accionUI"];
+        let codigoConfirmacion: string | undefined;
         if (turno === "confirmar_id" || turno === "si_tipeado") {
-          const id = turno === "confirmar_id" ? confirmarId! : await idPendiente(supabase, user.id);
+          // El botón lleva el id exacto de su pendiente. Un "sí" tipeado solo vale si la pendiente se propuso
+          // en el turno inmediatamente anterior de esta sesión (si no, es vieja y el "sí" es un mensaje más).
+          let id: string | null = null;
+          if (turno === "confirmar_id") id = confirmarId!;
+          else {
+            const pendiente = await idPendiente(supabase, user.id);
+            if (pendiente) {
+              try {
+                const msgs = await chat.listarMensajes(supabase, user.id, sesionId);
+                if (pendienteEsDelTurnoAnterior(pendiente.creadaAt, msgs)) id = pendiente.id;
+              } catch {
+                // Sin poder verificar el turno, no se confirma: falla cerrado.
+              }
+            }
+          }
           if (id) {
             let familiaConfirmar: MiembroFamilia[] = [];
             try {
@@ -354,25 +369,35 @@ export async function POST(request: Request) {
             const salida = await confirmarPendiente(supabase, user.id, pedidoId, id, familiaConfirmar);
             textoDirecto = salida.texto;
             accionDirecta = salida.accionUI;
+            codigoConfirmacion = salida.codigo;
           } else {
-            // Un "sí" tipeado sin nada pendiente es un mensaje más para el modelo.
-            if ((await limpiarPendientes(supabase, user.id)) === null) textoDirecto = TEXTO_LIMPIEZA_FALLIDA;
+            // Un "sí" tipeado sin pendiente (o con una vieja) es un mensaje más para el modelo; si la
+            // limpieza falla sigue igual (ver abajo).
+            await limpiarPendientes(supabase, user.id);
           }
         } else {
           // Cancelar, un "no" o CUALQUIER otro mensaje: la pendiente deja de valer antes de que corra el modelo (G3).
           const borradas = await limpiarPendientes(supabase, user.id);
-          // Si la limpieza falló, la pendiente podría seguir confirmable: no se afirma que se canceló
-          // ni se corre el modelo (un "sí" posterior la ejecutaría). Se corta el turno y que reintente.
-          if (borradas === null) textoDirecto = TEXTO_LIMPIEZA_FALLIDA;
-          else if (turno === "cancelar_id" || (turno === "no_tipeado" && (borradas ?? 0) > 0)) textoDirecto = TEXTO_CANCELADO;
+          // Si la limpieza falló, una Cancelar/"no" no puede afirmar que canceló: se dice que no se pudo.
+          // Un mensaje ordinario sí sigue al modelo (un fallo transitorio no tumba el chat): la pendiente que
+          // haya quedado ya no se confirma con un "sí" suelto (pendienteEsDelTurnoAnterior) y proponer otra
+          // destructiva la reemplaza (delete + insert en proponerAccionDestructiva, índice único por usuario)
+          // o, si esa DB también falla, no propone nada (MENSAJE_NO_VERIFICADA).
+          if (borradas === null) {
+            if (turno === "cancelar_id" || turno === "no_tipeado") textoDirecto = TEXTO_LIMPIEZA_FALLIDA;
+          } else if (turno === "cancelar_id" || (turno === "no_tipeado" && (borradas ?? 0) > 0)) textoDirecto = TEXTO_CANCELADO;
         }
         if (textoDirecto !== null) {
           // Turno resuelto por el servidor: sin llamada al modelo ni tokens que contar.
           if (textoDirecto === TEXTO_LIMPIEZA_FALLIDA) {
             medicion.resultado = "error";
             medicion.errorCodigo = "limpieza_pendiente";
+          } else if (turno === "confirmar_id" || turno === "si_tipeado") {
+            // Una confirmación que no se ejecutó (sin verificar, procesando, vencida...) cuenta como error.
+            medicion.resultado = codigoConfirmacion ? "error" : "confirmacion";
+            medicion.errorCodigo = codigoConfirmacion ?? null;
           } else {
-            medicion.resultado = turno === "confirmar_id" || turno === "si_tipeado" ? "confirmacion" : "cancelacion";
+            medicion.resultado = "cancelacion";
           }
           if (accionDirecta) enviar({ action: accionDirecta });
           enviar({ chunk: textoDirecto });
@@ -497,10 +522,10 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
         // Registra lo consumido hasta el turno que falló -- una excepción a
         // mitad del loop no debe perder la contabilidad de los turnos que sí
         // llegaron a completarse antes.
-        const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
-        if (usoNuevo) enviarUso(usoNuevo);
         medicion.resultado = "error";
         medicion.errorCodigo = clasificarError(e);
+        const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
+        if (usoNuevo) enviarUso(usoNuevo);
         enviar({ error: e instanceof Error ? e.message : "Error desconocido." });
         enviarFin();
       } finally {
