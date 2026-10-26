@@ -3,7 +3,8 @@
 /** Sobre quién es un recuerdo: la propia persona, un familiar o alguien nombrado a mano. */
 export type SobreTipo = "yo" | "familiar" | "otro";
 export type TipoMemoria = "estable" | "pasajero";
-export type EstadoMemoria = "vigente" | "reemplazado" | "borrado";
+/** 039: "vencido" = pasajero cuyo plazo pasó (se archiva sin texto). */
+export type EstadoMemoria = "vigente" | "reemplazado" | "borrado" | "vencido";
 export type OrigenMemoria = "chat" | "consolidacion" | "usuario";
 
 export type Memoria = {
@@ -80,3 +81,19 @@ export type MensajeBloques = { role: "user" | "assistant"; content: BloqueGuarda
  * assistant final), para poder reconstruir el turno entero.
  */
 export type BloquesTurno = MensajeBloques[];
+
+// ---------------------------------------------------------------------------
+// Contradicciones (migración 039): pares vigentes que la consolidación nocturna marcó y la persona decide
+// ---------------------------------------------------------------------------
+export type ValeContradiccion = "a" | "b" | "ambas" | "ninguna";
+export const VALORES_VALE: readonly ValeContradiccion[] = ["a", "b", "ambas", "ninguna"];
+
+export type ContradiccionMemoria = {
+  id: string;
+  /** Texto del recuerdo "a" / "b" (ya con los dos vigentes). */
+  textoA: string;
+  textoB: string;
+  pregunta: string;
+  preguntada_at: string | null;
+  veces_preguntada: number;
+};
