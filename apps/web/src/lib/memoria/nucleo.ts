@@ -187,15 +187,11 @@ export async function guardarAtomico(
     p_tipo: tipo,
     p_vence_at: venceAt,
     p_mensaje_origen_id: mensajeOrigenId,
+    p_origen: origen,
   });
   if (!rpc.error) {
     const fila = (Array.isArray(rpc.data) ? rpc.data[0] : rpc.data) as { o_id?: string; o_corrige_id?: string | null; o_texto_anterior?: string | null } | undefined;
     if (!fila?.o_id) return null;
-    // La RPC de 036 siempre escribe origen 'chat'; una corrección hecha por la persona lo deja como 'usuario'.
-    if (origen === "usuario") {
-      const { error: errOrigen } = await supabase.from("memorias").update({ origen }).eq("id", fila.o_id).eq("usuario_id", usuarioId);
-      if (errOrigen) console.warn("guardar_memoria: no se pudo marcar el origen", errOrigen.code ?? "");
-    }
     return { id: fila.o_id, corrigeId: fila.o_corrige_id ?? null, textoAnterior: fila.o_texto_anterior ?? null };
   }
   if (!faltaMigracion(rpc.error)) {

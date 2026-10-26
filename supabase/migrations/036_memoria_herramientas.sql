@@ -1,6 +1,9 @@
 -- Vita — herramientas de memoria del chat (etapa M4).
 -- ESCRITA pero NO aplicada: aplicar a mano con psql (después de la 035) y registrar en supabase_migrations.schema_migrations.
 --
+-- Revisión M6 (sigue sin aplicar, por eso se edita en lugar de sumar otra migración): `guardar_memoria` recibe `p_origen`
+-- ('chat' por defecto, 'usuario' para correcciones hechas desde la pantalla de privacidad).
+--
 -- Cuatro funciones SECURITY INVOKER (corren con los permisos de quien llama, así que la RLS owner-only de 035
 -- sigue siendo la autoridad; además cada una filtra por auth.uid() de forma explícita):
 --   guardar_memoria      recordar / corregir en UNA transacción (el viejo vigente pasa a 'reemplazado' y el nuevo lo apunta).
@@ -25,7 +28,8 @@ create or replace function guardar_memoria(
   p_texto text,
   p_tipo text,
   p_vence_at timestamptz,
-  p_mensaje_origen_id uuid default null
+  p_mensaje_origen_id uuid default null,
+  p_origen text default 'chat'
 )
 returns table (o_id uuid, o_corrige_id uuid, o_texto_anterior text)
 language plpgsql
@@ -84,7 +88,7 @@ begin
       values (
         v_uid, p_sobre_tipo, p_sobre_perfil_id, p_sobre_nombre, p_clave, p_texto, p_tipo,
         case when p_tipo = 'pasajero' then p_vence_at else null end,
-        v_viejo_id, 'chat', p_mensaje_origen_id
+        v_viejo_id, case when p_origen = 'usuario' then 'usuario' else 'chat' end, p_mensaje_origen_id
       )
       returning m.id into v_nuevo_id;
 
@@ -251,11 +255,11 @@ as $$
 $$;
 
 -- Solo usuarios con sesión; nada para anon.
-revoke execute on function guardar_memoria(text, uuid, text, text, text, text, timestamptz, uuid) from public, anon;
+revoke execute on function guardar_memoria(text, uuid, text, text, text, text, timestamptz, uuid, text) from public, anon;
 revoke execute on function deshacer_memoria(uuid) from public, anon;
 revoke execute on function buscar_memoria(text, text, uuid, text, date, date, int) from public, anon;
 revoke execute on function sumar_uso_memorias(uuid[]) from public, anon;
-grant execute on function guardar_memoria(text, uuid, text, text, text, text, timestamptz, uuid) to authenticated;
+grant execute on function guardar_memoria(text, uuid, text, text, text, text, timestamptz, uuid, text) to authenticated;
 grant execute on function deshacer_memoria(uuid) to authenticated;
 grant execute on function buscar_memoria(text, text, uuid, text, date, date, int) to authenticated;
 grant execute on function sumar_uso_memorias(uuid[]) to authenticated;

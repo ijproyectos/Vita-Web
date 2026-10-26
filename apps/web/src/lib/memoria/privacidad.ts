@@ -195,7 +195,9 @@ export async function previaOlvido(supabase: Cliente, usuarioId: string, id: str
     const idsOrigen = cadena.map((c) => c.mensaje_origen_id).filter((x): x is string => !!x);
     let origen: MensajeFuente[] = [];
     if (idsOrigen.length > 0) {
-      const { data } = await supabase.from("mensajes_chat").select("id, created_at, contenido").eq("usuario_id", usuarioId).in("id", idsOrigen);
+      const { data, error: errOrigen } = await supabase.from("mensajes_chat").select("id, created_at, contenido").eq("usuario_id", usuarioId).in("id", idsOrigen);
+      // Sin ver de qué mensajes salió no se puede decir qué se va a borrar: la pantalla no deja confirmar.
+      if (errOrigen) return null;
       origen = ((data ?? []) as { id: string; created_at: string; contenido: string }[]).map(aFuente);
     }
 

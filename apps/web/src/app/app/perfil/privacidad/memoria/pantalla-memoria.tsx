@@ -138,15 +138,19 @@ function Recuerdo({ recuerdo }: { recuerdo: RecuerdoVista }) {
     setModo(m);
     setError(null);
     setTildados(new Set());
+    setOrigen(null);
+    setRelacionados([]);
     setCargandoPrevia(true);
-    const r = await previaOlvidoAction(recuerdo.id);
-    setCargandoPrevia(false);
-    if (r.status === "success") {
-      setOrigen(r.previa.origen);
-      setRelacionados(r.previa.relacionados);
-    } else {
-      setOrigen([]);
-      setRelacionados([]);
+    try {
+      const r = await previaOlvidoAction(recuerdo.id);
+      if (r.status === "success") {
+        setOrigen(r.previa.origen);
+        setRelacionados(r.previa.relacionados);
+      } else setError(r.mensaje);
+    } catch {
+      setError("No pude ver de dónde salió este recuerdo. Revisá tu conexión y probá de nuevo.");
+    } finally {
+      setCargandoPrevia(false);
     }
   }
 
@@ -234,6 +238,11 @@ function Recuerdo({ recuerdo }: { recuerdo: RecuerdoVista }) {
           </p>
           {cargandoPrevia ? (
             <p className="text-[12.5px] font-medium text-subtle">Buscando de dónde salió…</p>
+          ) : origen === null ? (
+            <p className="text-pretty text-[12.5px] font-medium leading-[1.45] text-destructive">
+              Sin ver de qué mensajes salió no puedo {eliminar ? "eliminarlo" : "dejar de recordarlo"} sin dudas, así que no hago nada
+              todavía. Probá de nuevo.
+            </p>
           ) : (
             <>
               {origen && origen.length > 0 ? (
@@ -268,12 +277,21 @@ function Recuerdo({ recuerdo }: { recuerdo: RecuerdoVista }) {
             </button>
             <button
               type="button"
-              disabled={pendiente || cargandoPrevia}
+              disabled={pendiente || cargandoPrevia || origen === null}
               onClick={confirmarOlvido}
               className={cn("flex-1 rounded-full py-2.5 text-[13.5px] font-extrabold text-primary-foreground disabled:opacity-50", eliminar ? "bg-destructive" : "bg-primary")}
             >
               {pendiente ? "Un segundo…" : eliminar ? "Eliminar" : "Dejar de recordar"}
             </button>
+            {origen === null && !cargandoPrevia && (
+              <button
+                type="button"
+                onClick={() => abrirOlvido(modo === "eliminar" ? "eliminar" : "dejar")}
+                className="flex-1 rounded-full bg-card py-2.5 text-[13.5px] font-bold text-teal-deep"
+              >
+                Reintentar
+              </button>
+            )}
           </div>
         </div>
       )}

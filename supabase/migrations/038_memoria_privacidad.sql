@@ -12,7 +12,8 @@
 --   invalidar_resumen          deja el resumen vacío e invalidado (crea la fila si no existe, para frenar a un trabajador en vuelo).
 --   olvidar_memoria            "dejar de recordar" (p_eliminar = false) o "eliminar" (true) un recuerdo y sus fuentes.
 --   olvidar_todo_memoria       "borrar todo lo que vita recuerda": todos los recuerdos + resumen en blanco; los mensajes no se tocan.
---   borrar_mensajes_hasta      "Borrar historial" del chat: borra mensajes anteriores a un corte y los recuerdos que salieron de ellos.
+--   borrar_mensajes_hasta      "Borrar historial" del chat: borra mensajes anteriores a un corte y los recuerdos que salieron de ellos;
+--                              invalida el resumen solo si se borró al menos un mensaje.
 -- Función SECURITY DEFINER solo para service_role (el trabajador):
 --   guardar_resumen_regenerado escribe el resumen rearmado solo si la versión no cambió y sigue invalidado.
 -- Se redefine encolar_tarea_memoria (de 037): 'regenerar' se encola siempre, aunque haya uno en curso, porque el que está en
@@ -189,9 +190,8 @@ begin
     raise exception 'no autenticado' using errcode = '28000';
   end if;
 
-  -- El resumen primero: puede tener texto de los mensajes que se van.
-  perform invalidar_resumen();
-
+  -- Todo en una transacción: el orden interno no importa. El resumen se invalida solo si de verdad se borró algún mensaje
+  -- (puede tener su texto); con 0 borrados no se toca y la app no encola 'regenerar' (o_mensajes = 0).
   update memorias m
      set estado = 'borrado', texto = null, destacado = false, updated_at = now()
    where m.usuario_id = v_uid
@@ -201,6 +201,10 @@ begin
 
   delete from mensajes_chat x where x.usuario_id = v_uid and x.created_at < p_corte;
   get diagnostics v_mensajes = row_count;
+
+  if v_mensajes > 0 then
+    perform invalidar_resumen();
+  end if;
 
   return query select v_mensajes, v_recuerdos;
 end;
