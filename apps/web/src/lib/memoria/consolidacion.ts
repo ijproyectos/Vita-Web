@@ -170,8 +170,8 @@ export async function enviarLoteConsolidacion(admin: Admin = createAdminClient()
     if (!(await guardarBatchId(admin, loteId, batchId))) {
       // El lote existe y se cobra pero no quedó atado a la base: se deja el id en el log y, si se puede, en `error` del lote.
       console.error(`consolidacion: lote huérfano en Anthropic (id ${batchId}); no se pudo guardar su id en la base`);
-      await admin.from("lotes_consolidacion").update({ error: `huerfano:${batchId}` }).eq("id", loteId);
-      await cerrarLoteFallido(admin, loteId, "batch_id_sin_guardar");
+      // El id va como código de error del cierre (el RPC pisa la columna `error`): así queda guardado.
+      await cerrarLoteFallido(admin, loteId, `batch_id_sin_guardar:huerfano:${batchId}`);
       return { estado: "error", candidatos: ids.length, enviados: 0, vencidos };
     }
     return { estado: "enviado", candidatos: ids.length, enviados: filas.length, vencidos };

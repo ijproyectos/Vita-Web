@@ -518,7 +518,11 @@ export async function listarContradicciones(supabase: Cliente, usuarioId: string
 export async function marcarContradiccionesPreguntadas(supabase: Cliente, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   try {
-    await supabase.rpc("marcar_contradicciones_preguntadas", { p_ids: ids });
+    const { error } = await supabase.rpc("marcar_contradicciones_preguntadas", { p_ids: ids });
+    // Sin 039 (función inexistente) no se avisa; cualquier otro error sí, para poder diagnosticarlo.
+    if (error && error.code !== "PGRST202" && error.code !== "42883") {
+      console.warn("memoria: no se pudieron marcar las contradicciones preguntadas", error.code ?? "");
+    }
   } catch {
     // Sin la marca, la pregunta puede repetirse: molesta, no rompe nada.
   }
