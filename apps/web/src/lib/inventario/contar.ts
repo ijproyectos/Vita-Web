@@ -5,11 +5,12 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { STOCK_MAXIMO, acotarEntero } from "./tipos";
+import { MODELO_IA } from "@/lib/ai/modelo";
 
 // Único punto de contacto con Anthropic para contar pastillas — mismo setup
 // que lib/estudios/extraer.ts (server-only, salida estructurada por zod,
 // nunca lanza, cuenta tokens contra el límite diario).
-const MODEL = "claude-sonnet-5";
+const MODEL = MODELO_IA;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

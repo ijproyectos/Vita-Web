@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { esAccionDeEscritura } from "@/lib/ai/acciones-escritura";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
@@ -66,7 +68,17 @@ function etiquetaEstadoVoz(estado: EstadoVoz, hablando: boolean): string {
 // oculto vía transform, no un mount/unmount condicional) para conservar la
 // conversación en curso al cerrar y reabrir — mismo espíritu que el FAB
 // del diseño, adaptado de ruta a overlay real.
-export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
+export function VitaChatOverlay({
+  esPropio,
+  nombreActivo,
+  perfilActivoId,
+}: {
+  esPropio: boolean;
+  nombreActivo: string;
+  /** Perfil que se está viendo en la app: el servidor lo valida, nunca lo asume. */
+  perfilActivoId: string;
+}) {
+  const router = useRouter();
   const { abierto, mensajeInicial, cerrar } = useChatOverlay();
   const cargadoRef = useRef(false); // no es estado reactivo — solo evita re-pedir sesiones
   const [sesionId, setSesionId] = useState<string | null>(null);
@@ -280,16 +292,31 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
     nuevoChat();
   }
 
-  async function enviar(texto: string) {
+  // Reintentar = mismo texto y MISMO pedidoId, sin burbuja de usuario nueva: el
+  // servidor reconoce el pedido y no repite lo que ya escribió.
+  function reintentar(m: MensajeChatUI) {
+    if (m.pedidoId) enviar(m.content, m.pedidoId, m.confirmacionId);
+  }
+
+  async function enviar(texto: string, pedidoReintentado?: string, confirmacionId?: string) {
     const limpio = texto.trim();
     if (!limpio || enviando || (uso && uso.restantes <= 0)) return;
 
     const ahora = new Date().toISOString();
-    setMensajes((prev) => [
-      ...prev,
-      { role: "user", content: limpio, timestamp: ahora },
-      { role: "assistant", content: "", timestamp: ahora },
-    ]);
+    const pedidoId = pedidoReintentado ?? crypto.randomUUID();
+    let fallo = false;
+    setMensajes((prev) =>
+      pedidoReintentado
+        ? [
+            ...prev.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: false } : m)),
+            { role: "assistant" as const, content: "", timestamp: ahora },
+          ]
+        : [
+            ...prev,
+            { role: "user" as const, content: limpio, timestamp: ahora, pedidoId, confirmacionId },
+            { role: "assistant" as const, content: "", timestamp: ahora },
+          ]
+    );
     setEntrada("");
     if (timeoutEscribiendoRef.current) clearTimeout(timeoutEscribiendoRef.current);
     setEscribiendo(false);
@@ -298,13 +325,14 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
 
     let sesionAsignada: string | null = null;
     let textoAcumulado = "";
+    let huboEscritura = false; // refresca las pantallas UNA vez al terminar la respuesta
     if (modoVozRef.current) fraseHabladaIndiceRef.current = 0;
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesionId, mensaje: limpio }),
+        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId, confirmacionId }),
       });
 
       if (!res.body) throw new Error("Sin respuesta del servidor.");
@@ -328,7 +356,7 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
           const evento = JSON.parse(payload) as
             | { chunk: string }
             | { action: { type: string; [clave: string]: unknown } }
-            | { error: string }
+            | { error: string; sinReintento?: boolean }
             | { session: string }
             | { uso: UsoDiario };
 
@@ -364,25 +392,84 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
               setMoodAvatar(moodValido(evento.action.mood));
               continue;
             }
+            // Botones de respuesta rápida: se guardan aparte de `accion` para no
+            // pisar una tarjeta real, y no cuentan como escritura (sin refresh).
+            if (evento.action.type === "opciones_confirmacion") {
+              const opciones = Array.isArray(evento.action.opciones)
+                ? evento.action.opciones.filter((o): o is string => typeof o === "string" && o.trim() !== "")
+                : [];
+              // Solo ids de opciones que existen (uuid): lo demás se ignora.
+              const vinculos: Record<string, string> = {};
+              if (evento.action.vinculos && typeof evento.action.vinculos === "object") {
+                for (const [k, v] of Object.entries(evento.action.vinculos as Record<string, unknown>)) {
+                  if (opciones.includes(k) && typeof v === "string") vinculos[k] = v;
+                }
+              }
+              if (opciones.length > 0) {
+                setMensajes((prev) => {
+                  const copia = [...prev];
+                  copia[copia.length - 1] = { ...copia[copia.length - 1], opciones, vinculos };
+                  return copia;
+                });
+              }
+              continue;
+            }
+            if (esAccionDeEscritura(evento.action.type)) huboEscritura = true;
             setMensajes((prev) => {
               const copia = [...prev];
               copia[copia.length - 1] = { ...copia[copia.length - 1], accion: evento.action };
               return copia;
             });
-            if (evento.action.type === "medication_deleted") toast.success("Medicamento eliminado.");
-            if (evento.action.type === "all_medications_taken") toast.success("Marcaste todo como tomado.");
-            if (evento.action.type === "medication_taken") {
-              toast.success(`"${evento.action.medication_name}" marcado como tomado.`);
+            // Una escritura en un familiar dice para quién (accion.persona).
+            const persona = typeof evento.action.persona === "string" ? evento.action.persona : null;
+            const de = persona ? `de ${persona}` : "tuyas";
+            if (evento.action.type === "medication_deleted") {
+              toast.success(persona ? `Medicamento eliminado de ${persona}.` : "Medicamento eliminado.");
             }
-            if (evento.action.type === "profile_updated") toast.success("Perfil de salud actualizado.");
+            if (evento.action.type === "all_medications_taken") {
+              toast.success(persona ? `Marcaste todo como tomado para ${persona}.` : "Marcaste todo como tomado.");
+            }
+            if (evento.action.type === "medication_taken") {
+              toast.success(
+                `"${evento.action.medication_name}" marcado como tomado${persona ? ` para ${persona}` : ""}.`
+              );
+            }
+            if (evento.action.type === "profile_updated") {
+              toast.success(persona ? `Perfil de salud de ${persona} actualizado.` : "Perfil de salud actualizado.");
+            }
             if (evento.action.type === "condition_added") {
-              toast.success(`"${evento.action.label}" agregada a tus condiciones.`);
+              toast.success(`"${evento.action.label}" agregada a las condiciones ${de}.`);
             }
             if (evento.action.type === "allergy_added") {
-              toast.success(`"${evento.action.name}" agregada a tus alergias.`);
+              toast.success(`"${evento.action.name}" agregada a las alergias ${de}.`);
+            }
+            if (persona && (evento.action.type === "medication_added" || evento.action.type === "appointment_added")) {
+              toast.success(
+                evento.action.type === "medication_added" ? `Agregado a ${persona}.` : `Turno agendado para ${persona}.`
+              );
             }
           } else if ("error" in evento) {
-            toast.error(evento.error);
+            if (evento.sinReintento) {
+              // Error que no se arregla reintentando (límite diario, mensaje inválido):
+              // sin "Sin respuesta / Reintentar". Si vita todavía no dijo nada, el
+              // mensaje queda como su respuesta en el chat; si ya dijo algo
+              // (p. ej. el texto de emergencia), va como aviso.
+              const textoError = evento.error;
+              if (textoAcumulado) {
+                toast.error(textoError);
+              } else {
+                textoAcumulado = textoError;
+                setMensajes((prev) => {
+                  const copia = [...prev];
+                  const ultimo = copia[copia.length - 1];
+                  if (ultimo?.role === "assistant" && !ultimo.content) copia[copia.length - 1] = { ...ultimo, content: textoError };
+                  return copia;
+                });
+              }
+            } else {
+              fallo = true;
+              toast.error(evento.error);
+            }
           }
         }
       }
@@ -395,9 +482,25 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
         if (restante) encolarFraseVoz(restante);
       }
     } catch {
+      fallo = true;
       toast.error("No se pudo conectar con vita. Intentá de nuevo.");
     } finally {
       setEnviando(false);
+      // Sin respuesta: el mensaje queda marcado para reintentarlo con el mismo
+      // pedido; la burbuja vacía de vita se saca para no dejar un hueco.
+      if (fallo) {
+        setMensajes((prev) => {
+          const sinHueco = prev.length > 0 && prev[prev.length - 1].role === "assistant" && !prev[prev.length - 1].content
+            ? prev.slice(0, -1)
+            : prev;
+          return sinHueco.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: true } : m));
+        });
+      }
+      // Las pantallas (Home, Rutina, Mi Salud...) son Server Components: sin
+      // esto siguen mostrando lo de antes de que vita escribiera. Va acá y no
+      // al final del try: si el stream se corta después de una escritura, el
+      // dato ya quedó guardado y la pantalla igual tiene que mostrarlo.
+      if (huboEscritura) router.refresh();
       // Siempre actualiza la entrada de la sesión activa en el drawer —
       // antes solo se agregaba cuando el servidor asignaba una sesión
       // NUEVA; seguir mandando mensajes en una sesión ya existente dejaba
@@ -503,6 +606,12 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
           </button>
         </div>
 
+        {!esPropio && (
+          <div className="bg-aviso-tint px-5 py-2 text-[12.5px] font-medium text-aviso-ink">
+            Estás viendo a {nombreActivo}. Si le pedís algo, vita te pregunta si es para {nombreActivo} o para vos.
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {vacio && (
             <div className="flex justify-center pb-2 pt-2">
@@ -513,7 +622,7 @@ export function VitaChatOverlay({ esPropio }: { esPropio: boolean }) {
             Hoy · {formatoFechaCorta(fechaDeHoyISO())}
           </div>
           {mensajes.map((m, i) => (
-            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} />
+            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t) => enviar(t) : undefined} />
           ))}
           {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">
