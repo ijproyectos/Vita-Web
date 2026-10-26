@@ -5,6 +5,8 @@ import { after } from "next/server";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { pedirRegeneracion } from "@/lib/memoria/resumen";
+import { resolverContradiccion } from "@/lib/memoria/nucleo";
+import { VALORES_VALE, type ValeContradiccion } from "@/lib/memoria/tipos";
 import {
   cambiarMemoriaActiva,
   corregirRecuerdo,
@@ -104,6 +106,30 @@ export async function borrarTodoMemoriaAction(confirmacion: string): Promise<Res
     // Sin regenerar: el resumen queda en blanco y vita retoma desde acá (rearmarlo desde los mensajes volvería a escribir
     // lo que se acaba de borrar).
     refrescar();
+    return { status: "success" };
+  } catch {
+    return { status: "error", mensaje: ERROR_GENERICO };
+  }
+}
+
+/** La persona elige cuál vale en una contradicción que marcó la limpieza nocturna (a, b, ambas o ninguna = olvidar las dos). */
+export async function resolverContradiccionAction(id: string, vale: string): Promise<Resultado> {
+  const usuario = await requireUser();
+  if (typeof id !== "string" || !UUID_RE.test(id) || !VALORES_VALE.includes(vale as ValeContradiccion)) {
+    return { status: "error", mensaje: ERROR_GENERICO };
+  }
+  try {
+    const supabase = await createClient();
+    const r = await resolverContradiccion(supabase, id, vale as ValeContradiccion);
+    if (r === "no_encontrada" || r === "obsoleta") {
+      refrescar();
+      return { status: "error", mensaje: "Esto ya cambió. Actualizamos la pantalla." };
+    }
+    if (r !== "ok") return { status: "error", mensaje: ERROR_GENERICO };
+    // 'ninguna' olvidó los dos recuerdos: el resumen quedó invalidado y se rearma en segundo plano.
+    if (vale === "ninguna") after(() => pedirRegeneracion(usuario.id));
+    refrescar();
+    revalidatePath("/app", "layout");
     return { status: "success" };
   } catch {
     return { status: "error", mensaje: ERROR_GENERICO };

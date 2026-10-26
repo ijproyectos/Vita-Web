@@ -108,6 +108,10 @@ function claveSemantica(nombre: string, input: Record<string, unknown>): string 
       // Mismo tema sobre la misma persona dentro del pedido = la misma acción (el texto puede venir reformulado).
       campos = [input.sobre, input.clave];
       break;
+    case "resolver_contradiccion":
+      // Una contradicción se resuelve una vez por pedido, diga lo que diga el vale.
+      campos = [input.id];
+      break;
     default:
       campos = [JSON.stringify(input)];
   }

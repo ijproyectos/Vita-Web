@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Interruptor } from "@/components/vita/interruptor";
-import type { GrupoRecuerdos, MensajeFuente, RecuerdoVista, VistaMemoria } from "@/lib/memoria/privacidad";
+import type { ContradiccionVista, GrupoRecuerdos, MensajeFuente, RecuerdoVista, VistaMemoria } from "@/lib/memoria/privacidad";
 import {
   borrarTodoMemoriaAction,
   cambiarMemoriaActivaAction,
   corregirRecuerdoAction,
   olvidarRecuerdoAction,
   previaOlvidoAction,
+  resolverContradiccionAction,
 } from "./actions";
 
 const TARJETA = "overflow-hidden rounded-[20px] bg-card shadow-card";
@@ -59,6 +60,20 @@ export function PantallaMemoria({ vista }: { vista: VistaMemoria }) {
         </div>
       </section>
 
+      {vista.contradicciones.length > 0 && (
+        <section>
+          <h2 className="eyebrow px-0.5 pb-[9px] text-subtle">Para confirmar</h2>
+          <div className={TARJETA}>
+            {vista.contradicciones.map((c) => (
+              <Contradiccion key={c.id} contradiccion={c} />
+            ))}
+          </div>
+          <p className="px-1 pt-2.5 text-pretty text-xs font-medium leading-[1.45] text-slate-brand">
+            Dos cosas que me contaste parecen no coincidir. Vos decidís cuál vale: yo no elijo por mi cuenta.
+          </p>
+        </section>
+      )}
+
       {!hayAlgo ? (
         <p className="rounded-[20px] bg-card p-4 text-pretty text-[13.5px] font-medium leading-[1.45] text-slate-brand shadow-card">
           Todavía no recuerdo nada de vos. Cuando me cuentes algo que valga la pena para la próxima, lo vas a ver acá y vas a poder
@@ -87,6 +102,75 @@ export function PantallaMemoria({ vista }: { vista: VistaMemoria }) {
 
       <BorrarTodo hayAlgo={hayAlgo} />
     </>
+  );
+}
+
+function Contradiccion({ contradiccion }: { contradiccion: ContradiccionVista }) {
+  const router = useRouter();
+  const [confirmandoNinguna, setConfirmandoNinguna] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendiente, startTransition] = useTransition();
+
+  function resolver(vale: "a" | "b" | "ambas" | "ninguna") {
+    setError(null);
+    startTransition(async () => {
+      const r = await resolverContradiccionAction(contradiccion.id, vale);
+      if (r.status === "success") {
+        toast.success(vale === "ninguna" ? "Listo, me olvidé de las dos." : "Listo, gracias por aclararlo.");
+        router.refresh();
+      } else {
+        setError(r.mensaje);
+        router.refresh();
+      }
+    });
+  }
+
+  const OPCION = "rounded-full border border-foreground/10 bg-card px-3 py-2 text-[12.5px] font-bold text-teal-deep disabled:opacity-50";
+  return (
+    <div className="px-4 py-3.5 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
+      <p className="text-pretty text-[14px] font-bold leading-snug">{contradiccion.pregunta}</p>
+      <div className="mt-2 flex flex-col gap-1.5">
+        <div className="rounded-[14px] bg-secondary px-3 py-2.5 text-[13px] font-medium leading-snug">
+          <span className="block text-[11px] font-bold text-subtle">Primera</span>
+          {contradiccion.textoA}
+        </div>
+        <div className="rounded-[14px] bg-secondary px-3 py-2.5 text-[13px] font-medium leading-snug">
+          <span className="block text-[11px] font-bold text-subtle">Segunda</span>
+          {contradiccion.textoB}
+        </div>
+      </div>
+      {error && <p role="alert" className="mt-2 rounded-[14px] bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">{error}</p>}
+      {!confirmandoNinguna ? (
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <button type="button" disabled={pendiente} className={OPCION} onClick={() => resolver("a")}>
+            Vale la primera
+          </button>
+          <button type="button" disabled={pendiente} className={OPCION} onClick={() => resolver("b")}>
+            Vale la segunda
+          </button>
+          <button type="button" disabled={pendiente} className={OPCION} onClick={() => resolver("ambas")}>
+            Valen las dos
+          </button>
+          <button type="button" disabled={pendiente} className={cn(OPCION, "text-destructive")} onClick={() => setConfirmandoNinguna(true)}>
+            Ninguna
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2.5 flex flex-col gap-2 rounded-[var(--radius-item)] bg-secondary p-3">
+          <p className="text-pretty text-[12.5px] font-medium leading-[1.45] text-slate-brand">
+            Me olvido de las dos cosas y no uso los mensajes de donde salieron. Siguen en tu historial, pero no los busco ni los resumo.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setConfirmandoNinguna(false)} className="flex-1 rounded-full border border-foreground/10 bg-card py-2.5 text-[13px] font-bold text-slate-brand">
+              Cancelar
+            </button>
+            <button type="button" disabled={pendiente} onClick={() => resolver("ninguna")} className="flex-1 rounded-full bg-destructive py-2.5 text-[13px] font-extrabold text-primary-foreground disabled:opacity-50">
+              {pendiente ? "Un segundo…" : "Olvidar las dos"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -18,7 +18,9 @@ import {
   momentoDiaAIngles,
 } from "./mapeo";
 import { CLAVES_PANTALLAS, pantallaPorClave } from "./guia-app";
-import { buscarMemoria, recordarMemoria } from "@/lib/memoria/nucleo";
+import { buscarMemoria, recordarMemoria, resolverContradiccion } from "@/lib/memoria/nucleo";
+import { pedirRegeneracion } from "@/lib/memoria/resumen";
+import { VALORES_VALE, type ValeContradiccion } from "@/lib/memoria/tipos";
 import { MAX_TEXTO_MEMORIA } from "@/lib/memoria/claves";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
@@ -319,6 +321,19 @@ const TOOLS_MEMORIA: Anthropic.Tool[] = [
       required: ["consulta"],
     },
   },
+  {
+    name: "resolver_contradiccion",
+    description:
+      "Cierra una contradicción de la lista 'Para confirmar con la persona' DESPUÉS de que la persona te dijo cuál vale. Nunca la uses sin que lo haya dicho ella. vale: 'a' (vale el recuerdo A; el B queda como historial), 'b' (vale el B), 'ambas' (las dos son ciertas, no se contradicen) o 'ninguna' (ninguna vale: se olvidan las dos, usala solo si lo pidió o lo dejó claro).",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "El id que figura entre corchetes en 'Para confirmar con la persona'." },
+        vale: { type: "string", enum: ["a", "b", "ambas", "ninguna"], description: "Cuál vale según la persona." },
+      },
+      required: ["id", "vale"],
+    },
+  },
 ];
 
 /** TOOLS + memoria: lo que recibe el modelo cuando la persona tiene la memoria activa. */
@@ -349,6 +364,7 @@ export async function ejecutarTool(
   ctx: ContextoTool
 ): Promise<ResultadoTool> {
   if (nombre === "recordar" || nombre === "buscar_memoria") return ejecutarToolMemoria(nombre, input, ctx);
+  if (nombre === "resolver_contradiccion") return ejecutarResolverContradiccion(input, ctx);
 
   const destino = resolverDestino(nombre, input, ctx);
   if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
@@ -378,6 +394,31 @@ const MENSAJES_RECORDAR: Record<string, string> = {
   texto_largo: `ERROR: el texto pasa los ${MAX_TEXTO_MEMORIA} caracteres. Resumilo en una oración corta y volvé a llamar. No se guardó nada.`,
   error: "No se pudo guardar el recuerdo por un problema temporal. No le digas a la persona que quedó guardado.",
 };
+
+const RE_UUID_TOOL = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Contradicciones (039): siempre cliente de sesión (RLS owner-only); la RPC hace todo en una transacción.
+async function ejecutarResolverContradiccion(input: Record<string, unknown>, ctx: ContextoTool): Promise<ResultadoTool> {
+  const id = typeof input.id === "string" ? input.id.trim() : "";
+  const vale = input.vale as ValeContradiccion;
+  if (!RE_UUID_TOOL.test(id) || !VALORES_VALE.includes(vale)) {
+    return { contenido: "ERROR: id o vale inválidos. Usá el id exacto de 'Para confirmar con la persona' y vale 'a', 'b', 'ambas' o 'ninguna'. No se cambió nada." };
+  }
+  const r = await resolverContradiccion(ctx.supabase, id, vale);
+  if (r === "no_encontrada") return { contenido: "Esa contradicción ya no está pendiente (se resolvió o no existe). No se cambió nada." };
+  if (r === "obsoleta") return { contenido: "Uno de los dos recuerdos ya cambió, así que la pregunta quedó sin efecto. No hace falta que la persona decida nada." };
+  if (r === "no_disponible") return { contenido: "Esto no está disponible por ahora: no se cambió nada. No lo menciones salvo que te lo pregunten." };
+  if (r !== "ok") return { contenido: "No se pudo guardar por un problema temporal. No le digas a la persona que quedó resuelto." };
+  // 'ninguna' olvidó los dos recuerdos: el resumen quedó invalidado y se rearma en segundo plano (solo encola).
+  if (vale === "ninguna") await pedirRegeneracion(ctx.usuarioId, 0);
+  const dicho: Record<ValeContradiccion, string> = {
+    a: "Listo: quedó como válido el recuerdo A; el B se conserva solo como historial.",
+    b: "Listo: quedó como válido el recuerdo B; el A se conserva solo como historial.",
+    ambas: "Listo: se dejan los dos recuerdos, no se vuelve a preguntar.",
+    ninguna: "Listo: se olvidaron los dos recuerdos.",
+  };
+  return { contenido: dicho[vale] };
+}
 
 // Memoria: siempre con el cliente de sesión (RLS owner-only), sobre quien chatea, nunca sobre un familiar.
 async function ejecutarToolMemoria(nombre: "recordar" | "buscar_memoria", input: Record<string, unknown>, ctx: ContextoTool): Promise<ResultadoTool> {

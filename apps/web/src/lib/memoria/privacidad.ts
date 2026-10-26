@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import { claveSobre, etiquetaSobre, normalizarTexto, type SobreResuelto } from "./claves";
-import { faltaMigracion, guardarAtomico, type FilaMemoriaVigente } from "./nucleo";
+import { faltaMigracion, guardarAtomico, listarContradicciones, type FilaMemoriaVigente } from "./nucleo";
 import type { Memoria, OrigenMemoria, TipoMemoria } from "./tipos";
 
 // Pantalla "Lo que vita recuerda de vos" (M6): ver, corregir, dejar de recordar, eliminar y borrar todo. Todo con el
@@ -25,12 +25,16 @@ export type RecuerdoVista = {
   vence: string | null;
 };
 export type GrupoRecuerdos = { clave: string; titulo: string; recuerdos: RecuerdoVista[] };
+/** Contradicción pendiente que la persona puede resolver desde la pantalla (039). */
+export type ContradiccionVista = { id: string; pregunta: string; textoA: string; textoB: string };
 export type VistaMemoria = {
   /** false = falta la migración 035 (la pantalla lo avisa en vez de mostrar un error). */
   disponible: boolean;
   activa: boolean;
   grupos: GrupoRecuerdos[];
   pasajeros: RecuerdoVista[];
+  /** Pares que la limpieza nocturna marcó (vacío sin la migración 039). */
+  contradicciones: ContradiccionVista[];
 };
 
 const ZONA = "America/Argentina/Buenos_Aires";
@@ -47,7 +51,7 @@ function fuenteDe(origen: OrigenMemoria, iso: string): string {
 type FilaVista = Pick<Memoria, "id" | "sobre_tipo" | "sobre_perfil_id" | "sobre_nombre" | "texto" | "tipo" | "vence_at" | "origen" | "created_at">;
 
 export async function cargarVistaMemoria(supabase: Cliente, usuarioId: string): Promise<VistaMemoria> {
-  const vacia: VistaMemoria = { disponible: false, activa: false, grupos: [], pasajeros: [] };
+  const vacia: VistaMemoria = { disponible: false, activa: false, grupos: [], pasajeros: [], contradicciones: [] };
   try {
     const { data: perfil, error: errPerfil } = await supabase.from("perfiles").select("memoria_activa").eq("id", usuarioId).maybeSingle();
     if (errPerfil || !perfil) return vacia;
@@ -94,7 +98,8 @@ export async function cargarVistaMemoria(supabase: Cliente, usuarioId: string): 
       grupo.recuerdos.push(vista);
     }
     const grupos = [...porSobre.values()].sort((a, b) => (a.clave === "yo" ? -1 : b.clave === "yo" ? 1 : a.titulo.localeCompare(b.titulo, "es")));
-    return { disponible: true, activa: perfil.memoria_activa === true, grupos, pasajeros };
+    const contradicciones = (await listarContradicciones(supabase, usuarioId, 10)).map((c) => ({ id: c.id, pregunta: c.pregunta, textoA: c.textoA, textoB: c.textoB }));
+    return { disponible: true, activa: perfil.memoria_activa === true, grupos, pasajeros, contradicciones };
   } catch {
     return vacia;
   }

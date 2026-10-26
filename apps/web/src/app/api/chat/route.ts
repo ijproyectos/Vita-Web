@@ -21,9 +21,9 @@ import type { MensajeBloques } from "@/lib/memoria/tipos";
 import { confirmarPendiente, idPendiente, limpiarPendientes, opcionesPendienteDelPedido, TEXTO_CANCELADO } from "@/lib/chat/confirmaciones";
 import { clasificarTurno, pendienteEsDelTurnoAnterior } from "@/lib/chat/confirmaciones-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
-import { armarTurnoActual, conPuntoDeCache, construirBloqueMemorias, construirBloqueResumen, construirVentana, MAX_FILAS_VENTANA, sinTurnoActual } from "@/lib/memoria/contexto";
+import { armarTurnoActual, conPuntoDeCache, construirBloqueContradicciones, construirBloqueMemorias, construirBloqueResumen, construirVentana, MAX_CONTRADICCIONES_CONTEXTO, MAX_FILAS_VENTANA, sinTurnoActual, visibilidadContradiccion } from "@/lib/memoria/contexto";
 import { REGLA_CONTEXTO_VIVO, REGLAS_MEMORIA } from "@/lib/memoria/prompt";
-import { cargarMemoriasParaContexto, cargarResumen, estadoMemoria } from "@/lib/memoria/nucleo";
+import { cargarMemoriasParaContexto, cargarResumen, estadoMemoria, listarContradicciones, marcarContradiccionesPreguntadas } from "@/lib/memoria/nucleo";
 import { pedirResumen } from "@/lib/memoria/resumen";
 import { elegirCorte } from "@/lib/memoria/resumen-logica";
 import { parsearCursor } from "@/lib/chat/cursor";
@@ -483,9 +483,9 @@ export async function POST(request: Request) {
         const memoria = await estadoMemoria(supabase, user.id);
         versionPrompt = memoria.activa ? VERSION_PROMPT_CON_MEMORIA : VERSION_PROMPT_SIN_MEMORIA;
         const tools = memoria.activa ? TOOLS_CON_MEMORIA : TOOLS;
-        const [recuerdos, resumen] = memoria.activa
-          ? await Promise.all([cargarMemoriasParaContexto(supabase, user.id), cargarResumen(supabase, user.id)])
-          : [[], null];
+        const [recuerdos, resumen, contradicciones] = memoria.activa
+          ? await Promise.all([cargarMemoriasParaContexto(supabase, user.id), cargarResumen(supabase, user.id), listarContradicciones(supabase, user.id)])
+          : [[], null, []];
 
         // Capa 1 (punto de caché al final del bloque estático), capas 2 y 3 (punto de caché al final de lo
         // último que haya: cambian poco). Un bloque de texto vacío no es válido: solo se agregan si hay algo.
@@ -498,9 +498,23 @@ export async function POST(request: Request) {
         const resumenInvalidado = resumen?.invalidado === true;
         if (memoria.activa && resumenInvalidado) resumenPedido.regenerar = true;
         const bloqueResumen = resumenInvalidado ? null : construirBloqueResumen(resumen);
-        if (bloqueRecuerdos) system.push({ type: "text", text: bloqueRecuerdos.texto });
+        // Contradicciones por confirmar (039, máx. 2): se suman a la capa 2. Una vez preguntadas siguen visibles 30 min (para poder
+        // resolverlas cuando la persona contesta) y después se ocultan; si no contestó, vuelven al día siguiente (hasta 3 veces).
+        const ahoraContexto = new Date();
+        const porConfirmar = contradicciones
+          .map((c) => ({ c, v: visibilidadContradiccion(c, ahoraContexto) }))
+          .filter((x) => x.v.visible)
+          .slice(0, MAX_CONTRADICCIONES_CONTEXTO);
+        const bloqueContradicciones = construirBloqueContradicciones(
+          porConfirmar.map(({ c, v }) => ({ id: c.id, textoA: c.textoA, textoB: c.textoB, pregunta: c.pregunta, nuevaPregunta: v.nuevaPregunta }))
+        );
+        if (bloqueContradicciones) {
+          await marcarContradiccionesPreguntadas(supabase, user.id, porConfirmar.filter((x) => x.v.nuevaPregunta).map((x) => ({ id: x.c.id, veces_preguntada: x.c.veces_preguntada })));
+        }
+        const textoCapa2 = [bloqueRecuerdos?.texto, bloqueContradicciones?.texto].filter(Boolean).join("\n\n");
+        if (textoCapa2) system.push({ type: "text", text: textoCapa2 });
         if (bloqueResumen) system.push({ type: "text", text: bloqueResumen.texto });
-        if (bloqueRecuerdos || bloqueResumen) system[system.length - 1].cache_control = { type: "ephemeral" };
+        if (textoCapa2 || bloqueResumen) system[system.length - 1].cache_control = { type: "ephemeral" };
 
         // Capa 4: ventana reciente rearmada desde las filas (bloques con tool_use/tool_result, sin thinking),
         // solo lo posterior al resumen confirmado. El historial se reconstruye SIEMPRE desde la DB (fuente de

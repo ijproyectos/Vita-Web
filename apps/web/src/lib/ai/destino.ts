@@ -18,7 +18,7 @@ const ESCRITURAS_DE_DATOS = [
 // `recordar` (memoria) también ESCRIBE, así que entra al dedupe por pedido y al conteo de escrituras del
 // registro. Pero NO tiene destino: la memoria es siempre del dueño que la cuenta (el "sobre quién" va en
 // el propio input) y no pide confirmación de familia. Por eso no entra a TOOLS_CON_DESTINO.
-export const TOOLS_DE_ESCRITURA = new Set([...ESCRITURAS_DE_DATOS, "recordar"]);
+export const TOOLS_DE_ESCRITURA = new Set([...ESCRITURAS_DE_DATOS, "recordar", "resolver_contradiccion"]);
 
 // Tools que leen o escriben datos de una persona: son las únicas que aceptan
 // `persona_id`. set_avatar_mood es un efecto de interfaz, sin destino.
