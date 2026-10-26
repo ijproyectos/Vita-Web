@@ -57,6 +57,7 @@ create table lotes_consolidacion (
   usuarios int not null default 0 check (usuarios >= 0),
   created_at timestamptz not null default now(),
   terminado_at timestamptz,  -- cuándo se reclamó para aplicar (también sirve de reserva vencible)
+  intentos int not null default 0 check (intentos >= 0), -- reclamos para aplicar: tope para que un lote atascado no reintente para siempre
   error text                 -- código corto, nunca el mensaje crudo
 );
 create index idx_lotes_consolidacion_estado on lotes_consolidacion (estado, created_at);
@@ -69,6 +70,7 @@ create table lote_usuarios (
   estado text not null default 'enviado' check (estado in ('enviado', 'aplicado', 'error', 'omitido')),
   created_at timestamptz not null default now(), -- momento de la foto: "consolidado hasta" para elegir candidatos
   aplicado_at timestamptz,
+  intentos int not null default 0 check (intentos >= 0), -- fallas transitorias al aplicar a esta persona
   detalle jsonb,  -- solo conteos
   error text,
   primary key (lote_id, usuario_id),
@@ -423,6 +425,12 @@ begin
   end if;
 
   -- ---- 3) Contradicciones (se marcan, no se deciden) ----
+  -- Una contradicción que ya se preguntó 3 veces sin respuesta (y cuya última ventana de 30 min pasó) se descarta: así no ocupa
+  -- el cupo de 5 pendientes y las nuevas se pueden marcar. El par queda marcado para siempre (no se vuelve a preguntar).
+  update contradicciones_memoria c
+     set estado = 'descartada', pregunta = '', resuelta_at = now()
+   where c.usuario_id = p_usuario and c.estado = 'pendiente'
+     and c.veces_preguntada >= 3 and c.preguntada_at < now() - interval '30 minutes';
   select count(*) into v_pendientes from contradicciones_memoria c where c.usuario_id = p_usuario and c.estado = 'pendiente';
   for v_item in select e from jsonb_array_elements(coalesce(p_plan -> 'contradicciones', '[]'::jsonb)) e loop
     begin
@@ -610,8 +618,114 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- reclamar_lote_consolidacion / cerrar_lote_consolidacion / intento_fallido_lote_usuario (service_role)
+-- ---------------------------------------------------------------------------
+-- reclamar: un solo poll gana el lote (enviado, o terminado con el reclamo vencido) y se cuenta el intento. Devuelve
+-- (reclamado, intentos). El trabajador cierra el lote como fallido cuando los intentos pasan el tope.
+create or replace function reclamar_lote_consolidacion(p_id uuid, p_reclamo_vence_s int default 600)
+returns table (o_reclamado boolean, o_intentos int)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_intentos int;
+begin
+  update lotes_consolidacion l
+     set estado = 'terminado', terminado_at = now(), intentos = l.intentos + 1
+   where l.id = p_id
+     and (l.estado = 'enviado'
+          or (l.estado = 'terminado' and l.terminado_at < now() - make_interval(secs => greatest(coalesce(p_reclamo_vence_s, 600), 0))))
+  returning l.intentos into v_intentos;
+  if found then
+    return query select true, v_intentos;
+  else
+    return query select false, 0;
+  end if;
+end;
+$$;
+
+-- cerrar: ATÓMICO. Con p_error: las personas que seguían 'enviado' pasan a 'error' (vuelven a ser candidatas mañana) y el
+-- lote queda 'fallido', en una sola transacción. Sin p_error: el lote se cierra solo si ya nadie quedó 'enviado'
+-- ('aplicado' si alguien se aplicó, si no 'fallido'). Un lote nunca queda 'fallido' con personas 'enviado'.
+create or replace function cerrar_lote_consolidacion(p_lote uuid, p_error text default null)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_aplicadas int;
+begin
+  if p_error is not null then
+    update lote_usuarios u set estado = 'error', error = left(p_error, 80) where u.lote_id = p_lote and u.estado = 'enviado';
+    update lotes_consolidacion l set estado = 'fallido', error = left(p_error, 80), terminado_at = coalesce(l.terminado_at, now()) where l.id = p_lote;
+    return 'fallido';
+  end if;
+
+  if exists (select 1 from lote_usuarios u where u.lote_id = p_lote and u.estado = 'enviado') then
+    return 'abierto';
+  end if;
+  select count(*) into v_aplicadas from lote_usuarios u where u.lote_id = p_lote and u.estado = 'aplicado';
+  update lotes_consolidacion l
+     set estado = case when v_aplicadas > 0 then 'aplicado' else 'fallido' end,
+         error = case when v_aplicadas > 0 then null else 'sin_resultados' end
+   where l.id = p_lote;
+  return case when v_aplicadas > 0 then 'aplicado' else 'fallido' end;
+end;
+$$;
+
+-- intento fallido de UNA persona (falla transitoria al leer/aplicar): suma el intento y, pasado el tope, la deja en 'error'.
+create or replace function intento_fallido_lote_usuario(p_lote uuid, p_usuario uuid, p_max int default 3, p_codigo text default 'reintentos_agotados')
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_intentos int;
+begin
+  update lote_usuarios u set intentos = u.intentos + 1
+   where u.lote_id = p_lote and u.usuario_id = p_usuario and u.estado = 'enviado'
+  returning u.intentos into v_intentos;
+  if not found then
+    return false;
+  end if;
+  if v_intentos >= coalesce(p_max, 3) then
+    update lote_usuarios u set estado = 'error', error = left(coalesce(p_codigo, 'reintentos_agotados'), 80)
+     where u.lote_id = p_lote and u.usuario_id = p_usuario and u.estado = 'enviado';
+    return true;
+  end if;
+  return false;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- marcar_contradicciones_preguntadas (SECURITY INVOKER)
+-- ---------------------------------------------------------------------------
+-- El chat la llama solo cuando la respuesta salió completa. Incremento atómico en SQL.
+create or replace function marcar_contradicciones_preguntadas(p_ids uuid[])
+returns void
+language sql
+security invoker
+set search_path = public
+as $$
+  update contradicciones_memoria c
+     set preguntada_at = now(), veces_preguntada = c.veces_preguntada + 1
+   where c.id = any(p_ids) and c.usuario_id = auth.uid() and c.estado = 'pendiente';
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Permisos
 -- ---------------------------------------------------------------------------
+revoke all on function reclamar_lote_consolidacion(uuid, int) from public, anon, authenticated;
+revoke all on function cerrar_lote_consolidacion(uuid, text) from public, anon, authenticated;
+revoke all on function intento_fallido_lote_usuario(uuid, uuid, int, text) from public, anon, authenticated;
+grant execute on function reclamar_lote_consolidacion(uuid, int) to service_role;
+grant execute on function cerrar_lote_consolidacion(uuid, text) to service_role;
+grant execute on function intento_fallido_lote_usuario(uuid, uuid, int, text) to service_role;
+revoke execute on function marcar_contradicciones_preguntadas(uuid[]) from public, anon;
+grant execute on function marcar_contradicciones_preguntadas(uuid[]) to authenticated;
 revoke all on function marcar_pasajeros_vencidos() from public, anon, authenticated;
 revoke all on function candidatos_consolidacion(int, int) from public, anon, authenticated;
 revoke all on function reservar_lote_consolidacion(jsonb) from public, anon, authenticated;

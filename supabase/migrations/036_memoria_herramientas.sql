@@ -1,6 +1,10 @@
 -- Vita — herramientas de memoria del chat (etapa M4).
 -- ESCRITA pero NO aplicada: aplicar a mano con psql (después de la 035) y registrar en supabase_migrations.schema_migrations.
 --
+-- IMPORTANTE: esta migración se editó EN SITIO tras escribirse (M6: `p_origen` en `guardar_memoria`; firma final de 9 argumentos) y NUNCA se
+-- aplicó en ningún entorno: hay que aplicarla en su forma final, no una versión anterior (un `create or replace` con otra firma dejaría
+-- dos sobrecargas de `guardar_memoria`). Lo mismo vale para 037 (F3: `tomar_tarea_memoria(p_usuario)`).
+--
 -- Revisión M6 (sigue sin aplicar, por eso se edita en lugar de sumar otra migración): `guardar_memoria` recibe `p_origen`
 -- ('chat' por defecto, 'usuario' para correcciones hechas desde la pantalla de privacidad).
 --

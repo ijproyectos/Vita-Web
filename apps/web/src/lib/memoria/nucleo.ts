@@ -511,20 +511,16 @@ export async function listarContradicciones(supabase: Cliente, usuarioId: string
   }
 }
 
-/** Marca que vita las tiene delante para preguntar (para no repetir la pregunta en cada mensaje). Best effort. */
-export async function marcarContradiccionesPreguntadas(supabase: Cliente, usuarioId: string, items: { id: string; veces_preguntada: number }[]): Promise<void> {
-  const ahora = new Date().toISOString();
-  for (const it of items) {
-    try {
-      await supabase
-        .from("contradicciones_memoria")
-        .update({ preguntada_at: ahora, veces_preguntada: it.veces_preguntada + 1 })
-        .eq("id", it.id)
-        .eq("usuario_id", usuarioId)
-        .eq("estado", "pendiente");
-    } catch {
-      // Sin la marca, la pregunta puede repetirse: molesta, no rompe nada.
-    }
+/**
+ * Marca que vita las puso delante para preguntar (así no se repite la pregunta en cada mensaje). Un solo UPDATE atómico en
+ * SQL (`veces_preguntada = veces_preguntada + 1`, RPC `marcar_contradicciones_preguntadas`); sin 039 no hace nada. Best effort.
+ */
+export async function marcarContradiccionesPreguntadas(supabase: Cliente, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    await supabase.rpc("marcar_contradicciones_preguntadas", { p_ids: ids });
+  } catch {
+    // Sin la marca, la pregunta puede repetirse: molesta, no rompe nada.
   }
 }
 

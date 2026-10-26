@@ -44,8 +44,10 @@ import { faltaMigracion } from "./nucleo";
 
 type Admin = SupabaseClient;
 
-// Los reintentos del SDK sirven acá (el create es idempotente por reserva previa); timeout corto para no colgar al cron.
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 2, timeout: 30_000 });
+// SIN reintentos del SDK por defecto: un reintento de `batches.create` podría crear un segundo lote (y cobrarlo). Las lecturas
+// (retrieve/results) son idempotentes y piden sus reintentos explícitos con LECTURA.
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0, timeout: 30_000 });
+const LECTURA = { maxRetries: 2 } as const;
 
 /** Un reclamo de lote 'terminado' que lleva más que esto se considera abandonado y otro poll lo retoma. */
 const RECLAMO_VENCE_MS = 10 * 60_000;
@@ -54,6 +56,12 @@ const LOTE_VENCE_MS = 30 * 3600_000;
 /** Un lote sin id de Anthropic (se cayó entre reservar y crear) se limpia pasado este tiempo. */
 const LOTE_HUERFANO_MS = 60 * 60_000;
 const CONCURRENCIA_APLICAR = 5;
+/** Reclamos de un mismo lote antes de darlo por fallido (con un poll cada 15 min y reclamo de 10 min, ~1 h de reintentos). */
+const MAX_RECLAMOS_LOTE = 6;
+/** Fallas transitorias de UNA persona (leer sus recuerdos / aplicar) antes de dejarla en 'error' para la noche siguiente. */
+const MAX_INTENTOS_PERSONA = 3;
+/** Lotes que se miran por poll (los menos reintentados primero: uno atascado no deja sin turno a los nuevos). */
+const LOTES_POR_POLL = 10;
 export const PRESUPUESTO_PROCESAR_MS = 40_000;
 
 export type ResumenEnvio =
@@ -147,13 +155,23 @@ export async function enviarLoteConsolidacion(admin: Admin = createAdminClient()
       },
     }));
 
+    let batchId: string;
     try {
-      const lote = await anthropic.messages.batches.create({ requests });
-      const { error: errId } = await admin.from("lotes_consolidacion").update({ batch_id: lote.id }).eq("id", loteId);
-      if (errId) console.error("consolidacion: el lote se creó pero no se pudo guardar su id", errId.code ?? "");
+      // Una sola vez, sin reintentos (ver arriba).
+      batchId = (await anthropic.messages.batches.create({ requests })).id;
     } catch (e) {
-      // No se creó el lote: se liberan las personas (quedan 'error' y vuelven a ser candidatas mañana).
-      await cerrarLoteFallido(admin, loteId, codigoError(e));
+      // No se creó el lote (o no se sabe: un timeout puede haberlo creado igual, en ese caso Anthropic lo corre y se cobra sin
+      // aplicarse): se liberan las personas, quedan 'error' y vuelven a ser candidatas mañana.
+      const codigo = codigoError(e);
+      if (codigo === "timeout") console.warn("consolidacion: timeout al crear el lote; puede haber quedado un lote sin seguimiento en Anthropic");
+      await cerrarLoteFallido(admin, loteId, codigo);
+      return { estado: "error", candidatos: ids.length, enviados: 0, vencidos };
+    }
+    if (!(await guardarBatchId(admin, loteId, batchId))) {
+      // El lote existe y se cobra pero no quedó atado a la base: se deja el id en el log y, si se puede, en `error` del lote.
+      console.error(`consolidacion: lote huérfano en Anthropic (id ${batchId}); no se pudo guardar su id en la base`);
+      await admin.from("lotes_consolidacion").update({ error: `huerfano:${batchId}` }).eq("id", loteId);
+      await cerrarLoteFallido(admin, loteId, "batch_id_sin_guardar");
       return { estado: "error", candidatos: ids.length, enviados: 0, vencidos };
     }
     return { estado: "enviado", candidatos: ids.length, enviados: filas.length, vencidos };
@@ -170,13 +188,30 @@ function codigoError(e: unknown): string {
   return "interno";
 }
 
-/** Lote fallido: las personas que seguían 'enviado' pasan a 'error' (se reintentan la noche siguiente). */
-async function cerrarLoteFallido(admin: Admin, loteId: string, codigo: string): Promise<void> {
+async function guardarBatchId(admin: Admin, loteId: string, batchId: string): Promise<boolean> {
+  for (let i = 0; i < 2; i++) {
+    const { error } = await admin.from("lotes_consolidacion").update({ batch_id: batchId }).eq("id", loteId);
+    if (!error) return true;
+  }
+  return false;
+}
+
+/**
+ * Lote fallido, ATÓMICO (RPC `cerrar_lote_consolidacion`): las personas que seguían 'enviado' pasan a 'error' (vuelven a ser
+ * candidatas la noche siguiente) y el lote queda 'fallido' en la misma transacción: nunca un lote 'fallido' con personas
+ * 'enviado'. Si la RPC falla se loguea y el lote sigue abierto (el tope de edad lo vuelve a intentar cerrar en el próximo poll).
+ */
+async function cerrarLoteFallido(admin: Admin, loteId: string, codigo: string): Promise<boolean> {
   try {
-    await admin.from("lote_usuarios").update({ estado: "error", error: codigo }).eq("lote_id", loteId).eq("estado", "enviado");
-    await admin.from("lotes_consolidacion").update({ estado: "fallido", error: codigo, terminado_at: new Date().toISOString() }).eq("id", loteId);
+    const { error } = await admin.rpc("cerrar_lote_consolidacion", { p_lote: loteId, p_error: codigo });
+    if (error) {
+      console.warn("consolidacion: no se pudo cerrar el lote fallido", error.code ?? "");
+      return false;
+    }
+    return true;
   } catch {
     console.warn("consolidacion: no se pudo cerrar el lote fallido");
+    return false;
   }
 }
 
@@ -195,7 +230,7 @@ export type ResumenProceso = {
   estado?: "sin_migracion";
 };
 
-type FilaLote = { id: string; batch_id: string | null; estado: string; created_at: string; terminado_at: string | null };
+type FilaLote = { id: string; batch_id: string | null; estado: string; created_at: string; terminado_at: string | null; intentos: number };
 type FilaLoteUsuario = { usuario_id: string; custom_id: string; snapshot: unknown };
 
 export async function procesarLotesConsolidacion(
@@ -209,10 +244,12 @@ export async function procesarLotesConsolidacion(
   try {
     const { data, error } = await admin
       .from("lotes_consolidacion")
-      .select("id, batch_id, estado, created_at, terminado_at")
+      .select("id, batch_id, estado, created_at, terminado_at, intentos")
       .in("estado", ["enviado", "terminado"])
+      // Los menos reintentados primero: un lote atascado no desplaza a los nuevos (y su tope de reclamos lo cierra).
+      .order("intentos", { ascending: true })
       .order("created_at", { ascending: true })
-      .limit(5);
+      .limit(LOTES_POR_POLL);
     if (error) {
       if (faltaMigracion(error)) resumen.estado = "sin_migracion";
       else console.warn("consolidacion: no se pudieron leer los lotes", error.code ?? "");
@@ -228,29 +265,32 @@ export async function procesarLotesConsolidacion(
         if (edadMs > LOTE_HUERFANO_MS) await cerrarLoteFallido(admin, lote.id, "sin_lote_remoto");
         continue;
       }
+      // Tope de edad para CUALQUIER lote en vuelo o atascado (el máximo de Anthropic son 24 h): pasado esto, falla.
+      if (edadMs > LOTE_VENCE_MS) {
+        await cerrarLoteFallido(admin, lote.id, lote.estado === "enviado" ? "lote_vencido" : "reintentos_agotados");
+        continue;
+      }
       if (lote.estado === "enviado") {
-        if (edadMs > LOTE_VENCE_MS) {
-          await cerrarLoteFallido(admin, lote.id, "lote_vencido");
-          continue;
-        }
         let terminado = false;
         try {
-          terminado = (await anthropic.messages.batches.retrieve(lote.batch_id)).processing_status === "ended";
+          terminado = (await anthropic.messages.batches.retrieve(lote.batch_id, LECTURA)).processing_status === "ended";
         } catch (e) {
           console.warn("consolidacion: no se pudo consultar el lote", codigoError(e));
         }
         if (!terminado) continue;
       }
 
-      // Reclamo: solo un poll lo gana. Un 'terminado' con reclamo vencido (el poll anterior murió o se quedó sin tiempo) se retoma.
-      const vencido = new Date(Date.now() - RECLAMO_VENCE_MS).toISOString();
-      const { data: reclamado, error: errReclamo } = await admin
-        .from("lotes_consolidacion")
-        .update({ estado: "terminado", terminado_at: new Date().toISOString() })
-        .eq("id", lote.id)
-        .or(`estado.eq.enviado,and(estado.eq.terminado,terminado_at.lt.${vencido})`)
-        .select("id");
-      if (errReclamo || !reclamado || reclamado.length === 0) continue;
+      // Reclamo (RPC): solo un poll lo gana y se cuenta el intento. Un 'terminado' con reclamo vencido (el poll anterior murió o
+      // se quedó sin tiempo) se retoma, pero solo hasta MAX_RECLAMOS_LOTE veces: después las personas pasan a 'error' y el lote
+      // a 'fallido' (vuelven a ser candidatas la noche siguiente).
+      const { data: rec, error: errReclamo } = await admin.rpc("reclamar_lote_consolidacion", { p_id: lote.id, p_reclamo_vence_s: RECLAMO_VENCE_MS / 1000 });
+      if (errReclamo) continue;
+      const fila = (Array.isArray(rec) ? rec[0] : rec) as { o_reclamado?: boolean; o_intentos?: number } | undefined;
+      if (!fila?.o_reclamado) continue;
+      if ((fila.o_intentos ?? 0) > MAX_RECLAMOS_LOTE) {
+        await cerrarLoteFallido(admin, lote.id, "reintentos_agotados");
+        continue;
+      }
 
       resumen.terminados++;
       await aplicarLote(admin, lote.id, lote.batch_id, limiteMs, resumen);
@@ -310,7 +350,7 @@ async function aplicarLote(admin: Admin, loteId: string, batchId: string, limite
   if (porCustomId.size > 0) {
     try {
       // Los resultados llegan en CUALQUIER orden: se indexan por custom_id.
-      for await (const item of await anthropic.messages.batches.results(batchId)) {
+      for await (const item of await anthropic.messages.batches.results(batchId, LECTURA)) {
         if (porCustomId.has(item.custom_id)) resultados.set(item.custom_id, item);
       }
       completo = true;
@@ -335,14 +375,9 @@ async function aplicarLote(admin: Admin, loteId: string, batchId: string, limite
   await Promise.all(Array.from({ length: CONCURRENCIA_APLICAR }, trabajador));
 
   // ¿Quedó alguien sin resolver? Si sí (sin tiempo), el lote sigue 'terminado' y se retoma cuando venza el reclamo.
-  const { count } = await admin.from("lote_usuarios").select("usuario_id", { count: "exact", head: true }).eq("lote_id", loteId).eq("estado", "enviado");
-  if (count === 0) {
-    const { count: aplicadas } = await admin.from("lote_usuarios").select("usuario_id", { count: "exact", head: true }).eq("lote_id", loteId).eq("estado", "aplicado");
-    await admin
-      .from("lotes_consolidacion")
-      .update({ estado: (aplicadas ?? 0) > 0 || porCustomId.size === 0 ? "aplicado" : "fallido", error: (aplicadas ?? 0) > 0 ? null : "sin_resultados" })
-      .eq("id", loteId);
-  }
+  // La RPC solo cierra si ya nadie quedó 'enviado' ('abierto' = sigue): un lote nunca se cierra con personas sin resolver.
+  const { error: errCierre } = await admin.rpc("cerrar_lote_consolidacion", { p_lote: loteId, p_error: null });
+  if (errCierre) console.warn("consolidacion: no se pudo cerrar el lote", errCierre.code ?? "");
 }
 
 async function aplicarUsuario(
@@ -386,7 +421,7 @@ async function aplicarUsuario(
   // Los recuerdos tal como se mandaron (la posición en el snapshot es la referencia m<N> que vio el modelo). Solo se usan
   // para resolver referencias y chequear que dos recuerdos sean de la misma persona; el estado vigente lo vuelve a verificar la RPC.
   const enviados = await cargarEnviados(admin, usuarioId, snapshot);
-  if (!enviados) return; // error de lectura: queda 'enviado' y se reintenta
+  if (!enviados) return intentoFallido(admin, loteId, usuarioId, resumen); // error de lectura: se reintenta, con tope
   const plan = validarPlan(crudo, enviados);
   if (!plan) return fallar("plan_invalido");
 
@@ -400,7 +435,7 @@ async function aplicarUsuario(
   });
   if (error) {
     console.warn("consolidacion: no se pudo aplicar el plan", error.code ?? "");
-    return; // sigue 'enviado': se reintenta en el próximo poll
+    return intentoFallido(admin, loteId, usuarioId, resumen); // se reintenta en el próximo poll, con tope
   }
   const r = (Array.isArray(data) ? data[0] : data) as { o_estado?: string; o_unidos?: number; o_destacados?: number; o_contradicciones?: number } | undefined;
   if (r?.o_estado === "aplicado" || r?.o_estado === "memoria_apagada") {
@@ -411,6 +446,17 @@ async function aplicarUsuario(
     resumen.contradicciones += r.o_contradicciones ?? 0;
     await contabilizarUso(usuarioId, tokensEntrada, tokensSalida, null);
   }
+}
+
+/** Falla transitoria de una persona: suma el intento y, pasado el tope, queda 'error' (candidata de nuevo la noche siguiente). */
+async function intentoFallido(admin: Admin, loteId: string, usuarioId: string, resumen: ResumenProceso): Promise<void> {
+  const { data, error } = await admin.rpc("intento_fallido_lote_usuario", {
+    p_lote: loteId,
+    p_usuario: usuarioId,
+    p_max: MAX_INTENTOS_PERSONA,
+    p_codigo: "reintentos_agotados",
+  });
+  if (!error && data === true) resumen.errores++;
 }
 
 async function cargarEnviados(admin: Admin, usuarioId: string, snapshot: EntradaSnapshot[]): Promise<MemoriaConsolidable[] | null> {

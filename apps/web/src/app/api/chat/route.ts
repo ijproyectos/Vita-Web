@@ -480,6 +480,7 @@ export async function POST(request: Request) {
         // Contexto en capas (lib/memoria/contexto.ts). Orden por estabilidad, para el caché de la API:
         // 1 reglas+tools -> 2 recuerdos -> 3 resumen -> 4 ventana reciente -> 5 perfil vivo y hoy.
         // Con la memoria apagada (o sin la migración 035) no hay tools de memoria ni capas 2-3: como antes.
+        let contradiccionesAMarcar: string[] = [];
         const memoria = await estadoMemoria(supabase, user.id);
         versionPrompt = memoria.activa ? VERSION_PROMPT_CON_MEMORIA : VERSION_PROMPT_SIN_MEMORIA;
         const tools = memoria.activa ? TOOLS_CON_MEMORIA : TOOLS;
@@ -508,9 +509,8 @@ export async function POST(request: Request) {
         const bloqueContradicciones = construirBloqueContradicciones(
           porConfirmar.map(({ c, v }) => ({ id: c.id, textoA: c.textoA, textoB: c.textoB, pregunta: c.pregunta, nuevaPregunta: v.nuevaPregunta }))
         );
-        if (bloqueContradicciones) {
-          await marcarContradiccionesPreguntadas(supabase, user.id, porConfirmar.filter((x) => x.v.nuevaPregunta).map((x) => ({ id: x.c.id, veces_preguntada: x.c.veces_preguntada })));
-        }
+        // Se marcan como preguntadas SOLO si la respuesta llega a salir bien (más abajo): una falla del modelo no gasta el intento.
+        contradiccionesAMarcar = bloqueContradicciones ? porConfirmar.filter((x) => x.v.nuevaPregunta).map((x) => x.c.id) : [];
         const textoCapa2 = [bloqueRecuerdos?.texto, bloqueContradicciones?.texto].filter(Boolean).join("\n\n");
         if (textoCapa2) system.push({ type: "text", text: textoCapa2 });
         if (bloqueResumen) system.push({ type: "text", text: bloqueResumen.texto });
@@ -651,6 +651,11 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             tokens: tokensOutputAcumulados,
             pedidoId,
           });
+        }
+
+        // La respuesta salió completa y quedó guardada: recién ahora cuenta como "ya se lo pregunté" (incremento atómico en SQL).
+        if (contradiccionesAMarcar.length > 0 && textoAcumulado && !fallaPorTiempo && !cortePorTiempo) {
+          await marcarContradiccionesPreguntadas(supabase, contradiccionesAMarcar);
         }
 
         const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });

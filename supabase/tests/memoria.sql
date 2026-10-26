@@ -375,3 +375,239 @@ begin;
     raise notice 'PASS: no pisa un resumen vigente';
   end $$;
 rollback;
+
+-- ===========================================================================
+-- 039 sections (11-16): marcar_pasajeros_vencidos, aplicar_consolidacion (idempotency, stale snapshot skip),
+-- cascade trigger, resolver_contradiccion. NOT RUN when written (no database/psql in the authoring session): run after
+-- applying 035-039. Fixtures use fixed uuids 99999999-0000-0000-0000-0000000000XX and 88888888-... (lotes); each section
+-- ROLLBACKs. Sections 11-14 run as postgres (service_role equivalent); section 15-16 simulate the authenticated owner.
+-- ===========================================================================
+
+-- ===========================================================================
+-- 11 — marcar_pasajeros_vencidos: only expired pasajeros, text removed, estables untouched, idempotent
+-- ===========================================================================
+begin;
+  select set_config('app.a', (:user_a)::text, true);
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, tipo, vence_at) values
+    ('99999999-0000-0000-0000-000000000011', :user_a, 'yo', 'animo_viejo', 'Hoy estoy triste', 'pasajero', now() - interval '1 hour'),
+    ('99999999-0000-0000-0000-000000000012', :user_a, 'yo', 'animo_nuevo', 'Me duele la cabeza', 'pasajero', now() + interval '1 day');
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, tipo) values
+    ('99999999-0000-0000-0000-000000000013', :user_a, 'yo', 'gusto', 'Le gusta el mate', 'estable');
+  do $$
+  declare n int; e text; t text;
+  begin
+    n := marcar_pasajeros_vencidos();
+    if n < 1 then raise exception 'FAIL: debía archivar al menos el pasajero vencido (%)', n; end if;
+    select estado, texto into e, t from memorias where id = '99999999-0000-0000-0000-000000000011';
+    if e <> 'vencido' or t is not null then raise exception 'FAIL: el vencido debía quedar sin texto (% / %)', e, t; end if;
+    raise notice 'PASS: el pasajero vencido pasa a vencido sin texto';
+    select estado into e from memorias where id = '99999999-0000-0000-0000-000000000012';
+    if e <> 'vigente' then raise exception 'FAIL: tocó un pasajero que no venció'; end if;
+    select estado into e from memorias where id = '99999999-0000-0000-0000-000000000013';
+    if e <> 'vigente' then raise exception 'FAIL: tocó un estable'; end if;
+    raise notice 'PASS: no toca pasajeros vigentes ni estables';
+    n := marcar_pasajeros_vencidos();
+    if exists (select 1 from memorias where id = '99999999-0000-0000-0000-000000000011' and estado <> 'vencido') then raise exception 'FAIL: no idempotente'; end if;
+    raise notice 'PASS: repetir no cambia nada';
+  end $$;
+rollback;
+
+-- ===========================================================================
+-- 12 — aplicar_consolidacion: merge + highlight, same-person guard, idempotency (second call = ya_aplicado)
+-- ===========================================================================
+begin;
+  select set_config('app.a', (:user_a)::text, true);
+  update perfiles set memoria_activa = true where id = :user_a;
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, tipo, usos) values
+    ('99999999-0000-0000-0000-000000000021', :user_a, 'yo', 'toma_enalapril', 'Toma enalapril a la mañana', 'estable', 2),
+    ('99999999-0000-0000-0000-000000000022', :user_a, 'yo', 'enalapril', 'Toma el enalapril a la mañana', 'estable', 1),
+    ('99999999-0000-0000-0000-000000000023', :user_a, 'yo', 'camina', 'Camina todas las tardes', 'estable', 0);
+  insert into lotes_consolidacion (id) values ('88888888-0000-0000-0000-000000000001');
+  insert into lote_usuarios (lote_id, usuario_id, custom_id, snapshot) values
+    ('88888888-0000-0000-0000-000000000001', :user_a, 'u_test_a', '[]'::jsonb);
+  do $$
+  declare
+    a uuid := current_setting('app.a')::uuid;
+    snap jsonb;
+    plan jsonb;
+    r record; n int; nuevo uuid; est text; rp uuid; dest boolean; ult text;
+  begin
+    select jsonb_object_agg(id::text, updated_at) into snap from memorias where usuario_id = a;
+    plan := jsonb_build_object(
+      'unir', jsonb_build_array(jsonb_build_object('ids', jsonb_build_array('99999999-0000-0000-0000-000000000021','99999999-0000-0000-0000-000000000022'), 'texto', 'Toma enalapril a la mañana', 'clave', 'enalapril_manana')),
+      'destacados', jsonb_build_array('99999999-0000-0000-0000-000000000023'),
+      'contradicciones', '[]'::jsonb);
+    select * into r from aplicar_consolidacion('88888888-0000-0000-0000-000000000001', a, plan, snap, 8, 1000);
+    if r.o_estado <> 'aplicado' or r.o_unidos <> 1 or r.o_destacados <> 1 then raise exception 'FAIL: resultado inesperado (% / % / %)', r.o_estado, r.o_unidos, r.o_destacados; end if;
+    select id into nuevo from memorias where usuario_id = a and estado = 'vigente' and origen = 'consolidacion';
+    if nuevo is null then raise exception 'FAIL: no nació el recuerdo unido'; end if;
+    select estado, reemplazada_por_id into est, rp from memorias where id = '99999999-0000-0000-0000-000000000021';
+    if est <> 'reemplazado' or rp <> nuevo then raise exception 'FAIL: el viejo debía quedar reemplazado apuntando al unido (% / %)', est, rp; end if;
+    select destacado into dest from memorias where id = '99999999-0000-0000-0000-000000000023';
+    if not dest then raise exception 'FAIL: no destacó el recuerdo elegido'; end if;
+    raise notice 'PASS: une duplicados y destaca';
+
+    select * into r from aplicar_consolidacion('88888888-0000-0000-0000-000000000001', a, plan, snap, 8, 1000);
+    if r.o_estado <> 'ya_aplicado' then raise exception 'FAIL: el segundo intento debía ser ya_aplicado (%)', r.o_estado; end if;
+    select count(*) into n from memorias where usuario_id = a and origen = 'consolidacion';
+    if n <> 1 then raise exception 'FAIL: el segundo intento creó otro unido (%)', n; end if;
+    raise notice 'PASS: aplicar dos veces es idempotente';
+  end $$;
+rollback;
+
+-- ===========================================================================
+-- 13 — aplicar_consolidacion: stale plans are skipped (changed, deleted, other person), nothing is revived
+-- ===========================================================================
+begin;
+  select set_config('app.a', (:user_a)::text, true);
+  update perfiles set memoria_activa = true where id = :user_a;
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, tipo) values
+    ('99999999-0000-0000-0000-000000000031', :user_a, 'yo', 'k1', 'Dato uno', 'estable'),
+    ('99999999-0000-0000-0000-000000000032', :user_a, 'yo', 'k2', 'Dato uno bis', 'estable'),
+    ('99999999-0000-0000-0000-000000000033', :user_a, 'yo', 'k3', 'Dato tres', 'estable'),
+    ('99999999-0000-0000-0000-000000000034', :user_a, 'yo', 'k4', 'Dato cuatro', 'estable');
+  insert into memorias (id, usuario_id, sobre_tipo, sobre_nombre, clave, texto, tipo) values
+    ('99999999-0000-0000-0000-000000000035', :user_a, 'otro', 'Laura', 'k5', 'Laura trabaja de tarde', 'estable');
+  insert into lotes_consolidacion (id) values ('88888888-0000-0000-0000-000000000002');
+  insert into lote_usuarios (lote_id, usuario_id, custom_id, snapshot) values ('88888888-0000-0000-0000-000000000002', :user_a, 'u_test_b', '[]'::jsonb);
+  do $$
+  declare
+    a uuid := current_setting('app.a')::uuid;
+    snap jsonb; plan jsonb; r record; est text; txt text;
+  begin
+    select jsonb_object_agg(id::text, updated_at) into snap from memorias where usuario_id = a;
+    -- Mientras corría el lote: 31 cambió (corregido), 33 se borró, 34 intacto.
+    update memorias set texto = 'Dato uno corregido', updated_at = now() + interval '1 second' where id = '99999999-0000-0000-0000-000000000031';
+    update memorias set estado = 'borrado', texto = null where id = '99999999-0000-0000-0000-000000000033';
+    plan := jsonb_build_object(
+      'unir', jsonb_build_array(
+        jsonb_build_object('ids', jsonb_build_array('99999999-0000-0000-0000-000000000031','99999999-0000-0000-0000-000000000032'), 'texto', 'Dato uno', 'clave', 'uno'),
+        jsonb_build_object('ids', jsonb_build_array('99999999-0000-0000-0000-000000000033','99999999-0000-0000-0000-000000000034'), 'texto', 'Dato tres y cuatro', 'clave', 'tres_cuatro'),
+        jsonb_build_object('ids', jsonb_build_array('99999999-0000-0000-0000-000000000034','99999999-0000-0000-0000-000000000035'), 'texto', 'mezcla de personas', 'clave', 'mezcla')),
+      'destacados', jsonb_build_array('99999999-0000-0000-0000-000000000033'),
+      'contradicciones', jsonb_build_array(jsonb_build_object('a','99999999-0000-0000-0000-000000000031','b','99999999-0000-0000-0000-000000000034','pregunta','¿Cuál vale?')));
+    select * into r from aplicar_consolidacion('88888888-0000-0000-0000-000000000002', a, plan, snap, 8, 1000);
+    if r.o_unidos <> 0 or r.o_destacados <> 0 or r.o_contradicciones <> 0 or r.o_omitidos < 4 then
+      raise exception 'FAIL: debía saltear todo (unidos % destacados % contradicciones % omitidos %)', r.o_unidos, r.o_destacados, r.o_contradicciones, r.o_omitidos;
+    end if;
+    raise notice 'PASS: un plan viejo (cambiado, borrado o de otra persona) se saltea ítem por ítem';
+    select estado, texto into est, txt from memorias where id = '99999999-0000-0000-0000-000000000033';
+    if est <> 'borrado' or txt is not null then raise exception 'FAIL: un recuerdo borrado revivió o recuperó texto'; end if;
+    select estado into est from memorias where id = '99999999-0000-0000-0000-000000000031';
+    if est <> 'vigente' then raise exception 'FAIL: el recuerdo cambiado no debía tocarse'; end if;
+    if exists (select 1 from memorias where usuario_id = a and origen = 'consolidacion') then raise exception 'FAIL: se creó un unido a pesar del plan viejo'; end if;
+    raise notice 'PASS: lo borrado no revive y lo cambiado no se pisa';
+  end $$;
+rollback;
+
+-- ===========================================================================
+-- 14 — cascade trigger: forgetting an ingredient forgets the merged memory and the other ingredients; closes contradictions
+-- ===========================================================================
+begin;
+  select set_config('app.a', (:user_a)::text, true);
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, tipo, origen) values
+    ('99999999-0000-0000-0000-000000000041', :user_a, 'yo', 'unido', 'Toma enalapril', 'estable', 'consolidacion'),
+    ('99999999-0000-0000-0000-000000000044', :user_a, 'yo', 'otra', 'Otra cosa', 'estable', 'chat');
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, tipo, estado, reemplazada_por_id) values
+    ('99999999-0000-0000-0000-000000000042', :user_a, 'yo', 'ing1', 'Toma enalapril 1', 'estable', 'reemplazado', '99999999-0000-0000-0000-000000000041'),
+    ('99999999-0000-0000-0000-000000000043', :user_a, 'yo', 'ing2', 'Toma enalapril 2', 'estable', 'reemplazado', '99999999-0000-0000-0000-000000000041');
+  insert into contradicciones_memoria (id, usuario_id, memoria_a, memoria_b, pregunta) values
+    ('77777777-0000-0000-0000-000000000041', :user_a, '99999999-0000-0000-0000-000000000041', '99999999-0000-0000-0000-000000000044', '¿Cuál vale?');
+  do $$
+  declare n int; est text; pr text;
+  begin
+    update memorias set estado = 'borrado', texto = null where id = '99999999-0000-0000-0000-000000000042';
+    select count(*) into n from memorias where id in ('99999999-0000-0000-0000-000000000041','99999999-0000-0000-0000-000000000043') and estado = 'borrado' and texto is null;
+    if n <> 2 then raise exception 'FAIL: borrar un ingrediente debía arrastrar al unido y al otro ingrediente (%)', n; end if;
+    raise notice 'PASS: la cascada borra el unido y sus ingredientes';
+    select estado, pregunta into est, pr from contradicciones_memoria where id = '77777777-0000-0000-0000-000000000041';
+    if est <> 'descartada' or pr <> '' then raise exception 'FAIL: la contradicción debía cerrarse y vaciarse (% / %)', est, pr; end if;
+    raise notice 'PASS: una contradicción se descarta (sin pregunta) cuando uno de sus recuerdos deja de estar vigente';
+    select estado into est from memorias where id = '99999999-0000-0000-0000-000000000044';
+    if est <> 'vigente' then raise exception 'FAIL: la cascada tocó un recuerdo ajeno a la unión'; end if;
+    raise notice 'PASS: no toca recuerdos que no son parte de la unión';
+  end $$;
+rollback;
+
+-- ===========================================================================
+-- 15 — resolver_contradiccion as the owner: a / ambas / ninguna; closed or foreign contradictions are not found
+-- ===========================================================================
+begin;
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, tipo) values
+    ('99999999-0000-0000-0000-000000000051', :user_a, 'yo', 'enalapril', 'Toma enalapril', 'estable'),
+    ('99999999-0000-0000-0000-000000000052', :user_a, 'yo', 'enalapril_dejo', 'Dejó el enalapril', 'estable'),
+    ('99999999-0000-0000-0000-000000000053', :user_a, 'yo', 'cafe', 'Toma café', 'estable'),
+    ('99999999-0000-0000-0000-000000000054', :user_a, 'yo', 'cafe_no', 'No toma café', 'estable'),
+    ('99999999-0000-0000-0000-000000000055', :user_a, 'yo', 'te', 'Toma té', 'estable'),
+    ('99999999-0000-0000-0000-000000000056', :user_a, 'yo', 'te_no', 'No toma té', 'estable');
+  insert into contradicciones_memoria (id, usuario_id, memoria_a, memoria_b, pregunta) values
+    ('77777777-0000-0000-0000-000000000051', :user_a, '99999999-0000-0000-0000-000000000051', '99999999-0000-0000-0000-000000000052', '¿Sigue con el enalapril?'),
+    ('77777777-0000-0000-0000-000000000052', :user_a, '99999999-0000-0000-0000-000000000053', '99999999-0000-0000-0000-000000000054', '¿Toma café?'),
+    ('77777777-0000-0000-0000-000000000053', :user_a, '99999999-0000-0000-0000-000000000055', '99999999-0000-0000-0000-000000000056', '¿Toma té?');
+  select set_config('request.jwt.claims', json_build_object('sub', :user_b, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  do $$
+  declare r record;
+  begin
+    select * into r from resolver_contradiccion('77777777-0000-0000-0000-000000000051', 'a');
+    if r.o_resultado <> 'no_encontrada' then raise exception 'FAIL: otro usuario resolvió una contradicción ajena (%)', r.o_resultado; end if;
+    raise notice 'PASS: otro usuario no encuentra la contradicción';
+  end $$;
+  reset role;
+  select set_config('request.jwt.claims', json_build_object('sub', :user_a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  do $$
+  declare r record; est text; rp uuid; pr text; ce text;
+  begin
+    select * into r from resolver_contradiccion('77777777-0000-0000-0000-000000000051', 'a');
+    select estado, reemplazada_por_id into est, rp from memorias where id = '99999999-0000-0000-0000-000000000052';
+    select estado, pregunta into ce, pr from contradicciones_memoria where id = '77777777-0000-0000-0000-000000000051';
+    if r.o_resultado <> 'ok' or est <> 'reemplazado' or rp <> '99999999-0000-0000-0000-000000000051' or ce <> 'resuelta' or pr <> '' then
+      raise exception 'FAIL: vale a (% / % / % / %)', r.o_resultado, est, rp, ce;
+    end if;
+    raise notice 'PASS: vale a deja la otra como reemplazada y cierra la contradicción';
+    select * into r from resolver_contradiccion('77777777-0000-0000-0000-000000000051', 'b');
+    if r.o_resultado <> 'no_encontrada' then raise exception 'FAIL: una contradicción cerrada no se resuelve de nuevo'; end if;
+    raise notice 'PASS: una contradicción cerrada no se vuelve a resolver';
+
+    select * into r from resolver_contradiccion('77777777-0000-0000-0000-000000000052', 'ambas');
+    if r.o_resultado <> 'ok' or exists (select 1 from memorias where id in ('99999999-0000-0000-0000-000000000053','99999999-0000-0000-0000-000000000054') and estado <> 'vigente') then
+      raise exception 'FAIL: ambas debía dejar los dos vigentes';
+    end if;
+    raise notice 'PASS: ambas deja los dos recuerdos vigentes';
+
+    select * into r from resolver_contradiccion('77777777-0000-0000-0000-000000000053', 'ninguna');
+    if r.o_resultado <> 'ok' or exists (select 1 from memorias where id in ('99999999-0000-0000-0000-000000000055','99999999-0000-0000-0000-000000000056') and (estado <> 'borrado' or texto is not null)) then
+      raise exception 'FAIL: ninguna debía olvidar los dos';
+    end if;
+    select estado into ce from contradicciones_memoria where id = '77777777-0000-0000-0000-000000000053';
+    if ce <> 'resuelta' then raise exception 'FAIL: ninguna debía dejar la contradicción resuelta (%)', ce; end if;
+    raise notice 'PASS: ninguna olvida los dos recuerdos y la contradicción queda resuelta';
+  end $$;
+rollback;
+
+-- ===========================================================================
+-- 16 — cierre de lotes: cerrar_lote_consolidacion is atomic; intento_fallido_lote_usuario caps retries (postgres)
+-- ===========================================================================
+begin;
+  select set_config('app.a', (:user_a)::text, true);
+  insert into lotes_consolidacion (id) values ('88888888-0000-0000-0000-000000000003');
+  insert into lote_usuarios (lote_id, usuario_id, custom_id, snapshot) values ('88888888-0000-0000-0000-000000000003', :user_a, 'u_test_c', '[]'::jsonb);
+  do $$
+  declare a uuid := current_setting('app.a')::uuid; lote uuid := '88888888-0000-0000-0000-000000000003'; r text; cerrada boolean; est text; le text;
+  begin
+    r := cerrar_lote_consolidacion(lote, null);
+    if r <> 'abierto' then raise exception 'FAIL: un lote con personas enviado no se cierra sin error (%)', r; end if;
+    raise notice 'PASS: no se cierra un lote con personas sin resolver';
+    cerrada := intento_fallido_lote_usuario(lote, a, 3, 'x'); cerrada := intento_fallido_lote_usuario(lote, a, 3, 'x');
+    if cerrada then raise exception 'FAIL: cerró antes del tope'; end if;
+    cerrada := intento_fallido_lote_usuario(lote, a, 3, 'reintentos_agotados');
+    select estado into est from lote_usuarios where lote_id = lote and usuario_id = a;
+    if not cerrada or est <> 'error' then raise exception 'FAIL: al tercer intento debía quedar en error (% / %)', cerrada, est; end if;
+    raise notice 'PASS: el tope de intentos deja a la persona en error';
+    r := cerrar_lote_consolidacion(lote, null);
+    select estado into le from lotes_consolidacion where id = lote;
+    if r <> 'fallido' or le <> 'fallido' then raise exception 'FAIL: sin aplicadas el lote debía quedar fallido (% / %)', r, le; end if;
+    raise notice 'PASS: sin nadie enviado el lote se cierra (fallido si no se aplicó ninguno)';
+  end $$;
+rollback;
