@@ -22,7 +22,7 @@ Compare the output with migrations `001`–`030` in the current main baseline (`
 
 ## 2. Reconstruct an isolated development database
 
-Supabase CLI 2.116.0 and Docker Desktop are available. A controlled reconstruction and SQL test run completed on 2026-10-27 using PostgreSQL 17.6; the production PostgreSQL version remains unverified. `psql` ran inside the local database container rather than from the host PATH. See the observed results below.
+Supabase CLI 2.116.0 and Docker Desktop are available. A controlled reconstruction and SQL test run completed on 2026-10-27 using PostgreSQL 17.6, matching the version in the owner-supplied production inventory. `psql` ran inside the local database container rather than from the host PATH. See the observed results below.
 
 Before replay:
 
@@ -45,7 +45,7 @@ The first report should identify:
 - SQL test results and obsolete expectations.
 - Open decisions for dose identity/date, historical preservation and stock consistency.
 
-Application lint/build is not a validation of this SQL. The initial inventory is a metadata-query/documentation unit; it introduces no application behavior or database migration. Production inventory and comparison remain pending owner-supplied metadata.
+Application lint/build is not a validation of this SQL. The initial inventory is a metadata-query/documentation unit; it introduces no application behavior or database migration. The owner-supplied production metadata comparison is recorded below with its scope limits.
 
 ## Observed local results — 2026-10-27
 
@@ -84,3 +84,21 @@ The 17 existing SQL scripts ran in separate `psql -X -v ON_ERROR_STOP=1` session
 Total: **14 passed, 3 failed, 0 skipped**. These results validate only the executed SQL scenarios on this local stack. They do not establish application concurrency, real notification delivery, browser behavior, production parity or the correctness of unexecuted assertions after a script's first failure. The manual browser checklist was not run.
 
 Evidence lives in the temporary workspace: `replay-summary.json`, `sql-tests-summary.json`, per-migration/per-test stdout and stderr, `inventory-before.json`, `inventory-after.json`, and `inventory-authenticated.json`. Startup logs can contain generated local credentials and must not be shared wholesale. The temporary runners and synthetic fixtures are local evidence, not production migration records.
+
+## Owner-supplied production comparison — 2026-10-27
+
+The owner supplied production inventory collected at `2026-10-27T13:59:28Z`, PostgreSQL 17.6, with `transaction_read_only=on` and versions `001`–`030` registered consecutively. The comparison uses that conversation payload and the local inventory; no persisted production JSON file was available for an automated exhaustive comparison.
+
+All section totals match: 5 roles, 261 columns, 69 indexes, 91 policies, 18 routines, 1 trigger, 29 relations (28 tables and 1 sequence), 7 extensions, 119 constraints, 2 column grants, 17 schema grants, 55 routine grants and 878 relation grants. No section reported truncation. The coordinator's manual comparison also found all 18 routine definition hashes and all 7 extension versions equal. The extensions are `pg_cron 1.6.4`, `pg_net 0.20.4`, `pg_stat_statements 1.11`, `pgcrypto 1.3`, `plpgsql 1.0`, `supabase_vault 0.3.1` and `uuid-ossp 1.1`. Equal counts/hashes do not establish full schema, permission or behavioral equivalence.
+
+Confirmed differences:
+
+- Production has `vinculos_sin_autovinculo` validated; replay retains `NOT VALID` from migration 016. This is a real metadata difference requiring history reconciliation, not evidence of invalid production rows.
+- Production reports active cron job 2, `dosis-vencidas`, every five minutes (`*/5 * * * *`). Local cron execution is deliberately off and has no jobs because 009/018 scheduling was overridden. Inventory metadata alone does not prove successful job execution or delivery.
+- Production has the migration ledger; the manual local replay does not. No local ledger was fabricated to make the environments appear equal.
+
+The supplied production tables have RLS enabled and not forced. Relation grants also include `TRUNCATE` for `anon` and `authenticated`, matching local grants. A focused local-only diagnosis confirmed the practical database-role effect on `public.mediciones`: authenticated SELECT saw only its own synthetic row, but TRUNCATE removed both owners' rows. Anonymous SELECT was denied by the existing `es_cuidador_de` function privileges, yet anonymous TRUNCATE still removed both rows. Each diagnosis ran in a transaction followed by ROLLBACK; the original table fingerprint and zero-row baseline were restored after each. No grants, policies, functions or application files were changed.
+
+[PostgreSQL 17 documents that TRUNCATE is not subject to row security](https://www.postgresql.org/docs/17/ddl-rowsecurity.html). This confirms excessive authority for a database role able to execute that SQL. It does not demonstrate that a REST client or an anonymous API key can issue arbitrary SQL; no exposed SQL/RPC route or production exploitation was tested. The probe and result are in temporary `diagnose-truncate.py`, `truncate-anon.sql`, `truncate-authenticated.sql` and `truncate-diagnostic-summary.json`.
+
+The next bounded step is to audit effective/default privileges and role memberships, identify the application's actual SQL/RPC execution paths, and design a new least-privilege hardening migration with regression checks. Existing permissions and historical migrations should not be changed merely to satisfy the three old test failures. Resolve those tests separately, then proceed to parent/child ownership constraints and atomic dose/stock operations.
