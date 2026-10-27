@@ -1,5 +1,7 @@
 # Modelo de datos
 
+Propuesta de evolución, separada del esquema actual: [A database model for reliable Vita actions](database-model-proposal.md).
+
 Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con RLS `usuario_id = auth.uid()` (o `id = auth.uid()` en `perfiles`) para el dueño. Además, desde `021` un cuidador con vínculo aceptado lee (cualquier rol) y escribe (rol `editar`) los datos de la persona que cuida — ver la sección Familia.
 
 ## `perfiles`
