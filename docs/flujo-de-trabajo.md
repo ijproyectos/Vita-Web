@@ -57,3 +57,11 @@ También se puede crear a mano en GitHub: Settings → Rules → Rulesets → Ne
 - La base de producción de Supabase **no** se usa para desarrollar. Cada colaborador trabaja contra un proyecto de Supabase de desarrollo, con sus propias claves en `.env.local`.
 - Las claves de producción (service role, contraseña de la base, `CRON_SECRET`) solo están en Netlify y las tiene el dueño.
 - Las migraciones entran por PR (`supabase/migrations/`, requieren aprobación del dueño) y las aplica el dueño en producción.
+
+## Si Netlify deja de publicar solo
+
+Cada merge a `main` debería generar un deploy de producción y cada PR un deploy preview. Si no aparecen:
+
+1. En GitHub (cuenta dueña del repo): Settings → Applications → Netlify → Configure. Aceptar permisos pendientes, revisar que no esté suspendida y que `Vita-Web` tenga acceso.
+2. En Netlify: Site configuration → Build & deploy → Continuous deployment, confirmar el repositorio y la rama `main`.
+3. Mientras tanto se puede publicar a mano: `npx netlify-cli deploy --trigger`.
