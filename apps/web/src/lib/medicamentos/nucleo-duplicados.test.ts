@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ErrorHorarioMedicamentoDuplicado } from "./duplicados";
+import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado } from "./duplicados";
+import { ErrorMedicamentoAmbiguo } from "./resolucion";
 import type { DatosNuevoMedicamento, Medicamento } from "./tipos";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/inventario/nucleo", () => ({ ajustarStock: vi.fn(), buscarInventarioId: vi.fn() }));
 const { buscarInventarioId } = await import("@/lib/inventario/nucleo");
-const { agregar, agregarMultiMomento, actualizarHorario, actualizarGrupo, verificarHorariosDisponibles } = await import("./nucleo");
+const { agregar, agregarMultiMomento, actualizarHorario, actualizarGrupo, buscarPorNombre, verificarHorariosDisponibles } = await import("./nucleo");
 
 const fila = (cambios: Partial<Medicamento> = {}): Medicamento => ({
   id: "m1", usuario_id: "persona", nombre: "Losartán", dosis: "50", unidad: "mg",
@@ -102,7 +103,7 @@ describe("núcleo impide duplicados antes de mutar", () => {
   it("grupo verifica conflictos externos y lote final antes de escribir", async () => {
     for (const tomas of [[{ id: "m1", hora: "9:00", conComida: "con" as const }], [{ id: "m1", hora: "10:00", conComida: "con" as const }, { hora: "10:00:00", conComida: "antes" as const }]]) {
       const db = baseFalsa([fila(), fila({ id: "externo", hora_programada: "09:00" })]);
-      await expect(actualizarGrupo(db.cliente, "persona", ["m1", "id-inexistente"], { nombre: "LOSARTÁN", dosis: "100", unidad: "mg", tomas })).rejects.toBeInstanceOf(ErrorHorarioMedicamentoDuplicado);
+      await expect(actualizarGrupo(db.cliente, "persona", ["m1"], { nombre: "LOSARTÁN", dosis: "100", unidad: "mg", tomas })).rejects.toBeInstanceOf(ErrorHorarioMedicamentoDuplicado);
       expect(db.mutaciones).toEqual([]);
     }
   });
@@ -116,6 +117,29 @@ describe("núcleo impide duplicados antes de mutar", () => {
     const tomas = [{ id: "m1", hora: "09:00", conComida: "con" as const }, ...(swap ? [{ id: "m2", hora: "08:00", conComida: "con" as const }] : [])];
     await expect(actualizarGrupo(db.cliente, "persona", ["m1", "m2"], { nombre: "Losartán", dosis: "50", unidad: "mg", tomas })).rejects.toThrow("Guardá primero un horario libre");
     expect(db.mutaciones).toEqual([]);
+  });
+  it("grupo rechaza ids repetidos, inexistentes o de otro medicamento antes de escribir", async () => {
+    const tomas = [{ id: "m1", hora: "08:00", conComida: "con" as const }];
+    const datos = { nombre: "Losartán", dosis: "50", unidad: "mg", tomas };
+    const db = baseFalsa([fila(), fila({ id: "otro", nombre: "Ibuprofeno", hora_programada: "10:00" })]);
+    for (const ids of [["m1", "m1"], ["m1", "id-inexistente"], ["m1", "otro"]]) {
+      await expect(actualizarGrupo(db.cliente, "persona", ids, datos)).rejects.toThrow("cambió");
+    }
+    expect(db.mutaciones).toEqual([]);
+  });
+  it("actualizarHorario deriva el momento del día de la hora y nunca lo fija solo", async () => {
+    const db = baseFalsa([fila()]);
+    await actualizarHorario(db.cliente, "persona", "m1", { horaProgramada: "21:00", momentoDia: "mañana" });
+    expect(db.mutaciones[0].valores).toMatchObject({ hora_programada: "21:00", momento_dia: "noche" });
+    db.mutaciones.length = 0;
+    await expect(actualizarHorario(db.cliente, "persona", "m1", { momentoDia: "noche" })).rejects.toBeInstanceOf(ErrorEntradaMedicamento);
+    expect(db.mutaciones).toEqual([]);
+  });
+  it("buscarPorNombre lanza ambigüedad en vez de elegir la primera fila", async () => {
+    const db = baseFalsa([fila(), fila({ id: "m2", hora_programada: "20:00", momento_dia: "noche" })]);
+    await expect(buscarPorNombre(db.cliente, "persona", "losartán")).rejects.toBeInstanceOf(ErrorMedicamentoAmbiguo);
+    await expect(buscarPorNombre(db.cliente, "persona", "losartán", "20:00")).resolves.toMatchObject({ id: "m2" });
+    await expect(buscarPorNombre(db.cliente, "persona", "nada")).resolves.toBeNull();
   });
   it("todas las escrituras fallan cerrado si no pueden leer", async () => {
     const db = baseFalsa([fila()], true);

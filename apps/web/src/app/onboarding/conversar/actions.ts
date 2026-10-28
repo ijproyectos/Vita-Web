@@ -177,7 +177,13 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   if (!nombre) return { status: "error", message: "Falta el nombre del remedio." };
   const dosis = typeof datos.dosis === "string" ? datos.dosis.trim() : "";
   const unidad = typeof datos.unidad === "string" ? datos.unidad.trim() : "";
-  const tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
+  let tomas: ReturnType<typeof normalizarTomas>;
+  try {
+    tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
+  } catch (e) {
+    if (e instanceof ErrorEntradaMedicamento) return { status: "error", message: e.message };
+    throw e;
+  }
   if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
 
   try {

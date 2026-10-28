@@ -52,3 +52,11 @@ export function resolverMedicamento(todos: Medicamento[], nombre: string, horaHi
   };
 }
 
+
+/** More than one medicine matches and nothing singles one out: the caller must ask which. */
+export class ErrorMedicamentoAmbiguo extends Error {
+  constructor(readonly candidatos: { hora: string; dosis: string }[]) {
+    super("Hay más de un medicamento con ese nombre.");
+    this.name = "ErrorMedicamentoAmbiguo";
+  }
+}

@@ -29,12 +29,12 @@ export default async function ModoSimpleDePersonaPage(props: PageProps<"/app/fam
     obtenerPrefsConEstado(supabase, id),
     perfilNucleo.obtenerPerfil(supabase, id).catch(() => null),
     perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null),
-    medicamentos.listarHoy(supabase, id).catch(() => []),
+    medicamentos.listarHoy(supabase, id).catch(() => null),
     turnoParaMostrar(supabase, id),
     medicionesParaMostrar(supabase, id),
   ]);
 
-  const { momento, enGrupo, resto, invalidas } = proximoGrupoPendiente(hoy, medicamentos.horaEnAR());
+  const { momento, enGrupo, resto, invalidas } = proximoGrupoPendiente(hoy ?? [], medicamentos.horaEnAR());
   const grupo = enGrupo.map((m) => ({ id: m.id, nombre: m.nombre, dosis: m.dosis, unidad: m.unidad, horaProgramada: m.hora_programada }));
 
   const contacto =
@@ -68,7 +68,8 @@ export default async function ModoSimpleDePersonaPage(props: PageProps<"/app/fam
             momento: momentoDelDia(m.hora_programada),
           })),
           porCorregir: invalidas.map((m) => ({ id: m.id, nombre: m.nombre })),
-          hayMedsHoy: hoy.length > 0,
+          hayMedsHoy: (hoy?.length ?? 0) > 0,
+          errorMedicamentos: hoy === null,
           turno,
           mediciones,
         }}

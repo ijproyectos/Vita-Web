@@ -59,7 +59,8 @@ async function accionDeDosis(notificacion, accion) {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ medicamentoId, accion }),
+      // `fecha` = el día AR de la dosis: el servidor no marca otra distinta.
+      body: JSON.stringify({ medicamentoId, accion, fecha: datos.fecha }),
     });
     exito = respuesta.ok;
   } catch {

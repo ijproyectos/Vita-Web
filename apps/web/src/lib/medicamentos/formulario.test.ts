@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ErrorEntradaMedicamento } from "./duplicados";
 import { MAX_TOMAS, leerTomas } from "./formulario";
 
 function form(horas: string[], comidas: string[]): FormData {
@@ -20,14 +21,13 @@ describe("leerTomas", () => {
     ]);
   });
 
-  it("descarta horas inválidas sin desalinear las comidas", () => {
-    expect(leerTomas(form(["25:00", "09:00"], ["antes", "con"]))).toEqual([{ hora: "09:00", conComida: "con", indicacion: null }]);
+  it("rechaza una hora inválida en vez de descartarla", () => {
+    expect(() => leerTomas(form(["25:00", "09:00"], ["antes", "con"]))).toThrow(ErrorEntradaMedicamento);
+    expect(() => leerTomas(form(["", "09:00"], []))).toThrow("Revisá los horarios");
   });
 
-  it("deduplica por hora normalizada (gana la primera)", () => {
-    expect(leerTomas(form(["8:00", "08:00", "08:00:00"], ["antes", "con", "despues"]))).toEqual([
-      { hora: "08:00", conComida: "antes", indicacion: null },
-    ]);
+  it("rechaza horas repetidas (misma hora normalizada)", () => {
+    expect(() => leerTomas(form(["8:00", "08:00", "08:00:00"], []))).toThrow("repetidos");
   });
 
   it("comida inválida o ausente cae en no-importa", () => {
@@ -37,16 +37,13 @@ describe("leerTomas", () => {
     ]);
   });
 
-  it("respeta el tope MAX_TOMAS", () => {
-    const horas = Array.from({ length: 10 }, (_, i) => `${String(i + 6).padStart(2, "0")}:00`);
-    const r = leerTomas(form(horas, horas.map(() => "con")));
-    expect(r).toHaveLength(MAX_TOMAS);
-    expect(r[MAX_TOMAS - 1].hora).toBe("11:00");
+  it("rechaza más de MAX_TOMAS tomas", () => {
+    const horas = Array.from({ length: MAX_TOMAS + 1 }, (_, i) => `${String(i + 6).padStart(2, "0")}:00`);
+    expect(() => leerTomas(form(horas, []))).toThrow(`hasta ${MAX_TOMAS}`);
   });
 
-  it("las inválidas no consumen cupo del tope", () => {
-    const horas = ["99:99", "06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00"];
-    const r = leerTomas(form(horas, []));
-    expect(r.map((x) => x.hora)).toEqual(["06:00", "07:00", "08:00", "09:00", "10:00", "11:00"]);
+  it("acepta exactamente MAX_TOMAS tomas", () => {
+    const horas = Array.from({ length: MAX_TOMAS }, (_, i) => `${String(i + 6).padStart(2, "0")}:00`);
+    expect(leerTomas(form(horas, []))).toHaveLength(MAX_TOMAS);
   });
 });

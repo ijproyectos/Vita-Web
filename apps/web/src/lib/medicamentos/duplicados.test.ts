@@ -24,6 +24,7 @@ describe("identidad de un horario de medicamento", () => {
   });
   it("una hora inválida lanza el error de entrada de dominio", () => {
     expect(() => normalizarHoraDuplicados("25:99")).toThrow(ErrorEntradaMedicamento);
+    expect(() => normalizarHoraDuplicados("08:00:99")).toThrow(ErrorEntradaMedicamento);
   });
   it.each(["0:00", "00:00", "00:00:00"])("acepta medianoche %s", (hora) => {
     expect(normalizarHoraDuplicados(hora)).toBe("00:00");

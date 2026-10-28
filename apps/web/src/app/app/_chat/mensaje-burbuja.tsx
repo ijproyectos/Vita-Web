@@ -17,6 +17,8 @@ export type MensajeChatUI = {
   // Reintento sin duplicar: el pedido que se le mandó al servidor, y si no hubo respuesta.
   pedidoId?: string;
   sinRespuesta?: boolean;
+  // Respuesta de vita que se cortó a mitad del stream: se conserva el texto parcial.
+  interrumpido?: boolean;
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
@@ -49,6 +51,9 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, 
         <VitaAvatar size={26} />
         <div className="max-w-[78%] rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] font-medium leading-snug text-foreground shadow-item">
           {cargando ? <PuntosEscribiendo /> : m.content}
+          {m.interrumpido && (
+            <p className="mt-1.5 text-[12px] font-semibold text-destructive">Respuesta interrumpida</p>
+          )}
         </div>
       </div>
       {m.accion && <TarjetaAccion accion={m.accion} alCerrar={alCerrar} esPropio={esPropio} />}

@@ -87,7 +87,7 @@ export function payloadDosisHora(d: DosisAviso): PayloadPush {
     actions: [ACCION_TOMADA, ACCION_POSPONER],
     requireInteraction: true,
     renotify: true,
-    datos: { medicamentoId: d.medicamentoId },
+    datos: { medicamentoId: d.medicamentoId, fecha: d.fechaAR },
   };
 }
 
@@ -101,7 +101,7 @@ export function payloadDosisSegundoAviso(d: DosisAviso): PayloadPush {
     actions: [ACCION_TOMADA],
     requireInteraction: true,
     renotify: true,
-    datos: { medicamentoId: d.medicamentoId, tono: "ambar" },
+    datos: { medicamentoId: d.medicamentoId, fecha: d.fechaAR, tono: "ambar" },
   };
 }
 
@@ -115,7 +115,7 @@ export function payloadDosisPospuesta(d: DosisAviso): PayloadPush {
     actions: [ACCION_TOMADA, ACCION_POSPONER],
     requireInteraction: true,
     renotify: true,
-    datos: { medicamentoId: d.medicamentoId },
+    datos: { medicamentoId: d.medicamentoId, fecha: d.fechaAR },
   };
 }
 

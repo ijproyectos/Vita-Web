@@ -53,8 +53,8 @@ describe("normalizarHora", () => {
     },
   );
 
-  // Bug conocido: el grupo de segundos es \d{2} sin rango. Pasarlo a it al arreglarlo.
-  it.fails("rechaza segundos fuera de rango (08:00:99)", () => {
+  it("rechaza segundos distintos de 00 (08:00:99, 08:00:30)", () => {
     expect(normalizarHora("08:00:99")).toBeNull();
+    expect(normalizarHora("08:00:30")).toBeNull();
   });
 });

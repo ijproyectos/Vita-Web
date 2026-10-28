@@ -7,6 +7,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { VitaWordmark } from "@/components/vita/v-mark";
 import { cn } from "@/lib/utils";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
+import { FormCerrarSesion } from "@/components/vita/form-cerrar-sesion";
 
 // Selector de elder — si el cuidador solo tiene un vínculo aceptado, lo
 // muestra igual como una única tarjeta (en vez de saltar directo a
@@ -99,11 +100,11 @@ export default async function CuidarPage() {
         <VitaIcon name="chevron-right" size={16} className="text-muted-foreground" />
       </Link>
 
-      <form action="/auth/signout" method="post" className="flex justify-center py-4">
+      <FormCerrarSesion className="flex justify-center py-4">
         <button type="submit" className="text-sm font-semibold text-destructive">
           Cerrar sesión
         </button>
-      </form>
+      </FormCerrarSesion>
     </div>
   );
 }

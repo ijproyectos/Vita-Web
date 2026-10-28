@@ -9,6 +9,7 @@ import { PASTILLAS_POR_TOMA_MAXIMO, STOCK_MAXIMO } from "@/lib/inventario/tipos"
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import { normalizarLlevar, validarTelefono, type ItemLlevar } from "@/lib/turnos/tipos";
 import { leerTomas } from "@/lib/medicamentos/formulario";
+import { ErrorEntradaMedicamento } from "@/lib/medicamentos/duplicados";
 import { MENSAJE_SOLO_LECTURA, perfilActivoEditable, rolSobre } from "@/lib/familia/perfil-activo";
 
 // Compartidas entre Home y Rutina — ambas pantallas muestran y togglean
@@ -106,7 +107,13 @@ export async function crearMedicamentoAction(
   const dosis = String(formData.get("dosis") ?? "").trim();
   const unidad = String(formData.get("unidad") ?? "mg");
   const frecuencia = String(formData.get("frecuencia") ?? "");
-  const tomas = leerTomas(formData);
+  let tomas: ReturnType<typeof leerTomas>;
+  try {
+    tomas = leerTomas(formData);
+  } catch (e) {
+    if (e instanceof ErrorEntradaMedicamento) return { status: "error", message: e.message };
+    throw e;
+  }
   const duracion = String(formData.get("duracion") ?? "");
   const notas = String(formData.get("notas") ?? "").trim();
 

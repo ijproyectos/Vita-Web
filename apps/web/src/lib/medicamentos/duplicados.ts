@@ -1,3 +1,4 @@
+import { normalizarHora } from "@/lib/rutina/momento";
 import { DIAS_SEMANA, type DiaSemana } from "./tipos";
 
 export type HorarioMedicamento = {
@@ -23,15 +24,11 @@ export class ErrorHorarioMedicamentoDuplicado extends Error {
   }
 }
 
+/** Throwing flavour of the shared hour normalizer (`normalizarHora`): same semantics, domain error on failure. */
 export function normalizarHoraDuplicados(hora: string): string {
-  if (typeof hora !== "string") throw new ErrorEntradaMedicamento("Revisá los horarios.");
-  const limpia = hora.trim();
-  if (!/^(?:\d{1,2}:\d{2}|\d{2}:\d{2}:00)$/.test(limpia)) {
-    throw new ErrorEntradaMedicamento("Revisá los horarios.");
-  }
-  const [h, m] = limpia.split(":").map(Number);
-  if (h > 23 || m > 59) throw new ErrorEntradaMedicamento("Revisá los horarios.");
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  const normal = typeof hora === "string" ? normalizarHora(hora) : null;
+  if (!normal) throw new ErrorEntradaMedicamento("Revisá los horarios.");
+  return normal;
 }
 
 export function normalizarNombreMedicamento(nombre: string): string {

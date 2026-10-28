@@ -40,7 +40,13 @@ export async function crearMedicamentoParaElderAction(
   const dosis = String(formData.get("dosis") ?? "").trim().slice(0, 40);
   const unidad = String(formData.get("unidad") ?? "mg");
   const frecuencia = String(formData.get("frecuencia") ?? "");
-  const tomas = leerTomas(formData);
+  let tomas: ReturnType<typeof leerTomas>;
+  try {
+    tomas = leerTomas(formData);
+  } catch (e) {
+    if (e instanceof ErrorEntradaMedicamento) return { status: "error", message: e.message };
+    throw e;
+  }
   const duracion = String(formData.get("duracion") ?? "");
   const notas = String(formData.get("notas") ?? "").trim().slice(0, 500);
 

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolverMedicamento } from "./resolucion";
+import { ErrorMedicamentoAmbiguo, resolverMedicamento } from "./resolucion";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ConComida,
@@ -18,6 +18,7 @@ import type {
 import { HORA_POR_MOMENTO } from "./tipos";
 import { conComidaDeIndicacion, type IndicacionComida } from "./comidas";
 import {
+  ErrorEntradaMedicamento,
   ErrorHorarioMedicamentoDuplicado,
   horariosCoinciden,
   normalizarHoraDuplicados,
@@ -323,8 +324,8 @@ export async function listarTomasDesde(
  * una sola vez (una por momento elegido, mismo nombre) desde
  * `agregarMultiMomento`, y sin esto la de "la noche" quedaba inalcanzable
  * por chat: siempre resolvía a la primera coincidencia (típicamente la de
- * la mañana). Si no hay hint o no matchea ninguna, cae al primer match de
- * siempre.
+ * la mañana). Si no hay hint o no matchea ninguna lanza `ErrorMedicamentoAmbiguo`
+ * (nunca elige una fila en silencio).
  */
 export async function buscarPorNombre(
   supabase: Cliente,
@@ -336,8 +337,9 @@ export async function buscarPorNombre(
   const r = resolverMedicamento(todos, nombre, horaHint);
   if (r.estado === "no_encontrado") return null;
   // Exacta antes que parcial y la hora desambigua (algoritmo único en resolucion.ts); si sigue
-  // ambiguo, el comportamiento de siempre: la primera coincidencia.
-  return r.estado === "unico" ? r.medicamento : r.filas[0];
+  // ambiguo NO se elige una fila en silencio: quien llama pregunta cuál.
+  if (r.estado === "ambiguo") throw new ErrorMedicamentoAmbiguo(r.candidatos);
+  return r.medicamento;
 }
 
 // Postgres 42703 / PostgREST PGRST204: falta la columna `indicacion` (migración
@@ -357,6 +359,12 @@ function sinIndicacion<T extends Record<string, unknown>>(fila: T): Omit<T, "ind
 /** Columnas de comida a escribir: la clave elegida y su `con_comida` derivado (o el legacy si no hay clave). */
 function columnasComida(t: { conComida?: ConComida; indicacion?: IndicacionComida | null }): { con_comida: ConComida; indicacion: IndicacionComida | null } {
   return { con_comida: t.indicacion ? conComidaDeIndicacion(t.indicacion) : t.conComida ?? "no-importa", indicacion: t.indicacion ?? null };
+}
+
+/** Rows of one group (several takes of one medicine) share name and dose. */
+function mismoGrupo(filas: Medicamento[]): boolean {
+  const clave = (m: Medicamento) => `${m.nombre.trim().replace(/\s+/g, " ").toLowerCase()}|${(m.dosis ?? "").trim()}|${m.unidad}`;
+  return new Set(filas.map(clave)).size === 1;
 }
 
 function comprobarHorarios(
@@ -525,6 +533,10 @@ export async function actualizarHorario(
   medicamentoId: string,
   datos: DatosActualizarHorario
 ): Promise<Medicamento> {
+  // The hour is the only source of truth of the day period: it is never set on its own.
+  if (datos.momentoDia !== undefined && datos.horaProgramada === undefined) {
+    throw new ErrorEntradaMedicamento("Para cambiar el momento del día indicá el horario.");
+  }
   const existentes = await listarTodos(supabase, usuarioId);
   const actual = existentes.find((m) => m.id === medicamentoId);
   if (!actual) throw new Error("No encontramos ese medicamento.");
@@ -535,8 +547,12 @@ export async function actualizarHorario(
   };
   comprobarHorarios([candidato], existentes, [medicamentoId]);
   const cambios: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (datos.horaProgramada !== undefined) cambios.hora_programada = normalizarHoraDuplicados(datos.horaProgramada);
-  if (datos.momentoDia !== undefined) cambios.momento_dia = datos.momentoDia;
+  if (datos.horaProgramada !== undefined) {
+    const hora = normalizarHoraDuplicados(datos.horaProgramada);
+    cambios.hora_programada = hora;
+    // Derived from the hour, ignoring any `momentoDia` that came along.
+    cambios.momento_dia = momentoDelDia(hora);
+  }
   if (datos.diasRecurrentes !== undefined) cambios.dias_recurrentes = datos.diasRecurrentes;
   // La indicación es una observación independiente de la hora: solo cambia si se pide.
   if (datos.indicacion !== undefined) Object.assign(cambios, columnasComida({ indicacion: datos.indicacion }));
@@ -585,11 +601,15 @@ export async function actualizarGrupo(
 ): Promise<void> {
   const nombre = datos.nombre.trim();
   if (!nombre) throw new Error("El nombre no puede quedar vacío.");
+  if (new Set(ids).size !== ids.length) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
   if (datos.tomas.length === 0) throw new Error("Tiene que haber al menos un horario.");
   const tomas = datos.tomas.map((t) => ({ ...t, hora: normalizarHoraDuplicados(t.hora) }));
   const existentes = await listarTodos(supabase, usuarioId);
   const filas = existentes.filter((m) => ids.includes(m.id));
   if (filas.length === 0) throw new Error("No encontramos ese medicamento.");
+  // Every id must exist for this person and be a take of the same medicine
+  // (rows of one group share name and dose); otherwise we would edit unrelated rows.
+  if (filas.length !== ids.length || !mismoGrupo(filas)) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
 
   const idsValidos = new Set(filas.map((f) => f.id));
   if (datos.tomas.some((t) => t.id && !idsValidos.has(t.id))) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");

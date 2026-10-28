@@ -42,6 +42,8 @@ type Previa = {
   siguientes: Siguiente[];
   porCorregir: PorCorregir[];
   hayMedsHoy: boolean;
+  // La lectura de los remedios de hoy falló: no es lo mismo que "no tiene remedios".
+  errorMedicamentos?: boolean;
   turno: TurnoSimple | null;
   mediciones: { titulo: string; items: MedicionSimple[] } | null;
 };
@@ -363,7 +365,11 @@ function VistaPrevia({
             />
             <div className="mt-5 flex flex-col gap-4">
               {prefs.ver_turnos && previa.turno && <TarjetaTurno turno={previa.turno} />}
-              {hayGrupo ? (
+              {previa.errorMedicamentos ? (
+                <p className="rounded-[20px] bg-destructive/10 p-4 text-sm text-destructive" role="alert">
+                  No pudimos cargar los remedios de hoy. Intentá de nuevo en un momento.
+                </p>
+              ) : hayGrupo ? (
                 <TarjetaGrupo
                   grupo={previa.grupo}
                   momento={previa.momento}

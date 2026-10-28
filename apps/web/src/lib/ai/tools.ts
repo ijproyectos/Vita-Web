@@ -3,6 +3,7 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
+import { ErrorMedicamentoAmbiguo } from "@/lib/medicamentos/resolucion";
 import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, normalizarHoraDuplicados } from "@/lib/medicamentos/duplicados";
 import { indicacionDeComida, type DatosNuevoMedicamento, type Medicamento, type MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import { CLAVES_INDICACION, INDICACIONES_COMIDA } from "@/lib/medicamentos/comidas";
@@ -439,12 +440,21 @@ async function ejecutarEnDestino(
       return { contenido: "Esta acción requiere la confirmación del usuario y no se ejecutó nada." };
 
     case "mark_taken": {
-      const medicamento = await medicamentos.buscarPorNombre(
-        supabase,
-        usuarioId,
-        String(input.medication_name),
-        input.medication_time_hint as string | undefined
-      );
+      let medicamento;
+      try {
+        medicamento = await medicamentos.buscarPorNombre(
+          supabase,
+          usuarioId,
+          String(input.medication_name),
+          input.medication_time_hint as string | undefined
+        );
+      } catch (e) {
+        if (e instanceof ErrorMedicamentoAmbiguo) {
+          const opciones = e.candidatos.map((c) => `${c.hora}${c.dosis ? ` (${c.dosis})` : ""}`).join(", ");
+          return { contenido: `Hay más de un "${limpiarDato(String(input.medication_name))}": ${opciones}. Preguntale al usuario cuál (o pasá medication_time_hint) y no marques nada todavía.` };
+        }
+        throw e;
+      }
       if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
 
       await medicamentos.marcarTomado(supabase, usuarioId, medicamento.id, true);
