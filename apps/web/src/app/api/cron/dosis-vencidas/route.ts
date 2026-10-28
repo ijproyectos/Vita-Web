@@ -189,10 +189,13 @@ export async function POST(request: Request) {
   // - `registros_chat` (034): registro de costo/latencia por respuesta -> 90 días.
   const accionesPurgadas = await purgarAnteriores(admin, "acciones_agente");
   const registrosPurgados = await purgarAnteriores(admin, "registros_chat");
+  // - `limites_pedidos` (035): ventanas de conteo ya vencidas -> 2 días.
+  const limitesPurgados = await purgarAnteriores(admin, "limites_pedidos");
 
   return NextResponse.json({
     accionesPurgadas,
     registrosPurgados,
+    limitesPurgados,
     detectadas: dosisVencidas.length,
     alertados,
     omitidos,

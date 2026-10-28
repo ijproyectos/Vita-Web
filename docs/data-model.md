@@ -204,6 +204,16 @@ Un registro por respuesta del chat con vita, para medir costo, velocidad y falla
 | `resultado` | text check | ver arriba |
 | `error_codigo` | text | p. ej. `anthropic_529`, `timeout`, `tiempo`, `confirmacion_vencida` |
 
+## `limites_pedidos`
+
+Tope de PEDIDOS (no de tokens: eso es `uso_ia_diario`, 013) a los endpoints que gastan plata, para frenar abuso (migración 035, escrita, NO aplicada; sin ella el límite no corre: **falla abierto**, el límite diario de tokens sigue protegiendo el costo). Una fila por `(clave, ventana_inicio)`; `clave` = `<endpoint>:<u|ip>:<id>:<min|dia>` donde `id` es el usuario o el HMAC de la IP (`hashIp`, el mismo secreto que `intentos_codigo`; **nunca la IP cruda**) y `ventana_inicio` el comienzo de la ventana fija (minuto UTC o día calendario de Argentina). `contar_pedido(p_clave, p_ventana_inicio)` (security definer, ejecutable solo por `service_role`) crea la fila en 1 o suma 1 en una sola sentencia y devuelve la cuenta. RLS habilitada SIN policies. Topes (constantes en `lib/limites/logica.ts`): chat 15/min y 300/día por usuario y 60/min por IP; voz 30/min por usuario. Sin IP conocida no hay límite por IP. Las ventanas de minuto se cuentan primero y la diaria solo si pasaron. Se pasa del tope -> 429 con `Retry-After` (salvo un mensaje de emergencia en el chat, que igual recibe los teléfonos). **Retención**: el cron `dosis-vencidas` borra las filas con `ventana_inicio` de más de 2 días. Tests: `supabase/tests/limite-pedidos.sql`.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `clave` | text | parte de la PK |
+| `ventana_inicio` | timestamptz | parte de la PK |
+| `cuenta` | int not null default 0 | |
+
 ## `enlaces_profesional`
 
 Links temporales de solo lectura para mostrarle un resumen de salud a un profesional (`/p/{token}`, sin login). **Migración 015 aplicada 2026-10-11** (psql + registro en `schema_migrations`; `supabase/tests/enlaces-profesional.sql` 17/17 PASS).

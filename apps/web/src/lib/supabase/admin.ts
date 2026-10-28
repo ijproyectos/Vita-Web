@@ -29,9 +29,10 @@ import { createClient } from "@supabase/supabase-js";
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,
  * nombres de tools y versión del prompt, SIN texto ni datos de salud; la agenda `after()` de
- * `/api/chat`). Todos se llaman DESPUÉS de que la
+ * `/api/chat`) y `verificarLimitePedidos` (`lib/limites/nucleo.ts`, `limites_pedidos` vía la RPC
+ * `contar_pedido`: tope de pedidos por usuario / por IP hasheada con HMAC a `/api/chat` y `/api/voz/*`). Todos se llaman DESPUÉS de que la
  * sesión autenticó al usuario: el `usuario_id` sale de esa sesión, nunca del cliente. La retención de
- * `registros_chat` (90 días) la hace el cron `dosis-vencidas` (`lib/notificaciones/retencion.ts`).
+ * `registros_chat` (90 días) y de `limites_pedidos` (2 días) la hace el cron `dosis-vencidas` (`lib/notificaciones/retencion.ts`).
  *
  * Fuera de esos usos (y de `lib/cuenta/nucleo.ts`, que borra la cuenta
  * del usuario ya autenticado), nunca importar este cliente desde código que
