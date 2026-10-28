@@ -137,6 +137,18 @@ describe("núcleo impide duplicados antes de mutar", () => {
     const db = baseFalsa([fila({ dosis: null as unknown as undefined, unidad: undefined }), fila({ id: "m2", dosis: null as unknown as undefined, unidad: undefined, hora_programada: "10:00" })]);
     const datos = { nombre: "Losartán", dosis: "", unidad: "", tomas: [{ id: "m1", hora: "08:00", conComida: "con" as const }, { id: "m2", hora: "10:00", conComida: "con" as const }] };
     await expect(actualizarGrupo(db.cliente, "persona", ["m1", "m2"], datos)).resolves.not.toThrow();
+    expect(db.mutaciones.length).toBeGreaterThan(0);
+  });
+  it("grupo: unidad o dosis vacía no separa filas del mismo medicamento", async () => {
+    const tomas = [{ id: "m1", hora: "08:00", conComida: "con" as const }, { id: "m2", hora: "20:00", conComida: "con" as const }];
+    const datos = { nombre: "Losartán", dosis: "50", unidad: "mg", tomas };
+    const sinUnidad = baseFalsa([fila(), fila({ id: "m2", dosis: "50", unidad: "", hora_programada: "20:00" })]);
+    await expect(actualizarGrupo(sinUnidad.cliente, "persona", ["m1", "m2"], datos)).resolves.not.toThrow();
+    expect(sinUnidad.mutaciones.length).toBeGreaterThan(0);
+    const sinDosis = baseFalsa([fila(), fila({ id: "m2", dosis: "", unidad: "", hora_programada: "20:00" })]);
+    await expect(actualizarGrupo(sinDosis.cliente, "persona", ["m1", "m2"], datos)).resolves.not.toThrow();
+    const otraDosis = baseFalsa([fila(), fila({ id: "m2", dosis: "100", unidad: "", hora_programada: "20:00" })]);
+    await expect(actualizarGrupo(otraDosis.cliente, "persona", ["m1", "m2"], datos)).rejects.toThrow("cambió");
   });
   it("actualizarHorario deriva el momento del día de la hora y nunca lo fija solo", async () => {
     const db = baseFalsa([fila()]);

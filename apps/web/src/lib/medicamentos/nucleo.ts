@@ -363,18 +363,27 @@ function columnasComida(t: { conComida?: ConComida; indicacion?: IndicacionComid
 
 /**
  * Rows of one group (several takes of one medicine) share the medicine identity:
- * name without case, accents or extra spaces plus the numeric dose and the unit
- * ("50", "50 mg" and "50,0 MG" are the same dose; "50 ml" is not). The same key the stock uses.
+ * name without case, accents or extra spaces, plus the numeric dose and the unit
+ * ("50", "50 mg" and "50,0 MG" are the same dose; "50 ml" is not). Dose and unit
+ * are often left empty, so a missing value never splits a group: they only have
+ * to agree among the rows that do have one.
  */
-function claveGrupo(m: Medicamento): string {
-  const nombre = m.nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+function partesGrupo(m: Medicamento): { nombre: string; dosis: string; unidad: string } {
+  const sinAcentos = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const { valor, unidad } = separarDosis(m.dosis ?? "");
-  const unidadNormalizada = (m.unidad ?? unidad ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").toLowerCase();
-  return `${claveMedicamento(nombre, valor)}|${unidadNormalizada}`;
+  const [nombre, dosis] = claveMedicamento(sinAcentos(m.nombre).replace(/\s+/g, " "), valor).split("|");
+  const unidadNormalizada = sinAcentos(m.unidad?.trim() || unidad || "").replace(/\s+/g, "").toLowerCase();
+  return { nombre, dosis, unidad: unidadNormalizada };
 }
 
 function mismoGrupo(filas: Medicamento[]): boolean {
-  return new Set(filas.map(claveGrupo)).size === 1;
+  const partes = filas.map(partesGrupo);
+  const coinciden = (valores: string[]) => new Set(valores.filter(Boolean)).size <= 1;
+  return (
+    new Set(partes.map((p) => p.nombre)).size === 1 &&
+    coinciden(partes.map((p) => p.dosis)) &&
+    coinciden(partes.map((p) => p.unidad))
+  );
 }
 
 function comprobarHorarios(
