@@ -1,10 +1,14 @@
 import "server-only";
 
+import { after } from "next/server";
 import { limpiarDato } from "@/lib/ai/limpiar";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
+import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
+import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
+import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { guiaDePantallasParaPrompt } from "@/lib/ai/guia-app";
 import {
   ejecutarToolIdempotente,
@@ -196,6 +200,12 @@ ${guiaDePantallasParaPrompt()}
   lo menciones ni lo narres — es un efecto puramente visual que el usuario
   no debe ver en el texto.`;
 
+// Versión del prompt para registros_chat: hash de la plantilla ESTÁTICA (SYSTEM_PROMPT, que se arma una
+// sola vez al cargar el módulo; la guía de pantallas es constante) + TOOLS + modelo. El contexto por
+// request (Personas, Hoy, fecha) se agrega DESPUÉS en `systemConFecha` y no entra al hash.
+// (No se exporta: un route.ts solo puede exportar handlers.)
+const VERSION_PROMPT = calcularVersionPrompt(SYSTEM_PROMPT, TOOLS, MODELO_IA);
+
 // Bloque "Personas" del contexto: a quién puede ayudar vita, con el id que tiene
 // que pasar en persona_id y si puede editar (Admin) o solo ver (Lector).
 // Nombre/relación los escribe el usuario (o un familiar): se limpian antes de
@@ -301,6 +311,30 @@ export async function POST(request: Request) {
   // Red de seguridad estática: si el modelo no puede responder, igual sale este texto.
   const emergencia = detectarEmergencia(mensaje);
 
+  // Registro best-effort de la respuesta (registros_chat): la fila se arma al terminar el stream y se
+  // inserta con `after`, o sea cuando la respuesta ya se envió; nunca demora lo que ve el usuario.
+  const inicioMs = performance.now();
+  const medicion = medicionInicial();
+  let cerrarRegistro: () => void = () => {};
+  after(
+    new Promise<void>((resolver) => {
+      cerrarRegistro = resolver;
+    }).then(() =>
+      registrarRespuestaChat(
+        construirFilaRegistro({
+          usuarioId: user.id,
+          pedidoId,
+          versionPrompt: VERSION_PROMPT,
+          modelo: MODELO_IA,
+          inicioMs,
+          finMs: performance.now(),
+          medicion,
+          toolsDeEscritura: TOOLS_DE_ESCRITURA,
+        })
+      )
+    )
+  );
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -322,6 +356,7 @@ export async function POST(request: Request) {
       try {
         const limite = await verificarLimiteDiario(user.id);
         if (!limite.ok) {
+          medicion.resultado = "limite";
           const uso = await obtenerUsoHoy(user.id);
           if (uso) enviarUso(uso);
           // Emergencia: el límite no puede dejar al usuario sin los teléfonos.
@@ -341,6 +376,7 @@ export async function POST(request: Request) {
         const sesionId = sesionValida
           ? sesionIdEntrante!
           : await chat.crearSesion(supabase, user.id);
+        medicion.sesionId = sesionId;
         if (!sesionValida) enviar({ session: sesionId });
 
         // En un reintento el primer intento pudo haber llegado más o menos lejos.
@@ -351,6 +387,7 @@ export async function POST(request: Request) {
         if (previo.estado === "respondido") {
           // Ya terminó del lado servidor: se devuelve la respuesta guardada
           // sin volver a correr el modelo (ni gastar tokens ni escribir dos veces).
+          medicion.resultado = "replay";
           for (const accion of await accionesDelPedido(supabase, user.id, pedidoId)) enviar({ action: accion });
           enviar({ chunk: previo.respuesta });
           enviarFin();
@@ -392,6 +429,9 @@ export async function POST(request: Request) {
             abiertoId: abierto?.id,
           });
           if (directa) {
+            // Una confirmación que no se ejecutó (sin verificar, vencida, cambió...) cuenta como error.
+            medicion.resultado = directa.codigo ? "error" : "confirmacion";
+            medicion.errorCodigo = directa.codigo ?? null;
             if (directa.accionUI) enviar({ action: directa.accionUI });
             enviar({ chunk: directa.texto });
             await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", directa.texto);
@@ -448,7 +488,9 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
             messages: historial,
           });
 
+          medicion.vueltas++;
           respuesta.on("text", (texto) => {
+            medicion.primerTokenMs ??= performance.now() - inicioMs;
             textoAcumulado += texto;
             enviar({ chunk: texto });
           });
@@ -457,12 +499,18 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
           historial.push({ role: "assistant", content: mensajeFinal.content });
           tokensInputAcumulados += mensajeFinal.usage.input_tokens;
           tokensOutputAcumulados += mensajeFinal.usage.output_tokens;
+          medicion.tokensEntrada += mensajeFinal.usage.input_tokens;
+          medicion.tokensSalida += mensajeFinal.usage.output_tokens;
+          medicion.tokensCacheLectura += mensajeFinal.usage.cache_read_input_tokens ?? 0;
+          medicion.tokensCacheEscritura += mensajeFinal.usage.cache_creation_input_tokens ?? 0;
 
           if (mensajeFinal.stop_reason !== "tool_use") break;
 
           const usosDeTool = mensajeFinal.content.filter(
             (bloque): bloque is Anthropic.ToolUseBlock => bloque.type === "tool_use"
           );
+
+          for (const u of usosDeTool) medicion.tools.push(u.name); // solo nombres, nunca inputs
 
           const turnoConTexto = mensajeFinal.content.some((b) => b.type === "text" && b.text.trim() !== "");
           const soloSinDatos = usosDeTool.every((u) => TOOLS_SIN_DATOS.has(u.name));
@@ -510,6 +558,8 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
         // Registra lo consumido hasta el turno que falló -- una excepción a
         // mitad del loop no debe perder la contabilidad de los turnos que sí
         // llegaron a completarse antes.
+        medicion.resultado = "error";
+        medicion.errorCodigo = clasificarError(e);
         const usoNuevo = await registrarUsoIA(user.id, { inputTokens: tokensInputAcumulados, outputTokens: tokensOutputAcumulados });
         if (usoNuevo) enviarUso(usoNuevo);
         // Anthropic caído o sin respuesta: si el mensaje parece una emergencia,
@@ -518,7 +568,11 @@ Contexto: ahora es ${descripcionAhoraEnAR()} (hora de Argentina; hoy = ${fechaDe
         enviar({ error: e instanceof Error ? e.message : "Error desconocido." });
         enviarFin();
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } finally {
+          cerrarRegistro(); // dispara el `after` de arriba, con la respuesta ya cerrada
+        }
       }
     },
   });

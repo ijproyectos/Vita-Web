@@ -25,6 +25,14 @@ import { createClient } from "@supabase/supabase-js";
  * vínculo aceptado con `cuidador_id` = el usuario ya autenticado por sesión,
  * y borra la cuenta ante cualquier fallo. Nunca recibe ids ajenos del cliente.
  *
+ * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
+ * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
+ * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,
+ * nombres de tools y versión del prompt, SIN texto ni datos de salud; la agenda `after()` de
+ * `/api/chat`). Todos se llaman DESPUÉS de que la
+ * sesión autenticó al usuario: el `usuario_id` sale de esa sesión, nunca del cliente. La retención de
+ * `registros_chat` (90 días) la hace el cron `dosis-vencidas` (`lib/notificaciones/retencion.ts`).
+ *
  * Fuera de esos usos (y de `lib/cuenta/nucleo.ts`, que borra la cuenta
  * del usuario ya autenticado), nunca importar este cliente desde código que
  * atiende una request de un usuario autenticado — para eso están `lib/supabase/{server,client}.ts`,

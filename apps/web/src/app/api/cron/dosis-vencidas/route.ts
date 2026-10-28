@@ -5,6 +5,7 @@ import { entregarAviso, obtenerPreferenciasDe } from "@/lib/notificaciones/aviso
 import { PREFERENCIAS_POR_DEFECTO } from "@/lib/notificaciones/avisos-tipos";
 import { procesarAvisosProgramados, type ResumenProgramados } from "@/lib/notificaciones/programados";
 import { payloadDosisVencida } from "@/lib/notificaciones/mensajes";
+import { purgarAnteriores } from "@/lib/notificaciones/retencion";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -182,26 +183,16 @@ export async function POST(request: Request) {
     programados = { error: e instanceof Error ? e.message : "Fallo en los avisos programados." };
   }
 
-  // Retención de `acciones_agente` (migración 030): guarda datos de salud del
-  // chat (incluso de terceros) y solo sirve durante un reintento o una
-  // confirmación de minutos. Se purga lo de más de 48 h en este mismo job (sin
-  // job nuevo). Si la tabla no existe (030 sin aplicar) o falla, se degrada.
-  let accionesPurgadas: number | { error: string } = 0;
-  try {
-    const limite = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await admin.from("acciones_agente").delete().lt("created_at", limite).select("id");
-    if (error) {
-      const sinTabla = error.code === "PGRST205" || error.code === "42P01";
-      accionesPurgadas = sinTabla ? 0 : { error: error.message };
-    } else {
-      accionesPurgadas = data?.length ?? 0;
-    }
-  } catch (e) {
-    accionesPurgadas = { error: e instanceof Error ? e.message : "Fallo la purga de acciones_agente." };
-  }
+  // Retención (sin jobs nuevos; cada tabla degrada a 0 si no existe o falla):
+  // - `acciones_agente` (030): datos de salud del chat (incluso de terceros) que solo sirven durante
+  //   un reintento o una confirmación de minutos -> 48 h.
+  // - `registros_chat` (034): registro de costo/latencia por respuesta -> 90 días.
+  const accionesPurgadas = await purgarAnteriores(admin, "acciones_agente");
+  const registrosPurgados = await purgarAnteriores(admin, "registros_chat");
 
   return NextResponse.json({
     accionesPurgadas,
+    registrosPurgados,
     detectadas: dosisVencidas.length,
     alertados,
     omitidos,

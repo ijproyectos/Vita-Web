@@ -186,6 +186,24 @@ Reintentos del chat sin duplicar escrituras (migración 030, escrita, pendiente 
 
 `unique (usuario_id, pedido_id, clave)`. RLS owner-only (select/insert/update/delete propios); UPDATE solo de la columna `resultado`. `mensajes_chat` no cambia: en un reintento el servidor no reinserta el mensaje si ya es el último del usuario en la sesión.
 
+## `registros_chat`
+
+Un registro por respuesta del chat con vita, para medir costo, velocidad y fallas (migración 034, escrita, NO aplicada; sin ella el chat funciona igual: el insert es best-effort y tolera la tabla ausente). **No guarda texto de mensajes, ni inputs/outputs de tools, ni datos de salud, ni mensajes de error crudos**: solo latencia total y al primer token, vueltas del modelo, NOMBRES de tools, cuántas fueron de escritura, tokens (entrada, salida, cache lectura/escritura), `resultado` (`ok`/`error`/`limite`/`confirmacion`/`cancelacion`/`replay`), un `error_codigo` corto, `version_prompt` (12 hex del sha256 de la plantilla estática del system prompt + tools + modelo; el contexto por request no entra) y `modelo`. RLS habilitada SIN policies (solo `service_role`, como `uso_ia_diario`): la fila la escribe `registrarRespuestaChat` con el cliente admin vía `after()` cuando el stream ya cerró, con el `usuario_id` de la sesión. `sesion_id`/`pedido_id` son uuid sueltos (sin FK). **Retención**: el cron `dosis-vencidas` borra las filas de más de 90 días (degrada si la tabla no existe). Consultas de resumen (solo lectura): `supabase/queries/registros-chat-resumen.sql`.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `usuario_id` | uuid FK `auth.users` on delete cascade | |
+| `pedido_id`, `sesion_id` | uuid | sin FK |
+| `created_at` | timestamptz | índices por fecha y por (usuario, fecha) |
+| `version_prompt`, `modelo` | text not null | |
+| `latencia_ms`, `latencia_primer_token_ms` | int | el segundo es null si no streameó texto |
+| `vueltas_modelo`, `escrituras` | int | |
+| `tools` | text[] | solo nombres |
+| `tokens_entrada`, `tokens_salida`, `tokens_cache_lectura`, `tokens_cache_escritura` | int | |
+| `resultado` | text check | ver arriba |
+| `error_codigo` | text | p. ej. `anthropic_529`, `timeout`, `tiempo`, `confirmacion_vencida` |
+
 ## `enlaces_profesional`
 
 Links temporales de solo lectura para mostrarle un resumen de salud a un profesional (`/p/{token}`, sin login). **Migración 015 aplicada 2026-10-11** (psql + registro en `schema_migrations`; `supabase/tests/enlaces-profesional.sql` 17/17 PASS).
