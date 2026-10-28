@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
-import { opcionesConfirmarPara, opcionesElegirDestino, resolverDestino } from "./destino";
+import { opcionesConfirmarAccion, opcionesConfirmarPara, opcionesElegirDestino, resolverDestino, TOOLS_CONFIRMACION_ATADA } from "./destino";
 
 const YO = "11111111-1111-1111-1111-111111111111";
 const ELSA = "22222222-2222-2222-2222-222222222222";
@@ -129,5 +129,31 @@ describe("opciones de botones", () => {
 
   it("sanea nombres en las opciones", () => {
     expect(opcionesConfirmarPara('E"l\nsa').opciones[0]).toBe("Sí, para E l sa");
+  });
+});
+
+describe("borrar / cambiar un horario", () => {
+  it.each(["delete_schedule", "update_schedule"])("%s pide confirmación también sobre los datos propios", (tool) => {
+    expect(resolverDestino(tool, {}, { usuarioId: YO, familia })).toEqual({
+      ok: true,
+      destinoId: YO,
+      persona: null,
+      requiereConfirmacion: true,
+    });
+    expect(resolverDestino(tool, { persona_id: YO }, { usuarioId: YO, familia })).toMatchObject({ requiereConfirmacion: true });
+    expect(TOOLS_CONFIRMACION_ATADA.has(tool)).toBe(true);
+  });
+
+  it("otras escrituras propias siguen sin confirmación", () => {
+    expect(resolverDestino("add_medication", {}, { usuarioId: YO, familia })).not.toHaveProperty("requiereConfirmacion");
+  });
+
+  it("opcionesConfirmarAccion ata Confirmar al id de la pendiente", () => {
+    expect(opcionesConfirmarAccion("p1")).toEqual({
+      type: "opciones_confirmacion",
+      opciones: ["Confirmar", "Cancelar"],
+      vinculos: { Confirmar: "p1" },
+    });
+    expect(opcionesConfirmarAccion(null)).not.toHaveProperty("vinculos");
   });
 });

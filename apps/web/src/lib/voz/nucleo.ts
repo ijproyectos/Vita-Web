@@ -1,5 +1,6 @@
 import "server-only";
 
+import { TIMEOUT_PROVEEDOR_VOZ_MS } from "@/lib/ai/presupuesto";
 import type { ResultadoAudio, ResultadoTranscripcion } from "./tipos";
 
 // Único punto de contacto con la API de transcripción de Groq (endpoint
@@ -8,6 +9,8 @@ import type { ResultadoAudio, ResultadoTranscripcion } from "./tipos";
 // Mismo criterio que lib/estudios/extraer.ts para Anthropic: un solo
 // archivo server-only, nunca lanza, quien llama siempre puede degradar
 // (acá, dejar que el usuario tipee) si esto falla.
+// Tope de cada llamada a un proveedor de voz: constante compartida con el presupuesto del chat
+// (lib/ai/presupuesto.ts), para poder devolver un {error} prolijo antes de que la plataforma mate la función.
 const ENDPOINT_TRANSCRIPCIONES = "https://api.groq.com/openai/v1/audio/transcriptions";
 
 /**
@@ -33,6 +36,7 @@ export async function transcribirAudio(audio: Buffer | Blob, mimeType: string): 
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: cuerpo,
+      signal: AbortSignal.timeout(TIMEOUT_PROVEEDOR_VOZ_MS),
     });
 
     if (!respuesta.ok) {
@@ -96,6 +100,7 @@ export async function generarAudio(texto: string): Promise<ResultadoAudio> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ text: limpio }),
+      signal: AbortSignal.timeout(TIMEOUT_PROVEEDOR_VOZ_MS),
     });
 
     if (!respuesta.ok) {

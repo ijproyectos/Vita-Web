@@ -37,6 +37,9 @@ const MOOD_A_ESTADO: Record<string, EstadoAvatar> = {
   calm: "calm",
   alert: "alert",
 };
+// Error HTTP del servidor con un mensaje ya listo para mostrar (p. ej. 429 por demasiados pedidos).
+class ErrorDeRespuesta extends Error {}
+
 function moodValido(mood: unknown): EstadoAvatar {
   return MOOD_A_ESTADO[typeof mood === "string" ? mood : "neutral"] ?? "idle";
 }
@@ -335,6 +338,12 @@ export function VitaChatOverlay({
         body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId, confirmacionId }),
       });
 
+      // 429 (demasiados pedidos) u otro error HTTP con mensaje: se muestra tal cual y el mensaje queda
+      // para Reintentar (el cuerpo es JSON, no el stream SSE).
+      if (!res.ok) {
+        const cuerpo = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        throw new ErrorDeRespuesta(typeof cuerpo?.error === "string" && cuerpo.error ? cuerpo.error : "No se pudo conectar con vita. Intentá de nuevo.");
+      }
       if (!res.body) throw new Error("Sin respuesta del servidor.");
       const lector = res.body.getReader();
       const decoder = new TextDecoder();
@@ -481,9 +490,9 @@ export function VitaChatOverlay({
         const restante = textoAcumulado.slice(fraseHabladaIndiceRef.current).trim();
         if (restante) encolarFraseVoz(restante);
       }
-    } catch {
+    } catch (e) {
       fallo = true;
-      toast.error("No se pudo conectar con vita. Intentá de nuevo.");
+      toast.error(e instanceof ErrorDeRespuesta ? e.message : "No se pudo conectar con vita. Intentá de nuevo.");
     } finally {
       setEnviando(false);
       // Sin respuesta: el mensaje queda marcado para reintentarlo con el mismo
