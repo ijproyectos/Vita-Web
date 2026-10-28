@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, type ReactNode } from "react";
 
 const ESPERA_MAX_MS = 2500;
+const ESPERA_FETCH_MS = 3000;
 
 /**
  * Logout form that also drops THIS device's push subscription, so a shared
@@ -11,8 +12,9 @@ const ESPERA_MAX_MS = 2500;
  * matters: the endpoint goes to /auth/signout first (the server deletes its
  * row, then ends the session); only after the server confirmed is the browser
  * subscription removed, so a failed logout never leaves the user signed in
- * without push. Anything that fails or takes too long falls back to the plain
- * native form post: logging out is never blocked.
+ * without push. The fetch is aborted after ~3 s; on timeout or error it falls
+ * back to the plain native form post, which still carries the endpoint through
+ * a hidden input so the server deletes the row. Logging out is never blocked.
  *
  * `antesDeSalir` runs once the logout is done and right before navigating
  * (e.g. to clear a per-device PIN), never while the form still has to submit.
@@ -40,10 +42,13 @@ export function FormCerrarSesion({
       suscripcionLocal().catch(() => null),
       new Promise<null>((resolver) => setTimeout(() => resolver(null), ESPERA_MAX_MS)),
     ]);
+    const controlador = new AbortController();
+    const corte = setTimeout(() => controlador.abort(), ESPERA_FETCH_MS);
     try {
       const datos = new FormData();
       if (suscripcion) datos.set("endpoint", suscripcion.endpoint);
-      const respuesta = await fetch(form.action, { method: "POST", body: datos, credentials: "same-origin" });
+      const respuesta = await fetch(form.action, { method: "POST", body: datos, credentials: "same-origin", signal: controlador.signal });
+      clearTimeout(corte);
       if (!respuesta.ok) throw new Error("signout");
       // The server confirmed: now it is safe to drop the local subscription.
       await suscripcion?.unsubscribe().catch(() => false);
@@ -51,8 +56,14 @@ export function FormCerrarSesion({
       router.replace("/login");
       router.refresh();
     } catch {
+      clearTimeout(corte);
       // Network or server hiccup: fall back to the native post. The form is
       // still mounted here (antesDeSalir has not run), so the submit is not detached.
+      if (suscripcion) {
+        // Fill the hidden input right before the native post so the server can delete the row.
+        const campo = form.elements.namedItem("endpoint");
+        if (campo instanceof HTMLInputElement) campo.value = suscripcion.endpoint;
+      }
       form.submit();
       antesDeSalir?.();
     }
@@ -70,6 +81,7 @@ export function FormCerrarSesion({
         void cerrar(e.currentTarget);
       }}
     >
+      <input type="hidden" name="endpoint" defaultValue="" />
       {children}
     </form>
   );

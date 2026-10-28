@@ -363,12 +363,14 @@ function columnasComida(t: { conComida?: ConComida; indicacion?: IndicacionComid
 
 /**
  * Rows of one group (several takes of one medicine) share the medicine identity:
- * name without case, accents or extra spaces plus the numeric dose only
- * ("50", "50 mg" and "50,0" are the same dose). The same key the stock uses.
+ * name without case, accents or extra spaces plus the numeric dose and the unit
+ * ("50", "50 mg" and "50,0 MG" are the same dose; "50 ml" is not). The same key the stock uses.
  */
 function claveGrupo(m: Medicamento): string {
   const nombre = m.nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
-  return claveMedicamento(nombre, separarDosis(m.dosis).valor);
+  const { valor, unidad } = separarDosis(m.dosis ?? "");
+  const unidadNormalizada = (m.unidad ?? unidad ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").toLowerCase();
+  return `${claveMedicamento(nombre, valor)}|${unidadNormalizada}`;
 }
 
 function mismoGrupo(filas: Medicamento[]): boolean {

@@ -16,9 +16,11 @@ describe("validarFechaAccion", () => {
     expect(validarFechaAccion("tomada", "2026-10-28", MEDIODIA)).toEqual({ ok: true, fecha: "2026-10-28" });
     expect(validarFechaAccion("posponer", "2026-10-28", MEDIODIA)).toEqual({ ok: true, fecha: "2026-10-28" });
   });
-  it("treats a missing date (old service workers) as today, flagged as inferred", () => {
-    expect(validarFechaAccion("tomada", undefined, MEDIODIA)).toEqual({ ok: true, fecha: "2026-10-28", inferida: true });
-    expect(validarFechaAccion("posponer", undefined, MEDIODIA)).toEqual({ ok: true, fecha: "2026-10-28", inferida: true });
+  it("refuses a missing or null date (stale service workers never mark today's dose)", () => {
+    for (const fecha of [undefined, null]) {
+      expect(validarFechaAccion("tomada", fecha, MEDIODIA)).toEqual({ ok: false, motivo: "sin_fecha" });
+      expect(validarFechaAccion("posponer", fecha, MEDIODIA)).toEqual({ ok: false, motivo: "sin_fecha" });
+    }
   });
   it("refuses a malformed date", () => {
     expect(validarFechaAccion("tomada", "ayer", MEDIODIA)).toEqual({ ok: false, motivo: "sin_fecha" });

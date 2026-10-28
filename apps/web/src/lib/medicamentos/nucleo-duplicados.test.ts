@@ -127,6 +127,17 @@ describe("núcleo impide duplicados antes de mutar", () => {
     }
     expect(db.mutaciones).toEqual([]);
   });
+  it("grupo rechaza filas con otra unidad aunque nombre y número coincidan", async () => {
+    const db = baseFalsa([fila(), fila({ id: "ml", unidad: "ml", hora_programada: "10:00" })]);
+    const datos = { nombre: "Losartán", dosis: "50", unidad: "mg", tomas: [{ id: "m1", hora: "08:00", conComida: "con" as const }] };
+    await expect(actualizarGrupo(db.cliente, "persona", ["m1", "ml"], datos)).rejects.toThrow("cambió");
+    expect(db.mutaciones).toEqual([]);
+  });
+  it("grupo con dosis legacy null no lanza y se compara como vacía", async () => {
+    const db = baseFalsa([fila({ dosis: null as unknown as undefined, unidad: undefined }), fila({ id: "m2", dosis: null as unknown as undefined, unidad: undefined, hora_programada: "10:00" })]);
+    const datos = { nombre: "Losartán", dosis: "", unidad: "", tomas: [{ id: "m1", hora: "08:00", conComida: "con" as const }, { id: "m2", hora: "10:00", conComida: "con" as const }] };
+    await expect(actualizarGrupo(db.cliente, "persona", ["m1", "m2"], datos)).resolves.not.toThrow();
+  });
   it("actualizarHorario deriva el momento del día de la hora y nunca lo fija solo", async () => {
     const db = baseFalsa([fila()]);
     await actualizarHorario(db.cliente, "persona", "m1", { horaProgramada: "21:00", momentoDia: "mañana" });
