@@ -3,16 +3,33 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ejecutarTool, type ResultadoTool } from "@/lib/ai/tools";
 import {
+  mensajeEsperandoConfirmacion,
   mensajeFaltaConfirmacion,
+  opcionesConfirmarAccion,
   opcionesConfirmarPara,
   opcionesElegirDestino,
   resolverDestino,
   TOOLS_CONFIRMACION_ATADA,
+  TOOLS_CONFIRMACION_PROPIA,
   TOOLS_DE_ESCRITURA,
 } from "@/lib/ai/destino";
 import { limpiarDato } from "@/lib/ai/limpiar";
 import { clasificarRespuesta } from "@/lib/ai/respuesta";
 import { claveSemantica } from "@/lib/chat/clave";
+import {
+  cambiosDeInput,
+  destinoPermitido,
+  pendienteVigente,
+  resolverMedicamento,
+  snapshotCoincide,
+  textoExito,
+  textoPropuesta,
+  tomarSnapshot,
+  autorizaPendiente,
+  esObjetivoGuardado,
+  type ObjetivoGuardado,
+} from "@/lib/chat/confirmaciones-logica";
+import * as medicamentos from "@/lib/medicamentos/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 
 // Reintentos sin duplicar escrituras (migración 030, `acciones_agente`).
@@ -20,7 +37,7 @@ import type { MiembroFamilia } from "@/lib/familia/tipos";
 // ESCRIBE se reclama una fila (usuario, pedido, clave). Si ya existía, la
 // acción ya se hizo en un intento anterior: se devuelve lo guardado.
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Valida el pedidoId del cliente; si falta o es inválido genera uno (clientes viejos). */
 export function normalizarPedidoId(entrante: unknown): string {
@@ -55,6 +72,8 @@ type Contexto = {
   familia: MiembroFamilia[];
   /** Perfil de un familiar abierto en pantalla (ya validado), si lo hay. */
   abiertoId?: string;
+  /** Botón Confirmar sin modelo: si la pendiente no se puede consumir NO se crea otra, se informa. */
+  soloConfirmar?: boolean;
 };
 
 /** true solo si el error es CLARAMENTE "la tabla acciones_agente no existe" (migración 030 sin aplicar). */
@@ -87,7 +106,110 @@ type AccionPendiente = {
   origenDestino?: boolean;
   /** Sesión de chat donde se preguntó: otra sesión nunca puede confirmarla. */
   sesionId?: string;
+  /** Borrar/cambiar un horario: la fila exacta que se le mostró al usuario (se ejecuta por id). */
+  objetivo?: ObjetivoGuardado;
 };
+
+
+const TEXTO_NO_VERIFICADA = "No pude confirmarlo por un problema temporal, así que no cambié nada. Probá de nuevo en un momento.";
+const TEXTO_NADA_PENDIENTE = "No hay nada pendiente de confirmar (ya se confirmó, se canceló o venció). Si querés, pedímelo de nuevo.";
+const TEXTO_SIN_PERMISO = "Ya no tenés permiso para editar a esa persona, así que no cambié nada.";
+const TEXTO_CAMBIO_ENTRE_MEDIO = "Ese medicamento cambió mientras tanto, así que no toqué nada. Pedímelo de nuevo para que lo revise.";
+
+type ResolucionObjetivo = { ok: true; objetivo: ObjetivoGuardado } | { ok: false; resultado: ResultadoTool };
+
+/**
+ * delete_schedule / update_schedule: resuelve la fila EXACTA antes de preguntar. No
+ * encontrada -> lo dice; varias con el mismo nombre y sin hora que acierte -> pide la
+ * hora (nunca elige la primera); una sola -> la pregunta con su snapshot. Falla cerrado.
+ */
+async function resolverObjetivo(
+  nombre: string,
+  input: Record<string, unknown>,
+  destino: { destinoId: string; persona: string | null },
+  supabase: SupabaseClient
+): Promise<ResolucionObjetivo> {
+  const buscado = typeof input.medication_name === "string" ? input.medication_name.trim() : "";
+  if (!buscado) return { ok: false, resultado: { contenido: "Falta medication_name. No se ejecutó nada." } };
+  let todos;
+  try {
+    todos = await medicamentos.listarTodos(supabase, destino.destinoId);
+  } catch {
+    return { ok: false, resultado: { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA } };
+  }
+  const hint = typeof input.medication_time_hint === "string" ? input.medication_time_hint : undefined;
+  const r = resolverMedicamento(todos, buscado, hint);
+  if (r.estado === "no_encontrado") {
+    return {
+      ok: false,
+      resultado: { contenido: `No encontré un medicamento llamado "${limpiarDato(buscado)}". Decíselo al usuario y preguntale el nombre exacto. No se ejecutó nada.` },
+    };
+  }
+  if (r.estado === "ambiguo") {
+    const lista = r.candidatos.map((c) => `${c.hora}${c.dosis ? ` (${limpiarDato(c.dosis, 20)})` : ""}`).join(", ");
+    return {
+      ok: false,
+      resultado: {
+        contenido: r.mismaHora
+          ? `Hay varios medicamentos que coinciden con "${limpiarDato(buscado)}" y alguno comparte la hora (${lista}), así que no puedo distinguirlos por hora. NO se ejecutó nada. Decile al usuario cuáles hay y que lo resuelva desde la pantalla Mis medicamentos.`
+          : `Hay ${r.candidatos.length} medicamentos que coinciden con "${limpiarDato(buscado)}", a estas horas: ${lista}. NO se ejecutó nada. Preguntale al usuario cuál (la hora) y recién con su respuesta volvé a llamar a la tool pasando esa hora en medication_time_hint.`,
+      },
+    };
+  }
+  const tool = nombre as "delete_schedule" | "update_schedule";
+  let cambios;
+  if (tool === "update_schedule") {
+    const c = cambiosDeInput(input);
+    if ("error" in c) return { ok: false, resultado: { contenido: `${c.error} No se ejecutó nada.` } };
+    cambios = c.datos;
+  }
+  return {
+    ok: true,
+    objetivo: {
+      medicamentoId: r.medicamento.id,
+      snapshot: tomarSnapshot(r.medicamento),
+      texto: textoPropuesta(tool, destino.persona, r.medicamento, cambios),
+      ...(cambios ? { cambios } : {}),
+    },
+  };
+}
+
+/**
+ * Ejecuta lo CONFIRMADO, por id y con el núcleo (nunca por nombre ni con lo que el modelo
+ * reformule): relee el permiso sobre el destino y que la fila siga igual a lo que se mostró.
+ */
+async function ejecutarObjetivo(
+  nombre: string,
+  accion: AccionPendiente | null,
+  ctx: { supabase: SupabaseClient; usuarioId: string; familia: MiembroFamilia[] }
+): Promise<ResultadoTool> {
+  const falla = (texto: string, codigo: string): ResultadoTool => ({
+    contenido: `${texto} No se ejecutó nada; contale al usuario lo que pasó en una frase.`,
+    textoUsuario: texto,
+    codigo,
+  });
+  if (!accion || accion.tool !== nombre || !esObjetivoGuardado(accion.objetivo)) {
+    return falla(TEXTO_NO_VERIFICADA, "confirmacion_no_verificada");
+  }
+  const { objetivo, destinoId } = accion;
+  const tool = nombre as "delete_schedule" | "update_schedule";
+  if (!destinoPermitido(destinoId, ctx.usuarioId, ctx.familia)) return falla(TEXTO_SIN_PERMISO, "confirmacion_sin_permiso");
+  try {
+    const actual = await medicamentos.obtenerPorId(ctx.supabase, destinoId, objetivo.medicamentoId);
+    if (!actual || !snapshotCoincide(objetivo.snapshot, actual)) return falla(TEXTO_CAMBIO_ENTRE_MEDIO, "confirmacion_cambio");
+    const persona = accion.persona ? accion.persona : null;
+    const texto = textoExito(tool, persona, objetivo.snapshot, objetivo.cambios);
+    const conPersona = persona ? { persona } : {};
+    if (tool === "delete_schedule") {
+      await medicamentos.eliminarHorario(ctx.supabase, destinoId, objetivo.medicamentoId);
+      return { contenido: texto, textoUsuario: texto, accionUI: { type: "medication_deleted", ...conPersona } };
+    }
+    await medicamentos.actualizarHorario(ctx.supabase, destinoId, objetivo.medicamentoId, objetivo.cambios ?? {});
+    return { contenido: texto, textoUsuario: texto, accionUI: { type: "schedule_updated", ...conPersona } };
+  } catch {
+    return falla(TEXTO_NO_VERIFICADA, "confirmacion_no_verificada");
+  }
+}
 
 function sinMarcas(input: Record<string, unknown>): Record<string, unknown> {
   const { confirmado: _c, persona_id: _p, ...resto } = input;
@@ -223,24 +345,29 @@ async function confirmacionDelServidor(p: {
     const previa = previas?.find((f) => pendienteDe(f.resultado)?.sesionId === sesionId);
     if (previa) {
       const guardada = pendienteDe(previa.resultado);
-      let autorizada = !!confirmacionId && confirmacionId === previa.id;
-      if (!autorizada && respuesta === "si") {
-        if (!atada && !guardada?.origenDestino) {
-          autorizada = true;
-        } else {
-          // Acción atada: el "sí" tipeado vale solo si es la única pendiente vigente.
-          const { data: vigentes, error: errVigentes } = await supabase
-            .from("acciones_agente")
-            .select("id, resultado")
-            .eq("usuario_id", usuarioId)
-            .like("clave", "pendiente:%")
-            .neq("pedido_id", pedidoId)
-            .gte("created_at", desde)
-            .limit(50);
-          if (errVigentes) throw errVigentes;
-          autorizada = (vigentes ?? []).filter((f) => pendienteDe(f.resultado)?.sesionId === sesionId).length === 1;
-        }
+      let vigentesEnSesion = 1;
+      const necesitaUnica = respuesta === "si" && (atada || !!guardada?.origenDestino) && !(confirmacionId && confirmacionId === previa.id);
+      if (necesitaUnica) {
+        // Acción atada: el "sí" tipeado vale solo si es la única pendiente vigente.
+        const { data: vigentes, error: errVigentes } = await supabase
+          .from("acciones_agente")
+          .select("id, resultado")
+          .eq("usuario_id", usuarioId)
+          .like("clave", "pendiente:%")
+          .neq("pedido_id", pedidoId)
+          .gte("created_at", desde)
+          .limit(50);
+        if (errVigentes) throw errVigentes;
+        vigentesEnSesion = (vigentes ?? []).filter((f) => pendienteDe(f.resultado)?.sesionId === sesionId).length;
       }
+      const autorizada = autorizaPendiente({
+        confirmacionId,
+        pendienteId: previa.id as string,
+        respuesta,
+        atada,
+        origenDestino: !!guardada?.origenDestino,
+        vigentesEnSesion,
+      });
       if (autorizada) {
         // Se consume: solo confirma quien efectivamente borró la fila.
         const { data: borradas, error: errBorrar } = await supabase
@@ -350,7 +477,7 @@ export async function ejecutarToolIdempotente(
   input: Record<string, unknown>,
   ctx: Contexto
 ): Promise<ResultadoTool> {
-  const { supabase, usuarioId, pedidoId, sesionId, mensajeUsuario, respuestaUsuario, confirmacionId, familia, abiertoId } = ctx;
+  const { supabase, usuarioId, pedidoId, sesionId, mensajeUsuario, respuestaUsuario, confirmacionId, familia, abiertoId, soloConfirmar } = ctx;
   const ctxTool = { supabase, usuarioId, familia, abiertoId };
   if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, ctxTool);
 
@@ -370,12 +497,21 @@ export async function ejecutarToolIdempotente(
   const clave = `${destino.destinoId}~${claveSemantica(nombre, input)}`;
 
   const filtro = { usuario_id: usuarioId, pedido_id: pedidoId, clave };
+  let confirmadaObjetivo: AccionPendiente | null = null;
 
   if (destino.requiereConfirmacion) {
     // Replay: si este pedido ya ejecutó (o está ejecutando) la acción, no se vuelve a preguntar.
     const existente = await claimExistente(supabase, filtro);
     if (existente === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     if (existente !== "ninguno") return existente;
+
+    // Borrar / cambiar un horario: se resuelve la fila exacta ANTES de preguntar (y queda en la pendiente).
+    let objetivo: ObjetivoGuardado | undefined;
+    if (TOOLS_CONFIRMACION_PROPIA.has(nombre)) {
+      const res = await resolverObjetivo(nombre, input, destino, supabase);
+      if (!res.ok) return res.resultado;
+      objetivo = res.objetivo;
+    }
 
     const estado = await confirmacionDelServidor({
       supabase,
@@ -386,16 +522,26 @@ export async function ejecutarToolIdempotente(
       confirmacionId,
       sesionId,
       atada: TOOLS_CONFIRMACION_ATADA.has(nombre),
-      accion: { tool: nombre, input: sinMarcas(input), destinoId: destino.destinoId, persona: destino.persona ?? "", sesionId },
+      accion: { tool: nombre, input: sinMarcas(input), destinoId: destino.destinoId, persona: destino.persona ?? "", sesionId, ...(objetivo ? { objetivo } : {}) },
     });
+    if (soloConfirmar && estado.estado !== "confirmada") {
+      const texto = estado.estado === "error" || estado.estado === "sin_tabla" ? TEXTO_NO_VERIFICADA : TEXTO_NADA_PENDIENTE;
+      return { contenido: texto, textoUsuario: texto, codigo: estado.estado === "error" || estado.estado === "sin_tabla" ? "confirmacion_no_verificada" : "confirmacion_nada_pendiente" };
+    }
     if (estado.estado === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     if (estado.estado === "sin_tabla") return noDisponible(destino.persona);
     if (estado.estado === "rechazada") return { contenido: MENSAJE_CONFIRMACION_RECHAZADA };
-    if (estado.estado === "pendiente") return faltaConfirmacion(destino.persona, estado.id);
+    if (estado.estado === "pendiente") {
+      if (objetivo) {
+        return { contenido: mensajeEsperandoConfirmacion(objetivo.texto), accionUI: opcionesConfirmarAccion(estado.id) };
+      }
+      return faltaConfirmacion(destino.persona, estado.id);
+    }
     // Confirmación válida: se ejecuta lo que el usuario confirmó (la acción
     // GUARDADA, no lo que el modelo reformule ahora). ejecutarTool exige confirmado: true.
     const guardada = estado.accion && estado.accion.tool === nombre ? estado.accion.input : sinMarcas(input);
     input = { ...guardada, persona_id: destino.destinoId, confirmado: true };
+    if (TOOLS_CONFIRMACION_PROPIA.has(nombre)) confirmadaObjetivo = estado.accion;
   }
 
   let reclamada = false;
@@ -449,7 +595,9 @@ export async function ejecutarToolIdempotente(
 
   let resultado: ResultadoTool;
   try {
-    resultado = await ejecutarTool(nombre, input, ctxTool);
+    resultado = TOOLS_CONFIRMACION_PROPIA.has(nombre)
+      ? await ejecutarObjetivo(nombre, confirmadaObjetivo, { supabase, usuarioId, familia })
+      : await ejecutarTool(nombre, input, ctxTool);
   } catch (e) {
     if (reclamada) await liberar(supabase, filtro);
     throw e;
@@ -467,6 +615,44 @@ export async function ejecutarToolIdempotente(
     // Best-effort: el claim ya evita repetir la escritura.
   }
   return resultado;
+}
+
+/**
+ * Botón "Confirmar" de una borrada/cambio de horario: se resuelve SIN llamar al modelo.
+ * Es el mismo mecanismo de siempre (pendiente de esta sesión, ventana de 5 min, consumo
+ * atómico, claim por pedido): se reusa `ejecutarToolIdempotente` con la acción GUARDADA y
+ * `confirmacionId`. Devuelve null si no hay una pendiente de este tipo (sigue el flujo normal).
+ */
+export async function confirmarSinModelo(
+  ctx: Omit<Contexto, "respuestaUsuario" | "soloConfirmar" | "mensajeUsuario"> & { confirmacionId: string }
+): Promise<{ texto: string; accionUI?: ResultadoTool["accionUI"]; codigo?: string } | null> {
+  let fila: { resultado: unknown; created_at: string } | null = null;
+  try {
+    const { data, error } = await ctx.supabase
+      .from("acciones_agente")
+      .select("resultado, created_at")
+      .eq("usuario_id", ctx.usuarioId)
+      .eq("id", ctx.confirmacionId)
+      .like("clave", "pendiente:%")
+      .maybeSingle();
+    if (error || !data) return null;
+    fila = data as { resultado: unknown; created_at: string };
+  } catch {
+    return null;
+  }
+  const p = pendienteDe(fila.resultado);
+  if (!p || !TOOLS_CONFIRMACION_PROPIA.has(p.tool) || p.sesionId !== ctx.sesionId) return null;
+  if (!pendienteVigente(fila.created_at, Date.now(), VENTANA_CONFIRMACION_MS)) return null;
+  const r = await ejecutarToolIdempotente(
+    p.tool,
+    { ...p.input, persona_id: p.destinoId },
+    { ...ctx, mensajeUsuario: "", respuestaUsuario: "otro", soloConfirmar: true }
+  );
+  return {
+    texto: r.textoUsuario ?? TEXTO_NO_VERIFICADA,
+    accionUI: r.accionUI,
+    ...(r.codigo ? { codigo: r.codigo } : r.textoUsuario ? {} : { codigo: "confirmacion_no_verificada" }),
+  };
 }
 
 async function liberar(supabase: SupabaseClient, filtro: Record<string, string>) {

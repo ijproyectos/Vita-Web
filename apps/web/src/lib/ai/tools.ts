@@ -4,7 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { indicacionDeComida, type Medicamento, type MedicamentoConToma } from "@/lib/medicamentos/tipos";
-import { CLAVES_INDICACION, esIndicacionComida, INDICACIONES_COMIDA, type IndicacionComida } from "@/lib/medicamentos/comidas";
+import { CLAVES_INDICACION, INDICACIONES_COMIDA } from "@/lib/medicamentos/comidas";
 import * as turnos from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
@@ -16,10 +16,10 @@ import {
   diasAIngles,
   diasDesdeIngles,
   momentoDiaAIngles,
-  momentoDiaDesdeIngles,
 } from "./mapeo";
 import { CLAVES_PANTALLAS, pantallaPorClave } from "./guia-app";
 import { limpiarDato } from "./limpiar";
+import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
 // Tools portadas 1:1 desde `agent/README.md` del Vitapp original (el
@@ -44,22 +44,6 @@ const PROPIEDAD_INDICACION_COMIDA_EDITABLE = {
   description: `${PROPIEDAD_INDICACION_COMIDA.description} "none" = quitar la indicación.`,
 };
 
-const sinTildes = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
-
-/**
- * Lo que mandó el modelo como indicación: clave del catálogo o su etiqueta
- * (la que ve en los listados, ej. "Con el desayuno"). undefined = no la mandó;
- * null = "none"; "invalida" = algo fuera del catálogo (no se guarda en silencio).
- */
-function leerIndicacionDelModelo(valor: unknown): IndicacionComida | null | undefined | "invalida" {
-  if (valor === undefined || valor === null || valor === "") return undefined;
-  if (typeof valor !== "string") return "invalida";
-  if (sinTildes(valor) === "none") return null;
-  if (esIndicacionComida(valor)) return valor;
-  return INDICACIONES_COMIDA.find((o) => sinTildes(o.etiqueta) === sinTildes(valor))?.clave ?? "invalida";
-}
-
-const ERROR_INDICACION = `ERROR: esa indicación de comida no existe. No se guardó nada. Usá una de: ${INDICACIONES_COMIDA.map((o) => `${o.clave} ("${o.etiqueta}")`).join(", ")}, o preguntale al usuario cuál es.`;
 
 // Familia (021): cada tool de datos acepta un `persona_id` opcional. Ausente =
 // la cuenta logueada (nunca el perfil activo de la UI: eso es solo contexto
@@ -304,6 +288,10 @@ export type AccionUI = { type: string; [clave: string]: unknown };
 export type ResultadoTool = {
   contenido: string; // lo que vuelve al modelo como tool_result
   accionUI?: AccionUI; // si corresponde, se emite como evento SSE {action}
+  /** Texto listo para el usuario (confirmaciones resueltas sin pasar por el modelo). */
+  textoUsuario?: string;
+  /** Código corto si la acción NO se ejecutó (registros_chat.error_codigo). */
+  codigo?: string;
 };
 
 export type ContextoTool = {
@@ -392,49 +380,11 @@ async function ejecutarEnDestino(
       };
     }
 
-    case "update_schedule": {
-      const medicamento = await medicamentos.buscarPorNombre(
-        supabase,
-        usuarioId,
-        String(input.medication_name),
-        input.medication_time_hint as string | undefined
-      );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
-
-      const indicacion = leerIndicacionDelModelo(input.meal_indication);
-      if (indicacion === "invalida") return { contenido: ERROR_INDICACION };
-
-      // Si viene scheduled_time, momentoDia se re-deriva de esa hora (misma
-      // razón que en add_medication) — solo se confía en el time_of_day
-      // suelto del modelo cuando no hay una hora nueva de la que derivarlo.
-      const actualizado = await medicamentos.actualizarHorario(supabase, usuarioId, medicamento.id, {
-        horaProgramada: input.scheduled_time as string | undefined,
-        momentoDia: input.scheduled_time
-          ? momentoDelDia(String(input.scheduled_time))
-          : input.time_of_day
-            ? momentoDiaDesdeIngles(String(input.time_of_day))
-            : undefined,
-        diasRecurrentes: input.recurring_days
-          ? diasDesdeIngles(input.recurring_days as string[])
-          : undefined,
-        // Solo se toca si el modelo la manda ("none" la borra); mover la hora no la cambia.
-        indicacion,
-      });
-      return { contenido: JSON.stringify(paraModelo(actualizado)), accionUI: { type: "schedule_updated" } };
-    }
-
-    case "delete_schedule": {
-      const medicamento = await medicamentos.buscarPorNombre(
-        supabase,
-        usuarioId,
-        String(input.medication_name),
-        input.medication_time_hint as string | undefined
-      );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
-
-      await medicamentos.eliminarHorario(supabase, usuarioId, medicamento.id);
-      return { contenido: `Eliminado "${limpiarDato(medicamento.nombre)}".`, accionUI: { type: "medication_deleted" } };
-    }
+    // Borrar / cambiar un horario no se ejecuta desde acá: pedidos.ts guarda la pendiente y,
+    // tras la confirmación, lo ejecuta por id (lib/chat/pedidos.ts). Defensa en profundidad.
+    case "update_schedule":
+    case "delete_schedule":
+      return { contenido: "Esta acción requiere la confirmación del usuario y no se ejecutó nada." };
 
     case "mark_taken": {
       const medicamento = await medicamentos.buscarPorNombre(

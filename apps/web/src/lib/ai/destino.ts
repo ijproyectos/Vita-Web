@@ -20,7 +20,11 @@ export const TOOLS_DE_ESCRITURA = new Set([
 // que estar ATADA a esa acción exacta (el botón con el id de la pendiente, o un
 // "sí" tipeado mientras sea la única pendiente). `mark_all_taken` además
 // silencia la alerta de dosis vencida a los cuidadores.
-export const TOOLS_CONFIRMACION_ATADA = new Set(["mark_taken", "mark_all_taken", "delete_schedule"]);
+export const TOOLS_CONFIRMACION_ATADA = new Set(["mark_taken", "mark_all_taken", "delete_schedule", "update_schedule"]);
+
+// Borrar o cambiar el horario de un medicamento pide confirmación del servidor
+// SIEMPRE, también sobre los datos propios (se pierde historial / cambia cuándo suena).
+export const TOOLS_CONFIRMACION_PROPIA = new Set(["delete_schedule", "update_schedule"]);
 
 // Tools que leen o escriben datos de una persona: son las únicas que aceptan
 // `persona_id`. set_avatar_mood es un efecto de interfaz, sin destino.
@@ -79,6 +83,20 @@ export function opcionesConfirmarPara(nombreCrudo: string, confirmacionId?: stri
   };
 }
 
+/** Confirmar/Cancelar de una acción destructiva guardada; "Confirmar" va atado al id de la pendiente. */
+export function opcionesConfirmarAccion(pendienteId?: string | null): AccionOpciones {
+  return {
+    type: "opciones_confirmacion",
+    opciones: ["Confirmar", "Cancelar"],
+    ...(pendienteId ? { vinculos: { Confirmar: pendienteId } } : {}),
+  };
+}
+
+/** Texto para el modelo cuando una borrada/cambio de horario quedó esperando el Confirmar. */
+export function mensajeEsperandoConfirmacion(texto: string): string {
+  return `ESPERANDO CONFIRMACIÓN: NO se ejecutó nada todavía. La app le muestra al usuario la pregunta "${limpiarDato(texto, 300)}" con los botones Confirmar y Cancelar. Decile con tus palabras, en una frase, esa misma pregunta (nombre, hora, persona si es otra, y lo que se pierde o cambia) y esperá. NUNCA digas que ya se borró o se cambió: lo confirma el servidor. Solo si en un mensaje POSTERIOR el usuario dice que sí, volvé a llamar a la tool con exactamente los mismos datos. No la llames de nuevo en el mismo turno.`;
+}
+
 /** `ids[i]` es el id de la pendiente de `nombres[i]` (opcional). */
 export function opcionesElegirDestino(nombresCrudos: string | string[], ids?: (string | null | undefined)[]): AccionOpciones {
   const lista = Array.isArray(nombresCrudos) ? nombresCrudos : [nombresCrudos];
@@ -116,7 +134,12 @@ export function resolverDestino(
   input: Record<string, unknown>,
   ctx: { usuarioId: string; familia: MiembroFamilia[]; abiertoId?: string; mensajeUsuario?: string }
 ): DestinoResuelto {
-  const propio: DestinoResuelto = { ok: true, destinoId: ctx.usuarioId, persona: null };
+  const propio: DestinoResuelto = {
+    ok: true,
+    destinoId: ctx.usuarioId,
+    persona: null,
+    ...(TOOLS_CONFIRMACION_PROPIA.has(nombreTool) ? { requiereConfirmacion: true } : {}),
+  };
   if (!TOOLS_CON_DESTINO.has(nombreTool)) return propio;
 
   // Ausente = undefined, null o string vacío/solo espacios (el modelo a veces manda null).

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { resolverMedicamento } from "./resolucion";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ConComida,
@@ -323,18 +324,11 @@ export async function buscarPorNombre(
   horaHint?: string
 ): Promise<Medicamento | null> {
   const todos = await listarTodos(supabase, usuarioId);
-  const buscado = nombre.trim().toLowerCase();
-
-  // Exactas primero (mismo criterio que antes: una coincidencia exacta le
-  // gana a cualquier cantidad de coincidencias parciales); recién si no
-  // hay ninguna exacta se cae a substring.
-  const exactas = todos.filter((m) => m.nombre.toLowerCase() === buscado);
-  const coincidencias = exactas.length > 0 ? exactas : todos.filter((m) => m.nombre.toLowerCase().includes(buscado));
-
-  if (coincidencias.length === 0) return null;
-  if (coincidencias.length === 1 || !horaHint) return coincidencias[0];
-
-  return coincidencias.find((m) => m.hora_programada === horaHint) ?? coincidencias[0];
+  const r = resolverMedicamento(todos, nombre, horaHint);
+  if (r.estado === "no_encontrado") return null;
+  // Exacta antes que parcial y la hora desambigua (algoritmo único en resolucion.ts); si sigue
+  // ambiguo, el comportamiento de siempre: la primera coincidencia.
+  return r.estado === "unico" ? r.medicamento : r.filas[0];
 }
 
 // Postgres 42703 / PostgREST PGRST204: falta la columna `indicacion` (migración
