@@ -28,8 +28,27 @@ describe("construirSystem", () => {
     const estimado = (JSON.stringify(TOOLS).length + SYSTEM_PROMPT.length) / 4;
     expect(estimado).toBeGreaterThan(1024);
   });
-  it("el orden de las tools es determinístico (mismo JSON en dos lecturas)", () => {
-    expect(JSON.stringify(TOOLS)).toBe(JSON.stringify([...TOOLS]));
+  it("el orden de las tools es fijo: cambiarlo invalida el caché, así que tiene que ser a propósito", () => {
+    expect(TOOLS.map((t) => t.name)).toMatchInlineSnapshot(`
+      [
+        "list_today_medications",
+        "list_all_medications",
+        "add_medication",
+        "update_schedule",
+        "delete_schedule",
+        "mark_taken",
+        "mark_all_taken",
+        "add_appointment",
+        "list_today_appointments",
+        "update_health_profile",
+        "add_condition",
+        "add_allergy",
+        "show_today_medications",
+        "show_all_medications",
+        "open_screen",
+        "set_avatar_mood",
+      ]
+    `);
     expect(new Set(TOOLS.map((t) => t.name)).size).toBe(TOOLS.length);
   });
 });

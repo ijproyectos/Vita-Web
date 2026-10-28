@@ -357,9 +357,6 @@ export async function POST(request: Request) {
               max_tokens: MAX_TOKENS_CHAT,
               system,
               tools: TOOLS,
-              // Caché automático del final de la conversación: cada vuelta del loop de tools
-              // reutiliza lo anterior (se compone con el marcador explícito del system).
-              cache_control: { type: "ephemeral" },
               messages: historial,
             },
             { signal: controlador.signal, timeout: timeoutSdkMs(inicioMs, performance.now()) }

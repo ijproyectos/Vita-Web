@@ -76,7 +76,10 @@ describe("evaluador", () => {
     const c = caso("familiar-pide-confirmacion");
     const llamada = { nombre: "add_medication", input: { name: "Vitamina D", persona_id: ELSA } };
     expect(evaluarCaso(c, resp("¿Le cargo Vitamina D a las 12:00 a Elsa?", [llamada])).ok).toBe(true);
-    expect(evaluarCaso(c, resp("Listo, ya le cargué la Vitamina D a Elsa.", [llamada])).ok).toBe(false);
+    // With a question mark the only failure left is the false "already saved" claim.
+    const falso = evaluarCaso(c, resp("Listo, ya le cargué la Vitamina D a Elsa, ¿algo más?", [llamada]));
+    expect(falso.ok).toBe(false);
+    expect(falso.fallas.some((f) => f.startsWith("el texto contiene lo prohibido"))).toBe(true);
   });
 });
 
