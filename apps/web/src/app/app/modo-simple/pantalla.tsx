@@ -27,12 +27,14 @@ import {
   TarjetaGrupo,
   TarjetaMediciones,
   TarjetaSiguientes,
+  TarjetaPorCorregir,
   TarjetaTurno,
   fraseAnuncio,
   listaHablada,
   type Dosis,
   type MedicionSimple,
   type Siguiente,
+  type PorCorregir,
   type TurnoSimple,
 } from "@/components/vita/modo-simple/piezas";
 import { marcarTomadoAction } from "../rutina/actions";
@@ -62,9 +64,9 @@ export function Pantalla({
   grupo,
   momento,
   siguientes,
+  porCorregir,
   hayMedsHoy,
   vencida,
-  faltanMinutos,
   recordatorios,
   config,
   turno,
@@ -88,10 +90,11 @@ export function Pantalla({
   grupo: Dosis[];
   momento: MomentoDia | null;
   siguientes: Siguiente[];
+  /** Pendientes con la hora guardada inválida (no se pueden confirmar). */
+  porCorregir: PorCorregir[];
   /** Había medicación programada hoy (distingue "todo tomado" de "nada cargado"). */
   hayMedsHoy: boolean;
   vencida: boolean;
-  faltanMinutos: number;
   /** Un familiar le recordó estas dosis (aviso tranquilo, sin sonido). */
   recordatorios: { medicamentoId: string; nombre: string; horaProgramada: string }[];
 }) {
@@ -286,7 +289,7 @@ export function Pantalla({
 
               {turno && <TarjetaTurno turno={turno} />}
 
-              {fase === "descanso" && <TarjetaDescanso nombre={nombre} hayMedsHoy={hayMedsHoy} />}
+              {fase === "descanso" && <TarjetaDescanso nombre={nombre} hayMedsHoy={hayMedsHoy} proximaHora={siguientes[0]?.horaProgramada} />}
 
               {mostrarTarjeta && posponer.posponido && (
                 <TarjetaPospuesta
@@ -304,7 +307,6 @@ export function Pantalla({
                   grupo={grupo}
                   momento={momento}
                   alertado={fase === "alertado"}
-                  faltanMinutos={faltanMinutos}
                   confirmando={pendiente}
                   escuchandoVoz={estadoVoz !== "inactivo"}
                   silenciada={silenciada}
@@ -326,7 +328,9 @@ export function Pantalla({
                 />
               )}
 
-              {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} />}
+              {porCorregir.length > 0 && <TarjetaPorCorregir items={porCorregir} />}
+
+              {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
             </div>
           </div>
           <BarraInferior estado={estadoAvatar} onHablar={() => abrirChat()} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />

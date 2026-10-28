@@ -28,11 +28,11 @@ export function ConfirmarPersona({
         </div>
         <h1 className="mt-[22px] font-heading text-[34px] font-extrabold leading-none tracking-[-0.04em]">Hola, {vista.nombre}</h1>
         <p className="mt-3 text-balance text-center text-[17px] font-medium leading-[1.45] text-slate-brand">
-          {vista.cuidador ? `${vista.cuidador} ya armó tu perfil.` : "Ya armaron tu perfil."} Fijate que seas vos.
+          Antes de entrar, ¿este es tu perfil?
         </p>
         <div className="mt-[26px] flex flex-col self-stretch rounded-[24px] bg-card px-5 py-[18px] shadow-card">
           <div className="font-heading text-xl font-extrabold tracking-[-0.3px]">{vista.nombreCompleto}</div>
-          {vista.cuidador && <div className="mt-1 text-[15px] font-medium text-slate-brand">La cuida {vista.cuidador}</div>}
+          {vista.cuidador && <div className="mt-1 text-[15px] font-medium text-slate-brand">Te acompaña {vista.cuidador} en vita</div>}
           {meds !== null && (
             <div className="mt-4 rounded-[16px] bg-canvas px-3.5 py-3">
               <div className="font-heading text-2xl font-extrabold leading-none">{meds}</div>

@@ -256,7 +256,10 @@ describe("marcarTomado graba la fecha AR", () => {
 describe("agregar: degradación sin la columna `indicacion` (migración 031 sin aplicar)", () => {
   function clienteFalso(respuestas: { data: unknown; error: { code?: string; message: string } | null }[]) {
     const inserts: Record<string, unknown>[] = [];
+    // La lectura previa del precheck de duplicados no encuentra horarios existentes.
+    const lectura = { eq: () => ({ order: async () => ({ data: [], error: null }) }) };
     const from = () => ({
+      select: () => lectura,
       insert: (fila: Record<string, unknown>) => {
         inserts.push(fila);
         const r = respuestas.shift()!;

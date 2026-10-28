@@ -1,5 +1,6 @@
 "use server";
 
+import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado } from "@/lib/medicamentos/duplicados";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
@@ -188,6 +189,9 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
       frecuencia: datos.frecuencia,
     });
   } catch (e) {
+    if (e instanceof ErrorHorarioMedicamentoDuplicado || e instanceof ErrorEntradaMedicamento) {
+      return { status: "error", message: e.message };
+    }
     return errorAmigable("guardarMedicamentoPropioAction", e);
   }
 

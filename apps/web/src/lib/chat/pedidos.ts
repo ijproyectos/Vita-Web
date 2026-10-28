@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ejecutarTool, type ResultadoTool } from "@/lib/ai/tools";
+import { verificarHorariosDisponibles } from "@/lib/medicamentos/nucleo";
+import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, normalizarHoraDuplicados } from "@/lib/medicamentos/duplicados";
+import { ejecutarTool, normalizarAltaMedicamento, resultadoErrorMedicamento, type ResultadoTool } from "@/lib/ai/tools";
 import {
   mensajeEsperandoConfirmacion,
   mensajeFaltaConfirmacion,
@@ -159,9 +161,34 @@ async function resolverObjetivo(
   const tool = nombre as "delete_schedule" | "update_schedule";
   let cambios;
   if (tool === "update_schedule") {
+    // Una hora inválida se informa como error de entrada, no como fallo temporal.
+    if (typeof input.scheduled_time === "string" && input.scheduled_time.trim() !== "") {
+      try {
+        normalizarHoraDuplicados(input.scheduled_time);
+      } catch (error) {
+        return { ok: false, resultado: resultadoErrorMedicamento(error, destino.persona) };
+      }
+    }
     const c = cambiosDeInput(input);
     if ("error" in c) return { ok: false, resultado: { contenido: `${c.error} No se ejecutó nada.` } };
     cambios = c.datos;
+    // Mover el horario a uno que ya existe se informa ANTES de pedir confirmación (sin contar la fila que se mueve).
+    if (cambios.horaProgramada !== undefined || cambios.diasRecurrentes !== undefined) {
+      try {
+        await verificarHorariosDisponibles(
+          supabase,
+          destino.destinoId,
+          [{
+            nombre: r.medicamento.nombre,
+            horaProgramada: cambios.horaProgramada ?? r.medicamento.hora_programada,
+            diasRecurrentes: cambios.diasRecurrentes ?? r.medicamento.dias_recurrentes,
+          }],
+          [r.medicamento.id]
+        );
+      } catch (error) {
+        return { ok: false, resultado: resultadoErrorMedicamento(error, destino.persona) };
+      }
+    }
   }
   return {
     ok: true,
@@ -206,7 +233,12 @@ async function ejecutarObjetivo(
     }
     await medicamentos.actualizarHorario(ctx.supabase, destinoId, objetivo.medicamentoId, objetivo.cambios ?? {});
     return { contenido: texto, textoUsuario: texto, accionUI: { type: "schedule_updated", ...conPersona } };
-  } catch {
+  } catch (error) {
+    // Un conflicto de horario aparecido entre la pregunta y la confirmación se informa tal cual.
+    if (error instanceof ErrorHorarioMedicamentoDuplicado || error instanceof ErrorEntradaMedicamento) {
+      const r = resultadoErrorMedicamento(error, accion.persona || null);
+      return { ...r, textoUsuario: error.message, codigo: "confirmacion_conflicto" };
+    }
     return falla(TEXTO_NO_VERIFICADA, "confirmacion_no_verificada");
   }
 }
@@ -499,13 +531,26 @@ export async function ejecutarToolIdempotente(
   const filtro = { usuario_id: usuarioId, pedido_id: pedidoId, clave };
   let confirmadaObjetivo: AccionPendiente | null = null;
 
-  if (destino.requiereConfirmacion) {
-    // Replay: si este pedido ya ejecutó (o está ejecutando) la acción, no se vuelve a preguntar.
+  // Un replay terminado conserva su éxito aunque el alta haya creado el horario
+  // que ahora detectaría el precheck. También vale para la cuenta propia.
+  if (destino.requiereConfirmacion || nombre === "add_medication" || nombre === "update_schedule") {
     const existente = await claimExistente(supabase, filtro);
     if (existente === "error") return { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA };
     if (existente !== "ninguno") return existente;
+  }
 
+  if (nombre === "add_medication") {
+    try {
+      const candidato = normalizarAltaMedicamento(input);
+      await verificarHorariosDisponibles(supabase, destino.destinoId, [candidato]);
+    } catch (error) {
+      return resultadoErrorMedicamento(error, destino.persona);
+    }
+  }
+
+  if (destino.requiereConfirmacion) {
     // Borrar / cambiar un horario: se resuelve la fila exacta ANTES de preguntar (y queda en la pendiente).
+    // Para update_schedule, resolverObjetivo también verifica duplicados antes de preguntar.
     let objetivo: ObjetivoGuardado | undefined;
     if (TOOLS_CONFIRMACION_PROPIA.has(nombre)) {
       const res = await resolverObjetivo(nombre, input, destino, supabase);

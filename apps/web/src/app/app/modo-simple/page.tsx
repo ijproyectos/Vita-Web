@@ -19,30 +19,11 @@ import { Pantalla } from "./pantalla";
 // de ahí en vez de repetirla acá.
 const GRACIA_MIN = 30;
 
-/**
- * Diferencia en minutos entre `horaProgramada` y `ahoraHHMM` (ambas
- * "HH:MM", hora AR) — solo para el texto "en X minutos" de la fase
- * esperando. A diferencia de `esDosisVencida` (que decide si ya se
- * considera vencida contra un margen de gracia), esto es puro texto de
- * presentación: no se reutiliza en ninguna decisión de negocio.
- */
-function minutosHasta(horaProgramada: string, ahoraHHMM: string): number {
-  const aMinutos = (hhmm: string) => {
-    const [horas, minutos] = hhmm.split(":").map(Number);
-    return horas * 60 + minutos;
-  };
-  return aMinutos(horaProgramada) - aMinutos(ahoraHHMM);
-}
-
 export default async function ModoSimplePage() {
   const usuario = await requireUser();
   const supabase = await createClient();
 
   const [hoy, perfil, config] = await Promise.all([
-    // listarHoy() ya devuelve las filas ordenadas por hora_programada
-    // ascendente (ver listarTodos) — la primera pendiente es exactamente
-    // "la próxima dosis" que pide el diseño, ya sea una vencida más
-    // temprano en el día o la próxima por venir.
     medicamentos.listarHoy(supabase, usuario.id),
     perfilNucleo.obtenerPerfil(supabase, usuario.id),
     obtenerPrefs(supabase, usuario.id),
@@ -51,7 +32,8 @@ export default async function ModoSimplePage() {
     config.ver_turnos ? turnoParaMostrar(supabase, usuario.id) : null,
     config.ver_mediciones ? medicionesParaMostrar(supabase, usuario.id) : null,
   ]);
-  const { primera, momento, enGrupo, resto } = proximoGrupoPendiente(hoy);
+  const ahoraHHMM = medicamentos.horaEnAR();
+  const { primera, momento, enGrupo, resto, invalidas } = proximoGrupoPendiente(hoy, ahoraHHMM);
 
   const cabecera = {
     nombre: perfil?.nombre?.trim() || "",
@@ -66,18 +48,8 @@ export default async function ModoSimplePage() {
     mediciones,
   };
 
-  if (!primera) {
-    return <Pantalla key="descanso" {...cabecera} grupo={[]} momento={null} siguientes={[]} hayMedsHoy={hoy.length > 0} vencida={false} faltanMinutos={0} recordatorios={[]} />;
-  }
-
-  // V7: una tarjeta por momento del día. El grupo son todas las pendientes
-  // del mismo momento que la próxima dosis pendiente ("Tus 2 pastillas de la
-  // mañana"); lo que queda para otros momentos va a "Después".
-
-  const ahoraHHMM = medicamentos.horaEnAR();
-  const vencida = medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN);
-  const faltanMinutos = Math.max(0, minutosHasta(primera.hora_programada, ahoraHHMM));
-  const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, enGrupo);
+  const vencida = primera ? medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN) : false;
+  const recordatorios = enGrupo.length ? await listarRecordatoriosPendientes(supabase, usuario.id, enGrupo) : [];
 
   return (
     <Pantalla
@@ -85,7 +57,7 @@ export default async function ModoSimplePage() {
       // desaparece) y esto fuerza un remount limpio del estado de la
       // pantalla (fase, audio desbloqueado) en vez de arrastrar el estado
       // del grupo anterior.
-      key={enGrupo.map((m) => m.id).join(",")}
+      key={enGrupo.map((m) => m.id).join(",") || "descanso"}
       {...cabecera}
       grupo={enGrupo.map((m) => ({
         id: m.id,
@@ -101,9 +73,9 @@ export default async function ModoSimplePage() {
         horaProgramada: m.hora_programada,
         momento: momentoDelDia(m.hora_programada),
       }))}
-      hayMedsHoy
+      porCorregir={invalidas.map((m) => ({ id: m.id, nombre: m.nombre }))}
+      hayMedsHoy={hoy.length > 0}
       vencida={vencida}
-      faltanMinutos={faltanMinutos}
       recordatorios={recordatorios}
     />
   );

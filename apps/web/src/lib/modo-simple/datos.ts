@@ -7,28 +7,14 @@ import { diasEntre, haceCuanto, horaEnPalabras } from "./formato";
 import { fechaConOffset, fechaDeHoyISO, fechaISOEnAR } from "@/lib/rutina/formato";
 import { formatearValor, META_MEDICION } from "@/lib/mediciones/tipos";
 import { normalizarLlevar } from "@/lib/turnos/tipos";
-import { momentoDelDia } from "@/lib/rutina/momento";
-import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import type { MedicionSimple, TurnoSimple } from "@/lib/modo-simple/tipos";
+
+export { proximoGrupoPendiente } from "./seleccion";
 
 // Datos REALES de una persona para su pantalla de modo simple (y para la vista
 // previa de Configurar modo simple). `(cliente, personaId)`: la RLS decide el
 // acceso (la persona, o un cuidador vinculado).
 type Cliente = SupabaseClient;
-
-/**
- * Selección de "lo que toca ahora" en modo simple: las pendientes del mismo
- * momento del día que la próxima pendiente (`hoy` viene ordenado por hora).
- * Lo comparten la pantalla de la persona y la vista previa de Configurar.
- */
-export function proximoGrupoPendiente(hoy: MedicamentoConToma[]) {
-  const pendientes = hoy.filter((m) => !m.tomado);
-  const primera = pendientes[0] ?? null;
-  const momento = primera ? momentoDelDia(primera.hora_programada) : null;
-  const enGrupo = primera ? pendientes.filter((m) => momentoDelDia(m.hora_programada) === momento) : [];
-  const resto = primera ? pendientes.filter((m) => momentoDelDia(m.hora_programada) !== momento) : [];
-  return { pendientes, primera, momento, enGrupo, resto };
-}
 
 /** Turno de hoy o de mañana (real). Nunca lanza: sin turno o ante un error, null. */
 export async function turnoParaMostrar(supabase: Cliente, usuarioId: string): Promise<TurnoSimple | null> {

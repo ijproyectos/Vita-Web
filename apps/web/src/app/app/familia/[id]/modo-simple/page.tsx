@@ -5,6 +5,7 @@ import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { fechaLargaEnAR, saludoEnAR } from "@/lib/rutina/formato";
+import { momentoDelDia } from "@/lib/rutina/momento";
 import { obtenerPrefsConEstado } from "@/lib/modo-simple/nucleo";
 import { medicionesParaMostrar, proximoGrupoPendiente, turnoParaMostrar } from "@/lib/modo-simple/datos";
 import { TopBar } from "../../../top-bar";
@@ -33,8 +34,7 @@ export default async function ModoSimpleDePersonaPage(props: PageProps<"/app/fam
     medicionesParaMostrar(supabase, id),
   ]);
 
-  // Mismo criterio que la pantalla de la persona: las pendientes del momento de la próxima.
-  const { momento, enGrupo } = proximoGrupoPendiente(hoy);
+  const { momento, enGrupo, resto, invalidas } = proximoGrupoPendiente(hoy, medicamentos.horaEnAR());
   const grupo = enGrupo.map((m) => ({ id: m.id, nombre: m.nombre, dosis: m.dosis, unidad: m.unidad, horaProgramada: m.hora_programada }));
 
   const contacto =
@@ -61,6 +61,13 @@ export default async function ModoSimpleDePersonaPage(props: PageProps<"/app/fam
           fechaTexto: fechaLargaEnAR(),
           grupo,
           momento,
+          siguientes: resto.slice(0, 3).map((m) => ({
+            id: m.id,
+            nombre: m.nombre,
+            horaProgramada: m.hora_programada,
+            momento: momentoDelDia(m.hora_programada),
+          })),
+          porCorregir: invalidas.map((m) => ({ id: m.id, nombre: m.nombre })),
           hayMedsHoy: hoy.length > 0,
           turno,
           mediciones,

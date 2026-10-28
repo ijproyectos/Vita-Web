@@ -3,7 +3,8 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
-import { indicacionDeComida, type Medicamento, type MedicamentoConToma } from "@/lib/medicamentos/tipos";
+import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, normalizarHoraDuplicados } from "@/lib/medicamentos/duplicados";
+import { indicacionDeComida, type DatosNuevoMedicamento, type Medicamento, type MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import { CLAVES_INDICACION, INDICACIONES_COMIDA } from "@/lib/medicamentos/comidas";
 import * as turnos from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
@@ -304,6 +305,56 @@ export type ContextoTool = {
   abiertoId?: string;
 };
 
+/** Frontera común del input del modelo para el precheck y la escritura. */
+export function normalizarAltaMedicamento(input: Record<string, unknown>): DatosNuevoMedicamento {
+  if (typeof input.name !== "string" || !input.name.trim()) {
+    throw new ErrorEntradaMedicamento("Falta un nombre de medicamento válido.");
+  }
+  let horaProgramada: string;
+  try {
+    if (typeof input.scheduled_time !== "string") throw new Error();
+    horaProgramada = normalizarHoraDuplicados(input.scheduled_time.trim());
+  } catch {
+    throw new ErrorEntradaMedicamento("Indicá una hora válida en formato HH:MM.");
+  }
+  const dias = input.recurring_days;
+  if (dias !== undefined && (!Array.isArray(dias) || !dias.every((d) => typeof d === "string"))) {
+    throw new ErrorEntradaMedicamento("Los días del medicamento deben ser una lista válida.");
+  }
+  let diasRecurrentes;
+  try {
+    diasRecurrentes = diasDesdeIngles((dias ?? []) as string[]);
+  } catch {
+    throw new ErrorEntradaMedicamento("Los días del medicamento deben ser días de la semana válidos.");
+  }
+  for (const campo of ["dose", "condition"]) {
+    if (input[campo] !== undefined && input[campo] !== null && typeof input[campo] !== "string") {
+      throw new ErrorEntradaMedicamento("La dosis y la condición deben ser texto.");
+    }
+  }
+  return {
+    nombre: input.name.trim(),
+    dosis: (input.dose as string | null | undefined) ?? null,
+    condicion: (input.condition as string | null | undefined) ?? null,
+    horaProgramada,
+    momentoDia: momentoDelDia(horaProgramada),
+    diasRecurrentes,
+  };
+}
+
+/** Sin tarjeta ni invitación a confirmar cuando el alta no puede realizarse. */
+export function resultadoErrorMedicamento(error: unknown, persona: string | null): ResultadoTool {
+  const para = persona ? ` para ${limpiarDato(persona)}` : "";
+  if (error instanceof ErrorHorarioMedicamentoDuplicado) {
+    return { contenido: `No se guardó ningún cambio${para}: ${limpiarDato(error.message, 240)} No ofrezcas agregarlo igual ni pidas confirmación para duplicarlo.` };
+  }
+  if (error instanceof ErrorEntradaMedicamento) {
+    return { contenido: `No se guardó ningún cambio${para}: ${error.message}` };
+  }
+  console.warn("medicamento_operacion_fallida", { codigo: "error_inesperado" });
+  return { contenido: `No pude verificar o guardar el medicamento${para} por un error temporal. No afirmes que quedó guardado ni pidas confirmación de alta; intentá de nuevo más tarde.` };
+}
+
 export async function ejecutarTool(
   nombre: string,
   input: Record<string, unknown>,
@@ -320,7 +371,15 @@ export async function ejecutarTool(
     };
   }
 
-  const resultado = await ejecutarEnDestino(nombre, input, { supabase: ctx.supabase, usuarioId: destino.destinoId });
+  let resultado: ResultadoTool;
+  try {
+    resultado = await ejecutarEnDestino(nombre, input, { supabase: ctx.supabase, usuarioId: destino.destinoId });
+  } catch (error) {
+    if (nombre === "add_medication" || error instanceof ErrorHorarioMedicamentoDuplicado) {
+      return resultadoErrorMedicamento(error, destino.persona);
+    }
+    throw error;
+  }
   // Las tarjetas/toasts de una escritura en otra persona dicen para quién.
   if (destino.persona && resultado.accionUI) {
     return { ...resultado, accionUI: { ...resultado.accionUI, persona: destino.persona } };
@@ -355,17 +414,10 @@ async function ejecutarEnDestino(
       // al llenar el campo separado; la hora es la única fuente de verdad).
       const indicacion = leerIndicacionDelModelo(input.meal_indication);
       if (indicacion === "invalida") return { contenido: ERROR_INDICACION };
+      // Solo claves del catálogo: lo que mande el modelo se valida acá, no se guarda tal cual.
+      // Se guarda como se pidió, aunque no coincida con la hora habitual de esa comida.
       const creado = await medicamentos.agregar(supabase, usuarioId, {
-        nombre: String(input.name),
-        dosis: (input.dose as string) ?? null,
-        horaProgramada: String(input.scheduled_time),
-        momentoDia: momentoDelDia(String(input.scheduled_time)),
-        condicion: (input.condition as string) ?? null,
-        diasRecurrentes: input.recurring_days
-          ? diasDesdeIngles(input.recurring_days as string[])
-          : [],
-        // Solo claves del catálogo: lo que mande el modelo se valida acá, no se guarda tal cual.
-        // Se guarda como se pidió, aunque no coincida con la hora habitual de esa comida.
+        ...normalizarAltaMedicamento(input),
         indicacion: indicacion ?? null,
       });
       return {
