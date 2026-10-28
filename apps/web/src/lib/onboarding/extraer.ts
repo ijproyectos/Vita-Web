@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
+import { MODELO_IA } from "@/lib/ai/modelo";
 
 // Único punto de contacto con Anthropic para el onboarding conversacional
 // nuevo — mismo criterio que lib/estudios/extraer.ts: server-only, un
@@ -11,7 +12,7 @@ import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 // nunca lanza (quien llama siempre puede degradar a un form manual si esto
 // falla, sea por falta de ANTHROPIC_API_KEY, red, o una respuesta
 // inutilizable del modelo).
-const MODEL = "claude-sonnet-5";
+const MODEL = MODELO_IA;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

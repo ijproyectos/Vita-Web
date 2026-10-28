@@ -182,7 +182,26 @@ export async function POST(request: Request) {
     programados = { error: e instanceof Error ? e.message : "Fallo en los avisos programados." };
   }
 
+  // Retención de `acciones_agente` (migración 030): guarda datos de salud del
+  // chat (incluso de terceros) y solo sirve durante un reintento o una
+  // confirmación de minutos. Se purga lo de más de 48 h en este mismo job (sin
+  // job nuevo). Si la tabla no existe (030 sin aplicar) o falla, se degrada.
+  let accionesPurgadas: number | { error: string } = 0;
+  try {
+    const limite = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await admin.from("acciones_agente").delete().lt("created_at", limite).select("id");
+    if (error) {
+      const sinTabla = error.code === "PGRST205" || error.code === "42P01";
+      accionesPurgadas = sinTabla ? 0 : { error: error.message };
+    } else {
+      accionesPurgadas = data?.length ?? 0;
+    }
+  } catch (e) {
+    accionesPurgadas = { error: e instanceof Error ? e.message : "Fallo la purga de acciones_agente." };
+  }
+
   return NextResponse.json({
+    accionesPurgadas,
     detectadas: dosisVencidas.length,
     alertados,
     omitidos,

@@ -16,6 +16,14 @@ export async function obtenerPerfil(supabase: Cliente, usuarioId: string): Promi
   return data as Perfil | null;
 }
 
+/** True si el perfil no tiene remedios, condiciones ni alergias cargados. */
+export async function perfilVacio(supabase: Cliente, usuarioId: string): Promise<boolean> {
+  const { count, error } = await supabase.from("medicamentos").select("id", { count: "exact", head: true }).eq("usuario_id", usuarioId);
+  if (error || (count ?? 0) > 0) return false;
+  const perfil = await obtenerPerfil(supabase, usuarioId);
+  return !perfil || ((perfil.condiciones?.length ?? 0) === 0 && (perfil.alergias?.length ?? 0) === 0);
+}
+
 /** Primer nombre de la persona ("Vos" si no hay). Nunca lanza. */
 export async function obtenerNombre(supabase: Cliente, usuarioId: string): Promise<string> {
   const { data } = await supabase.from("perfiles").select("nombre").eq("id", usuarioId).maybeSingle();

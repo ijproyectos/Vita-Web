@@ -9,6 +9,7 @@ import * as turnos from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import type { CambiosPerfil } from "@/lib/perfil/tipos";
 import { GENEROS, GRUPOS_SANGUINEOS } from "@/lib/perfil/opciones";
+import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaDeHoyISO } from "@/lib/rutina/formato";
 import {
@@ -17,6 +18,9 @@ import {
   momentoDiaAIngles,
   momentoDiaDesdeIngles,
 } from "./mapeo";
+import { CLAVES_PANTALLAS, pantallaPorClave } from "./guia-app";
+import { limpiarDato } from "./limpiar";
+import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino, TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
 // Tools portadas 1:1 desde `agent/README.md` del Vitapp original (el
 // agente LangGraph + MCP), acotadas al módulo en alcance (medicamentos).
@@ -25,9 +29,6 @@ import {
 // sin el subproceso ni el JWT intermedio (el `usuarioId` ya viene resuelto
 // de la sesión de Supabase, nunca del modelo).
 //
-// Familia (021): las tools actúan SIEMPRE sobre la cuenta logueada, nunca
-// sobre el perfil activo (cookie `vita_perfil`). Que vita cargue datos de
-// otra persona necesitaría un destino explícito por tool — decisión aparte.
 // Indicación de comida opcional de add_medication / update_schedule: SOLO las
 // opciones del catálogo (lib/medicamentos/comidas.ts), con su etiqueta en la descripción.
 const PROPIEDAD_INDICACION_COMIDA = {
@@ -60,7 +61,12 @@ function leerIndicacionDelModelo(valor: unknown): IndicacionComida | null | unde
 
 const ERROR_INDICACION = `ERROR: esa indicación de comida no existe. No se guardó nada. Usá una de: ${INDICACIONES_COMIDA.map((o) => `${o.clave} ("${o.etiqueta}")`).join(", ")}, o preguntale al usuario cuál es.`;
 
-export const TOOLS: Anthropic.Tool[] = [
+// Familia (021): cada tool de datos acepta un `persona_id` opcional. Ausente =
+// la cuenta logueada (nunca el perfil activo de la UI: eso es solo contexto
+// para el prompt). Si viene, `resolverDestino` (lib/ai/destino.ts) lo valida
+// contra los vínculos reales y, para escribir en otra persona, exige rol
+// `editar` y confirmación explícita. La RLS sigue siendo la autoridad final.
+const TOOLS_BASE: Anthropic.Tool[] = [
   {
     name: "list_today_medications",
     description: "Lista los medicamentos programados para hoy, con si ya se tomaron o no.",
@@ -231,6 +237,22 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "open_screen",
+    description:
+      "No lee ni cambia datos — le muestra al usuario un botón para abrir una pantalla de la app. Usar cuando pregunte dónde está algo, cómo hacer algo en la app o pida ir a una pantalla. No usar después de una escritura (esas ya muestran su propia tarjeta).",
+    input_schema: {
+      type: "object",
+      properties: {
+        screen: {
+          type: "string",
+          enum: CLAVES_PANTALLAS,
+          description: "Clave de la pantalla a abrir, de la lista de Pantallas de la app.",
+        },
+      },
+      required: ["screen"],
+    },
+  },
+  {
     name: "set_avatar_mood",
     description:
       "No consulta ni cambia datos — le indica a la interfaz qué expresión mostrar en el avatar de vita mientras responde. Llamala SIEMPRE, en cada respuesta, además de cualquier otra tool que uses. Elegí el mood según el CONTENIDO de tu respuesta, nunca por palabras clave sueltas: 'happy' para buenas noticias, felicitaciones o logros del usuario; 'empathetic' si el usuario expresa preocupación, tristeza, dolor o dificultad; 'alert' SOLO si hay algo que de verdad requiere atención especial (una dosis vencida hace rato, un dato de salud que suena serio) — no lo uses para avisos triviales; 'calm' cuando estés acompañando o tranquilizando al usuario; 'neutral' para el resto (información de rutina, confirmaciones simples). No exageres: la mayoría de las respuestas son 'neutral'.",
@@ -248,6 +270,35 @@ export const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const PROPIEDAD_PERSONA = {
+  type: "string",
+  description:
+    "Id de la persona sobre la que actuar, tomado EXACTAMENTE de la lista de Personas del contexto. Omitir = quien está chateando.",
+} as const;
+
+const PROPIEDAD_CONFIRMADO = {
+  type: "boolean",
+  description:
+    "Solo para escribir en OTRA persona: true si el usuario ya confirmó explícitamente, en un mensaje anterior, esta acción exacta para esa persona. Es solo una indicación: el servidor exige su propia confirmación (botones que la app le muestra al usuario) y no ejecuta nada sin ella. No preguntes por texto antes de llamar a la tool: llamala directo con persona_id y el servidor pide la confirmación.",
+} as const;
+
+// Suma `persona_id` (y `confirmado` en las de escritura) a las tools con destino.
+export const TOOLS: Anthropic.Tool[] = TOOLS_BASE.map((t) => {
+  if (!TOOLS_CON_DESTINO.has(t.name)) return t;
+  const schema = t.input_schema as { properties?: Record<string, unknown> };
+  return {
+    ...t,
+    input_schema: {
+      ...t.input_schema,
+      properties: {
+        ...(schema.properties ?? {}),
+        persona_id: PROPIEDAD_PERSONA,
+        ...(TOOLS_DE_ESCRITURA.has(t.name) ? { confirmado: PROPIEDAD_CONFIRMADO } : {}),
+      },
+    },
+  };
+});
+
 export type AccionUI = { type: string; [clave: string]: unknown };
 
 export type ResultadoTool = {
@@ -255,7 +306,43 @@ export type ResultadoTool = {
   accionUI?: AccionUI; // si corresponde, se emite como evento SSE {action}
 };
 
+export type ContextoTool = {
+  supabase: SupabaseClient;
+  /** El usuario logueado (quien chatea). */
+  usuarioId: string;
+  /** Personas que cuida (listar_familia): único universo válido para `persona_id`. */
+  familia: MiembroFamilia[];
+  /** Perfil de un familiar abierto en pantalla (ya validado contra `familia`), si lo hay. */
+  abiertoId?: string;
+};
+
 export async function ejecutarTool(
+  nombre: string,
+  input: Record<string, unknown>,
+  ctx: ContextoTool
+): Promise<ResultadoTool> {
+  const destino = resolverDestino(nombre, input, ctx);
+  if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
+  // Defensa en profundidad: quien llama (pedidos.ts) ya exigió la confirmación
+  // del servidor y recién ahí pasa `confirmado: true`.
+  if (destino.requiereConfirmacion && input.confirmado !== true) {
+    return {
+      contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona"),
+      accionUI: opcionesConfirmarPara(destino.persona ?? "esa persona"),
+    };
+  }
+
+  const resultado = await ejecutarEnDestino(nombre, input, { supabase: ctx.supabase, usuarioId: destino.destinoId });
+  // Las tarjetas/toasts de una escritura en otra persona dicen para quién.
+  if (destino.persona && resultado.accionUI) {
+    return { ...resultado, accionUI: { ...resultado.accionUI, persona: destino.persona } };
+  }
+  return resultado;
+}
+
+// `usuarioId` acá ya es el DESTINO validado (el propio usuario o un miembro de
+// su familia): los núcleos de dominio filtran por él y la RLS decide el resto.
+async function ejecutarEnDestino(
   nombre: string,
   input: Record<string, unknown>,
   ctx: { supabase: SupabaseClient; usuarioId: string }
@@ -312,7 +399,7 @@ export async function ejecutarTool(
         String(input.medication_name),
         input.medication_time_hint as string | undefined
       );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
+      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
 
       const indicacion = leerIndicacionDelModelo(input.meal_indication);
       if (indicacion === "invalida") return { contenido: ERROR_INDICACION };
@@ -333,7 +420,7 @@ export async function ejecutarTool(
         // Solo se toca si el modelo la manda ("none" la borra); mover la hora no la cambia.
         indicacion,
       });
-      return { contenido: JSON.stringify(paraModelo(actualizado)) };
+      return { contenido: JSON.stringify(paraModelo(actualizado)), accionUI: { type: "schedule_updated" } };
     }
 
     case "delete_schedule": {
@@ -343,10 +430,10 @@ export async function ejecutarTool(
         String(input.medication_name),
         input.medication_time_hint as string | undefined
       );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
+      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
 
       await medicamentos.eliminarHorario(supabase, usuarioId, medicamento.id);
-      return { contenido: `Eliminado "${medicamento.nombre}".`, accionUI: { type: "medication_deleted" } };
+      return { contenido: `Eliminado "${limpiarDato(medicamento.nombre)}".`, accionUI: { type: "medication_deleted" } };
     }
 
     case "mark_taken": {
@@ -356,11 +443,11 @@ export async function ejecutarTool(
         String(input.medication_name),
         input.medication_time_hint as string | undefined
       );
-      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${input.medication_name}".` };
+      if (!medicamento) return { contenido: `No encontré un medicamento llamado "${limpiarDato(String(input.medication_name))}".` };
 
       await medicamentos.marcarTomado(supabase, usuarioId, medicamento.id, true);
       return {
-        contenido: `Marcado "${medicamento.nombre}" como tomado.`,
+        contenido: `Marcado "${limpiarDato(medicamento.nombre)}" como tomado.`,
         accionUI: { type: "medication_taken", medication_name: medicamento.nombre },
       };
     }
@@ -394,7 +481,7 @@ export async function ejecutarTool(
       return {
         contenido: JSON.stringify({
           id: creado.id,
-          specialty: creado.especialidad,
+          specialty: limpiarDato(creado.especialidad),
           date: creado.fecha,
           time: creado.hora,
         }),
@@ -414,9 +501,9 @@ export async function ejecutarTool(
         contenido: JSON.stringify(
           deHoy.map((t) => ({
             id: t.id,
-            specialty: t.especialidad,
-            professional: t.profesional,
-            place: t.lugar,
+            specialty: limpiarDato(t.especialidad),
+            professional: t.profesional ? limpiarDato(t.profesional) : t.profesional,
+            place: t.lugar ? limpiarDato(t.lugar) : t.lugar,
             time: t.hora,
           }))
         ),
@@ -446,13 +533,13 @@ export async function ejecutarTool(
         tipo: input.type === "temporary" ? "temporal" : "permanente",
         desde: (input.since as string) ?? String(new Date().getFullYear()),
       });
-      return { contenido: `Condición "${label}" agregada.`, accionUI: { type: "condition_added", label } };
+      return { contenido: `Condición "${limpiarDato(label)}" agregada.`, accionUI: { type: "condition_added", label } };
     }
 
     case "add_allergy": {
       const nombre = String(input.name);
       await perfilNucleo.agregarAlergia(supabase, usuarioId, nombre);
-      return { contenido: `Alergia "${nombre}" agregada.`, accionUI: { type: "allergy_added", name: nombre } };
+      return { contenido: `Alergia "${limpiarDato(nombre)}" agregada.`, accionUI: { type: "allergy_added", name: nombre } };
     }
 
     case "show_today_medications":
@@ -460,6 +547,15 @@ export async function ejecutarTool(
 
     case "show_all_medications":
       return { contenido: "Mostrado.", accionUI: { type: "show_all_medications" } };
+
+    case "open_screen": {
+      // Solo claves del catálogo: nunca una ruta que arme el modelo.
+      const pantalla = pantallaPorClave(input.screen);
+      if (!pantalla) {
+        return { contenido: "Esa pantalla no existe en la app. Elegí una de la lista de Pantallas de la app." };
+      }
+      return { contenido: "Botón mostrado.", accionUI: { type: "open_screen", href: pantalla.ruta, label: pantalla.titulo } };
+    }
 
     case "set_avatar_mood": {
       const mood = String(input.mood ?? "neutral");
@@ -475,15 +571,18 @@ export async function ejecutarTool(
 
 // Traduce un medicamento al vocabulario en inglés de las tools antes de
 // devolverlo al modelo — mismo mapeo que usan los inputs, en la dirección
-// contraria.
+// contraria. Todo string que escribió un usuario pasa por limpiarDato (como el
+// contexto del prompt): un resultado de tool es DATO, nunca una instrucción.
+// (Esta rama no tiene tools de mediciones/estudios/listas de familia; si se
+// agregan, sus strings también van por limpiarDato.)
 function paraModelo(m: Medicamento | MedicamentoConToma) {
   return {
     id: m.id,
-    name: m.nombre,
-    dose: m.dosis,
+    name: limpiarDato(m.nombre),
+    dose: m.dosis ? limpiarDato(m.dosis, 20) : m.dosis,
     scheduled_time: m.hora_programada,
     time_of_day: momentoDiaAIngles(m.momento_dia),
-    condition: m.condicion,
+    condition: m.condicion ? limpiarDato(m.condicion) : m.condicion,
     recurring_days: diasAIngles(m.dias_recurrentes),
     meal_indication: indicacionDeComida(m),
     ...("tomado" in m ? { taken: m.tomado } : {}),

@@ -12,9 +12,8 @@ import * as turnosNucleo from "@/lib/turnos/nucleo";
 import { extraerNombreEdad } from "@/lib/onboarding/extraer";
 import { MEDICIONES_EN_CASA, type MedicionesEnCasa } from "@/lib/perfil/tipos";
 import type { ConComida } from "@/lib/medicamentos/tipos";
-import { MAX_TOMAS, normalizarComida } from "@/lib/medicamentos/formulario";
-import type { ComidaToma, IndicacionComida } from "@/lib/medicamentos/comidas";
-import { normalizarHora } from "@/lib/rutina/momento";
+import { normalizarTomas } from "@/lib/medicamentos/formulario";
+import type { IndicacionComida } from "@/lib/medicamentos/comidas";
 
 // Server Actions del onboarding conversacional nuevo — nunca lanzan (mismo
 // criterio que ../actions.ts), cada una atrapa lo que su función de
@@ -77,11 +76,13 @@ export async function crearPerfilFamiliarAction(datos: {
   nombre: string;
   relacion: string;
   edad: number | null;
+  /** Id del perfil creado en ESTA charla (lo guarda el cliente): único reusable en un reintento. */
+  reutilizarId?: string | null;
 }): Promise<ResultadoCrearFamiliar> {
   const usuario = await requireUser();
   const nombre = typeof datos?.nombre === "string" ? datos.nombre.trim() : "";
   if (!nombre) return { status: "error", message: "Escribí su nombre." };
-  const edad = datos.edad;
+  const edad = datos?.edad ?? null;
   if (edad !== null && (!Number.isInteger(edad) || edad < 0 || edad > EDAD_MAXIMA)) {
     return { status: "error", message: "La edad no es válida." };
   }
@@ -91,18 +92,25 @@ export async function crearPerfilFamiliarAction(datos: {
     if (familia.length >= MAXIMO_PERFILES_A_CARGO) {
       return { status: "error", message: `Ya tenés ${MAXIMO_PERFILES_A_CARGO} perfiles a cargo, el máximo por ahora.` };
     }
-    // Reintento tras una respuesta perdida: si ya existe esa misma persona
-    // (mismo nombre y relación, a cargo y sin celular conectado) se reusa en
-    // vez de abrir otra cuenta.
+    // Reintento dentro de la misma charla: solo se reusa el perfil que ESTA
+    // charla creó (id que devuelve el cliente), con el mismo nombre y
+    // relación, y mientras no tenga datos. Nunca por coincidencia de nombre:
+    // dos "Juan, hermano" distintos son dos personas.
     const relacion = typeof datos.relacion === "string" ? datos.relacion : null;
-    const existente = familia.find(
-      (m) =>
-        m.rol === "editar" &&
-        !m.conectado &&
-        m.nombre.trim().toLowerCase() === nombre.toLowerCase() &&
-        (m.relacion ?? null) === relacion
-    );
-    if (existente) return { status: "success", id: existente.id, color: existente.color ?? colorLibre([]) };
+    const existente =
+      typeof datos.reutilizarId === "string"
+        ? familia.find(
+            (m) =>
+              m.id === datos.reutilizarId &&
+              m.rol === "editar" &&
+              !m.conectado &&
+              m.nombre.trim().toLowerCase() === nombre.toLowerCase() &&
+              (m.relacion ?? null) === relacion
+          )
+        : undefined;
+    if (existente && (await perfilNucleo.perfilVacio(await createClient(), existente.id))) {
+      return { status: "success", id: existente.id, color: existente.color ?? colorLibre([]) };
+    }
 
     const color = colorLibre(familia.map((m) => m.color));
     const resultado = await familiaNucleo.crearPerfilGestionado(usuario.id, {
@@ -114,9 +122,17 @@ export async function crearPerfilFamiliarAction(datos: {
     });
     if (resultado.status === "error") return resultado;
     return { status: "success", id: resultado.id, color };
-  } catch {
+  } catch (e) {
+    console.error("[onboarding] crearPerfilFamiliarAction", e);
     return { status: "error", message: "No pudimos crear el perfil. Probá de nuevo." };
   }
+}
+
+const MENSAJE_GENERICO = "No pudimos guardarlo. Probá de nuevo.";
+
+function errorAmigable(contexto: string, e: unknown): { status: "error"; message: string } {
+  console.error(`[onboarding] ${contexto}`, e);
+  return { status: "error", message: MENSAJE_GENERICO };
 }
 
 /**
@@ -158,15 +174,7 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   // Borde del sistema: las tomas vienen del cliente, se validan como `leerTomas`.
   const nombre = typeof datos.nombre === "string" ? datos.nombre.trim() : "";
   if (!nombre) return { status: "error", message: "Falta el nombre del remedio." };
-  const vistas = new Set<string>();
-  const tomas: ({ hora: string } & ComidaToma)[] = [];
-  for (const t of Array.isArray(datos.tomas) ? datos.tomas : []) {
-    if (tomas.length >= MAX_TOMAS) break;
-    const hora = normalizarHora(String(t?.hora));
-    if (!hora || vistas.has(hora)) continue;
-    vistas.add(hora);
-    tomas.push({ hora, ...normalizarComida(t.conComida, t.indicacion) });
-  }
+  const tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
   if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
 
   try {
@@ -178,7 +186,7 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
       frecuencia: datos.frecuencia,
     });
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarMedicamentoPropioAction", e);
   }
 
   return { status: "success" };
@@ -204,7 +212,7 @@ export async function guardarCondicionesPropiasAction(labels: string[], personaI
       });
     }
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarCondicionesPropiasAction", e);
   }
   return { status: "success" };
 }
@@ -219,7 +227,7 @@ export async function guardarAlergiasPropiasAction(alergias: string[], personaId
       await perfilNucleo.agregarAlergia(supabase, destino.id, alergia);
     }
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarAlergiasPropiasAction", e);
   }
   return { status: "success" };
 }
@@ -240,18 +248,18 @@ export async function guardarTurnoPropioAction(
   if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
 
-  const especialidad = datos.especialidad.trim();
+  const especialidad = typeof datos?.especialidad === "string" ? datos.especialidad.trim() : "";
   if (!especialidad) return { status: "error", message: "Faltan datos del turno." };
 
   try {
     await turnosNucleo.agregar(supabase, destino.id, {
       especialidad,
-      fecha: datos.fecha,
-      hora: datos.hora,
-      lugar: datos.lugar?.trim() || null,
+      fecha: String(datos.fecha),
+      hora: String(datos.hora),
+      lugar: typeof datos.lugar === "string" ? datos.lugar.trim() || null : null,
     });
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarTurnoPropioAction", e);
   }
   return { status: "success" };
 }
@@ -267,7 +275,7 @@ export async function guardarMedicionesEnCasaAction(valor: MedicionesEnCasa, per
   try {
     await perfilNucleo.guardarMedicionesEnCasa(supabase, destino.id, valor);
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarMedicionesEnCasaAction", e);
   }
   return { status: "success" };
 }
@@ -279,7 +287,7 @@ export async function marcarUsoAmbosAction(): Promise<EstadoAccion> {
   try {
     await perfilNucleo.guardarUsoApp(supabase, usuario.id, "ambos");
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("marcarUsoAmbosAction", e);
   }
   return { status: "success" };
 }
@@ -295,7 +303,7 @@ export async function finalizarOnboardingAction(): Promise<EstadoAccion | void> 
   try {
     await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("finalizarOnboardingAction", e);
   }
   redirect("/onboarding/permiso");
 }

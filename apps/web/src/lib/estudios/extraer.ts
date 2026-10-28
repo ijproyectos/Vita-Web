@@ -5,11 +5,12 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { TIPO_PDF, type DatosExtraidos } from "./tipos";
 import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
+import { MODELO_IA } from "@/lib/ai/modelo";
 
 // Único punto de contacto con Anthropic para esto — mismo criterio que
 // generar-plan.ts de NutrIA (server-only, un archivo, salida estructurada
 // vía zod en vez de texto libre sin validar).
-const MODEL = "claude-sonnet-5";
+const MODEL = MODELO_IA;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

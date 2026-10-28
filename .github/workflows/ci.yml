@@ -55,5 +55,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Unit tests of the pure logic (Vitest, node environment, no network).
+      - name: Test
+        run: npm test
+
       - name: Production build
         run: npm run build

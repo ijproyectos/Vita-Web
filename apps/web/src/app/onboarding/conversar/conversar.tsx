@@ -241,7 +241,7 @@ export function ConversarOnboarding({ usoApp }: { usoApp: UsoApp }) {
     if (creandoPerfil.current) return;
     creandoPerfil.current = true;
     setEscribiendo(true);
-    const creado = await crearPerfilFamiliarAction({ nombre, relacion, edad }).catch(
+    const creado = await crearPerfilFamiliarAction({ nombre, relacion, edad, reutilizarId: personaId }).catch(
       () => ({ status: "error", message: "revisá tu conexión e intentá de nuevo" }) as const
     );
     setEscribiendo(false);

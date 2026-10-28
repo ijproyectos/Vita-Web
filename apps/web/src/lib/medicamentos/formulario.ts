@@ -19,17 +19,23 @@ export function normalizarComida(conComida: unknown, indicacion: unknown): Comid
   return { conComida: COMIDAS_VALIDAS.includes(conComida as ConComida) ? (conComida as ConComida) : "no-importa", indicacion: null };
 }
 
+/** Valida una lista de tomas cruda (hora + comida): normaliza la hora, descarta inválidas y repetidas y aplica MAX_TOMAS. */
+export function normalizarTomas(crudas: { hora: unknown; conComida?: unknown; indicacion?: unknown }[]): ({ hora: string } & ComidaToma)[] {
+  const vistas = new Set<string>();
+  const tomas: ({ hora: string } & ComidaToma)[] = [];
+  for (const t of crudas) {
+    if (tomas.length >= MAX_TOMAS) break;
+    const hora = normalizarHora(String(t?.hora));
+    if (!hora || vistas.has(hora)) continue;
+    vistas.add(hora);
+    tomas.push({ hora, ...normalizarComida(t.conComida, t.indicacion) });
+  }
+  return tomas;
+}
+
 export function leerTomas(formData: FormData): ({ hora: string } & ComidaToma)[] {
   const horas = formData.getAll("tomaHora").map(String);
   const comidas = formData.getAll("tomaComida").map(String);
   const indicaciones = formData.getAll("tomaIndicacion").map(String);
-  const vistas = new Set<string>();
-  const tomas: ({ hora: string } & ComidaToma)[] = [];
-  for (let i = 0; i < horas.length && tomas.length < MAX_TOMAS; i++) {
-    const hora = normalizarHora(horas[i]);
-    if (!hora || vistas.has(hora)) continue;
-    vistas.add(hora);
-    tomas.push({ hora, ...normalizarComida(comidas[i], indicaciones[i]) });
-  }
-  return tomas;
+  return normalizarTomas(horas.map((hora, i) => ({ hora, conComida: comidas[i], indicacion: indicaciones[i] })));
 }
