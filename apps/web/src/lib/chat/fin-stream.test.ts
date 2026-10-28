@@ -9,6 +9,6 @@ describe("clasificarFinDeStream", () => {
     expect(clasificarFinDeStream({ recibioDone: false, huboError: false })).toBe("interrumpido");
   });
   it("does not double-report when an error event was already handled", () => {
-    expect(clasificarFinDeStream({ recibioDone: false, huboError: true })).toBe("completo");
+    expect(clasificarFinDeStream({ recibioDone: false, huboError: true })).toBe("error_reportado");
   });
 });

@@ -28,7 +28,7 @@ import {
   type HorarioMedicamento,
 } from "./duplicados";
 import { ajustarStock, buscarInventarioId } from "@/lib/inventario/nucleo";
-import { claveMedicamento } from "@/lib/inventario/tipos";
+import { claveMedicamento, separarDosis } from "@/lib/inventario/tipos";
 import { momentoDelDia } from "@/lib/rutina/momento";
 
 // Núcleo de lógica de medicamentos, sin acoplarse a Server Actions ni al
@@ -361,10 +361,18 @@ function columnasComida(t: { conComida?: ConComida; indicacion?: IndicacionComid
   return { con_comida: t.indicacion ? conComidaDeIndicacion(t.indicacion) : t.conComida ?? "no-importa", indicacion: t.indicacion ?? null };
 }
 
-/** Rows of one group (several takes of one medicine) share name and dose. */
+/**
+ * Rows of one group (several takes of one medicine) share the medicine identity:
+ * name without case, accents or extra spaces plus the numeric dose only
+ * ("50", "50 mg" and "50,0" are the same dose). The same key the stock uses.
+ */
+function claveGrupo(m: Medicamento): string {
+  const nombre = m.nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+  return claveMedicamento(nombre, separarDosis(m.dosis).valor);
+}
+
 function mismoGrupo(filas: Medicamento[]): boolean {
-  const clave = (m: Medicamento) => `${m.nombre.trim().replace(/\s+/g, " ").toLowerCase()}|${(m.dosis ?? "").trim()}|${m.unidad}`;
-  return new Set(filas.map(clave)).size === 1;
+  return new Set(filas.map(claveGrupo)).size === 1;
 }
 
 function comprobarHorarios(
@@ -375,11 +383,21 @@ function comprobarHorarios(
   const normalizados = candidatos.map(normalizarHorarioMedicamento);
   const excluidos = new Set(excluirIds);
   const nombres = new Set(normalizados.map((m) => m.nombre));
-  const previos = existentes
-    .filter((m) => !excluidos.has(m.id) && nombres.has(normalizarNombreMedicamento(m.nombre)))
-    .map((m) => normalizarHorarioMedicamento({
-      nombre: m.nombre, horaProgramada: m.hora_programada, diasRecurrentes: m.dias_recurrentes,
-    }));
+  // Existing rows are legacy data: normalize them leniently and skip the ones
+  // that cannot be compared (blank name, bad hour or days). Only the incoming
+  // data is validated strictly, so one bad old row never blocks unrelated writes.
+  const previos = existentes.flatMap((m) => {
+    if (excluidos.has(m.id)) return [];
+    try {
+      if (!nombres.has(normalizarNombreMedicamento(m.nombre))) return [];
+      return [normalizarHorarioMedicamento({
+        nombre: m.nombre, horaProgramada: m.hora_programada, diasRecurrentes: m.dias_recurrentes,
+      })];
+    } catch (e) {
+      if (e instanceof ErrorEntradaMedicamento) return [];
+      throw e;
+    }
+  });
   for (let i = 0; i < normalizados.length; i++) {
     if ([...previos, ...normalizados.slice(0, i)].some((m) => horariosCoinciden(normalizados[i], m))) {
       throw new ErrorHorarioMedicamentoDuplicado();
@@ -627,9 +645,17 @@ export async function actualizarGrupo(
   // Las escrituras del grupo son requests separados. Un horario que todavía
   // ocupa otra fila propia no puede reutilizarse sin una transacción conjunta.
   // Rechazar antes de escribir evita que la exclusión DB deje cambios parciales.
-  if (tomas.some((t, i) => filas.some((f) => f.id !== t.id && horariosCoinciden(candidatos[i], {
-    nombre: f.nombre, horaProgramada: f.hora_programada, diasRecurrentes: f.dias_recurrentes,
-  })))) {
+  const coincide = (i: number, f: Medicamento) => {
+    try {
+      return horariosCoinciden(candidatos[i], {
+        nombre: f.nombre, horaProgramada: f.hora_programada, diasRecurrentes: f.dias_recurrentes,
+      });
+    } catch (e) {
+      if (e instanceof ErrorEntradaMedicamento) return false; // legacy row that cannot be compared
+      throw e;
+    }
+  };
+  if (tomas.some((t, i) => filas.some((f) => f.id !== t.id && coincide(i, f)))) {
     throw new Error("Ese horario todavía pertenece a otra toma del grupo. Guardá primero un horario libre y después completá el cambio.");
   }
 

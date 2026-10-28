@@ -311,6 +311,7 @@ export function VitaChatOverlay({
     let fallo = false;
     let recibioDone = false;
     let huboErrorEvento = false;
+    let cortado = false;
     setMensajes((prev) =>
       pedidoReintentado
         ? [
@@ -494,6 +495,7 @@ export function VitaChatOverlay({
       // respuesta quedó cortada. Se conserva el texto parcial, se marca y se ofrece Reintentar.
       if (clasificarFinDeStream({ recibioDone, huboError: huboErrorEvento }) === "interrumpido") {
         fallo = true;
+        cortado = true;
         toast.error("La respuesta se cortó. Podés reintentar.");
       }
 
@@ -516,10 +518,11 @@ export function VitaChatOverlay({
           const sinHueco = prev.length > 0 && prev[prev.length - 1].role === "assistant" && !prev[prev.length - 1].content
             ? prev.slice(0, -1)
             : prev;
-          // Con texto parcial, la burbuja de vita se conserva y queda marcada como cortada.
+          // Con texto parcial, la burbuja de vita se conserva y queda marcada como cortada,
+          // solo si el stream se cortó de verdad (no ante un evento de error explícito).
           const marcado = sinHueco.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: true } : m));
           const ultimo = marcado[marcado.length - 1];
-          if (textoAcumulado && ultimo?.role === "assistant" && ultimo.content) {
+          if (cortado && textoAcumulado && ultimo?.role === "assistant" && ultimo.content) {
             marcado[marcado.length - 1] = { ...ultimo, interrumpido: true };
           }
           return marcado;

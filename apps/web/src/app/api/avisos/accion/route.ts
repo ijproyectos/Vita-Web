@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { marcarTomado } from "@/lib/medicamentos/nucleo";
+import { aplicaEnDia, diaSemanaDe, marcarTomado } from "@/lib/medicamentos/nucleo";
 import { posponerDosis } from "@/lib/notificaciones/avisos";
 import { validarFechaAccion } from "@/lib/notificaciones/fecha-accion";
 
@@ -74,12 +74,15 @@ export async function POST(request: Request) {
     // acá solo vale la dosis PROPIA.
     const { data: propia, error: errorPropia } = await supabase
       .from("medicamentos")
-      .select("id")
+      .select("id, dias_recurrentes")
       .eq("id", medicamentoId)
       .eq("usuario_id", user.id)
       .maybeSingle();
     if (errorPropia) return NextResponse.json({ error: "No pudimos verificar la dosis." }, { status: 500 });
     if (!propia) return NextResponse.json({ error: "Dosis no encontrada." }, { status: 404 });
+    if (validacion.inferida && !aplicaEnDia({ dias_recurrentes: propia.dias_recurrentes ?? [] }, diaSemanaDe(new Date()))) {
+      return NextResponse.json({ error: "Esta notificación ya no corresponde a una dosis pendiente." }, { status: 409 });
+    }
 
     if (accion === "tomada") {
       // marcarTomado devuelve void y LANZA ante cualquier error de DB: el catch

@@ -29,7 +29,8 @@ with base as (
         select array_position(array['lunes','martes','miercoles','jueves','viernes','sabado','domingo'], d) - 1
         from unnest(m.dias_recurrentes) as d)
     end as dias_idx,
-    (cardinality(m.dias_recurrentes) > 0 and exists (
+    -- 040: medicamento_dias_clave(NULL) es NULL (función strict) y el CHECK la rechaza.
+    m.dias_recurrentes is null or (cardinality(m.dias_recurrentes) > 0 and exists (
       select 1 from unnest(m.dias_recurrentes) as d
       where d is null or d <> all (array['lunes','martes','miercoles','jueves','viernes','sabado','domingo'])
     )) or coalesce(array_ndims(m.dias_recurrentes), 1) <> 1 as dias_invalidos

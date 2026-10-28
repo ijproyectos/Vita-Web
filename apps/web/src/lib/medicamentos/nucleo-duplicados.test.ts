@@ -153,6 +153,21 @@ describe("núcleo impide duplicados antes de mutar", () => {
     expect(db.mutaciones).toEqual([]);
     expect(buscarInventarioId).not.toHaveBeenCalled();
   });
+  it("a legacy row with blank name or bad hour does not block unrelated writes", async () => {
+    const db = baseFalsa([fila({ id: "x1", nombre: "   ", hora_programada: "08:00" }), fila({ id: "x2", nombre: "Losartán", hora_programada: "99:99" })]);
+    await agregar(db.cliente, "persona", { ...alta, horaProgramada: "09:00" });
+    expect(db.mutaciones).toHaveLength(1);
+  });
+  it("grupo accepts accent, spacing and dose-format variants but rejects another dose", async () => {
+    const tomas = [{ id: "m1", hora: "08:00", conComida: "con" as const }, { id: "m2", hora: "20:00", conComida: "con" as const }];
+    const datos = { nombre: "Losartan", dosis: "50", unidad: "mg", tomas };
+    const ok = baseFalsa([fila(), fila({ id: "m2", nombre: " losartán  ", dosis: "50 mg", hora_programada: "20:00" })]);
+    await actualizarGrupo(ok.cliente, "persona", ["m1", "m2"], datos);
+    expect(ok.mutaciones.length).toBeGreaterThan(0);
+    const mal = baseFalsa([fila(), fila({ id: "m2", dosis: "100", hora_programada: "20:00" })]);
+    await expect(actualizarGrupo(mal.cliente, "persona", ["m1", "m2"], datos)).rejects.toThrow("cambió");
+    expect(mal.mutaciones).toEqual([]);
+  });
   it("una hora histórica inválida de otro nombre no bloquea el alta", async () => {
     const db = baseFalsa([fila({ nombre: "Otro", hora_programada: "99:99" })]);
     await agregar(db.cliente, "persona", alta);

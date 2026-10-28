@@ -224,10 +224,9 @@ export function PinPausado({ motivo, onBorrarPin }: { motivo: "agotado" | "olvid
           Los avisos de remedios y turnos siguen sonando, sin mostrar detalles.
         </p>
       </div>
-      <FormCerrarSesion>
+      <FormCerrarSesion antesDeSalir={onBorrarPin}>
         <button
           type="submit"
-          onClick={onBorrarPin}
           className="h-14 w-full rounded-full bg-primary font-heading text-base font-extrabold text-primary-foreground shadow-cta"
         >
           Volver a entrar
