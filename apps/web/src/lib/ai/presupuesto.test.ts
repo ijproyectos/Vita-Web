@@ -43,9 +43,12 @@ describe("presupuesto de tiempo", () => {
     expect(textoCortePorTiempo(2)).toContain("ya quedó guardado");
   });
   it("usoParcial suma lo que el stream ya reportó y es robusto", () => {
-    expect(usoParcial({ usage: { input_tokens: 120, output_tokens: 8 } })).toEqual({ input: 120, output: 8 });
-    expect(usoParcial(undefined)).toEqual({ input: 0, output: 0 });
-    expect(usoParcial({ usage: { input_tokens: Number.NaN, output_tokens: -3 } })).toEqual({ input: 0, output: 0 });
-    expect(usoParcial({})).toEqual({ input: 0, output: 0 });
+    expect(usoParcial({ usage: { input_tokens: 120, output_tokens: 8 } })).toEqual({ input: 120, output: 8, cacheRead: 0, cacheWrite: 0 });
+    expect(usoParcial(undefined)).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+    expect(usoParcial({ usage: { input_tokens: Number.NaN, output_tokens: -3 } })).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+    expect(
+      usoParcial({ usage: { input_tokens: 5, output_tokens: 1, cache_read_input_tokens: 4000, cache_creation_input_tokens: null } })
+    ).toEqual({ input: 5, output: 1, cacheRead: 4000, cacheWrite: 0 });
+    expect(usoParcial({})).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
   });
 });

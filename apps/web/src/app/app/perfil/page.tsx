@@ -147,7 +147,7 @@ export default async function PerfilPage() {
             </div>
             <BarraUso uso={uso} />
             <div className="text-[11.5px] font-medium text-subtle">
-              {uso.usados.toLocaleString("es-AR")} de {uso.limite.toLocaleString("es-AR")} tokens usados hoy
+              {uso.porcentajeUsado}% de tu cupo de hoy usado
             </div>
           </div>
         )}

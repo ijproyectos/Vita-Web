@@ -70,11 +70,29 @@ export function textoCortePorTiempo(escriturasHechas: number): string {
 }
 
 /** Tokens parciales de una llamada que se cortó (snapshot del stream), o 0 si no hay. */
-export function usoParcial(mensaje: { usage?: { input_tokens?: number; output_tokens?: number } } | undefined): {
+export function usoParcial(
+  mensaje:
+    | {
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_input_tokens?: number | null;
+          cache_creation_input_tokens?: number | null;
+        };
+      }
+    | undefined
+): {
   input: number;
   output: number;
+  cacheRead: number;
+  cacheWrite: number;
 } {
   const u = mensaje?.usage;
   const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : 0);
-  return { input: n(u?.input_tokens), output: n(u?.output_tokens) };
+  return {
+    input: n(u?.input_tokens),
+    output: n(u?.output_tokens),
+    cacheRead: n(u?.cache_read_input_tokens),
+    cacheWrite: n(u?.cache_creation_input_tokens),
+  };
 }
