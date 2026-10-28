@@ -3,6 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { usoDeAnthropic } from "@/lib/uso-ia/tipos";
 import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { STOCK_MAXIMO, acotarEntero } from "./tipos";
 import { MODELO_IA } from "@/lib/ai/modelo";
@@ -153,10 +154,7 @@ export async function contarPastillasEnFoto(
       output_config: { format: zodOutputFormat(ConteoSchema) },
     });
 
-    await registrarUsoIA(usuarioId, {
-      inputTokens: mensaje.usage.input_tokens,
-      outputTokens: mensaje.usage.output_tokens,
-    });
+    await registrarUsoIA(usuarioId, usoDeAnthropic(mensaje.usage));
 
     if (!mensaje.parsed_output) {
       return { ok: false, error: "No pude interpretar la foto. Cargá la cantidad a mano." };

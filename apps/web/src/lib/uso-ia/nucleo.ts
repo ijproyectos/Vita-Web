@@ -2,7 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fechaISOEnAR } from "@/lib/rutina/formato";
-import { calcularUso, type UsoDiarioConEstado } from "./tipos";
+import { calcularUso, tokensEntradaPonderados, tokensPonderados, type UsoDiarioConEstado, type UsoTokens } from "./tipos";
 
 // Límite diario de tokens de Anthropic por usuario — pedido explícito del
 // usuario tras quedarse sin crédito, para que una sola cuenta no pueda
@@ -85,7 +85,8 @@ export async function verificarLimiteDiario(usuarioId: string): Promise<Resultad
 
 /**
  * Suma el uso REAL de una llamada a Anthropic (los tokens que la propia
- * respuesta de la API informa, nunca una estimación) a la fila del día
+ * respuesta de la API informa, nunca una estimación) a la fila del día,
+ * ponderado por costo (caché: escritura 1.25x, lectura 0.1x; ver tipos.ts)
  * para este usuario. Lectura-antes-de-escribir, no una suma atómica en
  * SQL — aceptable para la escala real de este proyecto (un puñado de
  * usuarios, sin llamadas concurrentes de la misma persona en el mismo
@@ -96,7 +97,7 @@ export async function verificarLimiteDiario(usuarioId: string): Promise<Resultad
  */
 export async function registrarUsoIA(
   usuarioId: string,
-  uso: { inputTokens: number; outputTokens: number }
+  uso: UsoTokens
 ): Promise<UsoDiarioConEstado | null> {
   try {
     const admin = createAdminClient();
@@ -109,8 +110,8 @@ export async function registrarUsoIA(
       .eq("fecha", fecha)
       .maybeSingle();
 
-    const tokensInput = (existente?.tokens_input ?? 0) + uso.inputTokens;
-    const tokensOutput = (existente?.tokens_output ?? 0) + uso.outputTokens;
+    const tokensInput = (existente?.tokens_input ?? 0) + tokensEntradaPonderados(uso);
+    const tokensOutput = (existente?.tokens_output ?? 0) + (tokensPonderados(uso) - tokensEntradaPonderados(uso));
 
     const { error } = await admin.from("uso_ia_diario").upsert({
       usuario_id: usuarioId,
