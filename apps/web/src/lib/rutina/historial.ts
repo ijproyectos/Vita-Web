@@ -3,9 +3,9 @@
 // tomas y mediciones reales que le pasa el servidor. Nada se inventa — un día
 // sin medicamentos esperados no tiene punto.
 //
-// Las tomas se indexan por `medicamentos_tomas.fecha`, que se graba en UTC
-// (ver `fechaEnUTC` en lib/medicamentos/nucleo.ts); por eso "hoy" del
-// calendario es el día UTC, igual que en `listarHoy`.
+// Las tomas se indexan por `medicamentos_tomas.fecha`, que se graba en hora
+// AR (ver `fechaEnAR` en lib/medicamentos/nucleo.ts); por eso "hoy" del
+// calendario es el día AR, igual que en `listarHoy`.
 
 import { textoDosis, type DiaSemana, type Medicamento, type TomaRegistrada } from "@/lib/medicamentos/tipos";
 

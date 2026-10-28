@@ -4,7 +4,7 @@
 -- reclama una fila acá con clave única (usuario, pedido, clave de la acción).
 -- Si el usuario reintenta el mismo pedido y la fila ya existe, la acción NO se
 -- vuelve a ejecutar: se le devuelve al modelo el `resultado` guardado.
--- La clave = `destino~tool:campos que identifican la acción`, normalizados (ver claveSemantica en lib/chat/pedidos.ts); no el input entero,
+-- La clave = `destino~tool:campos que identifican la acción`, normalizados (ver claveSemantica en lib/chat/clave.ts); no el input entero,
 -- porque el modelo puede reformularlo en un reintento.
 
 create table acciones_agente (

@@ -61,10 +61,17 @@ export default async function HomePage() {
 
   // Dosis de hoy que ya pasaron de hora sin marcar.
   const ahora = medicamentos.horaEnAR();
-  const vencidas: DosisVencida[] = [...medsHoy]
-    .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
-    .filter((m) => !m.tomado && medicamentos.esDosisVencida(m.hora_programada, ahora, 0))
-    .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5) }));
+  const deAyer = await medicamentos.listarVencidasDeAyer(supabase, pid);
+  const vencidas: DosisVencida[] = [
+    // Hasta las 00:30 AR, las de ayer que quedaron sin tomar van primero.
+    ...[...deAyer]
+      .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
+      .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5), deAyer: true, fecha: medicamentos.fechaAyerEnAR() })),
+    ...[...medsHoy]
+      .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
+      .filter((m) => !m.tomado && medicamentos.esDosisVencida(m.hora_programada, ahora, 0))
+      .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5) })),
+  ];
 
   // Primera vez: ni remedios ni turnos cargados.
   const primeraVez = todosLosMeds.length === 0 && turnosProximos.length === 0;

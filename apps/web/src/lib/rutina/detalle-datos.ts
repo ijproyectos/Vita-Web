@@ -23,7 +23,7 @@ export async function cargarDatosDetalleMedicamento(
   perfilId: string,
   todosLosMeds: Medicamento[]
 ): Promise<DatosDetalleMedicamento> {
-  const hoy = medicamentos.fechaEnUTC();
+  const hoy = medicamentos.fechaEnAR();
   const [medsHoy, tomas, grupos] = await Promise.all([
     medicamentos.listarHoy(supabase, perfilId),
     medicamentos.listarTomasDesde(supabase, perfilId, inicioCalendario(hoy)),

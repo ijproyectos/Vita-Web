@@ -139,6 +139,7 @@ export function ajustarTomas(tomas: TomaForm[], cantidad: number): TomaForm[] {
 
 /** "Vita te recuerda a las 08:00 y 22:00 cada día." (D:5083) */
 export function textoRecordatorio(horas: string[], frecuencia: string): string {
+  if (horas.length === 0) return "Elegí un horario para que vita te recuerde.";
   const lista = horas.length <= 1 ? horas.join("") : `${horas.slice(0, -1).join(", ")} y ${horas[horas.length - 1]}`;
   return `Vita te recuerda a las ${lista}${frecuencia === "Única vez" ? " una sola vez." : " cada día."}`;
 }

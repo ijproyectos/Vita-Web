@@ -92,7 +92,7 @@ Adherencia — una fila por medicamento+fecha. Sin cambios respecto al pase ante
 | tomado | boolean | |
 | tomado_en | timestamptz | null si no se tomó |
 
-unique `(medicamento_id, fecha)`.
+unique `(medicamento_id, fecha)`. Desde la migración 032 `fecha` es la fecha de pared **AR** de la dosis (antes: fecha UTC del momento de marcar); la 032 migra las filas existentes y borra las de `tomado = false`.
 
 ## `turnos`
 
@@ -401,7 +401,7 @@ Código de re-ingreso de un solo uso (30 min desde el onboarding conversacional;
 | cuidador_id | uuid | references auth.users, on delete cascade; check `elder_id <> cuidador_id` |
 | codigo_hash | text | sha256 hex de `salt || código de 6 dígitos` |
 | salt | text | por fila |
-| expira_at | timestamptz | creación + 15 min |
+| expira_at | timestamptz | creación + 30 min |
 | usado_at | timestamptz | null hasta el canje |
 | created_at | timestamptz | |
 

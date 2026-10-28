@@ -116,8 +116,8 @@ describe("textoRecordatorio", () => {
   it("única vez", () => {
     expect(textoRecordatorio(["08:00"], "Única vez")).toBe("Vita te recuerda a las 08:00 una sola vez.");
   });
-  // Bug conocido: sin horas la frase queda con un hueco ("a las  cada día"). Pasarlo a it al arreglarlo.
-  it.fails("sin horas no deja la frase con hueco", () => {
-    expect(textoRecordatorio([], "1x día")).not.toContain("  ");
+  it("sin horas invita a elegir un horario, sin hueco en la frase", () => {
+    expect(textoRecordatorio([], "1x día")).toBe("Elegí un horario para que vita te recuerde.");
+    expect(textoRecordatorio([], "Única vez")).toBe("Elegí un horario para que vita te recuerde.");
   });
 });

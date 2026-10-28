@@ -20,9 +20,9 @@ export default async function RutinaPage() {
   const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
   const pid = activo.id;
 
-  // Las tomas se indexan por fecha UTC (ver lib/rutina/historial.ts): "hoy"
+  // Las tomas se indexan por fecha AR (ver lib/rutina/historial.ts): "hoy"
   // del calendario es el mismo día que usa `listarHoy`.
-  const hoy = medicamentos.fechaEnUTC();
+  const hoy = medicamentos.fechaEnAR();
   const desde = inicioCalendario(hoy);
 
   const [medsHoy, todosLosMeds, turnosHoy, turnosProximos, adherencia, grupos, tomas, mediciones, recetas] = await Promise.all([

@@ -174,14 +174,16 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   // Borde del sistema: las tomas vienen del cliente, se validan como `leerTomas`.
   const nombre = typeof datos.nombre === "string" ? datos.nombre.trim() : "";
   if (!nombre) return { status: "error", message: "Falta el nombre del remedio." };
+  const dosis = typeof datos.dosis === "string" ? datos.dosis.trim() : "";
+  const unidad = typeof datos.unidad === "string" ? datos.unidad.trim() : "";
   const tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
   if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
 
   try {
     await medicamentosNucleo.agregarMultiMomento(supabase, destino.id, {
       nombre,
-      dosis: datos.dosis?.trim() || null,
-      unidad: datos.unidad?.trim() || "mg",
+      dosis: dosis || null,
+      unidad: unidad || "mg",
       tomas,
       frecuencia: datos.frecuencia,
     });

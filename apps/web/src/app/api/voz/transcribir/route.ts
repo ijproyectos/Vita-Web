@@ -33,11 +33,11 @@ export async function POST(request: Request) {
   if (archivo.size > MAX_BYTES_AUDIO) {
     return NextResponse.json({ error: "El audio es demasiado grande (máximo 10 MB)." }, { status: 413 });
   }
-  if (archivo.type && !archivo.type.startsWith("audio/")) {
+  if (!archivo.type.startsWith("audio/")) {
     return NextResponse.json({ error: "El archivo no es un audio." }, { status: 415 });
   }
 
-  const resultado = await transcribirAudio(archivo, archivo.type || "audio/webm");
+  const resultado = await transcribirAudio(archivo, archivo.type);
 
   if ("error" in resultado) {
     return NextResponse.json({ error: resultado.error }, { status: 502 });

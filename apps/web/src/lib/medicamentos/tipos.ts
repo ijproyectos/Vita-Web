@@ -54,7 +54,7 @@ export type Medicamento = {
 /** Una toma registrada (fila de `medicamentos_tomas`) para el historial y la semana del detalle. */
 export type TomaRegistrada = {
   medicamento_id: string;
-  /** "YYYY-MM-DD", en UTC (mismo criterio que `listarHoy`). */
+  /** "YYYY-MM-DD", en hora AR (mismo criterio que `listarHoy`). */
   fecha: string;
   tomado: boolean;
   tomado_en: string | null;
