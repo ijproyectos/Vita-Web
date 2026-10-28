@@ -39,6 +39,42 @@
 --            and fecha <> (tomado_en at time zone 'America/Argentina/Buenos_Aires')::date) as a_mover
 --   from medicamentos_tomas;
 -- La migración emite además NOTICEs con esos conteos y los de duplicados.
+--
+-- RUNBOOK (aplicar por psql, nunca `supabase db push` a ciegas):
+--   1. Ventana segura: fuera de 00:00-00:30 AR (ver arriba) y con el código
+--      nuevo listo para desplegar enseguida.
+--   2. Pre-flight (solo lectura), guardar la salida:
+--        select count(*) as total,
+--               count(*) filter (where not tomado) as a_borrar,
+--               count(*) filter (where tomado and tomado_en is not null
+--                 and fecha <> (tomado_en at time zone 'America/Argentina/Buenos_Aires')::date) as a_mover
+--        from medicamentos_tomas;
+--   3. Backup (obligatorio, ANTES de aplicar; fuera de esta transacción):
+--        create table medicamentos_tomas_bak_032 as select * from medicamentos_tomas;
+--        alter table medicamentos_tomas_bak_032 enable row level security;
+--      (sin policies: son datos de salud y la tabla queda en `public`, expuesta
+--      a la API REST si no tiene RLS.) Verificar que su count coincide con 2.
+--   4. Aplicar este archivo con `psql -v ON_ERROR_STOP=1 -f`. Es UNA sola
+--      transacción (begin...commit): si cualquier sentencia falla (el chequeo
+--      del DO, el unique al recrearse, etc.) TODO se revierte, DDL incluido, y
+--      la tabla queda como estaba; se corrige y se reintenta. Una vez
+--      confirmada NO volver a correrla a ciegas (el borrado de filas sin tomar
+--      y el descarte de duplicados solo se recuperan desde el backup).
+--      Registrarla a mano en supabase_migrations.schema_migrations.
+--   5. Rollback (post-commit), con el código viejo desplegado y fuera de la
+--      ventana:
+--        begin;
+--        lock table medicamentos_tomas in access exclusive mode;
+--        alter table medicamentos_tomas drop constraint medicamentos_tomas_medicamento_id_fecha_key;
+--        delete from medicamentos_tomas;
+--        insert into medicamentos_tomas select * from medicamentos_tomas_bak_032;
+--        alter table medicamentos_tomas
+--          add constraint medicamentos_tomas_medicamento_id_fecha_key unique (medicamento_id, fecha);
+--        commit;
+--      y re-aplicar la definición de `resumen_profesional` de 015. Las tomas
+--      marcadas después del backup se pierden con este rollback. Borrar el
+--      backup (drop table medicamentos_tomas_bak_032) recién cuando todo esté
+--      estable.
 
 begin;
 

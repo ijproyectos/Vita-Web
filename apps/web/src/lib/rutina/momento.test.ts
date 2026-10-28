@@ -3,21 +3,18 @@ import { momentoDelDia, normalizarHora, ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_
 
 describe("momentoDelDia", () => {
   it.each([
-    ["06:00", "mañana"],
-    ["10:59", "mañana"],
-    ["11:00", "mediodia"],
-    ["14:59", "mediodia"],
-    ["15:00", "tarde"],
-    ["18:59", "tarde"],
-    ["19:00", "noche"],
+    ["00:00", "noche"],
+    ["06:59", "noche"],
+    ["07:00", "mañana"],
+    ["11:59", "mañana"],
+    ["12:00", "mediodia"],
+    ["13:59", "mediodia"],
+    ["14:00", "tarde"],
+    ["19:59", "tarde"],
+    ["20:00", "noche"],
     ["23:59", "noche"],
   ])("%s -> %s (límites de rango)", (hora, esperado) => {
     expect(momentoDelDia(hora)).toBe(esperado);
-  });
-
-  it("la madrugada (00–05) cae en noche", () => {
-    expect(momentoDelDia("00:00")).toBe("noche");
-    expect(momentoDelDia("05:59")).toBe("noche");
   });
 
   it("acepta horas sin cero a la izquierda", () => {

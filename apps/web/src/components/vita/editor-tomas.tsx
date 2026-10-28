@@ -29,11 +29,11 @@ export function EditorTomas({
       <SelectorHora
         abierto={editando !== null}
         hora={actual?.hora ?? "08:00"}
-        conComida={actual?.conComida ?? "no-importa"}
+        comida={{ conComida: actual?.conComida ?? "no-importa", indicacion: actual?.indicacion ?? null }}
         conComidas
         onCerrar={() => setEditando(null)}
-        onConfirmar={(hora, conComida) => {
-          onCambio(tomas.map((t, i) => (i === editando ? { ...t, hora, conComida } : t)));
+        onConfirmar={(hora, comida) => {
+          onCambio(tomas.map((t, i) => (i === editando ? { ...t, hora, ...comida } : t)));
           setEditando(null);
         }}
       />

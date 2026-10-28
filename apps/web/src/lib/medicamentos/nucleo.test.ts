@@ -252,3 +252,38 @@ describe("marcarTomado graba la fecha AR", () => {
     }
   });
 });
+
+describe("agregar: degradación sin la columna `indicacion` (migración 031 sin aplicar)", () => {
+  function clienteFalso(respuestas: { data: unknown; error: { code?: string; message: string } | null }[]) {
+    const inserts: Record<string, unknown>[] = [];
+    const from = () => ({
+      insert: (fila: Record<string, unknown>) => {
+        inserts.push(fila);
+        const r = respuestas.shift()!;
+        return { select: () => ({ single: async () => r }) };
+      },
+    });
+    return { cliente: { from } as never, inserts };
+  }
+  const datos = { nombre: "Enalapril", horaProgramada: "08:00", momentoDia: "mañana" as const, indicacion: "con-desayuno" as const };
+
+  it("reintenta sin `indicacion` y conserva con_comida derivado", async () => {
+    const { agregar } = await import("./nucleo");
+    const { cliente, inserts } = clienteFalso([
+      { data: null, error: { code: "PGRST204", message: "Could not find the 'indicacion' column of 'medicamentos'" } },
+      { data: { id: "m1" }, error: null },
+    ]);
+    await expect(agregar(cliente, "u1", datos)).resolves.toEqual({ id: "m1" });
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0].indicacion).toBe("con-desayuno");
+    expect("indicacion" in inserts[1]).toBe(false);
+    expect(inserts[1].con_comida).toBe("con");
+  });
+
+  it("otro error no se reintenta y se propaga", async () => {
+    const { agregar } = await import("./nucleo");
+    const { cliente, inserts } = clienteFalso([{ data: null, error: { code: "23505", message: "duplicate key" } }]);
+    await expect(agregar(cliente, "u1", datos)).rejects.toThrow(/No se pudo crear/);
+    expect(inserts).toHaveLength(1);
+  });
+});

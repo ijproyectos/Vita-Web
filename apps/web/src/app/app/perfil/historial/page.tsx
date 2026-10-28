@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { obtenerHistorial, type HistorialExportado } from "@/lib/exportar/nucleo";
 import { nombreCompleto } from "@/lib/perfil/tipos";
+import { indicacionDeComida } from "@/lib/medicamentos/tipos";
 import { rolSobre } from "@/lib/familia/perfil-activo";
 import { VitaWordmark } from "@/components/vita/v-mark";
 import { TopBar } from "../../top-bar";
@@ -30,12 +31,6 @@ function hora(iso: string | null | undefined): string {
 }
 
 const MOMENTOS: Record<string, string> = { mañana: "Mañana", mediodia: "Mediodía", tarde: "Tarde", noche: "Noche" };
-const COMIDAS: Record<string, string> = {
-  antes: "Antes de comer",
-  con: "Con la comida",
-  despues: "Después de comer",
-  "no-importa": "No importa",
-};
 const ESTADOS_VINCULO: Record<string, string> = {
   pendiente: "Invitación pendiente",
   aceptado: "Vinculado",
@@ -145,7 +140,7 @@ function Reporte({ h }: { h: HistorialExportado }) {
                 <div className="mt-1 text-[12.5px] text-muted-foreground">
                   {[
                     m.frecuencia,
-                    COMIDAS[m.con_comida] ?? null,
+                    indicacionDeComida(m),
                     m.duracion ? `Duración: ${m.duracion}` : null,
                     m.condicion ? `Para: ${m.condicion}` : null,
                   ]

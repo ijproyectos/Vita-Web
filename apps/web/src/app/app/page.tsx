@@ -18,7 +18,7 @@ import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados
 import { TarjetaDosisVencida, type DosisVencida } from "@/components/vita/tarjeta-dosis-vencida";
 import { TarjetaEmpecemos } from "@/components/vita/tarjeta-empecemos";
 import { TiraStock, type ItemStockBajo } from "@/components/vita/tira-stock";
-import { textoDosis } from "@/lib/medicamentos/tipos";
+import { indicacionDeComida, textoDosis } from "@/lib/medicamentos/tipos";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { TurnosHome } from "./turnos-home";
@@ -91,7 +91,7 @@ export default async function HomePage() {
     tomas.length === 0
       ? activo.esPropio ? "No tenés medicamentos programados para hoy." : `${nombre} no tiene medicamentos programados para hoy.`
       : siguiente
-        ? `Sigue: ${siguiente.nombre} a las ${siguiente.hora_programada.slice(0, 5)}`
+        ? `Sigue: ${siguiente.nombre} a las ${siguiente.hora_programada.slice(0, 5)}${indicacionDeComida(siguiente) ? ` · ${indicacionDeComida(siguiente)}` : ""}`
         : "Listo por hoy. No queda nada pendiente.";
 
   return (

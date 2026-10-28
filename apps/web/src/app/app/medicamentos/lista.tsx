@@ -65,7 +65,7 @@ function edicionDe(grupo: Grupo): Edicion {
     dosis: textoDosis(grupo.filas[0]),
     frecuencia: frecuenciaInicial(grupo.filas),
     frecuenciaTocada: false,
-    tomas: grupo.filas.map((f) => ({ id: f.id, hora: f.hora_programada.slice(0, 5), conComida: f.con_comida })),
+    tomas: grupo.filas.map((f) => ({ id: f.id, hora: f.hora_programada.slice(0, 5), conComida: f.con_comida, indicacion: f.indicacion ?? null })),
   };
 }
 

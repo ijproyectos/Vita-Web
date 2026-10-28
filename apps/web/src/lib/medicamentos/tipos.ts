@@ -1,5 +1,7 @@
 export type MomentoDia = "mañana" | "mediodia" | "tarde" | "noche";
 
+import type { IndicacionComida } from "./comidas";
+
 export type ConComida = "antes" | "con" | "despues" | "no-importa";
 
 export type DiaSemana =
@@ -33,6 +35,10 @@ export type Medicamento = {
   dias_recurrentes: DiaSemana[];
   frecuencia: string | null;
   con_comida: ConComida;
+  // Clave del catálogo (comidas.ts), exacta como se eligió. Migración 031: ausente
+  // (undefined) mientras no esté aplicada; null = sin indicación. Fuente de verdad
+  // de lo que se muestra; `con_comida` queda derivado para lectores viejos.
+  indicacion?: IndicacionComida | null;
   duracion: string | null;
   notas: string | null;
   // Stock compartido entre todas las filas del mismo medicamento (migración
@@ -69,6 +75,7 @@ export type DatosNuevoMedicamento = {
   diasRecurrentes?: DiaSemana[];
   frecuencia?: string | null;
   conComida?: ConComida;
+  indicacion?: IndicacionComida | null;
   duracion?: string | null;
   notas?: string | null;
 };
@@ -93,9 +100,10 @@ export type DatosNuevoMedicamentoMultiMomento = {
   /** Alta por momento (chat, onboarding): una fila por momento, hora por defecto. */
   momentos?: MomentoDia[];
   /** Alta por toma (formulario V7): una fila por toma, con su hora y su relación con la comida. */
-  tomas?: { hora: string; conComida: ConComida }[];
+  tomas?: { hora: string; conComida: ConComida; indicacion?: IndicacionComida | null }[];
   frecuencia?: string | null;
   conComida?: ConComida;
+  indicacion?: IndicacionComida | null;
   duracion?: string | null;
   notas?: string | null;
 };
@@ -104,6 +112,8 @@ export type DatosActualizarHorario = {
   horaProgramada?: string;
   momentoDia?: MomentoDia;
   diasRecurrentes?: DiaSemana[];
+  /** undefined = no tocar; null = quitar la indicación. */
+  indicacion?: IndicacionComida | null;
 };
 
 export type EstadisticaAdherencia = {
@@ -130,18 +140,10 @@ export function textoDosis(m: Pick<Medicamento, "dosis" | "unidad">): string {
   return /[a-zA-Z]/.test(dosis) ? dosis : `${dosis} ${m.unidad}`.trim();
 }
 
-const COMIDA_POR_MOMENTO: Record<MomentoDia, { con: string; antes: string; despues: string }> = {
-  "mañana": { con: "Con el desayuno", antes: "Antes del desayuno", despues: "Después del desayuno" },
-  mediodia: { con: "Con el almuerzo", antes: "Antes del almuerzo", despues: "Después del almuerzo" },
-  tarde: { con: "Con la merienda", antes: "Antes de la merienda", despues: "Después de la merienda" },
-  noche: { con: "Con la cena", antes: "Antes de la cena", despues: "Después de la cena" },
-};
-
-/** Línea de "Indicación" del detalle: "Con el desayuno"; null si no hay indicación de comida. */
-export function indicacionDeComida(m: Pick<Medicamento, "con_comida" | "momento_dia">): string | null {
-  if (m.con_comida === "no-importa") return null;
-  return COMIDA_POR_MOMENTO[m.momento_dia]?.[m.con_comida] ?? null;
-}
+// La lectura de la indicación (clave guardada o, en filas viejas, `con_comida` +
+// momento) vive junto al catálogo en `comidas.ts`; se re-exporta acá por ser
+// el lugar donde se consume junto al tipo `Medicamento`.
+export { indicacionDeComida } from "./comidas";
 
 /**
  * Un medicamento tal como lo ve "Mis medicamentos": todas las filas
@@ -176,7 +178,7 @@ export function agruparMedicamentos(meds: Medicamento[]): GrupoMedicamentoLista[
 }
 
 /** Una toma del formulario de edición: `id` presente = fila existente; ausente = toma nueva. */
-export type TomaEditada = { id?: string; hora: string; conComida: ConComida };
+export type TomaEditada = { id?: string; hora: string; conComida: ConComida; indicacion?: IndicacionComida | null };
 
 export type DatosActualizarGrupo = {
   nombre: string;

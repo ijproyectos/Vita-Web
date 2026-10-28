@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  COMIDAS_SELECTOR,
+  INDICACIONES_COMIDA,
+  CLAVES_INDICACION,
+  conComidaDeIndicacion,
+  esIndicacionComida,
+  indicacionesDelMomento,
+  opcionDeIndicacion,
   ajustarTomas,
   cantidadDeTomas,
+  indicacionDeComida,
   relacionDeToma,
   textoRecordatorio,
   type TomaForm,
@@ -11,23 +17,44 @@ import { momentoDelDia } from "@/lib/rutina/momento";
 
 describe("relacionDeToma", () => {
   it("deriva el momento de la hora", () => {
-    expect(relacionDeToma({ hora: "08:00", conComida: "con" })).toBe("Con el desayuno");
-    expect(relacionDeToma({ hora: "13:00", conComida: "despues" })).toBe("Después del almuerzo");
-    expect(relacionDeToma({ hora: "21:00", conComida: "antes" })).toBe("Antes de la cena");
+    expect(relacionDeToma({ hora: "08:00", conComida: "con", indicacion: null })).toBe("Con el desayuno");
+    expect(relacionDeToma({ hora: "13:00", conComida: "despues", indicacion: null })).toBe("Después del almuerzo");
+    expect(relacionDeToma({ hora: "21:00", conComida: "antes", indicacion: null })).toBe("Antes de la cena");
   });
   it("null si no importa la comida", () => {
-    expect(relacionDeToma({ hora: "08:00", conComida: "no-importa" })).toBeNull();
+    expect(relacionDeToma({ hora: "08:00", conComida: "no-importa", indicacion: null })).toBeNull();
   });
   it("hora vacía se trata como 08:00 (mañana)", () => {
-    expect(relacionDeToma({ hora: "", conComida: "con" })).toBe("Con el desayuno");
+    expect(relacionDeToma({ hora: "", conComida: "con", indicacion: null })).toBe("Con el desayuno");
   });
 });
 
-describe("COMIDAS_SELECTOR", () => {
-  it("el momento declarado coincide con el que deriva de la hora", () => {
-    for (const c of COMIDAS_SELECTOR) {
+describe("catálogo INDICACIONES_COMIDA", () => {
+  it("el momento declarado coincide con el que deriva de la hora sugerida", () => {
+    for (const c of INDICACIONES_COMIDA) {
       expect(momentoDelDia(c.hora), c.etiqueta).toBe(c.momento);
     }
+  });
+  it("claves únicas y reconocidas por esIndicacionComida", () => {
+    expect(new Set(CLAVES_INDICACION).size).toBe(INDICACIONES_COMIDA.length);
+    expect(CLAVES_INDICACION.every(esIndicacionComida)).toBe(true);
+    expect(esIndicacionComida("pizza")).toBe(false);
+    expect(esIndicacionComida(null)).toBe(false);
+  });
+  it("opcionDeIndicacion y conComidaDeIndicacion", () => {
+    expect(opcionDeIndicacion("con-desayuno")?.etiqueta).toBe("Con el desayuno");
+    expect(opcionDeIndicacion("nope")).toBeUndefined();
+    expect(conComidaDeIndicacion("despues-cena")).toBe("despues");
+    expect(conComidaDeIndicacion("ayunas")).toBe("antes");
+    expect(conComidaDeIndicacion(null)).toBe("no-importa");
+  });
+  it("indicacionesDelMomento agrupa por momento", () => {
+    expect(indicacionesDelMomento("mediodia").map((o) => o.clave)).toEqual(["antes-almuerzo", "con-almuerzo", "despues-almuerzo"]);
+  });
+  it("la indicación guardada manda sobre la lectura legacy", () => {
+    expect(indicacionDeComida({ indicacion: "antes-dormir", con_comida: "con", momento_dia: "mañana" })).toBe("Antes de dormir");
+    expect(indicacionDeComida({ indicacion: null, con_comida: "con", momento_dia: "mañana" })).toBe("Con el desayuno");
+    expect(indicacionDeComida({ indicacion: null, con_comida: "no-importa", momento_dia: "noche" })).toBeNull();
   });
 });
 
@@ -46,7 +73,7 @@ describe("cantidadDeTomas", () => {
 });
 
 describe("ajustarTomas", () => {
-  const t = (hora: string, conComida: TomaForm["conComida"] = "no-importa"): TomaForm => ({ hora, conComida });
+  const t = (hora: string, conComida: TomaForm["conComida"] = "no-importa"): TomaForm => ({ hora, conComida, indicacion: null });
 
   it("completa con horas por defecto sin repetir las usadas", () => {
     const r = ajustarTomas([t("08:00", "con")], 3);

@@ -3,15 +3,18 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { momentoDelDia } from "@/lib/rutina/momento";
-import { COMIDAS_SELECTOR, MOMENTOS_SELECTOR, relacionDeToma } from "@/lib/medicamentos/comidas";
-import type { ConComida, MomentoDia } from "@/lib/medicamentos/tipos";
+import { indicacionesDelMomento, MOMENTOS_SELECTOR, type ComidaToma } from "@/lib/medicamentos/comidas";
+import { ETIQUETA_MOMENTO, ORDEN_MOMENTOS } from "@/lib/rutina/momento";
+import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import { cn } from "@/lib/utils";
 import { VitaIcon } from "@/lib/vita-icons";
 
 // Selector de hora (V7 D:3343, "¿A qué hora?"): momento del día, "Con las
-// comidas" (solo para medicamentos), hora con − / + de 30 min y Confirmar.
+// comidas" (catálogo agrupado por momento; solo para medicamentos), hora con
+// − / + de 30 min y Confirmar. La indicación elegida es independiente de la
+// hora: mover la hora o cambiar de momento no la borra.
 // Se usa en el alta y en la edición de medicamentos y en el alta/edición de
-// turnos. Devuelve la hora "HH:MM" y la relación con la comida elegida.
+// turnos. Devuelve la hora "HH:MM" y la comida elegida (clave + con_comida).
 
 const CHIP_ON = "bg-ink text-background";
 const CHIP_OFF = "bg-card text-slate-brand shadow-item";
@@ -29,17 +32,17 @@ function deMinutos(min: number): string {
 export function SelectorHora({
   abierto,
   hora,
-  conComida,
+  comida,
   conComidas,
   onConfirmar,
   onCerrar,
 }: {
   abierto: boolean;
   hora: string;
-  conComida?: ConComida;
+  comida?: ComidaToma;
   /** Muestra "Con las comidas" (medicamentos); los turnos lo ocultan. */
   conComidas: boolean;
-  onConfirmar: (hora: string, conComida: ConComida) => void;
+  onConfirmar: (hora: string, comida: ComidaToma) => void;
   onCerrar: () => void;
 }) {
   return (
@@ -52,7 +55,7 @@ export function SelectorHora({
         <div aria-hidden className="mx-auto mb-[18px] h-1 w-10 shrink-0 rounded bg-line" />
         <Contenido
           hora={hora || "08:00"}
-          conComida={conComida ?? "no-importa"}
+          comida={comida ?? { conComida: "no-importa", indicacion: null }}
           conComidas={conComidas}
           onConfirmar={onConfirmar}
         />
@@ -64,23 +67,19 @@ export function SelectorHora({
 // Se monta al abrir la hoja: el estado nace de la hora/relación con que se abrió.
 function Contenido({
   hora: horaInicial,
-  conComida: comidaInicial,
+  comida: comidaInicial,
   conComidas,
   onConfirmar,
 }: {
   hora: string;
-  conComida: ConComida;
+  comida: ComidaToma;
   conComidas: boolean;
-  onConfirmar: (hora: string, conComida: ConComida) => void;
+  onConfirmar: (hora: string, comida: ComidaToma) => void;
 }) {
   const [hora, setHora] = useState(horaInicial);
-  const [comida, setComida] = useState<ConComida>(comidaInicial);
+  // La hora manda; la indicación es una observación aparte que se queda como se eligió.
+  const [comida, setComida] = useState<ComidaToma>(comidaInicial);
   const momento: MomentoDia = momentoDelDia(hora);
-
-  // La relación con la comida solo vale para el momento en que se eligió.
-  const [momentoComida, setMomentoComida] = useState<MomentoDia>(momentoDelDia(horaInicial));
-  const comidaVigente: ConComida = momentoComida === momento ? comida : "no-importa";
-  const etiquetaComida = relacionDeToma({ hora, conComida: comidaVigente });
 
   function mover(delta: number) {
     setHora((h) => deMinutos(aMinutos(h) + delta));
@@ -88,7 +87,6 @@ function Contenido({
 
   function elegirMomento(m: MomentoDia, horaDefecto: string) {
     setHora(horaDefecto);
-    if (m !== momentoComida) setComida("no-importa");
   }
 
   return (
@@ -115,36 +113,38 @@ function Contenido({
 
       {conComidas && (
         <>
-          <div className="eyebrow mb-2.5 mt-5 text-subtle">Con las comidas · {momentoLabel(momento)}</div>
-          <div className="flex flex-wrap gap-[7px]">
-            <button
-              type="button"
-              onClick={() => {
-                setComida("no-importa");
-                setMomentoComida(momento);
-              }}
-              className={cn("rounded-full px-[13px] py-2.5 text-[12.5px] font-bold transition-all motion-reduce:transition-none", comidaVigente === "no-importa" ? CHIP_ON : CHIP_OFF)}
-            >
-              Ninguna
-            </button>
-            {COMIDAS_SELECTOR.filter((c) => c.momento === momento).map((c) => {
-              const activa = comidaVigente === c.conComida && etiquetaComida === c.etiqueta;
-              return (
-                <button
-                  key={c.etiqueta}
-                  type="button"
-                  onClick={() => {
-                    setHora(c.hora);
-                    setComida(c.conComida);
-                    setMomentoComida(c.momento);
-                  }}
-                  className={cn("rounded-full px-[13px] py-2.5 text-[12.5px] font-bold transition-all motion-reduce:transition-none", activa ? CHIP_ON : CHIP_OFF)}
-                >
-                  {c.etiqueta}
-                </button>
-              );
-            })}
-          </div>
+          <div className="eyebrow mb-2.5 mt-5 text-subtle">Con las comidas</div>
+          <button
+            type="button"
+            onClick={() => setComida({ conComida: "no-importa", indicacion: null })}
+            className={cn(
+              "rounded-full px-[13px] py-2.5 text-[12.5px] font-bold transition-all motion-reduce:transition-none",
+              comida.conComida === "no-importa" && !comida.indicacion ? CHIP_ON : CHIP_OFF
+            )}
+          >
+            Ninguna
+          </button>
+          {ORDEN_MOMENTOS.map((m) => (
+            <div key={m}>
+              <div className="mb-1.5 mt-3 text-[11px] font-bold uppercase tracking-wide text-faint">{ETIQUETA_MOMENTO[m]}</div>
+              <div className="flex flex-wrap gap-[7px]">
+                {indicacionesDelMomento(m).map((c) => (
+                  <button
+                    key={c.clave}
+                    type="button"
+                    onClick={() => {
+                      // Elegir la opción sugiere su hora aproximada; después se puede mover.
+                      setHora(c.hora);
+                      setComida({ conComida: c.conComida, indicacion: c.clave });
+                    }}
+                    className={cn("rounded-full px-[13px] py-2.5 text-[12.5px] font-bold transition-all motion-reduce:transition-none", comida.indicacion === c.clave ? CHIP_ON : CHIP_OFF)}
+                  >
+                    {c.etiqueta}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </>
       )}
 
@@ -176,17 +176,13 @@ function Contenido({
 
       <button
         type="button"
-        onClick={() => onConfirmar(hora, conComidas ? comidaVigente : "no-importa")}
+        onClick={() => onConfirmar(hora, conComidas ? comida : { conComida: "no-importa", indicacion: null })}
         className="mt-5 w-full rounded-full bg-primary py-[17px] font-heading text-[15px] font-extrabold tracking-[-0.01em] text-primary-foreground shadow-cta transition-transform active:scale-[0.98] motion-reduce:transition-none"
       >
         Confirmar
       </button>
     </>
   );
-}
-
-function momentoLabel(m: MomentoDia): string {
-  return MOMENTOS_SELECTOR.find((x) => x.momento === m)?.etiqueta.toLowerCase() ?? "";
 }
 
 /** Fila "1.ª toma · hora" que abre el selector (D:2182). */

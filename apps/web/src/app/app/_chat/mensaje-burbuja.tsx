@@ -8,16 +8,37 @@ export type MensajeChatUI = {
   content: string;
   timestamp: string;
   accion?: { type: string; [clave: string]: unknown };
+  // Botones de respuesta rápida (confirmaciones de familia), armados por el servidor.
+  opciones?: string[];
+  // Opción afirmativa -> id de la acción pendiente en el servidor (confirmación atada).
+  vinculos?: Record<string, string>;
+  // Si este mensaje del usuario salió de un botón atado: se reenvía igual al reintentar.
+  confirmacionId?: string;
+  // Reintento sin duplicar: el pedido que se le mandó al servidor, y si no hubo respuesta.
+  pedidoId?: string;
+  sinRespuesta?: boolean;
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
-export function MensajeBurbuja({ m, cargando, alCerrar, esPropio }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean }) {
+export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, alElegirOpcion }: { m: MensajeChatUI; cargando: boolean; alCerrar: () => void; esPropio: boolean; alReintentar?: (m: MensajeChatUI) => void; alElegirOpcion?: (texto: string, confirmacionId?: string) => void }) {
   if (m.role === "user") {
     return (
-      <div className="mb-2.5 flex justify-end">
+      <div className="mb-2.5 flex flex-col items-end gap-1">
         <div className="max-w-[78%] rounded-[20px] rounded-br-[6px] bg-primary px-3.5 py-2.5 text-[14.5px] font-medium leading-snug text-primary-foreground">
           {m.content}
         </div>
+        {m.sinRespuesta && alReintentar && (
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-destructive">
+            <span>Sin respuesta</span>
+            <button
+              type="button"
+              onClick={() => alReintentar(m)}
+              className="rounded-full bg-card px-3 py-1 font-bold text-teal-deep shadow-item"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -31,6 +52,20 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio }: { m: Mensaje
         </div>
       </div>
       {m.accion && <TarjetaAccion accion={m.accion} alCerrar={alCerrar} esPropio={esPropio} />}
+      {m.opciones && m.opciones.length > 0 && alElegirOpcion && (
+        <div className="flex flex-wrap gap-2 pl-9" role="group" aria-label="Respuestas rápidas">
+          {m.opciones.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => alElegirOpcion(o, m.vinculos?.[o])}
+              className="min-h-11 rounded-full bg-card px-4 py-2.5 text-[14.5px] font-bold text-teal-deep shadow-[inset_0_0_0_1px_var(--teal-100)]"
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -49,8 +84,10 @@ function PuntosEscribiendo() {
   );
 }
 
-// El chat escribe en la cuenta logueada; /app/medicamentos y /app/turnos listan el
-// perfil ACTIVO. Los enlaces de edición solo valen si el activo es el propio.
+// /app/rutina, /app/medicamentos y /app/turnos listan el perfil ACTIVO. Los
+// enlaces solo valen si la acción fue sobre uno mismo y el activo es el propio;
+// si fue sobre un familiar (accion.persona) la tarjeta dice para quién y no
+// enlaza (evita llevar a la pantalla de otra persona sin cambiar de perfil).
 function TarjetaAccion({
   accion,
   alCerrar,
@@ -60,13 +97,15 @@ function TarjetaAccion({
   alCerrar: () => void;
   esPropio: boolean;
 }) {
+  const persona = typeof accion.persona === "string" ? accion.persona : null;
+  const editable = esPropio && !persona;
   const base = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-card";
 
   switch (accion.type) {
     case "medication_added":
       return (
         <div className={base}>
-          <CabeceraTarjeta icon="pill" texto="Medicamento agregado" />
+          <CabeceraTarjeta icon="pill" texto={persona ? `Agregado a ${persona}` : "Medicamento agregado"} />
           <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
             <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.name)}</div>
             <div className="mt-0.5 text-xs font-medium text-subtle">
@@ -74,17 +113,17 @@ function TarjetaAccion({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {esPropio && typeof accion.id === "string" && (
+            {editable && typeof accion.id === "string" && (
               <EnlaceTarjeta alCerrar={alCerrar} href={`/app/medicamentos?editar=${accion.id}`} texto="Ajustar detalles" primario />
             )}
-            <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
+            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />}
           </div>
         </div>
       );
     case "appointment_added":
       return (
         <div className={base}>
-          <CabeceraTarjeta icon="stethoscope" texto="Turno agendado" />
+          <CabeceraTarjeta icon="stethoscope" texto={persona ? `Turno agendado para ${persona}` : "Turno agendado"} />
           <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
             <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.specialty)}</div>
             <div className="mt-0.5 text-xs font-medium text-subtle">
@@ -92,10 +131,10 @@ function TarjetaAccion({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {esPropio && typeof accion.id === "string" && (
+            {editable && typeof accion.id === "string" && (
               <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos?editar=${accion.id}`} texto="Completar turno" primario />
             )}
-            <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />
+            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />}
           </div>
         </div>
       );
@@ -103,10 +142,26 @@ function TarjetaAccion({
     case "show_all_medications":
       return (
         <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
-          <span className="text-[13.5px] font-medium text-subtle">Tu rutina está actualizada.</span>
-          <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />
+          <span className="text-[13.5px] font-medium text-subtle">
+            {persona ? `Rutina de ${persona}` : "Tu rutina está actualizada."}
+          </span>
+          {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />}
         </div>
       );
+    case "open_screen": {
+      // Solo navegación: se muestra aunque sea de otra persona. Defensivo con el href.
+      if (typeof accion.href !== "string" || !(accion.href === "/app" || accion.href.startsWith("/app/"))) return null;
+      const label = typeof accion.label === "string" && accion.label.trim() !== "" ? accion.label : "esta pantalla";
+      return (
+        <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
+          <span className="flex items-center gap-2 text-[13.5px] font-medium text-subtle">
+            <VitaIcon name="chevron-right" size={15} />
+            {label}
+          </span>
+          <EnlaceTarjeta alCerrar={alCerrar} href={accion.href} texto={`Abrir ${label}`} primario inline />
+        </div>
+      );
+    }
     default:
       return null;
   }

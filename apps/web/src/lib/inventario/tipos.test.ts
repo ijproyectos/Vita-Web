@@ -34,8 +34,11 @@ describe("separarDosis", () => {
     expect(separarDosis(entrada)).toEqual(esperado);
   });
 
+  it("mcg es una unidad soportada", () => {
+    expect(separarDosis("100 mcg")).toEqual({ valor: "100", unidad: "mcg" });
+  });
   it("unidad no soportada conserva el texto entero", () => {
-    expect(separarDosis("100 mcg")).toEqual({ valor: "100 mcg", unidad: null });
+    expect(separarDosis("100 xyz")).toEqual({ valor: "100 xyz", unidad: null });
   });
   it("texto sin número inicial se conserva", () => {
     expect(separarDosis("media pastilla")).toEqual({ valor: "media pastilla", unidad: null });

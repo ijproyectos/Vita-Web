@@ -7,8 +7,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Último paso del onboarding (V7 `isPerm`): se llega al terminar (o "Terminar
 // después") el chat. El destino se calcula acá, nunca desde un parámetro
-// libre: `?pp=<uuid>` (perfil en borrador de la persona que se cuida) o
-// uso_app cuido/ambos -> vincular-cuidado; si no, /app.
+// libre: `?pp=<uuid>` (perfil en borrador heredado de una charla anterior) va
+// a vincular-cuidado; si no, /app. La charla nueva ya crea a la persona a
+// cargo como perfil gestionado real, así que no hay vínculo que armar acá.
 export default async function OnboardingPermisoPage(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const usuario = await requireUser();
   const supabase = await createClient();
@@ -21,9 +22,7 @@ export default async function OnboardingPermisoPage(props: { searchParams: Promi
   const destino =
     pp && UUID.test(pp)
       ? `/onboarding/vincular-cuidado?perfilPendienteId=${pp}`
-      : cuida
-        ? "/onboarding/vincular-cuidado"
-        : "/app";
+      : "/app";
 
   return <PantallaPermiso destino={destino} cuida={cuida} />;
 }

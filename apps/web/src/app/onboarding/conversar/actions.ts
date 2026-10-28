@@ -4,11 +4,16 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
-import * as perfilesPendientesNucleo from "@/lib/onboarding/perfiles-pendientes";
+import * as familiaNucleo from "@/lib/familia/nucleo";
+import { rolSobre } from "@/lib/familia/perfil-activo";
+import { COLORES_PERFIL, type ColorPerfil } from "@/lib/familia/tipos";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
-import { extraerMedicamentos, extraerNombreEdad, type MedicamentoExtraido } from "@/lib/onboarding/extraer";
-import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
+import { extraerNombreEdad } from "@/lib/onboarding/extraer";
+import { MEDICIONES_EN_CASA, type MedicionesEnCasa } from "@/lib/perfil/tipos";
+import type { ConComida } from "@/lib/medicamentos/tipos";
+import { normalizarTomas } from "@/lib/medicamentos/formulario";
+import type { IndicacionComida } from "@/lib/medicamentos/comidas";
 
 // Server Actions del onboarding conversacional nuevo — nunca lanzan (mismo
 // criterio que ../actions.ts), cada una atrapa lo que su función de
@@ -24,11 +29,10 @@ export type ResultadoExtraerNombreEdad =
 
 /**
  * Extrae nombre+edad de la respuesta en texto libre (ya tipeada, ya
- * transcripta de audio) y crea de una el perfil en borrador — mismo orden
- * que el mock (el mensaje "voy a crear el perfil de X" aparece apenas se
- * entiende el nombre, antes de la tarjeta de consentimiento). Si la
- * extracción falla o no reconoce un nombre, no crea nada: la UI cae a un
- * mini-form manual (nombre/edad) en vez de perder lo que la persona dijo.
+ * transcripta de audio). No crea nada: la UI valida la edad y recién después
+ * llama a `crearPerfilFamiliarAction`. Si la extracción falla o no reconoce un
+ * nombre, la UI cae a un mini-form manual (nombre/edad) en vez de perder lo
+ * que la persona dijo.
  */
 export async function extraerNombreEdadAction(texto: string, relacion: string): Promise<ResultadoExtraerNombreEdad> {
   const usuario = await requireUser();
@@ -44,185 +48,236 @@ export async function extraerNombreEdadAction(texto: string, relacion: string): 
   return { status: "success", nombre: resultado.datos.nombre, edad: resultado.datos.edad };
 }
 
-export type ResultadoCrearPerfilPendiente =
-  | { status: "success"; perfilPendienteId: string }
+export type ResultadoCrearFamiliar =
+  | { status: "success"; id: string; color: ColorPerfil }
   | { status: "error"; message: string };
 
-export async function crearPerfilPendienteAction(datos: {
+const MAXIMO_PERFILES_A_CARGO = 20;
+const EDAD_MAXIMA = 130;
+
+/**
+ * Primer color de la paleta que todavía no usa nadie de la familia del
+ * usuario. El teal queda para el propio perfil; si se agotan los demás, cae
+ * en el primero que no sea teal.
+ */
+function colorLibre(usados: (ColorPerfil | null)[]): ColorPerfil {
+  const candidatos = COLORES_PERFIL.filter((c) => c !== "teal");
+  return candidatos.find((c) => !usados.includes(c)) ?? candidatos[0];
+}
+
+/**
+ * Crea a la persona que se cuida como PERFIL GESTIONADO real (cuenta de auth
+ * + perfiles + vínculo aceptado con rol 'editar'), no como borrador: así todo
+ * lo que sigue en la charla (condiciones, alergias, remedios, turno,
+ * mediciones) se guarda directo en su perfil. La edad se aproxima a un año de
+ * nacimiento. El color se asigna solo.
+ */
+export async function crearPerfilFamiliarAction(datos: {
   nombre: string;
   relacion: string;
   edad: number | null;
-}): Promise<ResultadoCrearPerfilPendiente> {
+  /** Id del perfil creado en ESTA charla (lo guarda el cliente): único reusable en un reintento. */
+  reutilizarId?: string | null;
+}): Promise<ResultadoCrearFamiliar> {
   const usuario = await requireUser();
-  const supabase = await createClient();
+  const nombre = typeof datos?.nombre === "string" ? datos.nombre.trim() : "";
+  if (!nombre) return { status: "error", message: "Escribí su nombre." };
+  const edad = datos?.edad ?? null;
+  if (edad !== null && (!Number.isInteger(edad) || edad < 0 || edad > EDAD_MAXIMA)) {
+    return { status: "error", message: "La edad no es válida." };
+  }
 
   try {
-    const perfil = await perfilesPendientesNucleo.crearPerfilPendiente(supabase, usuario.id, datos);
-    return { status: "success", perfilPendienteId: perfil.id };
+    const familia = await familiaNucleo.listarFamilia(await createClient());
+    if (familia.length >= MAXIMO_PERFILES_A_CARGO) {
+      return { status: "error", message: `Ya tenés ${MAXIMO_PERFILES_A_CARGO} perfiles a cargo, el máximo por ahora.` };
+    }
+    // Reintento dentro de la misma charla: solo se reusa el perfil que ESTA
+    // charla creó (id que devuelve el cliente), con el mismo nombre y
+    // relación, y mientras no tenga datos. Nunca por coincidencia de nombre:
+    // dos "Juan, hermano" distintos son dos personas.
+    const relacion = typeof datos.relacion === "string" ? datos.relacion : null;
+    const existente =
+      typeof datos.reutilizarId === "string"
+        ? familia.find(
+            (m) =>
+              m.id === datos.reutilizarId &&
+              m.rol === "editar" &&
+              !m.conectado &&
+              m.nombre.trim().toLowerCase() === nombre.toLowerCase() &&
+              (m.relacion ?? null) === relacion
+          )
+        : undefined;
+    if (existente && (await perfilNucleo.perfilVacio(await createClient(), existente.id))) {
+      return { status: "success", id: existente.id, color: existente.color ?? colorLibre([]) };
+    }
+
+    const color = colorLibre(familia.map((m) => m.color));
+    const resultado = await familiaNucleo.crearPerfilGestionado(usuario.id, {
+      nombre,
+      relacion,
+      color,
+      anioNacimiento: edad === null ? null : new Date().getFullYear() - edad,
+      condiciones: [],
+    });
+    if (resultado.status === "error") return resultado;
+    return { status: "success", id: resultado.id, color };
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    console.error("[onboarding] crearPerfilFamiliarAction", e);
+    return { status: "error", message: "No pudimos crear el perfil. Probá de nuevo." };
   }
+}
+
+const MENSAJE_GENERICO = "No pudimos guardarlo. Probá de nuevo.";
+
+function errorAmigable(contexto: string, e: unknown): { status: "error"; message: string } {
+  console.error(`[onboarding] ${contexto}`, e);
+  return { status: "error", message: MENSAJE_GENERICO };
+}
+
+/**
+ * A quién se le escribe: la propia cuenta (sin `personaId`) o una persona a
+ * cargo. Nunca se confía en el id del cliente: tiene que ser el propio usuario
+ * o alguien con vínculo aceptado y rol 'editar' (`rolSobre` lo resuelve contra
+ * `listar_familia`); la RLS lo vuelve a hacer cumplir en cada escritura.
+ */
+async function destinoDeEscritura(usuarioId: string, personaId?: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  if (!personaId || personaId === usuarioId) return { ok: true, id: usuarioId };
+  if (typeof personaId !== "string") return { ok: false, message: "Perfil inválido." };
+  const rol = await rolSobre(personaId).catch(() => null);
+  if (rol !== "editar") return { ok: false, message: "No tenés permiso para editar ese perfil." };
+  return { ok: true, id: personaId };
 }
 
 // --- Medicamentos (compartido por el tab de la persona y el de "vos") ----
-
-export type ResultadoExtraerMedicamentos =
-  | { status: "success"; medicamentos: MedicamentoExtraido[] }
-  | { status: "error"; message: string };
-
-export async function extraerMedicamentosAction(texto: string): Promise<ResultadoExtraerMedicamentos> {
-  const usuario = await requireUser();
-  const resultado = await extraerMedicamentos(usuario.id, texto);
-
-  if (!resultado.ok) {
-    return { status: "error", message: resultado.error };
-  }
-  return { status: "success", medicamentos: resultado.datos };
-}
 
 export type DatosMedicamentoConfirmado = {
   nombre: string;
   dosis: string | null;
   unidad: string;
-  momentos: MomentoDia[];
   frecuencia: string | null;
+  tomas: { hora: string; conComida: ConComida; indicacion?: IndicacionComida | null }[];
 };
 
 /**
- * Persiste un medicamento ya confirmado/editado por la persona para el
- * perfil en borrador — una fila en `medicamentos_pendientes` por momento
- * elegido, mismo criterio que `agregarMultiMomento` para medicamentos
- * reales (una fila = un horario puntual).
+ * Guarda un medicamento ya confirmado — escritura DIRECTA a `medicamentos`
+ * reales, del propio usuario (tab "Vos") o de la persona a cargo (`personaId`):
+ * reutiliza `agregarMultiMomento`, la misma función que usa el resto de la
+ * app, nunca se reimplementa la creación.
  */
-export async function guardarMedicamentoPendienteAction(
-  perfilPendienteId: string,
-  datos: DatosMedicamentoConfirmado
-): Promise<EstadoAccion> {
-  await requireUser();
-  const supabase = await createClient();
-
-  try {
-    for (const momento of datos.momentos) {
-      await perfilesPendientesNucleo.agregarMedicamentoPendiente(supabase, perfilPendienteId, {
-        nombre: datos.nombre,
-        dosis: datos.dosis,
-        unidad: datos.unidad,
-        horaProgramada: HORA_POR_MOMENTO[momento],
-        momentoDia: momento,
-        frecuencia: datos.frecuencia,
-      });
-    }
-  } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
-  }
-
-  return { status: "success" };
-}
-
-export type ResultadoContarMedicamentosPendientes = { status: "success"; cantidad: number } | { status: "error"; message: string };
-
-/**
- * Recuenta desde la DB (no confía en un contador client-side, que podría
- * desincronizarse ante un guardado fallido a mitad de camino) cuántos
- * medicamentos quedaron cargados para el perfil en borrador — usado para
- * la tarjeta resumen ("N remedios") al terminar el tab de la persona.
- */
-export async function contarMedicamentosPendientesAction(perfilPendienteId: string): Promise<ResultadoContarMedicamentosPendientes> {
-  await requireUser();
-  const supabase = await createClient();
-
-  try {
-    const medicamentos = await perfilesPendientesNucleo.listarMedicamentosPendientes(supabase, perfilPendienteId);
-    return { status: "success", cantidad: medicamentos.length };
-  } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
-  }
-}
-
-/**
- * Guarda un medicamento del propio cuidador (tab "Vos") — escritura
- * DIRECTA a `medicamentos` reales (usuario_id = su propia cuenta, ya
- * existe), sin staging: reutiliza `agregarMultiMomento`, la misma función
- * que usa el resto de la app, nunca se reimplementa la creación.
- */
-export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConfirmado): Promise<EstadoAccion> {
+export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConfirmado, personaId?: string): Promise<EstadoAccion> {
   const usuario = await requireUser();
+  const destino = await destinoDeEscritura(usuario.id, personaId);
+  if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
 
+  // Borde del sistema: las tomas vienen del cliente, se validan como `leerTomas`.
+  const nombre = typeof datos.nombre === "string" ? datos.nombre.trim() : "";
+  if (!nombre) return { status: "error", message: "Falta el nombre del remedio." };
+  const dosis = typeof datos.dosis === "string" ? datos.dosis.trim() : "";
+  const unidad = typeof datos.unidad === "string" ? datos.unidad.trim() : "";
+  const tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
+  if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
+
   try {
-    await medicamentosNucleo.agregarMultiMomento(supabase, usuario.id, {
-      nombre: datos.nombre,
-      dosis: datos.dosis,
-      unidad: datos.unidad,
-      momentos: datos.momentos,
+    await medicamentosNucleo.agregarMultiMomento(supabase, destino.id, {
+      nombre,
+      dosis: dosis || null,
+      unidad: unidad || "mg",
+      tomas,
       frecuencia: datos.frecuencia,
     });
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarMedicamentoPropioAction", e);
   }
 
   return { status: "success" };
 }
 
-// --- Salud propia (condiciones, alergias, turno) -------------------------
-// Solo para el perfil de quien está logueada: el borrador de la persona que
-// se cuida (`perfiles_pendientes`) no tiene columnas para esto y no se
-// agregó migración — esos pasos se saltean en la rama de familia.
+// --- Salud (condiciones, alergias, turno, mediciones) -----------------------
+// Se preguntan igual para el propio usuario y para la persona a cargo:
+// `personaId` (opcional) apunta al perfil gestionado y se autoriza en
+// `destinoDeEscritura`.
 
-export async function guardarCondicionesPropiasAction(labels: string[]): Promise<EstadoAccion> {
+export async function guardarCondicionesPropiasAction(labels: string[], personaId?: string): Promise<EstadoAccion> {
   const usuario = await requireUser();
+  const destino = await destinoDeEscritura(usuario.id, personaId);
+  if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
   try {
     // agregarCondicion ya omite las duplicadas.
     for (const label of labels) {
-      await perfilNucleo.agregarCondicion(supabase, usuario.id, {
+      await perfilNucleo.agregarCondicion(supabase, destino.id, {
         label,
         tipo: "permanente",
         desde: String(new Date().getFullYear()),
       });
     }
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarCondicionesPropiasAction", e);
   }
   return { status: "success" };
 }
 
-export async function guardarAlergiasPropiasAction(alergias: string[]): Promise<EstadoAccion> {
+export async function guardarAlergiasPropiasAction(alergias: string[], personaId?: string): Promise<EstadoAccion> {
   const usuario = await requireUser();
+  const destino = await destinoDeEscritura(usuario.id, personaId);
+  if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
   try {
     for (const alergia of alergias) {
-      await perfilNucleo.agregarAlergia(supabase, usuario.id, alergia);
+      await perfilNucleo.agregarAlergia(supabase, destino.id, alergia);
     }
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarAlergiasPropiasAction", e);
   }
   return { status: "success" };
 }
 
 // `fecha` es "YYYY-MM-DD" exacta (la elige la persona en el chat): como
 // todavía no hay editar/eliminar turnos, nunca se guarda una fecha aproximada.
-export async function guardarTurnoPropioAction(datos: {
-  especialidad: string;
-  fecha: string;
-  hora: string;
-  lugar: string | null;
-}): Promise<EstadoAccion> {
+export async function guardarTurnoPropioAction(
+  datos: {
+    especialidad: string;
+    fecha: string;
+    hora: string;
+    lugar: string | null;
+  },
+  personaId?: string
+): Promise<EstadoAccion> {
   const usuario = await requireUser();
+  const destino = await destinoDeEscritura(usuario.id, personaId);
+  if (!destino.ok) return { status: "error", message: destino.message };
   const supabase = await createClient();
 
-  const especialidad = datos.especialidad.trim();
+  const especialidad = typeof datos?.especialidad === "string" ? datos.especialidad.trim() : "";
   if (!especialidad) return { status: "error", message: "Faltan datos del turno." };
 
   try {
-    await turnosNucleo.agregar(supabase, usuario.id, {
+    await turnosNucleo.agregar(supabase, destino.id, {
       especialidad,
-      fecha: datos.fecha,
-      hora: datos.hora,
-      lugar: datos.lugar?.trim() || null,
+      fecha: String(datos.fecha),
+      hora: String(datos.hora),
+      lugar: typeof datos.lugar === "string" ? datos.lugar.trim() || null : null,
     });
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("guardarTurnoPropioAction", e);
+  }
+  return { status: "success" };
+}
+
+// "¿Te medís la presión o el azúcar en casa?" (031). Si la columna no existe
+// todavía, el núcleo lo omite sin error.
+export async function guardarMedicionesEnCasaAction(valor: MedicionesEnCasa, personaId?: string): Promise<EstadoAccion> {
+  const usuario = await requireUser();
+  if (!MEDICIONES_EN_CASA.includes(valor)) return { status: "error", message: "Respuesta inválida." };
+  const destino = await destinoDeEscritura(usuario.id, personaId);
+  if (!destino.ok) return { status: "error", message: destino.message };
+  const supabase = await createClient();
+  try {
+    await perfilNucleo.guardarMedicionesEnCasa(supabase, destino.id, valor);
+  } catch (e) {
+    return errorAmigable("guardarMedicionesEnCasaAction", e);
   }
   return { status: "success" };
 }
@@ -234,38 +289,23 @@ export async function marcarUsoAmbosAction(): Promise<EstadoAccion> {
   try {
     await perfilNucleo.guardarUsoApp(supabase, usuario.id, "ambos");
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("marcarUsoAmbosAction", e);
   }
   return { status: "success" };
 }
 
 // --- Finalización ----------------------------------------------------------
 
-// uso_app "cuido"/"ambos": marca el onboarding completo (recién acá, mismo
-// punto que el guion viejo vía redirigirSegunUsoApp) y sigue al paso de
-// permiso, que luego va a vincular-cuidado, threadeando el perfil en borrador para que el código
-// generado quede linkeado a él (ver crearVinculoComoCuidador).
-export async function finalizarConCuidadoAction(perfilPendienteId: string): Promise<EstadoAccion | void> {
+// Cierre de la charla (con o sin persona a cargo creada: ya es un perfil real,
+// no hay borrador que threadear): marca el onboarding completo y va al paso de
+// permiso, que sigue a /app.
+export async function finalizarOnboardingAction(): Promise<EstadoAccion | void> {
   const usuario = await requireUser();
   const supabase = await createClient();
   try {
     await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
   } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
-  }
-  redirect(`/onboarding/permiso?pp=${perfilPendienteId}`);
-}
-
-// Sin borrador (uso_app "yo", o "Terminar después" sin haber creado a la
-// persona): marca el onboarding completo y va al paso de permiso, que decide
-// el destino final (/app o vincular-cuidado según uso_app).
-export async function finalizarSoloYoAction(): Promise<EstadoAccion | void> {
-  const usuario = await requireUser();
-  const supabase = await createClient();
-  try {
-    await perfilNucleo.completarOnboarding(supabase, usuario.id, {});
-  } catch (e) {
-    return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
+    return errorAmigable("finalizarOnboardingAction", e);
   }
   redirect("/onboarding/permiso");
 }

@@ -3,6 +3,10 @@
 // esta misma columna, no por onboarding_completado_at (ver migración 010).
 export type UsoApp = "yo" | "cuido" | "ambos";
 
+// Respuesta a "¿te medís la presión o el azúcar en casa?" (031_mediciones_en_casa.sql).
+export const MEDICIONES_EN_CASA = ["presion", "glucemia", "ambas", "ninguna"] as const;
+export type MedicionesEnCasa = (typeof MEDICIONES_EN_CASA)[number];
+
 export type TipoCondicion = "permanente" | "temporal";
 
 export type Condicion = {
@@ -58,6 +62,9 @@ export type Perfil = {
   uso_app: UsoApp | null;
   // Clave de paleta (021_familia.sql); ver lib/familia/tipos.ts.
   color: string | null;
+  // 031_mediciones_en_casa.sql: ausente (undefined) mientras la migración no
+  // esté aplicada; null = no respondió.
+  mediciones_en_casa?: MedicionesEnCasa | null;
 };
 
 // Subconjunto de campos editables inline desde Resumen de salud.
@@ -78,6 +85,7 @@ export type CambiosPerfil = Partial<
     | "apellido"
     | "telefono"
     | "color"
+    | "mediciones_en_casa"
   >
 >;
 

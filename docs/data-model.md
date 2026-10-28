@@ -29,6 +29,7 @@ Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con 
 | telefono | text | `025` — "Teléfono" de Editar perfil, máx. 40 |
 | contacto_emergencia_relacion | text | `025` — "Es tu…" (Hermana, Pareja, Mamá…), máx. 40 |
 | color | text | `021_familia.sql` — clave de paleta (`teal`/`violeta`/`ambar`/`rosa`/`azul`, check), la UI la mapea a tokens `--persona-<clave>` (`lib/familia/colores.ts`). null = color por defecto |
+| mediciones_en_casa | text | `031_mediciones_en_casa.sql` (escrita, no aplicada) — respuesta del onboarding a "¿te medís la presión o el azúcar en casa?": `presion`/`glucemia`/`ambas`/`ninguna` (check); null = no respondió. No son mediciones (esas viven en `mediciones`). El trigger de 021 no la restringe: un Admin la escribe en un perfil gestionado |
 
 **Familia (021)**: además de las policies `_self`, `perfiles_select_cuidador` (`es_cuidador_de(id)`, cualquier rol) y `perfiles_update_cuidador` (`puede_editar_de(id)`). Sin policy de INSERT para el cuidador (un perfil ajeno nace solo desde el admin client — perfil gestionado — o en el login de su dueño), por eso `lib/perfil/nucleo.ts` hace update-primero y upsert solo como fallback. El trigger `perfiles_proteger_columnas_ajenas` rechaza (`columna_no_editable_por_cuidador`) que alguien que no es el dueño cambie `id`/`uso_app`/`onboarding_completado_at`/`avatar_url`/`created_at`; service_role no se restringe.
 
@@ -42,11 +43,12 @@ Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con 
 | dosis | text | opcional |
 | unidad | text | default 'mg' |
 | hora_programada | text | "HH:MM" |
-| momento_dia | text | check: mañana / mediodia / tarde / noche |
+| momento_dia | text | check: mañana / mediodia / tarde / noche. Se deriva de la hora (`momentoDelDia`): mañana 07–12, mediodía 12–14, tarde 14–20, noche 20–07 |
 | condicion | text | opcional, legacy — no se pide en el form actual |
 | dias_recurrentes | text[] | días de la semana; vacío = todos los días. No se pide en el form actual (default `[]`), sigue disponible vía chat |
 | frecuencia | text | descriptiva ("1 vez al día"...) — no gobierna el scheduling real |
-| con_comida | text | check: antes / con / despues / no-importa |
+| con_comida | text | check: antes / con / despues / no-importa. Legacy: desde la 031 se escribe derivada de `indicacion` (ayunas y antes-* -> antes) |
+| indicacion | text | `031_mediciones_en_casa.sql` (escrita, no aplicada) — clave del catálogo `lib/medicamentos/comidas.ts` (check: ayunas, antes/con/despues-desayuno, -almuerzo, -merienda, -cena, antes-dormir); null = sin indicación. Observación guardada tal cual se eligió: la hora manda y la clave nunca se re-deduce ni se resetea al mover la hora. La app reintenta sin la columna si no existe; las filas viejas se muestran por `con_comida` |
 | duracion | text | label libre ("7 días" / "Indefinido"...) |
 | notas | text | |
 
@@ -169,6 +171,21 @@ Filas del feed "Registros" de Mi Salud (`024_consultas_vacunas.sql`, aplicada 20
 
 Historial de chat con vita — sin cambios respecto al pase anterior. Ver `003_chat_historial.sql`.
 
+## `acciones_agente`
+
+Reintentos del chat sin duplicar escrituras (migración 030, escrita, pendiente de aplicar; sin ella el chat funciona igual, solo sin la protección). Cada mensaje lleva un `pedido_id` generado por la app; antes de ejecutar una tool que escribe, `/api/chat` reclama una fila con el cliente de sesión. La clave es `<destinoId>~<tool>:<campos normalizados>` (persona destino, tool y solo los campos que identifican la acción —dosis, días, hora HH:MM, lugar...—, sin tildes/mayúsculas; no el input entero, que el modelo puede reformular). Si ya existe, no se re-ejecuta y se devuelve el `resultado` guardado al modelo; un claim sin resultado de más de 2 min se considera huérfano y se vuelve a reclamar. En un reintento cuyo primer intento ya guardó la respuesta de vita, el servidor la devuelve sin volver a correr el modelo. Escribir en OTRA persona exige confirmación hecha cumplir por el servidor (si la tabla no existe se falla cerrado: no se ejecuta nada en otra persona; sobre uno mismo se degrada a ejecutar como antes). Sin confirmación se guarda una fila `pendiente:<clave>` (bajo el pedido actual) con la acción exacta en `resultado = {pendiente: {tool, input, destinoId, persona}}`; el id de esa fila viaja en los botones. Se ejecuta (con el input GUARDADO) solo si el mensaje ACTUAL es un sí explícito (`clasificarRespuesta`: cualquier negación, "claro que no", "mejor no", "dale pero no", lo rechaza) y existe una pendiente de OTRO pedido de menos de 5 min con la misma clave, que se consume y deja un marcador `confirmada:<clave>`. Para `mark_taken`, `mark_all_taken` y `delete_schedule` sobre otra persona la confirmación está ATADA: hace falta el id de la pendiente en el botón (`confirmacionId`), o un "sí" tipeado mientras sea la única pendiente vigente del usuario; un "sí" genérico no ejecuta otra acción. Si el modelo escribe sin `persona_id` y el mensaje nombra a un familiar (o hay un perfil abierto), se guarda una pendiente por candidato y se piden botones "Para X" / "Para mí" / "Cancelar" (un toque en "Para X" completa en una sola ronda). Un "no" en el mensaje actual borra TODAS las pendientes del usuario antes de llamar al modelo. **Retención**: el cron `dosis-vencidas` borra las filas de más de 48 h (datos de salud, también de terceros). El UPDATE está limitado por column grant a `resultado`. Si un reintento repite una respuesta ya guardada, también se re-emiten las tarjetas de las escrituras de ese pedido. Tests: `supabase/tests/acciones-agente.sql`.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | uuid PK | |
+| `usuario_id` | uuid FK `auth.users` on delete cascade | dueño |
+| `pedido_id` | uuid not null | el del mensaje del usuario |
+| `clave` | text not null | `destinoId~tool:campos normalizados`; o `pendiente:<esa clave>` / `confirmada:<esa clave>` (filas de confirmación) |
+| `resultado` | jsonb | `{contenido, accionUI}`; null mientras se ejecuta. En `pendiente:`/`confirmada:` guarda `{pendiente: {tool, input, destinoId, persona}}` |
+| `created_at` | timestamptz | índice para la purga de 48 h |
+
+`unique (usuario_id, pedido_id, clave)`. RLS owner-only (select/insert/update/delete propios); UPDATE solo de la columna `resultado`. `mensajes_chat` no cambia: en un reintento el servidor no reinserta el mensaje si ya es el último del usuario en la sesión.
+
 ## `enlaces_profesional`
 
 Links temporales de solo lectura para mostrarle un resumen de salud a un profesional (`/p/{token}`, sin login). **Migración 015 aplicada 2026-10-11** (psql + registro en `schema_migrations`; `supabase/tests/enlaces-profesional.sql` 17/17 PASS).
@@ -244,7 +261,7 @@ RLS del cuidador (aditiva; las `_all_self` no se tocan; las de cuidador de 008/0
 
 RPCs nuevas (`returns table` con columnas calificadas): `listar_familia()` (personas que cuido: vínculo, nombre, color, rol, relación, `conectado` = `auth.users.last_sign_in_at is not null`), `listar_mis_cuidadores()` (quién me cuida, con nombre y rol), `cambiar_rol_cuidador(p_vinculo_id, p_rol)` (solo la persona cuidada; `vinculos_all_elder` bloquea el update directo de una fila aceptada), `dejar_de_cuidar(p_vinculo_id)` (el cuidador revoca su propio vínculo aceptado).
 
-**Perfil gestionado** (persona sin celular): cuenta real de `auth.users` con email placeholder `gestionado-<uuid>@usuarios.soyvita.com.ar`, creada por `crearPerfilGestionado` (`lib/familia/nucleo.ts`, admin client) junto con su `perfiles` y un vínculo ya `aceptado` con `rol = 'editar'`. Más adelante entra desde su celular con un código de `codigos_acceso`. Reemplaza `perfiles_pendientes` para flujos nuevos (el camino viejo sigue funcionando).
+**Perfil gestionado** (persona sin celular): cuenta real de `auth.users` con email placeholder `gestionado-<uuid>@usuarios.soyvita.com.ar`, creada por `crearPerfilGestionado` (`lib/familia/nucleo.ts`, admin client) junto con su `perfiles` y un vínculo ya `aceptado` con `rol = 'editar'`. Más adelante entra desde su celular con un código de `codigos_acceso`. Reemplaza `perfiles_pendientes` para flujos nuevos (el camino viejo sigue funcionando): el onboarding conversacional (`/onboarding/conversar`) crea a la persona a cargo así desde que se confirman relación, nombre y edad, y le guarda condiciones, alergias, remedios, turno y `mediciones_en_casa` directo en su perfil (con el rol `editar` del vínculo). Ya no crea borradores.
 
 ### Cuidadores de una persona (`027_cuidadores_de_persona.sql`)
 
@@ -375,7 +392,7 @@ Dedupe claim-before-send de los avisos programados: `unique (tipo, ref_id, fecha
 
 ## `codigos_acceso`
 
-Código de re-ingreso de un solo uso (15 min) que el cuidador genera para la persona cuidada (cuenta creada por código, o cuenta de Google que cambió de celular). Solo se guarda el hash. Ver `019_codigos_acceso.sql`.
+Código de re-ingreso de un solo uso (30 min desde el onboarding conversacional; `MINUTOS_VIGENCIA_CODIGO_ACCESO`) que el cuidador genera para la persona cuidada (cuenta creada por código, o cuenta de Google que cambió de celular). Solo se guarda el hash. Ver `019_codigos_acceso.sql`.
 
 | columna | tipo | notas |
 |---|---|---|
@@ -384,7 +401,7 @@ Código de re-ingreso de un solo uso (15 min) que el cuidador genera para la per
 | cuidador_id | uuid | references auth.users, on delete cascade; check `elder_id <> cuidador_id` |
 | codigo_hash | text | sha256 hex de `salt || código de 6 dígitos` |
 | salt | text | por fila |
-| expira_at | timestamptz | creación + 15 min |
+| expira_at | timestamptz | creación + 30 min |
 | usado_at | timestamptz | null hasta el canje |
 | created_at | timestamptz | |
 

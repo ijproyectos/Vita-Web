@@ -20,7 +20,7 @@ import { formatoFechaCorta, fechaDeHoyISO } from "@/lib/rutina/formato";
 import { iconoDeEspecialidad } from "@/lib/turnos/icono";
 import { claveMedicamento } from "@/lib/inventario/tipos";
 import { colorChipPorIndice } from "@/lib/perfil/tipos";
-import { textoDosis, type Medicamento, type MedicamentoConToma, type ResumenAdherencia, type TomaRegistrada } from "@/lib/medicamentos/tipos";
+import { indicacionDeComida, textoDosis, type Medicamento, type MedicamentoConToma, type ResumenAdherencia, type TomaRegistrada } from "@/lib/medicamentos/tipos";
 import type { Turno } from "@/lib/turnos/tipos";
 import type { Receta } from "@/lib/recetas/nucleo";
 import type { OpcionPerfil, PerfilActivo } from "@/lib/familia/tipos";
@@ -375,9 +375,10 @@ function MedItem({
         </div>
         <div className="min-w-0 flex-1">
           <div className={cn("truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]", tomado && "line-through opacity-55")}>{med.nombre}</div>
-          <div className={cn("mt-0.5 text-[11.5px] font-medium text-subtle", tomado && "opacity-60")}>
+          <div className={cn("mt-0.5 truncate text-[11.5px] font-medium text-subtle", tomado && "opacity-60")}>
             {dosis ? `${dosis} · ` : ""}
             {med.hora_programada.slice(0, 5)} hs
+            {indicacionDeComida(med) ? ` · ${indicacionDeComida(med)}` : ""}
           </div>
         </div>
         {puedeEditar ? (
