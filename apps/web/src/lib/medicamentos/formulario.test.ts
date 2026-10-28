@@ -15,25 +15,25 @@ describe("leerTomas", () => {
 
   it("lee pares hora/comida en orden y normaliza la hora", () => {
     expect(leerTomas(form(["8:00", "21:30"], ["con", "despues"]))).toEqual([
-      { hora: "08:00", conComida: "con" },
-      { hora: "21:30", conComida: "despues" },
+      { hora: "08:00", conComida: "con", indicacion: null },
+      { hora: "21:30", conComida: "despues", indicacion: null },
     ]);
   });
 
   it("descarta horas inválidas sin desalinear las comidas", () => {
-    expect(leerTomas(form(["25:00", "09:00"], ["antes", "con"]))).toEqual([{ hora: "09:00", conComida: "con" }]);
+    expect(leerTomas(form(["25:00", "09:00"], ["antes", "con"]))).toEqual([{ hora: "09:00", conComida: "con", indicacion: null }]);
   });
 
   it("deduplica por hora normalizada (gana la primera)", () => {
     expect(leerTomas(form(["8:00", "08:00", "08:00:00"], ["antes", "con", "despues"]))).toEqual([
-      { hora: "08:00", conComida: "antes" },
+      { hora: "08:00", conComida: "antes", indicacion: null },
     ]);
   });
 
   it("comida inválida o ausente cae en no-importa", () => {
     expect(leerTomas(form(["08:00", "09:00"], ["pizza"]))).toEqual([
-      { hora: "08:00", conComida: "no-importa" },
-      { hora: "09:00", conComida: "no-importa" },
+      { hora: "08:00", conComida: "no-importa", indicacion: null },
+      { hora: "09:00", conComida: "no-importa", indicacion: null },
     ]);
   });
 

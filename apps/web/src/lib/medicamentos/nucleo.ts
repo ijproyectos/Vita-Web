@@ -15,6 +15,7 @@ import type {
   TomaRegistrada,
 } from "./tipos";
 import { HORA_POR_MOMENTO } from "./tipos";
+import { conComidaDeIndicacion, type IndicacionComida } from "./comidas";
 import { ajustarStock, buscarInventarioId } from "@/lib/inventario/nucleo";
 import { claveMedicamento } from "@/lib/inventario/tipos";
 import { momentoDelDia } from "@/lib/rutina/momento";
@@ -252,32 +253,62 @@ export async function buscarPorNombre(
   return coincidencias.find((m) => m.hora_programada === horaHint) ?? coincidencias[0];
 }
 
+// Postgres 42703 / PostgREST PGRST204: falta la columna `indicacion` (migración
+// 031 sin aplicar). Solo ese caso se reintenta sin ella; cualquier otro error
+// (incluido el check de claves) se informa tal cual.
+function faltaColumnaIndicacion(error: { code?: string; message?: string }): boolean {
+  const message = error.message ?? "";
+  return /indicacion/i.test(message) && (error.code === "42703" || error.code === "PGRST204" || /column/i.test(message));
+}
+
+function sinIndicacion<T extends Record<string, unknown>>(fila: T): Omit<T, "indicacion"> {
+  const { indicacion: _indicacion, ...resto } = fila;
+  void _indicacion;
+  return resto;
+}
+
+/** Columnas de comida a escribir: la clave elegida y su `con_comida` derivado (o el legacy si no hay clave). */
+function columnasComida(t: { conComida?: ConComida; indicacion?: IndicacionComida | null }): { con_comida: ConComida; indicacion: IndicacionComida | null } {
+  return { con_comida: t.indicacion ? conComidaDeIndicacion(t.indicacion) : t.conComida ?? "no-importa", indicacion: t.indicacion ?? null };
+}
+
 export async function agregar(
   supabase: Cliente,
   usuarioId: string,
   datos: DatosNuevoMedicamento
 ): Promise<Medicamento> {
-  const { data, error } = await supabase
+  const comida = columnasComida(datos);
+  const fila: Record<string, unknown> = {
+    usuario_id: usuarioId,
+    nombre: datos.nombre,
+    dosis: datos.dosis ?? null,
+    unidad: datos.unidad ?? "mg",
+    hora_programada: datos.horaProgramada,
+    momento_dia: datos.momentoDia,
+    condicion: datos.condicion ?? null,
+    dias_recurrentes: datos.diasRecurrentes ?? [],
+    frecuencia: datos.frecuencia ?? null,
+    con_comida: comida.con_comida,
+    duracion: datos.duracion ?? null,
+    notas: datos.notas ?? null,
+  };
+  // Solo se manda `indicacion` si hay una: así el alta sin indicación no depende de la 031.
+  let { data, error } = await supabase
     .from("medicamentos")
-    .insert({
-      usuario_id: usuarioId,
-      nombre: datos.nombre,
-      dosis: datos.dosis ?? null,
-      unidad: datos.unidad ?? "mg",
-      hora_programada: datos.horaProgramada,
-      momento_dia: datos.momentoDia,
-      condicion: datos.condicion ?? null,
-      dias_recurrentes: datos.diasRecurrentes ?? [],
-      frecuencia: datos.frecuencia ?? null,
-      con_comida: datos.conComida ?? "no-importa",
-      duracion: datos.duracion ?? null,
-      notas: datos.notas ?? null,
-    })
+    .insert(comida.indicacion ? { ...fila, indicacion: comida.indicacion } : fila)
     .select()
     .single();
+  if (error && comida.indicacion && faltaColumnaIndicacion(error)) {
+    ({ data, error } = await supabase.from("medicamentos").insert(fila).select().single());
+  }
 
   if (error) throw new Error(`No se pudo crear el medicamento: ${error.message}`);
   return data as Medicamento;
+}
+
+function columnasComidaPlan(t: { conComida?: ConComida; indicacion?: IndicacionComida | null }): { conComida: ConComida; indicacion: IndicacionComida | null } {
+  const c = columnasComida(t);
+  return { conComida: c.con_comida, indicacion: c.indicacion };
 }
 
 /**
@@ -298,9 +329,9 @@ export async function agregarMultiMomento(
   const inventarioId = await buscarInventarioId(supabase, usuarioId, datos.nombre, datos.dosis);
 
   // Alta por toma (hora propia + comida por fila) o por momento (hora por defecto).
-  const plan: { hora: string; momento: MomentoDia; conComida: ConComida }[] = datos.tomas?.length
-    ? datos.tomas.map((t) => ({ hora: t.hora, momento: momentoDelDia(t.hora), conComida: t.conComida }))
-    : (datos.momentos ?? []).map((m) => ({ hora: HORA_POR_MOMENTO[m], momento: m, conComida: datos.conComida ?? "no-importa" }));
+  const plan: { hora: string; momento: MomentoDia; conComida: ConComida; indicacion: IndicacionComida | null }[] = datos.tomas?.length
+    ? datos.tomas.map((t) => ({ hora: t.hora, momento: momentoDelDia(t.hora), ...columnasComidaPlan(t) }))
+    : (datos.momentos ?? []).map((m) => ({ hora: HORA_POR_MOMENTO[m], momento: m, ...columnasComidaPlan(datos) }));
   if (plan.length === 0) throw new Error("Falta al menos un horario.");
 
   const filas = plan.map((toma) => ({
@@ -315,11 +346,15 @@ export async function agregarMultiMomento(
     dias_recurrentes: [],
     frecuencia: datos.frecuencia ?? null,
     con_comida: toma.conComida,
+    ...(toma.indicacion ? { indicacion: toma.indicacion } : {}),
     duracion: datos.duracion ?? null,
     notas: datos.notas ?? null,
   }));
 
-  const { data, error } = await supabase.from("medicamentos").insert(filas).select();
+  let { data, error } = await supabase.from("medicamentos").insert(filas).select();
+  if (error && filas.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
+    ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinIndicacion)).select());
+  }
   if (error) throw new Error(`No se pudo crear el medicamento: ${error.message}`);
   return data as Medicamento[];
 }
@@ -366,14 +401,15 @@ export async function actualizarHorario(
   if (datos.horaProgramada !== undefined) cambios.hora_programada = datos.horaProgramada;
   if (datos.momentoDia !== undefined) cambios.momento_dia = datos.momentoDia;
   if (datos.diasRecurrentes !== undefined) cambios.dias_recurrentes = datos.diasRecurrentes;
+  // La indicación es una observación independiente de la hora: solo cambia si se pide.
+  if (datos.indicacion !== undefined) Object.assign(cambios, columnasComida({ indicacion: datos.indicacion }));
 
-  const { data, error } = await supabase
-    .from("medicamentos")
-    .update(cambios)
-    .eq("id", medicamentoId)
-    .eq("usuario_id", usuarioId)
-    .select()
-    .single();
+  const actualizar = (c: Record<string, unknown>) =>
+    supabase.from("medicamentos").update(c).eq("id", medicamentoId).eq("usuario_id", usuarioId).select().single();
+  let { data, error } = await actualizar(cambios);
+  if (error && datos.indicacion !== undefined && faltaColumnaIndicacion(error)) {
+    ({ data, error } = await actualizar(sinIndicacion(cambios)));
+  }
 
   if (error) throw new Error(`No se pudo actualizar el horario: ${error.message}`);
   return data as Medicamento;
@@ -439,34 +475,45 @@ export async function actualizarGrupo(
 
   const nuevas = datos.tomas.filter((t) => !t.id);
   if (nuevas.length > 0) {
-    const { id: _id, created_at: _c, updated_at: _u, ...base } = molde;
+    const { id: _id, created_at: _c, updated_at: _u, indicacion: _i, ...base } = molde;
     void _id;
     void _c;
     void _u;
-    const { error } = await supabase.from("medicamentos").insert(
-      nuevas.map((t) => ({
+    void _i;
+    const filasNuevas = nuevas.map((t) => {
+      const comida = columnasComida(t);
+      return {
         ...base,
         ...compartido,
         hora_programada: t.hora,
         momento_dia: momentoDelDia(t.hora),
-        con_comida: t.conComida,
-      }))
-    );
+        con_comida: comida.con_comida,
+        // Si la columna existe (la fila molde la trae) se escribe siempre; si no, solo con valor.
+        ...(comida.indicacion || "indicacion" in molde ? { indicacion: comida.indicacion } : {}),
+      };
+    });
+    let { error } = await supabase.from("medicamentos").insert(filasNuevas);
+    if (error && faltaColumnaIndicacion(error)) {
+      ({ error } = await supabase.from("medicamentos").insert(filasNuevas.map(sinIndicacion)));
+    }
     if (error) throw new Error(`No se pudo guardar el horario nuevo: ${error.message}`);
   }
 
   for (const t of datos.tomas.filter((x) => x.id)) {
-    const { error } = await supabase
-      .from("medicamentos")
-      .update({
-        ...compartido,
-        hora_programada: t.hora,
-        momento_dia: momentoDelDia(t.hora),
-        con_comida: t.conComida,
-        updated_at: ahora,
-      })
-      .eq("id", t.id!)
-      .eq("usuario_id", usuarioId);
+    const comida = columnasComida(t);
+    const existente = filas.find((f) => f.id === t.id);
+    const cambiosToma = {
+      ...compartido,
+      hora_programada: t.hora,
+      momento_dia: momentoDelDia(t.hora),
+      con_comida: comida.con_comida,
+      updated_at: ahora,
+      // Se escribe la clave tal cual (aunque la hora cambie); sin valor y sin columna, no se toca.
+      ...(comida.indicacion || (existente && "indicacion" in existente) ? { indicacion: comida.indicacion } : {}),
+    };
+    const actualizar = (c: Record<string, unknown>) => supabase.from("medicamentos").update(c).eq("id", t.id!).eq("usuario_id", usuarioId);
+    let { error } = await actualizar(cambiosToma);
+    if (error && faltaColumnaIndicacion(error)) ({ error } = await actualizar(sinIndicacion(cambiosToma)));
     if (error) throw new Error(`No se pudo actualizar el medicamento: ${error.message}`);
   }
 

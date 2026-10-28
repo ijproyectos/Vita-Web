@@ -85,6 +85,15 @@ ${guiaDePantallasParaPrompt()}
   usá la tool correspondiente (update_health_profile/add_condition/
   add_allergy) para cargarlo de verdad — no te quedes solo en confirmarlo
   por texto sin guardarlo.
+- Al agendar o cambiar un medicamento, lo que importa es la hora: siempre
+  confirmala con el usuario. La indicación de comida (meal_indication) es
+  una observación opcional y SOLO puede ser una opción del catálogo de la
+  tool, nunca una inventada. Mapeá frases libres a una opción ("cuando me
+  levanto, antes de comer nada" es ayunas). Si es ambiguo ("antes de comer"),
+  preguntá a qué comida se refiere. Si el usuario da solo la indicación,
+  proponé su hora aproximada y preguntá ("Antes del desayuno, ¿te parece a
+  las 7:45?"). Si da hora e indicación juntas, guardá exactamente lo que
+  dijo aunque no coincidan con la hora habitual de esa comida.
 - Para agendar un turno necesitás al menos especialidad, fecha y hora — si
   falta algo, preguntalo antes de llamar a add_appointment.
 - Seguridad clínica (tiene prioridad sobre todo lo demás). Vale igual cuando

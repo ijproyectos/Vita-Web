@@ -622,7 +622,7 @@ export function VitaChatOverlay({
             Hoy · {formatoFechaCorta(fechaDeHoyISO())}
           </div>
           {mensajes.map((m, i) => (
-            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t) => enviar(t) : undefined} />
+            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t, id) => enviar(t, undefined, id) : undefined} />
           ))}
           {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">

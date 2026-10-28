@@ -51,7 +51,7 @@ export function acotarEntero(valor: unknown, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-export const UNIDADES_DOSIS = ["mg", "ml", "gotas", "UI", "comp."] as const;
+export const UNIDADES_DOSIS = ["mg", "mcg", "ml", "gotas", "UI", "comp."] as const;
 
 /**
  * Separa una dosis leída de un blister ("500 mg", "850mg", "5 ml") en el
@@ -60,14 +60,45 @@ export const UNIDADES_DOSIS = ["mg", "ml", "gotas", "UI", "comp."] as const;
  * (ej. "mcg"), devuelve el texto entero como valor y unidad null — mejor
  * conservar el dato que etiquetarlo con una unidad equivocada.
  */
+// Cómo lo escribe la gente -> unidad de `UNIDADES_DOSIS` ("1 comprimido", "20 gotitas").
+const SINONIMOS_UNIDAD: Record<string, (typeof UNIDADES_DOSIS)[number]> = {
+  comprimido: "comp.",
+  comprimidos: "comp.",
+  pastilla: "comp.",
+  pastillas: "comp.",
+  gota: "gotas",
+  gotita: "gotas",
+  gotitas: "gotas",
+  "µg": "mcg",
+  ug: "mcg",
+  microgramo: "mcg",
+  microgramos: "mcg",
+  miligramo: "mg",
+  miligramos: "mg",
+  mililitro: "ml",
+  mililitros: "ml",
+};
+
 export function separarDosis(texto: string | null | undefined): { valor: string; unidad: string | null } {
   const t = (texto ?? "").trim();
   if (!t) return { valor: "", unidad: null };
-  const m = t.match(/^(\d+(?:[.,]\d+)?)\s*([^\d\s].*)?$/);
+  // "1/2 comprimido" -> 0.5. Solo una fracción propia de comprimido (o sin
+  // unidad): "500/30 mg" o "10/20 mg" son combinaciones de dos drogas y quedan tal cual.
+  const fraccion = t.match(/^(\d+)\s*\/\s*(\d+)(.*)$/);
+  const restoFraccion = (fraccion?.[3] ?? "").trim().toLowerCase().replace(/\.$/, "");
+  const propia =
+    fraccion &&
+    Number(fraccion[1]) < Number(fraccion[2]) &&
+    ["", "comp", "comprimido", "comprimidos", "pastilla", "pastillas"].includes(restoFraccion);
+  const normalizado = propia
+    ? `${String(Math.round((Number(fraccion[1]) / Number(fraccion[2])) * 100) / 100)}${fraccion[3]}`
+    : t;
+  const m = normalizado.match(/^(\d+(?:[.,]\d+)?)\s*([^\d\s].*)?$/);
   if (!m) return { valor: t, unidad: null };
   const numero = m[1].replace(",", ".");
   const unidadCruda = (m[2] ?? "").trim().toLowerCase().replace(/\.$/, "");
   if (!unidadCruda) return { valor: numero, unidad: null };
-  const unidad = UNIDADES_DOSIS.find((u) => u.toLowerCase().replace(/\.$/, "") === unidadCruda);
+  const unidad =
+    UNIDADES_DOSIS.find((u) => u.toLowerCase().replace(/\.$/, "") === unidadCruda) ?? SINONIMOS_UNIDAD[unidadCruda];
   return unidad ? { valor: numero, unidad } : { valor: t, unidad: null };
 }

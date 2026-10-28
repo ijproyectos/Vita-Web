@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { COLUMNAS_025, type CambiosPerfil, type Condicion, type Perfil, type UsoApp } from "./tipos";
+import { COLUMNAS_025, type CambiosPerfil, type Condicion, type MedicionesEnCasa, type Perfil, type UsoApp } from "./tipos";
 
 type Cliente = SupabaseClient;
 
@@ -14,6 +14,14 @@ export async function obtenerPerfil(supabase: Cliente, usuarioId: string): Promi
 
   if (error) throw new Error(`No se pudo leer el perfil: ${error.message}`);
   return data as Perfil | null;
+}
+
+/** True si el perfil no tiene remedios, condiciones ni alergias cargados. */
+export async function perfilVacio(supabase: Cliente, usuarioId: string): Promise<boolean> {
+  const { count, error } = await supabase.from("medicamentos").select("id", { count: "exact", head: true }).eq("usuario_id", usuarioId);
+  if (error || (count ?? 0) > 0) return false;
+  const perfil = await obtenerPerfil(supabase, usuarioId);
+  return !perfil || ((perfil.condiciones?.length ?? 0) === 0 && (perfil.alergias?.length ?? 0) === 0);
 }
 
 /** Primer nombre de la persona ("Vos" si no hay). Nunca lanza. */
@@ -165,6 +173,20 @@ export async function quitarAlergia(
   const alergias = (perfil?.alergias ?? []).filter((a) => a !== alergia);
   await actualizarPerfilCrudo(supabase, usuarioId, { alergias });
   return alergias;
+}
+
+/**
+ * Guarda "¿te medís la presión o el azúcar en casa?" (031). Si la columna
+ * todavía no existe (migración sin aplicar) no hace nada y no tira: es un dato
+ * del onboarding, nunca debe cortar el recorrido.
+ */
+export async function guardarMedicionesEnCasa(supabase: Cliente, usuarioId: string, valor: MedicionesEnCasa): Promise<void> {
+  try {
+    await escribirPerfil(supabase, usuarioId, { mediciones_en_casa: valor });
+  } catch (e) {
+    if (e instanceof ErrorColumna) return;
+    throw e;
+  }
 }
 
 /**

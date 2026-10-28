@@ -1,11 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
+import { CLASES_COLOR } from "@/lib/familia/colores";
+import type { ColorPerfil } from "@/lib/familia/tipos";
+import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 
 // Piezas de UI compartidas por el onboarding conversacional nuevo
@@ -22,6 +25,10 @@ export type Mensaje = {
   // Date.now() al recibir la transcripción), no viene de ningún metadato
   // real del archivo de audio (que ya se descarta apenas se transcribe).
   audioSeg?: number;
+  // Tarjeta congelada: un widget (consentimiento, remedio, código, resumen) que
+  // quedó en el historial como solo lectura, mostrando lo que se eligió. Si está,
+  // se dibuja la tarjeta en vez de la burbuja (`texto` va vacío).
+  tarjeta?: ReactNode;
 };
 
 const ANIM_ENTRADA = "animate-in fade-in slide-in-from-bottom-1.5 duration-300";
@@ -143,14 +150,9 @@ export function ChipsMulti({
 
 type EstadoTab = "activo" | "inactivo" | "completo";
 
-// "Vos" siempre es teal (el color de marca), la persona cuidada siempre es
-// violeta (colorChipPorIndice(1) — índice 1 porque el 0/teal queda
-// reservado para "vos", ver conversar.tsx) — coincide con el mock, donde
-// el tab "2 · Vos" es teal claro y "1 · Elsa" es violeta.
-type ColorTab = "teal" | "violet";
-
-const FONDO_ACTIVO: Record<ColorTab, string> = { teal: "bg-chip-teal-ink", violet: "bg-chip-violet-ink" };
-const FONDO_COMPLETO: Record<ColorTab, string> = { teal: "bg-chip-teal-bg text-chip-teal-ink", violet: "bg-chip-violet-bg text-chip-violet-ink" };
+// "Vos" siempre es teal (el color de marca); la persona cuidada usa el color
+// que se le asignó al crear su perfil (perfiles.color, tokens --persona-*).
+type ColorTab = ColorPerfil;
 
 export function EncabezadoConversar({
   tabs,
@@ -194,8 +196,8 @@ export function EncabezadoConversar({
               key={t.label}
               className={cn(
                 "flex-1 rounded-full px-3 py-2 text-center text-[12.5px] font-bold transition-colors",
-                t.estado === "activo" && cn(FONDO_ACTIVO[t.color], "text-primary-foreground"),
-                t.estado === "completo" && FONDO_COMPLETO[t.color],
+                t.estado === "activo" && cn(CLASES_COLOR[t.color].solido, "text-primary-foreground"),
+                t.estado === "completo" && cn(CLASES_COLOR[t.color].fondo, CLASES_COLOR[t.color].tinta),
                 t.estado === "inactivo" && "bg-canvas text-subtle"
               )}
             >
@@ -325,6 +327,70 @@ export function CampoEntrada({
       >
         <VitaIcon name="send" size={18} />
       </button>
+    </div>
+  );
+}
+
+/**
+ * Tarjeta del código de acceso en la charla (f_share): los seis dígitos, copiar
+ * y compartir (hoja nativa del celular; si no hay, WhatsApp web). El código es
+ * real (un solo uso) y se muestra solo acá: en la DB queda el hash.
+ */
+export function TarjetaCodigoCompartir({ nombre, codigo, venceA }: { nombre: string; codigo: string; venceA: string }) {
+  const [copiado, setCopiado] = useState(false);
+
+  function mensaje() {
+    return `Tu código para entrar a vita: ${codigo}. Abrí ${window.location.origin}/login, tocá «Tengo un código» y escribilo. Vence en ${MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos y sirve una sola vez.`;
+  }
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(codigo);
+      setCopiado(true);
+      toast.success("Código copiado");
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      toast.error("No pudimos copiar el código.");
+    }
+  }
+
+  async function compartir() {
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ text: mensaje() });
+      } catch {
+        /* la persona cerró la hoja de compartir: no es un error */
+      }
+      return;
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensaje())}`, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="flex flex-col items-center rounded-[20px] bg-card px-4 pb-4 pt-[18px] text-center shadow-card">
+      <div className="eyebrow text-subtle">Código para {nombre}</div>
+      <div className="mt-3.5 grid w-full grid-cols-6 gap-1.5" role="img" aria-label={`Código ${codigo.split("").join(" ")}`}>
+        {codigo.split("").map((c, i) => (
+          <div key={i} aria-hidden className="flex h-[52px] items-center justify-center rounded-[14px] bg-secondary font-heading text-[26px] font-extrabold text-teal-deep">
+            {c}
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex w-full gap-2">
+        <button type="button" onClick={compartir} className="flex-1 rounded-full bg-primary py-[12px] font-heading text-[13.5px] font-extrabold text-primary-foreground shadow-cta">
+          Compartir
+        </button>
+        <button
+          type="button"
+          onClick={copiar}
+          className="rounded-full bg-card px-5 py-[12px] font-heading text-[13.5px] font-extrabold text-teal-deep shadow-[inset_0_0_0_1.5px_var(--chip-teal-bg)]"
+        >
+          {copiado ? "Copiado" : "Copiar"}
+        </button>
+      </div>
+      <p className="mt-3 text-pretty text-[11.5px] font-medium text-subtle">
+        Vence a las {venceA} ({MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos desde que se generó) y sirve una sola vez. Si se vence, le mandás otro desde Familia.
+      </p>
     </div>
   );
 }
