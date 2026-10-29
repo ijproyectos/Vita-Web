@@ -25,6 +25,12 @@ import { createClient } from "@supabase/supabase-js";
  * vínculo aceptado con `cuidador_id` = el usuario ya autenticado por sesión,
  * y borra la cuenta ante cualquier fallo. Nunca recibe ids ajenos del cliente.
  *
+ * "Pedir ayuda a mi familia" (`pedirAyudaAFamilia` en `lib/notificaciones/pedido-ayuda.ts`, tool
+ * `pedir_ayuda_familia` del chat de modo simple): escribe el aviso y manda el push a los CUIDADORES de la
+ * persona, filas y suscripciones que ella no puede tocar con su sesión. Se crea RECIÉN después de
+ * obtener los cuidadores aceptados con el cliente de sesión (`listar_mis_cuidadores`); el id de la
+ * persona sale de la sesión, nunca del modelo.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,

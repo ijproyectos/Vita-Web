@@ -15,7 +15,9 @@ export type TipoAviso =
   | "resumen_dia_persona"
   | "turno_persona_dia_antes"
   | "stock_bajo_persona"
-  | "persona_en_vita";
+  | "persona_en_vita"
+  // SOS explícito de la persona cuidada (modo simple): no depende de ninguna preferencia.
+  | "pedido_ayuda";
 
 export type Aviso = {
   id: string;

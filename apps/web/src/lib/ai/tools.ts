@@ -19,6 +19,8 @@ import {
 import { pantallaPorClave } from "./guia-app";
 import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
+import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
+import { accionPedidoAyuda, textoPedidoAyudaParaModelo } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 
 export { TOOLS } from "./tools-definiciones";
@@ -312,6 +314,14 @@ async function ejecutarEnDestino(
       // "Ok." nunca se narra — el chat solo muestra accionUI vía SSE, no
       // el contenido de esta tool (mismo mecanismo que show_today_medications).
       return { contenido: "Ok.", accionUI: { type: "avatar_mood", mood } };
+    }
+
+    case "pedir_ayuda_familia": {
+      // Aviso real a los cuidadores aceptados de QUIEN CHATEA (nunca de otra persona). El texto para el
+      // modelo dice con precisión si se avisó o no; la acción solo sale si el servidor lo confirmó.
+      const motivo = typeof input.motivo === "string" ? input.motivo : "";
+      const resultado = await pedirAyudaAFamilia(supabase, usuarioId, motivo);
+      return { contenido: textoPedidoAyudaParaModelo(resultado), accionUI: accionPedidoAyuda(resultado) };
     }
 
     default:

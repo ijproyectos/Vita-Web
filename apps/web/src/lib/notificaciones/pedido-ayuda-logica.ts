@@ -1,0 +1,50 @@
+// Parte PURA del pedido de ayuda a la familia (sin I/O, testeable sin Supabase).
+// Sin `server-only` a propósito: la importan la tool del chat y los tests.
+import { limpiarDato } from "@/lib/ai/limpiar";
+
+/** Como máximo un pedido de ayuda cada este tiempo por persona. */
+export const MINUTOS_ENTRE_PEDIDOS_AYUDA = 15;
+export const MAX_MOTIVO = 140;
+
+export type ResultadoPedidoAyuda =
+  | { status: "enviado"; nombres: string[] }
+  | { status: "sin-cuidadores" }
+  | { status: "repetido"; nombres: string[] }
+  | { status: "error"; message: string };
+
+/** El motivo lo escribe el modelo a partir de lo que dijo la persona: sin control chars, 1 línea, tope. */
+export function limpiarMotivo(crudo: unknown): string {
+  if (typeof crudo !== "string") return "";
+  return crudo
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_MOTIVO)
+    .trim();
+}
+
+function nombresParaModelo(nombres: string[]): string {
+  const lista = nombres.map((n) => limpiarDato(n, 40)).filter(Boolean);
+  if (lista.length <= 1) return lista[0] ?? "su familia";
+  return `${lista.slice(0, -1).join(", ")} y ${lista[lista.length - 1]}`;
+}
+
+/** Lo que vuelve al modelo como tool_result: explícito sobre si se avisó o no (nunca afirma de más). */
+export function textoPedidoAyudaParaModelo(r: ResultadoPedidoAyuda): string {
+  switch (r.status) {
+    case "enviado":
+      return `ENVIADO: la app le avisó de verdad a ${nombresParaModelo(r.nombres)} (aviso en la app y notificación). Decíselo con ese nombre y tranquilizala en una frase. Si lo que cuenta suena grave, agregá que toque el botón Ayuda para llamar.`;
+    case "repetido":
+      return `YA AVISADO: hace pocos minutos ya se le avisó a ${nombresParaModelo(r.nombres)} y no se mandó otro aviso. Decile que ya les avisaste y que enseguida se van a comunicar. Si suena grave, que toque el botón Ayuda para llamar.`;
+    case "sin-cuidadores":
+      return "NO SE AVISÓ A NADIE: no tiene familiares vinculados en vita. NO digas que avisaste a alguien. Decile que toque el botón Ayuda para llamar a su contacto.";
+    case "error":
+      return "NO SE PUDO AVISAR por un error temporal. NO digas que avisaste a alguien. Decile que toque el botón Ayuda para llamar a su contacto.";
+  }
+}
+
+/** Evento SSE para la pantalla: solo cuando el servidor confirmó que hay aviso (nuevo o reciente). */
+export function accionPedidoAyuda(r: ResultadoPedidoAyuda): { type: "ayuda_enviada"; nombres: string[] } | undefined {
+  if (r.status === "enviado" || r.status === "repetido") return { type: "ayuda_enviada", nombres: r.nombres };
+  return undefined;
+}

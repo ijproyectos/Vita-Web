@@ -267,3 +267,21 @@ export const TOOLS: Anthropic.Tool[] = TOOLS_BASE.map((t) => {
     },
   };
 });
+
+// Tools que SOLO existen en el chat de modo simple (`modo: "simple"` en /api/chat). No están en TOOLS: en el
+// modo normal no se ofrecen ni se ejecutan (ver lib/ai/modo-simple.ts).
+export const TOOL_PEDIR_AYUDA_FAMILIA: Anthropic.Tool = {
+  name: "pedir_ayuda_familia",
+  description:
+    "Le manda un aviso REAL (notificación en el celular) a los familiares que cuidan a quien te habla. Llamala cuando diga que se siente mal, cuente un síntoma, pida ayuda o pida que avisen a su familia o que le saquen un turno. El resultado dice si se avisó o no y a quién: contale a la persona SOLO eso, nunca afirmes que avisaste si el resultado no lo confirma. Se puede enviar como máximo un aviso cada 15 minutos.",
+  input_schema: {
+    type: "object",
+    properties: {
+      motivo: {
+        type: "string",
+        description: "Qué le pasa o qué pidió, con sus palabras, en una frase corta (ej. 'Se siente mareado'). Máx. 140 caracteres.",
+      },
+    },
+    required: ["motivo"],
+  },
+};

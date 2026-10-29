@@ -270,3 +270,20 @@ export function payloadPersonaEnVita(d: { personaId: string; personaNombre: stri
     tag: `persona-en-vita-${d.personaId}`,
   };
 }
+
+/**
+ * Push al cuidador: la persona pidió ayuda (SOS explícito). Sin botones de acción y
+ * con `requireInteraction`: no se cierra sola. No pasa por las preferencias de avisos
+ * de familia ni por el silencio nocturno (ninguno de los dos se consulta al entregarlo).
+ */
+export function payloadPedidoAyuda(d: { personaId: string; personaNombre: string; motivo: string }): PayloadPush {
+  return {
+    title: `${d.personaNombre} pidió ayuda`,
+    body: d.motivo || "Necesita que te comuniques lo antes posible.",
+    url: `/app/familia/${d.personaId}`,
+    tag: `pedido-ayuda-${d.personaId}`,
+    requireInteraction: true,
+    renotify: true,
+    datos: { personaId: d.personaId },
+  };
+}
