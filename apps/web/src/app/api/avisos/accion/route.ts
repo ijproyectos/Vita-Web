@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { marcarTomado } from "@/lib/medicamentos/nucleo";
 import { posponerDosis } from "@/lib/notificaciones/avisos";
+import { validarFechaAccion } from "@/lib/notificaciones/fecha-accion";
 
 export const runtime = "nodejs";
 
@@ -43,15 +44,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Formato no soportado." }, { status: 415 });
   }
 
-  let cuerpo: { medicamentoId?: unknown; accion?: unknown };
+  let cuerpo: { medicamentoId?: unknown; accion?: unknown; fecha?: unknown };
   try {
     cuerpo = await request.json();
   } catch {
     return NextResponse.json({ error: "Pedido inválido." }, { status: 400 });
   }
-  const { medicamentoId, accion } = cuerpo;
+  const { medicamentoId, accion, fecha } = cuerpo;
   if (typeof medicamentoId !== "string" || !UUID.test(medicamentoId) || (accion !== "tomada" && accion !== "posponer")) {
     return NextResponse.json({ error: "Pedido inválido." }, { status: 400 });
+  }
+
+  // La fecha de la dosis viaja en la notificación: una notificación vieja (o sin
+  // fecha) nunca marca ni pospone la dosis de HOY. Responde 409 y el service
+  // worker abre la app para resolverlo ahí.
+  const validacion = validarFechaAccion(accion, fecha, new Date());
+  if (!validacion.ok) {
+    return NextResponse.json({ error: "Esta notificación ya no corresponde a una dosis pendiente." }, { status: 409 });
   }
 
   try {
@@ -75,7 +84,7 @@ export async function POST(request: Request) {
     if (accion === "tomada") {
       // marcarTomado devuelve void y LANZA ante cualquier error de DB: el catch
       // de abajo responde 500, así el service worker nunca muestra "Listo".
-      await marcarTomado(supabase, user.id, medicamentoId, true);
+      await marcarTomado(supabase, user.id, medicamentoId, true, validacion.fecha);
     } else {
       const r = await posponerDosis(supabase, user.id, [medicamentoId]);
       if (!r.ok) return NextResponse.json({ error: "No pudimos programar el aviso." }, { status: 500 });

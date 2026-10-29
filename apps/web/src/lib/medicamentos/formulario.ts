@@ -1,5 +1,6 @@
 import { normalizarHora } from "@/lib/rutina/momento";
 import { conComidaDeIndicacion, esIndicacionComida, type ComidaToma } from "./comidas";
+import { ErrorEntradaMedicamento } from "./duplicados";
 import type { ConComida } from "./tipos";
 
 // Lectura de las tomas que manda el formulario de medicamento (alta propia y
@@ -19,14 +20,20 @@ export function normalizarComida(conComida: unknown, indicacion: unknown): Comid
   return { conComida: COMIDAS_VALIDAS.includes(conComida as ConComida) ? (conComida as ConComida) : "no-importa", indicacion: null };
 }
 
-/** Valida una lista de tomas cruda (hora + comida): normaliza la hora, descarta inválidas y repetidas y aplica MAX_TOMAS. */
+/**
+ * Validates a raw list of takes (hour + meal): normalizes the hour and REJECTS
+ * (throws `ErrorEntradaMedicamento`, message fit for the user) an invalid or
+ * repeated hour or more than MAX_TOMAS takes. Nothing is dropped silently, so
+ * what the user sees on the form is exactly what gets saved.
+ */
 export function normalizarTomas(crudas: { hora: unknown; conComida?: unknown; indicacion?: unknown }[]): ({ hora: string } & ComidaToma)[] {
+  if (crudas.length > MAX_TOMAS) throw new ErrorEntradaMedicamento(`Podés cargar hasta ${MAX_TOMAS} horarios por medicamento.`);
   const vistas = new Set<string>();
   const tomas: ({ hora: string } & ComidaToma)[] = [];
   for (const t of crudas) {
-    if (tomas.length >= MAX_TOMAS) break;
     const hora = normalizarHora(String(t?.hora));
-    if (!hora || vistas.has(hora)) continue;
+    if (!hora) throw new ErrorEntradaMedicamento("Revisá los horarios: hay uno que no es válido.");
+    if (vistas.has(hora)) throw new ErrorEntradaMedicamento("Hay horarios repetidos. Dejá cada horario una sola vez.");
     vistas.add(hora);
     tomas.push({ hora, ...normalizarComida(t.conComida, t.indicacion) });
   }

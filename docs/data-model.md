@@ -1,5 +1,7 @@
 # Modelo de datos
 
+Propuesta de evolución, separada del esquema actual: [A database model for reliable Vita actions](database-model-proposal.md).
+
 Cada fila de negocio lleva `usuario_id` referenciando `auth.users` directo, con RLS `usuario_id = auth.uid()` (o `id = auth.uid()` en `perfiles`) para el dueño. Además, desde `021` un cuidador con vínculo aceptado lee (cualquier rol) y escribe (rol `editar`) los datos de la persona que cuida — ver la sección Familia.
 
 ## `perfiles`
@@ -444,3 +446,7 @@ Throttling anti fuerza bruta de /login por código: `id` (identity), `ip_hash` (
 - Login con Apple.
 
 Rol Cuidador / vínculo con otro usuario ya no está fuera de alcance — ver `vinculos_cuidador`/`alertas_dosis` arriba (`008_cuidadores.sql`, ampliado en `021` con Familia).
+
+## uso_ia_diario: costo en dólares y cache (migración 036)
+
+Migración 036 (escrita, NO aplicada; aditiva sobre 013). Agrega a `uso_ia_diario` `tokens_cache_lectura`, `tokens_cache_escritura` y `costo_micro_usd` (todas `bigint not null default 0`; micro-USD enteros, 1 USD = 1.000.000). Las columnas de 013 se conservan y se siguen escribiendo. RLS habilitada SIN policies (solo `service_role`). El límite diario es US$0,33 (US$10/mes) y se decide por `costo_micro_usd`; costo = `input*2 + output*10 + cacheRead*0,2 + cacheWrite*2,5` micro-USD (precios de `claude-sonnet-5`, `lib/uso-ia/precios.ts`). Sin la migración la app estima desde los tokens viejos (200.000 ~ US$0,33). Tests: `supabase/tests/uso-ia-costo.sql`.

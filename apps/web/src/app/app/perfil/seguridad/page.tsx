@@ -5,6 +5,7 @@ import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { TopBar } from "../../top-bar";
 import { FilaAccion, Grupo, Tile } from "../filas";
 import { PinSeguridad } from "./pin-seguridad";
+import { FormCerrarSesion } from "@/components/vita/form-cerrar-sesion";
 
 // Seguridad (V7): PIN al volver (real, de este dispositivo), verificación en
 // dos pasos (todavía no existe: se dice "Próximamente", sin interruptor
@@ -49,13 +50,13 @@ export default async function SeguridadPage() {
       </Grupo>
 
       <Grupo titulo="Este dispositivo">
-        <form action="/auth/signout" method="post">
+        <FormCerrarSesion>
           <FilaAccion
             icon="logout"
             label="Cerrar sesión en este dispositivo"
             sub="No cierra tu sesión en otros dispositivos"
           />
-        </form>
+        </FormCerrarSesion>
       </Grupo>
     </div>
   );

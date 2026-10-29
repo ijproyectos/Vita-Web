@@ -30,12 +30,16 @@ export const RANGO_MOMENTO: Record<MomentoDia, string> = {
 
 export const ORDEN_MOMENTOS: MomentoDia[] = ["mañana", "mediodia", "tarde", "noche"];
 
-/** "8:05" / "08:05" / "08:05:00" -> "08:05"; null si no es una hora válida. */
+/**
+ * Single hour normalizer of the app. "8:05" / "08:05" / "08:05:00" -> "08:05".
+ * Seconds are only accepted as ":00" with a two-digit hour. null for anything else (seconds other than 00, hours > 23, minutes > 59, junk).
+ */
 export function normalizarHora(crudo: string): string | null {
-  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(crudo.trim());
+  if (typeof crudo !== "string") return null;
+  const m = /^(\d{1,2}):(\d{2})$|^(\d{2}):(\d{2}):00$/.exec(crudo.trim());
   if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  return `${String(h).padStart(2, "0")}:${m[2]}`;
+  const h = Number(m[1] ?? m[3]);
+  const minutos = m[2] ?? m[4];
+  if (h > 23 || Number(minutos) > 59) return null;
+  return `${String(h).padStart(2, "0")}:${minutos}`;
 }

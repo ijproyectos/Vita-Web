@@ -23,9 +23,13 @@ import {
   TarjetaDescanso,
   TarjetaGrupo,
   TarjetaMediciones,
+  TarjetaSiguientes,
+  TarjetaPorCorregir,
   TarjetaTurno,
   type Dosis,
   type MedicionSimple,
+  type Siguiente,
+  type PorCorregir,
   type TurnoSimple,
 } from "@/components/vita/modo-simple/piezas";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
@@ -35,7 +39,11 @@ type Previa = {
   fechaTexto: string;
   grupo: Dosis[];
   momento: MomentoDia | null;
+  siguientes: Siguiente[];
+  porCorregir: PorCorregir[];
   hayMedsHoy: boolean;
+  // La lectura de los remedios de hoy falló: no es lo mismo que "no tiene remedios".
+  errorMedicamentos?: boolean;
   turno: TurnoSimple | null;
   mediciones: { titulo: string; items: MedicionSimple[] } | null;
 };
@@ -357,12 +365,15 @@ function VistaPrevia({
             />
             <div className="mt-5 flex flex-col gap-4">
               {prefs.ver_turnos && previa.turno && <TarjetaTurno turno={previa.turno} />}
-              {hayGrupo ? (
+              {previa.errorMedicamentos ? (
+                <p className="rounded-[20px] bg-destructive/10 p-4 text-sm text-destructive" role="alert">
+                  No pudimos cargar los remedios de hoy. Intentá de nuevo en un momento.
+                </p>
+              ) : hayGrupo ? (
                 <TarjetaGrupo
                   grupo={previa.grupo}
                   momento={previa.momento}
                   alertado={false}
-                  faltanMinutos={0}
                   confirmando={false}
                   escuchandoVoz={false}
                   silenciada={false}
@@ -375,11 +386,13 @@ function VistaPrevia({
                   onAlternarVoz={NADA}
                 />
               ) : (
-                <TarjetaDescanso nombre={nombre} hayMedsHoy={previa.hayMedsHoy} />
+                <TarjetaDescanso nombre={nombre} hayMedsHoy={previa.hayMedsHoy} proximaHora={previa.siguientes[0]?.horaProgramada} />
               )}
               {prefs.ver_mediciones && previa.mediciones && (
                 <TarjetaMediciones titulo={previa.mediciones.titulo} mediciones={previa.mediciones.items} hrefDe={null} />
               )}
+              {previa.porCorregir.length > 0 && <TarjetaPorCorregir items={previa.porCorregir} />}
+              {previa.siguientes.length > 0 && <TarjetaSiguientes siguientes={previa.siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
             </div>
           </div>
           <BarraInferior estado="idle" onHablar={NADA} onAjustes={NADA} conCharla={prefs.charlar} />

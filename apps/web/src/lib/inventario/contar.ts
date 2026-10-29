@@ -154,8 +154,11 @@ export async function contarPastillasEnFoto(
     });
 
     await registrarUsoIA(usuarioId, {
+      modelo: MODEL,
       inputTokens: mensaje.usage.input_tokens,
       outputTokens: mensaje.usage.output_tokens,
+      cacheReadTokens: mensaje.usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: mensaje.usage.cache_creation_input_tokens ?? 0,
     });
 
     if (!mensaje.parsed_output) {

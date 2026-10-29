@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Tile } from "./filas";
+import { FormCerrarSesion } from "@/components/vita/form-cerrar-sesion";
 
 // Fila "Cerrar sesión" + hoja de confirmación (V7 CERRAR SESIÓN): antes de
 // salir avisa que, sin sesión, el celular deja de recibir los avisos de
@@ -41,11 +42,11 @@ export function CerrarSesion({ sub }: { sub: string }) {
           >
             Seguir en vita
           </button>
-          <form action="/auth/signout" method="post">
+          <FormCerrarSesion>
             <button type="submit" className="w-full rounded-full py-3 text-sm font-extrabold text-destructive">
               Cerrar sesión
             </button>
-          </form>
+          </FormCerrarSesion>
         </SheetContent>
       </Sheet>
     </>

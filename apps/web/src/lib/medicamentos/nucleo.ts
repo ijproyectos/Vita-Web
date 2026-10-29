@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolverMedicamento } from "./resolucion";
+import { ErrorMedicamentoAmbiguo, resolverMedicamento } from "./resolucion";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ConComida,
@@ -17,8 +17,18 @@ import type {
 } from "./tipos";
 import { HORA_POR_MOMENTO } from "./tipos";
 import { conComidaDeIndicacion, type IndicacionComida } from "./comidas";
+import {
+  ErrorEntradaMedicamento,
+  ErrorHorarioMedicamentoDuplicado,
+  horariosCoinciden,
+  normalizarHoraDuplicados,
+  normalizarNombreMedicamento,
+  normalizarHorarioMedicamento,
+  traducirErrorDuplicado,
+  type HorarioMedicamento,
+} from "./duplicados";
 import { ajustarStock, buscarInventarioId } from "@/lib/inventario/nucleo";
-import { claveMedicamento } from "@/lib/inventario/tipos";
+import { claveMedicamento, separarDosis } from "@/lib/inventario/tipos";
 import { momentoDelDia } from "@/lib/rutina/momento";
 
 // Núcleo de lógica de medicamentos, sin acoplarse a Server Actions ni al
@@ -314,8 +324,8 @@ export async function listarTomasDesde(
  * una sola vez (una por momento elegido, mismo nombre) desde
  * `agregarMultiMomento`, y sin esto la de "la noche" quedaba inalcanzable
  * por chat: siempre resolvía a la primera coincidencia (típicamente la de
- * la mañana). Si no hay hint o no matchea ninguna, cae al primer match de
- * siempre.
+ * la mañana). Si no hay hint o no matchea ninguna lanza `ErrorMedicamentoAmbiguo`
+ * (nunca elige una fila en silencio).
  */
 export async function buscarPorNombre(
   supabase: Cliente,
@@ -327,8 +337,9 @@ export async function buscarPorNombre(
   const r = resolverMedicamento(todos, nombre, horaHint);
   if (r.estado === "no_encontrado") return null;
   // Exacta antes que parcial y la hora desambigua (algoritmo único en resolucion.ts); si sigue
-  // ambiguo, el comportamiento de siempre: la primera coincidencia.
-  return r.estado === "unico" ? r.medicamento : r.filas[0];
+  // ambiguo NO se elige una fila en silencio: quien llama pregunta cuál.
+  if (r.estado === "ambiguo") throw new ErrorMedicamentoAmbiguo(r.candidatos);
+  return r.medicamento;
 }
 
 // Postgres 42703 / PostgREST PGRST204: falta la columna `indicacion` (migración
@@ -350,18 +361,86 @@ function columnasComida(t: { conComida?: ConComida; indicacion?: IndicacionComid
   return { con_comida: t.indicacion ? conComidaDeIndicacion(t.indicacion) : t.conComida ?? "no-importa", indicacion: t.indicacion ?? null };
 }
 
+/**
+ * Rows of one group (several takes of one medicine) share the medicine identity:
+ * name without case, accents or extra spaces, plus the numeric dose and the unit
+ * ("50", "50 mg" and "50,0 MG" are the same dose; "50 ml" is not). Dose and unit
+ * are often left empty, so a missing value never splits a group: they only have
+ * to agree among the rows that do have one.
+ */
+function partesGrupo(m: Medicamento): { nombre: string; dosis: string; unidad: string } {
+  const sinAcentos = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const { valor, unidad } = separarDosis(m.dosis ?? "");
+  const [nombre, dosis] = claveMedicamento(sinAcentos(m.nombre).replace(/\s+/g, " "), valor).split("|");
+  const unidadNormalizada = sinAcentos(m.unidad?.trim() || unidad || "").replace(/\s+/g, "").toLowerCase();
+  return { nombre, dosis, unidad: unidadNormalizada };
+}
+
+function mismoGrupo(filas: Medicamento[]): boolean {
+  const partes = filas.map(partesGrupo);
+  const coinciden = (valores: string[]) => new Set(valores.filter(Boolean)).size <= 1;
+  return (
+    new Set(partes.map((p) => p.nombre)).size === 1 &&
+    coinciden(partes.map((p) => p.dosis)) &&
+    coinciden(partes.map((p) => p.unidad))
+  );
+}
+
+function comprobarHorarios(
+  candidatos: HorarioMedicamento[],
+  existentes: Medicamento[],
+  excluirIds: string[] = []
+): void {
+  const normalizados = candidatos.map(normalizarHorarioMedicamento);
+  const excluidos = new Set(excluirIds);
+  const nombres = new Set(normalizados.map((m) => m.nombre));
+  // Existing rows are legacy data: normalize them leniently and skip the ones
+  // that cannot be compared (blank name, bad hour or days). Only the incoming
+  // data is validated strictly, so one bad old row never blocks unrelated writes.
+  const previos = existentes.flatMap((m) => {
+    if (excluidos.has(m.id)) return [];
+    try {
+      if (!nombres.has(normalizarNombreMedicamento(m.nombre))) return [];
+      return [normalizarHorarioMedicamento({
+        nombre: m.nombre, horaProgramada: m.hora_programada, diasRecurrentes: m.dias_recurrentes,
+      })];
+    } catch (e) {
+      if (e instanceof ErrorEntradaMedicamento) return [];
+      throw e;
+    }
+  });
+  for (let i = 0; i < normalizados.length; i++) {
+    if ([...previos, ...normalizados.slice(0, i)].some((m) => horariosCoinciden(normalizados[i], m))) {
+      throw new ErrorHorarioMedicamentoDuplicado();
+    }
+  }
+}
+
+/** Consulta con la sesión y la persona objetivo; una lectura fallida nunca permite escribir. */
+export async function verificarHorariosDisponibles(
+  supabase: Cliente,
+  usuarioId: string,
+  candidatos: HorarioMedicamento[],
+  excluirIds: string[] = []
+): Promise<void> {
+  candidatos.forEach(normalizarHorarioMedicamento);
+  const existentes = await listarTodos(supabase, usuarioId);
+  comprobarHorarios(candidatos, existentes, excluirIds);
+}
+
 export async function agregar(
   supabase: Cliente,
   usuarioId: string,
   datos: DatosNuevoMedicamento
 ): Promise<Medicamento> {
+  await verificarHorariosDisponibles(supabase, usuarioId, [datos]);
   const comida = columnasComida(datos);
   const fila: Record<string, unknown> = {
     usuario_id: usuarioId,
     nombre: datos.nombre,
     dosis: datos.dosis ?? null,
     unidad: datos.unidad ?? "mg",
-    hora_programada: datos.horaProgramada,
+    hora_programada: normalizarHoraDuplicados(datos.horaProgramada),
     momento_dia: datos.momentoDia,
     condicion: datos.condicion ?? null,
     dias_recurrentes: datos.diasRecurrentes ?? [],
@@ -380,7 +459,10 @@ export async function agregar(
     ({ data, error } = await supabase.from("medicamentos").insert(fila).select().single());
   }
 
-  if (error) throw new Error(`No se pudo crear el medicamento: ${error.message}`);
+  if (error) {
+    traducirErrorDuplicado(error);
+    throw new Error(`No se pudo crear el medicamento: ${error.message}`);
+  }
   return data as Medicamento;
 }
 
@@ -392,25 +474,27 @@ function columnasComidaPlan(t: { conComida?: ConComida; indicacion?: IndicacionC
 /**
  * Crea una fila por cada momento elegido en el form nuevo
  * (AgregarMedicamentoScreen del diseño) — mismo dato compartido, hora
- * default por momento (HORA_POR_MOMENTO). No usa una transacción explícita:
- * si una fila falla a mitad de camino, las ya insertadas quedan (mismo
- * riesgo aceptado que el resto de los inserts simples de este proyecto,
- * sin RPC porque no hay dinero ni un invariante cross-fila que proteger).
+ * default por momento (HORA_POR_MOMENTO). Valida el plan completo antes de
+ * consultar inventario y crea todas las filas en un único INSERT.
  */
 export async function agregarMultiMomento(
   supabase: Cliente,
   usuarioId: string,
   datos: DatosNuevoMedicamentoMultiMomento
 ): Promise<Medicamento[]> {
+  // Alta por toma (hora propia + comida por fila) o por momento (hora por defecto).
+  const plan: { hora: string; momento: MomentoDia; conComida: ConComida; indicacion: IndicacionComida | null }[] = datos.tomas?.length
+    ? datos.tomas.map((t) => {
+      const hora = normalizarHoraDuplicados(t.hora);
+      return { hora, momento: momentoDelDia(hora), ...columnasComidaPlan(t) };
+    })
+    : (datos.momentos ?? []).map((m) => ({ hora: HORA_POR_MOMENTO[m], momento: m, ...columnasComidaPlan(datos) }));
+  if (plan.length === 0) throw new Error("Falta al menos un horario.");
+  await verificarHorariosDisponibles(supabase, usuarioId, plan.map((t) => ({ nombre: datos.nombre, horaProgramada: t.hora })));
+
   // Si ese medicamento (nombre+dosis) ya tiene stock cargado, las filas
   // nuevas nacen enganchadas a él (un solo stock compartido por medicamento).
   const inventarioId = await buscarInventarioId(supabase, usuarioId, datos.nombre, datos.dosis);
-
-  // Alta por toma (hora propia + comida por fila) o por momento (hora por defecto).
-  const plan: { hora: string; momento: MomentoDia; conComida: ConComida; indicacion: IndicacionComida | null }[] = datos.tomas?.length
-    ? datos.tomas.map((t) => ({ hora: t.hora, momento: momentoDelDia(t.hora), ...columnasComidaPlan(t) }))
-    : (datos.momentos ?? []).map((m) => ({ hora: HORA_POR_MOMENTO[m], momento: m, ...columnasComidaPlan(datos) }));
-  if (plan.length === 0) throw new Error("Falta al menos un horario.");
 
   const filas = plan.map((toma) => ({
     // Solo si hay uno: así el insert tampoco depende de que la columna exista.
@@ -433,7 +517,10 @@ export async function agregarMultiMomento(
   if (error && filas.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
     ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinIndicacion)).select());
   }
-  if (error) throw new Error(`No se pudo crear el medicamento: ${error.message}`);
+  if (error) {
+    traducirErrorDuplicado(error);
+    throw new Error(`No se pudo crear el medicamento: ${error.message}`);
+  }
   return data as Medicamento[];
 }
 
@@ -475,9 +562,26 @@ export async function actualizarHorario(
   medicamentoId: string,
   datos: DatosActualizarHorario
 ): Promise<Medicamento> {
+  // The hour is the only source of truth of the day period: it is never set on its own.
+  if (datos.momentoDia !== undefined && datos.horaProgramada === undefined) {
+    throw new ErrorEntradaMedicamento("Para cambiar el momento del día indicá el horario.");
+  }
+  const existentes = await listarTodos(supabase, usuarioId);
+  const actual = existentes.find((m) => m.id === medicamentoId);
+  if (!actual) throw new Error("No encontramos ese medicamento.");
+  const candidato = {
+    nombre: actual.nombre,
+    horaProgramada: datos.horaProgramada ?? actual.hora_programada,
+    diasRecurrentes: datos.diasRecurrentes === undefined ? actual.dias_recurrentes : datos.diasRecurrentes,
+  };
+  comprobarHorarios([candidato], existentes, [medicamentoId]);
   const cambios: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (datos.horaProgramada !== undefined) cambios.hora_programada = datos.horaProgramada;
-  if (datos.momentoDia !== undefined) cambios.momento_dia = datos.momentoDia;
+  if (datos.horaProgramada !== undefined) {
+    const hora = normalizarHoraDuplicados(datos.horaProgramada);
+    cambios.hora_programada = hora;
+    // Derived from the hour, ignoring any `momentoDia` that came along.
+    cambios.momento_dia = momentoDelDia(hora);
+  }
   if (datos.diasRecurrentes !== undefined) cambios.dias_recurrentes = datos.diasRecurrentes;
   // La indicación es una observación independiente de la hora: solo cambia si se pide.
   if (datos.indicacion !== undefined) Object.assign(cambios, columnasComida({ indicacion: datos.indicacion }));
@@ -489,7 +593,10 @@ export async function actualizarHorario(
     ({ data, error } = await actualizar(sinIndicacion(cambios)));
   }
 
-  if (error) throw new Error(`No se pudo actualizar el horario: ${error.message}`);
+  if (error) {
+    traducirErrorDuplicado(error);
+    throw new Error(`No se pudo actualizar el horario: ${error.message}`);
+  }
   return data as Medicamento;
 }
 
@@ -523,35 +630,56 @@ export async function actualizarGrupo(
 ): Promise<void> {
   const nombre = datos.nombre.trim();
   if (!nombre) throw new Error("El nombre no puede quedar vacío.");
+  if (new Set(ids).size !== ids.length) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
   if (datos.tomas.length === 0) throw new Error("Tiene que haber al menos un horario.");
-  if (datos.tomas.some((t) => !/^\d{2}:\d{2}$/.test(t.hora))) throw new Error("Revisá los horarios.");
-  if (new Set(datos.tomas.map((t) => t.hora)).size !== datos.tomas.length) {
-    throw new Error("Hay dos tomas a la misma hora.");
-  }
-
-  const { data: existentes, error: errLeer } = await supabase
-    .from("medicamentos")
-    .select("*")
-    .eq("usuario_id", usuarioId)
-    .in("id", ids)
-    .order("hora_programada", { ascending: true });
-  if (errLeer) throw new Error(`No se pudo leer el medicamento: ${errLeer.message}`);
-  const filas = (existentes ?? []) as Medicamento[];
+  const tomas = datos.tomas.map((t) => ({ ...t, hora: normalizarHoraDuplicados(t.hora) }));
+  const existentes = await listarTodos(supabase, usuarioId);
+  const filas = existentes.filter((m) => ids.includes(m.id));
   if (filas.length === 0) throw new Error("No encontramos ese medicamento.");
+  // Every id must exist for this person and be a take of the same medicine
+  // (rows of one group share name and dose); otherwise we would edit unrelated rows.
+  if (filas.length !== ids.length || !mismoGrupo(filas)) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
 
   const idsValidos = new Set(filas.map((f) => f.id));
   if (datos.tomas.some((t) => t.id && !idsValidos.has(t.id))) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
+
+  const idsTomas = tomas.flatMap((t) => t.id ? [t.id] : []);
+  if (new Set(idsTomas).size !== idsTomas.length) throw new Error("Ese horario está repetido en la edición.");
+  const filaPorId = new Map(filas.map((f) => [f.id, f]));
+  const candidatos = tomas.map((t) => ({
+    nombre,
+    horaProgramada: t.hora,
+    diasRecurrentes: (t.id ? filaPorId.get(t.id)! : filas[0]).dias_recurrentes,
+  }));
+  comprobarHorarios(candidatos, existentes, [...idsValidos]);
+
+  // Las escrituras del grupo son requests separados. Un horario que todavía
+  // ocupa otra fila propia no puede reutilizarse sin una transacción conjunta.
+  // Rechazar antes de escribir evita que la exclusión DB deje cambios parciales.
+  const coincide = (i: number, f: Medicamento) => {
+    try {
+      return horariosCoinciden(candidatos[i], {
+        nombre: f.nombre, horaProgramada: f.hora_programada, diasRecurrentes: f.dias_recurrentes,
+      });
+    } catch (e) {
+      if (e instanceof ErrorEntradaMedicamento) return false; // legacy row that cannot be compared
+      throw e;
+    }
+  };
+  if (tomas.some((t, i) => filas.some((f) => f.id !== t.id && coincide(i, f)))) {
+    throw new Error("Ese horario todavía pertenece a otra toma del grupo. Guardá primero un horario libre y después completá el cambio.");
+  }
 
   const compartido: Record<string, unknown> = { nombre, dosis: datos.dosis, unidad: datos.unidad };
   if (datos.frecuencia !== undefined) compartido.frecuencia = datos.frecuencia;
   const ahora = new Date().toISOString();
 
   // Primero lo que no puede dejar el grupo a medias: altas y borrados.
-  const conservar = new Set(datos.tomas.flatMap((t) => (t.id ? [t.id] : [])));
+  const conservar = new Set(tomas.flatMap((t) => (t.id ? [t.id] : [])));
   const aBorrar = filas.filter((f) => !conservar.has(f.id)).map((f) => f.id);
   const molde = filas[0];
 
-  const nuevas = datos.tomas.filter((t) => !t.id);
+  const nuevas = tomas.filter((t) => !t.id);
   if (nuevas.length > 0) {
     const { id: _id, created_at: _c, updated_at: _u, indicacion: _i, ...base } = molde;
     void _id;
@@ -574,10 +702,13 @@ export async function actualizarGrupo(
     if (error && faltaColumnaIndicacion(error)) {
       ({ error } = await supabase.from("medicamentos").insert(filasNuevas.map(sinIndicacion)));
     }
-    if (error) throw new Error(`No se pudo guardar el horario nuevo: ${error.message}`);
+    if (error) {
+      traducirErrorDuplicado(error);
+      throw new Error(`No se pudo guardar el horario nuevo: ${error.message}`);
+    }
   }
 
-  for (const t of datos.tomas.filter((x) => x.id)) {
+  for (const t of tomas.filter((x) => x.id)) {
     const comida = columnasComida(t);
     const existente = filas.find((f) => f.id === t.id);
     const cambiosToma = {
@@ -592,7 +723,10 @@ export async function actualizarGrupo(
     const actualizar = (c: Record<string, unknown>) => supabase.from("medicamentos").update(c).eq("id", t.id!).eq("usuario_id", usuarioId);
     let { error } = await actualizar(cambiosToma);
     if (error && faltaColumnaIndicacion(error)) ({ error } = await actualizar(sinIndicacion(cambiosToma)));
-    if (error) throw new Error(`No se pudo actualizar el medicamento: ${error.message}`);
+    if (error) {
+      traducirErrorDuplicado(error);
+      throw new Error(`No se pudo actualizar el medicamento: ${error.message}`);
+    }
   }
 
   if (aBorrar.length > 0) {

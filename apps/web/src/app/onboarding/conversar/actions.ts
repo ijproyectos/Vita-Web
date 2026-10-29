@@ -1,5 +1,6 @@
 "use server";
 
+import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, mensajeSeguroMedicamento } from "@/lib/medicamentos/duplicados";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
@@ -176,7 +177,12 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   if (!nombre) return { status: "error", message: "Falta el nombre del remedio." };
   const dosis = typeof datos.dosis === "string" ? datos.dosis.trim() : "";
   const unidad = typeof datos.unidad === "string" ? datos.unidad.trim() : "";
-  const tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
+  let tomas: ReturnType<typeof normalizarTomas>;
+  try {
+    tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
+  } catch (e) {
+    return { status: "error", message: mensajeSeguroMedicamento(e, "Revisá los horarios.") };
+  }
   if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
 
   try {
@@ -188,6 +194,9 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
       frecuencia: datos.frecuencia,
     });
   } catch (e) {
+    if (e instanceof ErrorHorarioMedicamentoDuplicado || e instanceof ErrorEntradaMedicamento) {
+      return { status: "error", message: e.message };
+    }
     return errorAmigable("guardarMedicamentoPropioAction", e);
   }
 

@@ -102,6 +102,9 @@ describe("cambiosDeInput", () => {
     const r = cambiosDeInput({ scheduled_time: "21:00" });
     expect("datos" in r && r.datos).toMatchObject({ horaProgramada: "21:00", momentoDia: "noche" });
   });
+  it("el momento del día solo no alcanza: hace falta la hora", () => {
+    expect(cambiosDeInput({ time_of_day: "night" })).toHaveProperty("error");
+  });
   it("hora inválida", () => {
     expect(cambiosDeInput({ scheduled_time: "25:00" })).toHaveProperty("error");
     expect(cambiosDeInput({ scheduled_time: "9" })).toHaveProperty("error");

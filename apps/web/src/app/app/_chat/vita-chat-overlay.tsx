@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { clasificarFinDeStream } from "@/lib/chat/fin-stream";
 import { esAccionDeEscritura } from "@/lib/ai/acciones-escritura";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { VitaAvatar } from "@/components/vita/v-mark";
@@ -308,6 +309,9 @@ export function VitaChatOverlay({
     const ahora = new Date().toISOString();
     const pedidoId = pedidoReintentado ?? crypto.randomUUID();
     let fallo = false;
+    let recibioDone = false;
+    let huboErrorEvento = false;
+    let cortado = false;
     setMensajes((prev) =>
       pedidoReintentado
         ? [
@@ -360,7 +364,10 @@ export function VitaChatOverlay({
         for (const linea of lineas) {
           if (!linea.startsWith("data: ")) continue;
           const payload = linea.slice("data: ".length);
-          if (payload === "[DONE]") continue;
+          if (payload === "[DONE]") {
+            recibioDone = true;
+            continue;
+          }
 
           const evento = JSON.parse(payload) as
             | { chunk: string }
@@ -477,10 +484,19 @@ export function VitaChatOverlay({
               }
             } else {
               fallo = true;
+              huboErrorEvento = true;
               toast.error(evento.error);
             }
           }
         }
+      }
+
+      // El servidor siempre cierra con [DONE]: si el lector terminó sin verlo, la
+      // respuesta quedó cortada. Se conserva el texto parcial, se marca y se ofrece Reintentar.
+      if (clasificarFinDeStream({ recibioDone, huboError: huboErrorEvento }) === "interrumpido") {
+        fallo = true;
+        cortado = true;
+        toast.error("La respuesta se cortó. Podés reintentar.");
       }
 
       // Lo que haya quedado sin punto final (el cierre de la respuesta,
@@ -502,7 +518,14 @@ export function VitaChatOverlay({
           const sinHueco = prev.length > 0 && prev[prev.length - 1].role === "assistant" && !prev[prev.length - 1].content
             ? prev.slice(0, -1)
             : prev;
-          return sinHueco.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: true } : m));
+          // Con texto parcial, la burbuja de vita se conserva y queda marcada como cortada,
+          // solo si el stream se cortó de verdad (no ante un evento de error explícito).
+          const marcado = sinHueco.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: true } : m));
+          const ultimo = marcado[marcado.length - 1];
+          if (cortado && textoAcumulado && ultimo?.role === "assistant" && ultimo.content) {
+            marcado[marcado.length - 1] = { ...ultimo, interrumpido: true };
+          }
+          return marcado;
         });
       }
       // Las pantallas (Home, Rutina, Mi Salud...) son Server Components: sin
@@ -617,7 +640,7 @@ export function VitaChatOverlay({
 
         {!esPropio && (
           <div className="bg-aviso-tint px-5 py-2 text-[12.5px] font-medium text-aviso-ink">
-            Estás viendo a {nombreActivo}. Si le pedís algo, vita te pregunta si es para {nombreActivo} o para vos.
+            Perfil abierto: {nombreActivo}
           </div>
         )}
 

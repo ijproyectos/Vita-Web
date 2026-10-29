@@ -21,6 +21,9 @@ export type Dosis = {
   horaProgramada: string;
 };
 
+/** Toma pendiente cuya hora guardada es inválida: se muestra sin poder confirmarla. */
+export type PorCorregir = { id: string; nombre: string };
+
 export type Siguiente = { id: string; nombre: string; horaProgramada: string; momento: MomentoDia };
 
 const UNIDAD_HABLADA: Record<string, string> = {
@@ -152,7 +155,6 @@ export function TarjetaGrupo({
   grupo,
   momento,
   alertado,
-  faltanMinutos,
   confirmando,
   escuchandoVoz,
   silenciada,
@@ -167,7 +169,6 @@ export function TarjetaGrupo({
   grupo: Dosis[];
   momento: MomentoDia | null;
   alertado: boolean;
-  faltanMinutos: number;
   confirmando: boolean;
   escuchandoVoz: boolean;
   silenciada: boolean;
@@ -183,12 +184,10 @@ export function TarjetaGrupo({
   const n = grupo.length;
   return (
     <div className="rounded-[28px] bg-card p-5 shadow-card">
-      {alertado ? (
+      {alertado && (
         <div className="eyebrow mb-1.5 flex items-center gap-1.5 text-aviso-ink">
           <VitaIcon name="alert-triangle" size={14} strokeWidth={2.6} /> Todavía no confirmaste
         </div>
-      ) : (
-        faltanMinutos > 0 && <div className="eyebrow mb-1.5 text-subtle">En {faltanMinutos} min</div>
       )}
       <div className="flex items-start justify-between gap-3">
         <h2 className="font-heading text-[28px] font-extrabold leading-[1.1] tracking-[-0.035em] text-balance">
@@ -249,10 +248,10 @@ export function TarjetaGrupo({
 }
 
 
-export function TarjetaSiguientes({ siguientes }: { siguientes: Siguiente[] }) {
+export function TarjetaSiguientes({ siguientes, titulo = "Después" }: { siguientes: Siguiente[]; titulo?: string }) {
   return (
     <section>
-      <h2 className="eyebrow px-1 pb-2 text-subtle">Después</h2>
+      <h2 className="eyebrow px-1 pb-2 text-subtle">{titulo}</h2>
       <ul className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-card">
         {siguientes.map((s) => (
           <li key={s.id} className="flex items-center gap-3.5 px-4 py-3.5 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
@@ -272,16 +271,34 @@ export function TarjetaSiguientes({ siguientes }: { siguientes: Siguiente[] }) {
   );
 }
 
-export function TarjetaDescanso({ nombre, hayMedsHoy }: { nombre: string; hayMedsHoy: boolean }) {
+export function TarjetaPorCorregir({ items }: { items: PorCorregir[] }) {
+  return (
+    <section>
+      <h2 className="eyebrow flex items-center gap-1.5 px-1 pb-2 text-aviso-ink">
+        <VitaIcon name="alert-triangle" size={14} strokeWidth={2.6} /> Falta corregir la hora
+      </h2>
+      <ul className="overflow-hidden rounded-[var(--radius-card)] bg-aviso-panel shadow-card">
+        {items.map((m) => (
+          <li key={m.id} className="px-4 py-3.5 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
+            <div className="font-heading text-[19px] font-extrabold tracking-[-0.025em] text-aviso-panel-ink">{m.nombre}</div>
+            <div className="text-[14px] font-semibold text-aviso-panel-ink">Pedile a quien te cuida que revise el horario.</div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function TarjetaDescanso({ nombre, hayMedsHoy, proximaHora }: { nombre: string; hayMedsHoy: boolean; proximaHora?: string }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-[28px] bg-card px-6 py-9 text-center shadow-card">
       <div className="flex size-20 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep">
-        <VitaIcon name="check" size={40} strokeWidth={3} />
+        <VitaIcon name={proximaHora ? "clock" : "check"} size={40} strokeWidth={3} />
       </div>
       <div className="font-heading text-[26px] font-extrabold leading-tight tracking-[-0.035em]">
-        {hayMedsHoy ? `Tomaste todo hoy${nombre ? `, ${nombre}` : ""}` : "Hoy no tenés medicación pendiente"}
+        {proximaHora ? `Tu próxima toma es a las ${horaCorta(proximaHora)}` : hayMedsHoy ? `Tomaste todo hoy${nombre ? `, ${nombre}` : ""}` : "Hoy no tenés medicación pendiente"}
       </div>
-      <div className="text-[16px] font-medium text-subtle">Te vamos a avisar cuando sea la hora.</div>
+      <div className="text-[16px] font-medium text-subtle">{proximaHora ? "Por ahora no tenés tomas pendientes de confirmar." : "Te vamos a avisar cuando sea la hora."}</div>
     </div>
   );
 }

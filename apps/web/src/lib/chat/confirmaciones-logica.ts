@@ -1,5 +1,5 @@
 import { TOOLS_CONFIRMACION_PROPIA } from "@/lib/ai/destino";
-import { momentoDiaDesdeIngles, diasDesdeIngles } from "@/lib/ai/mapeo";
+import { diasDesdeIngles } from "@/lib/ai/mapeo";
 import { esIndicacionComida, INDICACIONES_COMIDA, type IndicacionComida } from "@/lib/medicamentos/comidas";
 import type { DatosActualizarHorario, DiaSemana, Medicamento } from "@/lib/medicamentos/tipos";
 import { textoDosis } from "@/lib/medicamentos/tipos";
@@ -153,7 +153,8 @@ export function cambiosDeInput(input: Record<string, unknown>): { datos: DatosAc
       // La hora es la única fuente de verdad del momento del día (igual que en add_medication).
       datos.momentoDia = momentoDelDia(datos.horaProgramada);
     } else if (input.time_of_day) {
-      datos.momentoDia = momentoDiaDesdeIngles(String(input.time_of_day));
+      // The day period only follows from an hour: asking for it alone would let it drift from the hour.
+      return { error: "Para cambiar el momento del día indicá la hora exacta (scheduled_time, HH:MM)." };
     }
     if (Array.isArray(input.recurring_days)) datos.diasRecurrentes = diasDesdeIngles(input.recurring_days as string[]);
   } catch (e) {

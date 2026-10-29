@@ -4,6 +4,7 @@ import { useState } from "react";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { INTENTOS_MAXIMOS, LARGO_PIN, guardarPin, verificarPin } from "@/lib/seguridad/pin";
+import { FormCerrarSesion } from "./form-cerrar-sesion";
 
 // Pantalla completa de PIN (V7 acceso › PIN): teclado de 12 teclas, 4 puntos
 // y los tres modos que usa el diseño. Toda la lógica de validación vive acá;
@@ -223,15 +224,14 @@ export function PinPausado({ motivo, onBorrarPin }: { motivo: "agotado" | "olvid
           Los avisos de remedios y turnos siguen sonando, sin mostrar detalles.
         </p>
       </div>
-      <form action="/auth/signout" method="post">
+      <FormCerrarSesion antesDeSalir={onBorrarPin}>
         <button
           type="submit"
-          onClick={onBorrarPin}
           className="h-14 w-full rounded-full bg-primary font-heading text-base font-extrabold text-primary-foreground shadow-cta"
         >
           Volver a entrar
         </button>
-      </form>
+      </FormCerrarSesion>
     </div>
   );
 }
