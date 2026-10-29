@@ -25,7 +25,6 @@ import {
   textoRespuestaFinal,
   etiquetaMedicion,
   leerMedicionPropuesta,
-  textoAyudaEnviada,
   textoPreguntaMedicion,
   destinoTrasIniciar,
   escuchaTrabada,
@@ -54,10 +53,8 @@ export type VistaInicialCharla = {
   fase: "inicio" | "escribir" | "respuesta" | "confirmar";
   pregunta?: string;
   respuesta?: string;
-  /** Nombres de quienes recibieron el pedido de ayuda. */
-  ayuda?: string[];
-  /** The help cap was reached: highlight the red call button. */
-  ayudaTope?: boolean;
+  /** Show the red "Llamar a mi familia" button (vita suggested calling; nothing was sent to anyone). */
+  ayudaLlamar?: boolean;
   medicion?: MedicionPropuesta;
   sinInternet?: boolean;
 };
@@ -111,8 +108,7 @@ export function CharlaSimple({
   const [fase, setFase] = useState<Fase>(inicial?.fase ?? "inicio");
   const [pregunta, setPregunta] = useState(inicial?.pregunta ?? "");
   const [respuesta, setRespuesta] = useState(inicial?.respuesta ?? "");
-  const [ayuda, setAyuda] = useState<string[] | null>(inicial?.ayuda ?? null);
-  const [ayudaTope, setAyudaTope] = useState(inicial?.ayudaTope ?? false);
+  const [ayudaLlamar, setAyudaLlamar] = useState(inicial?.ayudaLlamar ?? false);
   const [medicion, setMedicion] = useState<MedicionPropuesta | null>(inicial?.medicion ?? null);
   const [borrador, setBorrador] = useState("");
   const [resaltarMic, setResaltarMic] = useState(false);
@@ -190,12 +186,11 @@ export function CharlaSimple({
     }
   }
 
-  function mostrarRespuesta(preg: string, texto: string, extras?: { ayuda?: string[] | null; ayudaTope?: boolean; mood?: EstadoAvatar | null }) {
+  function mostrarRespuesta(preg: string, texto: string, extras?: { ayudaLlamar?: boolean; mood?: EstadoAvatar | null }) {
     setFase("respuesta");
     setPregunta(preg);
     setRespuesta(texto);
-    setAyuda(extras?.ayuda ?? null);
-    setAyudaTope(extras?.ayudaTope ?? false);
+    setAyudaLlamar(extras?.ayudaLlamar ?? false);
     setMedicion(null);
     setMood(extras?.mood ?? null);
   }
@@ -214,8 +209,7 @@ export function CharlaSimple({
     setAviso(null);
     setFase("pensando");
     setPregunta(texto);
-    setAyuda(null);
-    setAyudaTope(false);
+    setAyudaLlamar(false);
     setMedicion(null);
     setMood(null);
 
@@ -230,8 +224,7 @@ export function CharlaSimple({
     const timeout = setTimeout(() => ctrl.abort(), TIMEOUT_PEDIDO_MS);
     let acumulado = "";
     let errorServidor: string | null = null;
-    let nombresAyuda: string[] | null = null;
-    let topeAyuda = false;
+    let llamarAyuda = false;
     let propuesta: MedicionPropuesta | null = null;
     let moodModelo: EstadoAvatar | null = null;
     let cortada = false;
@@ -251,11 +244,8 @@ export function CharlaSimple({
         else if (e.tipo === "chunk") acumulado += e.texto;
         else if (e.tipo === "error") errorServidor = e.mensaje;
         else if (e.tipo === "accion") {
-          if (e.accion.type === "ayuda_enviada" && Array.isArray(e.accion.nombres)) {
-            const nombres = e.accion.nombres.filter((n): n is string => typeof n === "string" && n.trim() !== "");
-            if (nombres.length) nombresAyuda = nombres;
-          } else if (e.accion.type === "ayuda_tope") {
-            topeAyuda = true;
+          if (e.accion.type === "ayuda_llamar") {
+            llamarAyuda = true;
           } else if (e.accion.type === "medicion_propuesta") {
             propuesta = leerMedicionPropuesta(e.accion) ?? propuesta;
           } else if (e.accion.type === "avatar_mood") {
@@ -278,13 +268,12 @@ export function CharlaSimple({
       setFase("confirmar");
       setMedicion(propuestaFinal);
       setRespuesta(frase);
-      setAyudaTope(topeAyuda);
-      setAyuda(nombresAyuda); // si en el mismo turno se pidió ayuda, el aviso sigue visible
+      setAyudaLlamar(llamarAyuda); // if help was also suggested this turn, the call button stays visible
       void hablar(frase, turno);
       return;
     }
     const textoFinal = textoRespuestaFinal(acumulado, cortada, errorServidor);
-    mostrarRespuesta(texto, textoFinal, { ayuda: nombresAyuda, ayudaTope: topeAyuda, mood: moodModelo });
+    mostrarRespuesta(texto, textoFinal, { ayudaLlamar: llamarAyuda, mood: moodModelo });
     void hablar(textoFinal, turno);
   }
 
@@ -460,7 +449,6 @@ export function CharlaSimple({
         ? "thinking"
         : (mood ?? (fase === "respuesta" ? "calm" : "idle"));
 
-  const textoAyuda = ayuda ? textoAyudaEnviada(ayuda) : "";
   const verEscucha = escuchando || transcribiendo;
 
   return (
@@ -544,7 +532,10 @@ export function CharlaSimple({
           medicion={medicion}
           estado={estadoAvatar}
           guardando={guardando}
-          textoAyuda={textoAyuda}
+          ayudaLlamar={ayudaLlamar}
+          telefonoAyuda={telefonoAyuda}
+          nombreAyuda={nombreAyuda}
+          onAyudaSinContacto={onAyudaSinContacto}
           onSi={confirmarMedicion}
           onNo={rechazarMedicion}
         />
@@ -564,7 +555,7 @@ export function CharlaSimple({
                 {respuesta}
               </div>
             </div>
-            {ayudaTope && (
+            {ayudaLlamar && (
               <BotonAyuda
                 telefono={telefonoAyuda}
                 contacto={nombreAyuda}
@@ -572,12 +563,6 @@ export function CharlaSimple({
                 etiqueta="Llamar a mi familia"
                 className="h-[66px] w-full justify-center text-[21px] animate-pulse motion-reduce:animate-none"
               />
-            )}
-            {textoAyuda && (
-              <div className="flex items-center gap-3 rounded-[22px] border-2 border-primary/40 bg-persona-1-tint px-[18px] py-4 text-[20px] font-bold text-foreground">
-                <VitaIcon name="check" size={26} strokeWidth={3} className="shrink-0 text-teal-deep" />
-                {textoAyuda}
-              </div>
             )}
           </div>
           <div className="flex shrink-0 flex-col gap-2.5">
@@ -674,7 +659,10 @@ function VistaConfirmar({
   medicion,
   estado,
   guardando,
-  textoAyuda,
+  ayudaLlamar,
+  telefonoAyuda,
+  nombreAyuda,
+  onAyudaSinContacto,
   onSi,
   onNo,
 }: {
@@ -682,7 +670,10 @@ function VistaConfirmar({
   medicion: MedicionPropuesta;
   estado: EstadoAvatar;
   guardando: boolean;
-  textoAyuda: string;
+  ayudaLlamar: boolean;
+  telefonoAyuda: string | null;
+  nombreAyuda: string | null;
+  onAyudaSinContacto: () => void;
   onSi: () => void;
   onNo: () => void;
 }) {
@@ -705,11 +696,14 @@ function VistaConfirmar({
         <div className="font-heading text-[72px] font-extrabold leading-none tracking-[-0.04em] tabular-nums">{valor}</div>
         <div className="text-[20px] font-bold text-slate-brand">{unidad}</div>
       </div>
-      {textoAyuda && (
-        <div className="flex items-center gap-3 rounded-[22px] border-2 border-primary/40 bg-persona-1-tint px-[18px] py-4 text-[20px] font-bold text-foreground">
-          <VitaIcon name="check" size={26} strokeWidth={3} className="shrink-0 text-teal-deep" />
-          {textoAyuda}
-        </div>
+      {ayudaLlamar && (
+        <BotonAyuda
+          telefono={telefonoAyuda}
+          contacto={nombreAyuda}
+          onAyuda={onAyudaSinContacto}
+          etiqueta="Llamar a mi familia"
+          className="h-[66px] w-full justify-center text-[21px] animate-pulse motion-reduce:animate-none"
+        />
       )}
       <div className="flex-1" />
       <div className="flex flex-col gap-2.5">

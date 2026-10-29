@@ -1,5 +1,4 @@
 // Textos PUROS de la charla de voz del modo simple (voseo, frases cortas). Sin I/O.
-import { unirNombres } from "./respuestas";
 
 /** Lo primero que se le manda al modelo después de "¿Cómo estás hoy?" (vita preguntó, la persona contesta). */
 export const PREFIJO_ANIMO = "Vita me preguntó cómo estoy hoy. ";
@@ -29,12 +28,6 @@ export function textoSaludoAnimo(nombre: string): string {
 
 export function textoSinInternet(nombre: string): string {
   return `${conNombre("Ahora no tengo internet", nombre)}. Tus pastillas y turnos siguen guardados y te aviso igual.`;
-}
-
-export function textoAyudaEnviada(nombres: string[]): string {
-  const limpios = nombres.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim());
-  if (limpios.length === 0) return "";
-  return `${unirNombres(limpios)} ${limpios.length > 1 ? "recibieron" : "recibió"} tu pedido`;
 }
 
 export type MedicionPropuesta = { tipo: "glucemia" | "presion"; valor: number; valorSecundario?: number | null };

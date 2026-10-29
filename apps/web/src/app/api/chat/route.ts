@@ -62,7 +62,7 @@ const MAX_ITEMS_HOY = 20;
 // Tools que no consultan ni cambian datos: solo disparan un efecto de UI. Si el
 // turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo. (`proponer_medicion` NO
 // está: su resultado puede ser un error de validación que el modelo tiene que ver para pedir el valor de nuevo.)
-const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen"]);
+const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen", "sugerir_llamar_ayuda"]);
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: REINTENTOS_SDK });
 

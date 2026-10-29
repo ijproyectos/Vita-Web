@@ -17,11 +17,10 @@ import {
   momentoDiaAIngles,
 } from "./mapeo";
 import { pantallaPorClave } from "./guia-app";
+import { TEXTO_SUGERIR_LLAMAR_AYUDA } from "./modo-simple";
 import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
 import { validarMedicion } from "@/lib/mediciones/tipos";
-import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
-import { accionPedidoAyuda, textoPedidoAyudaParaModelo } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 
 export { TOOLS } from "./tools-definiciones";
@@ -330,13 +329,9 @@ async function ejecutarEnDestino(
       };
     }
 
-    case "pedir_ayuda_familia": {
-      // Aviso real a los cuidadores aceptados de QUIEN CHATEA (nunca de otra persona). El texto para el
-      // modelo dice con precisión si se avisó o no; la acción solo sale si el servidor lo confirmó.
-      const motivo = typeof input.motivo === "string" ? input.motivo : "";
-      const resultado = await pedirAyudaAFamilia(supabase, usuarioId, motivo);
-      return { contenido: textoPedidoAyudaParaModelo(resultado), accionUI: accionPedidoAyuda(resultado) };
-    }
+    case "sugerir_llamar_ayuda":
+      // Sin efecto en la DB ni en la red: no se avisa a nadie. Solo muestra el botón rojo de llamada (tel:).
+      return { contenido: TEXTO_SUGERIR_LLAMAR_AYUDA, accionUI: { type: "ayuda_llamar" } };
 
     default:
       return { contenido: `Tool desconocida: ${nombre}` };

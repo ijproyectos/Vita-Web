@@ -1,3 +1,5 @@
+// NOT WIRED to the chat or any UI right now (owner decision 2026-10-29): the simple-mode chat no longer
+// notifies caregivers; vita just tells the person to call family / 107. Kept in case the feature comes back.
 // Parte PURA del pedido de ayuda a la familia (sin I/O, testeable sin Supabase).
 // Sin `server-only` a propósito: la importan la tool del chat y los tests.
 import { limpiarDato } from "@/lib/ai/limpiar";

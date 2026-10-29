@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   etiquetaMedicion,
   leerMedicionPropuesta,
-  textoAyudaEnviada,
   textoPreguntaMedicion,
   textoSaludoAnimo,
   textoSinInternet,
@@ -26,11 +25,6 @@ describe("textos de la charla", () => {
   it("sin internet", () => {
     expect(textoSinInternet("Elsa")).toBe("Ahora no tengo internet, Elsa. Tus pastillas y turnos siguen guardados y te aviso igual.");
     expect(textoSinInternet("")).toMatch(/^Ahora no tengo internet\. /);
-  });
-  it("ayuda enviada: singular, plural y vacío", () => {
-    expect(textoAyudaEnviada(["Mica"])).toBe("Mica recibió tu pedido");
-    expect(textoAyudaEnviada(["Mica", "Juan"])).toBe("Mica y Juan recibieron tu pedido");
-    expect(textoAyudaEnviada([])).toBe("");
   });
 });
 

@@ -1,5 +1,8 @@
 import "server-only";
 
+// NOT WIRED to the chat or any UI right now (owner decision 2026-10-29): the simple-mode chat no longer
+// notifies caregivers; vita just tells the person to call family / 107. Kept in case the feature comes back.
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listarMisCuidadores } from "@/lib/familia/nucleo";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
