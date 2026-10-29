@@ -9,6 +9,12 @@ import {
   TEXTO_CORTADA,
   TEXTO_NO_ENTENDI,
   textoRespuestaFinal,
+  destinoTrasIniciar,
+  escuchaTrabada,
+  textoParaEnviar,
+  textoSinMic,
+  ESPERA_SIN_OIR_MS,
+  LARGO_MAXIMO_MENSAJE,
 } from "./charla";
 
 describe("textos de la charla", () => {
@@ -53,5 +59,27 @@ describe("textoRespuestaFinal", () => {
   it("sin texto usa el error del servidor o el genérico", () => {
     expect(textoRespuestaFinal("", true, "Mandaste muchos mensajes.")).toBe("Mandaste muchos mensajes.");
     expect(textoRespuestaFinal("  ", false, null)).toBe(TEXTO_NO_ENTENDI);
+  });
+});
+
+describe("escucha automática (iOS)", () => {
+  it("destino tras intentar abrir el micrófono", () => {
+    expect(destinoTrasIniciar({ ok: true })).toBe("escuchando");
+    expect(destinoTrasIniciar({ ok: true, suspendido: true })).toBe("tocar-mic");
+    expect(destinoTrasIniciar({ ok: false, motivo: "permiso-denegado" })).toBe("escribir");
+    expect(destinoTrasIniciar({ ok: false, motivo: "no-soportado" })).toBe("escribir");
+  });
+  it("el watchdog solo salta con contexto suspendido y pasado el plazo", () => {
+    expect(escuchaTrabada("escuchando", true, ESPERA_SIN_OIR_MS)).toBe(true);
+    expect(escuchaTrabada("escuchando", true, ESPERA_SIN_OIR_MS - 1)).toBe(false);
+    expect(escuchaTrabada("escuchando", false, 60_000)).toBe(false);
+    expect(escuchaTrabada("grabando", true, 60_000)).toBe(false);
+  });
+  it("textos de sin micrófono y mensaje escrito", () => {
+    expect(textoSinMic("permiso-denegado")).toMatch(/permiso/);
+    expect(textoSinMic("no-soportado")).toMatch(/no deja usar/);
+    expect(textoParaEnviar("   ")).toBe("");
+    expect(textoParaEnviar("  hola  ")).toBe("hola");
+    expect(textoParaEnviar("a".repeat(LARGO_MAXIMO_MENSAJE + 10))).toHaveLength(LARGO_MAXIMO_MENSAJE);
   });
 });

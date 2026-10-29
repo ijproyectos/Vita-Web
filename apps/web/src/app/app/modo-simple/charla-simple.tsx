@@ -25,6 +25,13 @@ import {
   leerMedicionPropuesta,
   textoAyudaEnviada,
   textoPreguntaMedicion,
+  destinoTrasIniciar,
+  escuchaTrabada,
+  textoParaEnviar,
+  textoSinMic,
+  ESPERA_SIN_OIR_MS,
+  LARGO_MAXIMO_MENSAJE,
+  TEXTO_TOCA_EL_MIC,
   textoSaludoAnimo,
   textoSinInternet,
   type MedicionPropuesta,
@@ -38,7 +45,18 @@ import {
 // Tope total de un pedido al chat: nunca queda "Pensando…" colgado.
 const TIMEOUT_PEDIDO_MS = 20_000;
 
-type Fase = "inicio" | "pensando" | "respuesta" | "confirmar";
+type Fase = "inicio" | "escribir" | "pensando" | "respuesta" | "confirmar";
+
+/** Solo para la vista previa de desarrollo (`/dev/charla-simple`): abre la charla ya en un estado dado. */
+export type VistaInicialCharla = {
+  fase: "inicio" | "escribir" | "respuesta" | "confirmar";
+  pregunta?: string;
+  respuesta?: string;
+  /** Nombres de quienes recibieron el pedido de ayuda. */
+  ayuda?: string[];
+  medicion?: MedicionPropuesta;
+  sinInternet?: boolean;
+};
 
 const MOOD_A_ESTADO: Record<string, EstadoAvatar> = {
   neutral: "idle",
@@ -61,21 +79,25 @@ export function CharlaSimple({
   medsHoy,
   turnoProximo,
   onCerrar,
+  inicial,
 }: {
   nombre: string;
   config: PrefsModoSimple;
   medsHoy: MedHoy[];
   turnoProximo: TurnoProximo | null;
   onCerrar: () => void;
+  inicial?: VistaInicialCharla;
 }) {
-  const enLinea = useEnLinea();
+  const enLinea = useEnLinea() && !inicial?.sinInternet;
   const { silenciada } = useSilencioVita();
 
-  const [fase, setFase] = useState<Fase>("inicio");
-  const [pregunta, setPregunta] = useState("");
-  const [respuesta, setRespuesta] = useState("");
-  const [ayuda, setAyuda] = useState<string[] | null>(null);
-  const [medicion, setMedicion] = useState<MedicionPropuesta | null>(null);
+  const [fase, setFase] = useState<Fase>(inicial?.fase ?? "inicio");
+  const [pregunta, setPregunta] = useState(inicial?.pregunta ?? "");
+  const [respuesta, setRespuesta] = useState(inicial?.respuesta ?? "");
+  const [ayuda, setAyuda] = useState<string[] | null>(inicial?.ayuda ?? null);
+  const [medicion, setMedicion] = useState<MedicionPropuesta | null>(inicial?.medicion ?? null);
+  const [borrador, setBorrador] = useState("");
+  const [resaltarMic, setResaltarMic] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [hablando, setHablando] = useState(false);
   const [mood, setMood] = useState<EstadoAvatar | null>(null);
@@ -88,13 +110,17 @@ export function CharlaSimple({
   const blobRef = useRef<Blob | null>(null);
   const prefijoRef = useRef(false);
   const botonVolverRef = useRef<HTMLButtonElement>(null);
+  const campoRef = useRef<HTMLTextAreaElement>(null);
+  const vigiaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Foco al abrir (el botón Volver) y de vuelta al botón que abrió la vista al cerrar.
   useEffect(() => {
     const previo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     botonVolverRef.current?.focus();
     const turnos = turnoRef;
+    const vigia = vigiaRef;
     return () => {
+      if (vigia.current) clearTimeout(vigia.current);
       // Invalida el turno en curso: un audio que todavía se está pidiendo no suena después de cerrar.
       turnos.current += 1;
       cancelarVoz();
@@ -103,7 +129,7 @@ export function CharlaSimple({
     };
   }, []);
 
-  const { estado: estadoVoz, iniciar, detener } = useGrabacionVoz({
+  const { estado: estadoVoz, iniciar, detener, preparar, contextoSuspendido, obtenerEstado } = useGrabacionVoz({
     onTranscripcion: (texto) => {
       detener();
       const limpio = texto.trim();
@@ -120,6 +146,8 @@ export function CharlaSimple({
 
   function nuevoTurno(): number {
     turnoRef.current += 1;
+    if (vigiaRef.current) clearTimeout(vigiaRef.current);
+    setResaltarMic(false);
     abortRef.current?.abort();
     cancelarVoz();
     setHablando(false);
@@ -247,6 +275,16 @@ export function CharlaSimple({
       setAviso(null);
       prefijoRef.current = true;
       const saludo = textoSaludoAnimo(nombre);
+      if (silenciada) {
+        // Sin sonido: el saludo se muestra y se pasa a escribir (nada de TTS ni micrófono).
+        mostrarRespuesta("", saludo);
+        setAviso(saludo);
+        setFase("escribir");
+        return;
+      }
+      // Dentro del gesto del tap: desbloquea el AudioContext (iOS). El micrófono recién se abre
+      // cuando vita termina de hablar, así nunca graba su propia voz.
+      preparar();
       mostrarRespuesta("", saludo);
       void (async () => {
         await hablar(saludo, turno);
@@ -257,14 +295,49 @@ export function CharlaSimple({
   }
 
   async function empezarAEscuchar() {
+    const turno = turnoRef.current;
     const r = await iniciar();
+    if (turno !== turnoRef.current) return;
+    const destino = destinoTrasIniciar(r);
     if (!r.ok) {
-      setAviso(
-        r.motivo === "permiso-denegado"
-          ? "Necesito permiso para usar el micrófono. Podés tocar una pregunta."
-          : "Este celular no deja usar el micrófono acá. Podés tocar una pregunta."
-      );
+      setAviso(textoSinMic(r.motivo));
+      setFase("escribir");
+    } else if (destino === "tocar-mic") {
+      avisarTocarMic();
+    } else {
+      // Red de seguridad: si el contexto sigue suspendido y no se oyó nada, no queda colgado en "Te escucho…".
+      if (vigiaRef.current) clearTimeout(vigiaRef.current);
+      vigiaRef.current = setTimeout(() => {
+        if (turno === turnoRef.current && escuchaTrabada(obtenerEstado(), contextoSuspendido(), ESPERA_SIN_OIR_MS)) avisarTocarMic();
+      }, ESPERA_SIN_OIR_MS);
     }
+  }
+
+  function avisarTocarMic() {
+    detener();
+    setAviso(TEXTO_TOCA_EL_MIC);
+    setResaltarMic(true);
+  }
+
+  function irAEscribir() {
+    nuevoTurno();
+    detener();
+    setAviso(null);
+    setFase("escribir");
+  }
+
+  function enviarBorrador() {
+    const texto = textoParaEnviar(borrador);
+    if (!texto) return;
+    setBorrador("");
+    void preguntar(texto);
+  }
+
+  function volver() {
+    if (fase === "escribir") {
+      setAviso(null);
+      setFase("inicio");
+    } else cerrar();
   }
 
   async function tocarMic() {
@@ -274,6 +347,7 @@ export function CharlaSimple({
       detener();
       return;
     }
+    // `nuevoTurno` apaga el resaltado; el micrófono se abre ya dentro del gesto.
     nuevoTurno();
     setAviso(null);
     await empezarAEscuchar();
@@ -328,6 +402,10 @@ export function CharlaSimple({
   }
 
   useEffect(() => {
+    if (fase === "escribir") campoRef.current?.focus();
+  }, [fase]);
+
+  useEffect(() => {
     function alTeclado(e: KeyboardEvent) {
       if (e.key === "Escape") cerrar();
     }
@@ -365,7 +443,7 @@ export function CharlaSimple({
       <button
         ref={botonVolverRef}
         type="button"
-        onClick={cerrar}
+        onClick={volver}
         className="flex h-14 shrink-0 items-center gap-2 self-start rounded-full border-2 border-foreground/10 bg-card pl-3.5 pr-5 text-[17px] font-extrabold transition-transform active:scale-[0.97] motion-reduce:transition-none"
       >
         <VitaIcon name="chevron-left" size={22} strokeWidth={2.6} />
@@ -385,6 +463,41 @@ export function CharlaSimple({
           <button type="button" onClick={tocarMic} className={cn(clasesBoton, "h-14 border-2 border-foreground/15 bg-card px-7")}>
             <VitaIcon name="close" size={22} />
             Dejar de escuchar
+          </button>
+        </div>
+      ) : fase === "escribir" ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-6">
+          <h1 className="font-heading text-[28px] font-extrabold leading-[1.2] tracking-[-0.03em]">Escribime lo que necesites</h1>
+          {aviso && (
+            <p role="status" className="text-[20px] font-medium leading-[1.4] text-slate-brand">
+              {aviso}
+            </p>
+          )}
+          <textarea
+            ref={campoRef}
+            value={borrador}
+            onChange={(e) => setBorrador(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                enviarBorrador();
+              }
+            }}
+            maxLength={LARGO_MAXIMO_MENSAJE}
+            enterKeyHint="send"
+            aria-label="Escribime lo que necesites"
+            placeholder="Por ejemplo: ¿qué tomo a la noche?"
+            className="min-h-[140px] resize-none rounded-[22px] border-2 border-primary bg-card px-[18px] py-4 text-[22px] font-semibold leading-[1.35] outline-none"
+          />
+          <div className="min-h-2 flex-1" />
+          <button
+            type="button"
+            onClick={enviarBorrador}
+            disabled={!borrador.trim()}
+            className={cn(clasesBoton, "h-[66px] shrink-0 text-[20px] font-extrabold", borrador.trim() ? "bg-primary text-primary-foreground" : "bg-secondary text-slate-brand")}
+          >
+            <VitaIcon name="send" size={24} strokeWidth={2.4} />
+            Preguntarle a vita
           </button>
         </div>
       ) : fase === "pensando" ? (
@@ -426,11 +539,6 @@ export function CharlaSimple({
                 {textoAyuda}
               </div>
             )}
-            {aviso && (
-              <p role="status" className="text-[18px] font-semibold text-slate-brand">
-                {aviso}
-              </p>
-            )}
           </div>
           <div className="flex shrink-0 flex-col gap-2.5">
             {!silenciada && config.voz && (
@@ -439,19 +547,24 @@ export function CharlaSimple({
                 Escuchar de nuevo
               </button>
             )}
+            {aviso && (
+              <p role="status" className="text-center text-[18px] font-bold text-teal-deep">
+                {aviso}
+              </p>
+            )}
             <button
               type="button"
-              onClick={tocarMic}
-              disabled={silenciada}
+              onClick={silenciada ? irAEscribir : tocarMic}
               className={cn(
                 clasesBoton,
-                "h-[66px] bg-primary text-[19px] font-extrabold text-primary-foreground shadow-[0_8px_20px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
+                "h-[66px] bg-primary text-[19px] font-extrabold text-primary-foreground shadow-[0_8px_20px_color-mix(in_srgb,var(--primary)_28%,transparent)]",
+                resaltarMic && "animate-pulse ring-4 ring-primary/40 motion-reduce:animate-none"
               )}
             >
-              <VitaIcon name="mic" size={26} strokeWidth={2.4} />
-              Preguntar otra cosa
+              <VitaIcon name={silenciada ? "edit" : "mic"} size={26} strokeWidth={2.4} />
+              {silenciada ? "Escribir otra cosa" : "Preguntar otra cosa"}
             </button>
-            {silenciada && <p className="text-center text-[16px] font-semibold text-slate-brand">El sonido está desactivado. Podés tocar una pregunta.</p>}
+            {silenciada && <p className="text-center text-[16px] font-semibold text-slate-brand">El sonido está desactivado.</p>}
           </div>
         </div>
       ) : (
@@ -482,18 +595,30 @@ export function CharlaSimple({
               {aviso}
             </p>
           )}
-          <button
-            type="button"
-            onClick={tocarMic}
-            disabled={silenciada}
-            aria-label="Tocá y hablá"
-            className="flex flex-col items-center gap-2.5 disabled:opacity-50"
-          >
-            <span className="flex size-[92px] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_26px_color-mix(in_srgb,var(--primary)_35%,transparent)]">
-              <VitaIcon name="mic" size={46} strokeWidth={2.2} />
-            </span>
-            <span className="text-[20px] font-extrabold">{silenciada ? "El sonido está desactivado" : "Tocá y hablá"}</span>
-          </button>
+          {silenciada ? (
+            <button type="button" onClick={irAEscribir} className={cn(clasesBoton, "h-[72px] self-stretch bg-primary text-[20px] font-extrabold text-primary-foreground")}>
+              <VitaIcon name="edit" size={26} strokeWidth={2.4} />
+              Escribirle a vita
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={tocarMic} aria-label="Tocá y hablá" className="flex flex-col items-center gap-2.5">
+                <span
+                  className={cn(
+                    "flex size-[92px] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_26px_color-mix(in_srgb,var(--primary)_35%,transparent)]",
+                    resaltarMic && "animate-pulse ring-4 ring-primary/40 motion-reduce:animate-none"
+                  )}
+                >
+                  <VitaIcon name="mic" size={46} strokeWidth={2.2} />
+                </span>
+                <span className="text-[20px] font-extrabold">Tocá y hablá</span>
+              </button>
+              <button type="button" onClick={irAEscribir} className="mt-2 flex h-14 items-center gap-2 px-5 text-[18px] font-bold text-teal-deep underline underline-offset-4">
+                <VitaIcon name="edit" size={22} />
+                Prefiero escribir
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

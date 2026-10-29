@@ -57,3 +57,32 @@ export function textoPreguntaMedicion(m: MedicionPropuesta): string {
   const { etiqueta, valor } = etiquetaMedicion(m);
   return `${etiqueta} ${valor}. ¿Lo anoto así?`;
 }
+
+/** Cuánto se espera con el contexto de audio suspendido antes de pedir que toquen el micrófono. */
+export const ESPERA_SIN_OIR_MS = 8_000;
+export const TEXTO_TOCA_EL_MIC = "Tocá el micrófono y contame.";
+export const TEXTO_SIN_PERMISO_MIC = "Necesito permiso para usar el micrófono. Podés escribirme.";
+export const TEXTO_SIN_MIC = "Este celular no deja usar el micrófono acá.";
+export const LARGO_MAXIMO_MENSAJE = 4000;
+
+export type DestinoEscucha = "escuchando" | "tocar-mic" | "escribir";
+
+/** Qué hace la vista después de intentar abrir el micrófono por su cuenta (fuera de un gesto). */
+export function destinoTrasIniciar(r: { ok: true; suspendido?: boolean } | { ok: false; motivo: string }): DestinoEscucha {
+  if (!r.ok) return "escribir";
+  return r.suspendido ? "tocar-mic" : "escuchando";
+}
+
+/** Watchdog: escuchando, sin haber grabado nada, con el contexto suspendido y pasado el plazo. */
+export function escuchaTrabada(estadoVoz: string, contextoSuspendido: boolean, esperadoMs: number): boolean {
+  return estadoVoz === "escuchando" && contextoSuspendido && esperadoMs >= ESPERA_SIN_OIR_MS;
+}
+
+export function textoSinMic(motivo: "no-soportado" | "permiso-denegado"): string {
+  return motivo === "permiso-denegado" ? TEXTO_SIN_PERMISO_MIC : TEXTO_SIN_MIC;
+}
+
+/** Texto listo para enviar desde el campo de escribir: recortado y con tope; "" si no hay nada. */
+export function textoParaEnviar(borrador: string): string {
+  return borrador.trim().slice(0, LARGO_MAXIMO_MENSAJE);
+}
