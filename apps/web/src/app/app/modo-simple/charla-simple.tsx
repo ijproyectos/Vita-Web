@@ -361,6 +361,8 @@ export function CharlaSimple({
   async function tocarMic() {
     desbloquearVoz();
     if (silenciada) return;
+    // Dentro del gesto del tap: desbloquea el AudioContext (iOS) antes del await de getUserMedia.
+    preparar();
     if (estadoVoz !== "inactivo") {
       detener();
       return;
