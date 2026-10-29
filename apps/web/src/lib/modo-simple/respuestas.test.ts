@@ -103,3 +103,16 @@ describe("respuestaProximoTurno", () => {
     expect(respuestaProximoTurno(t("mañana"), hoy)).toContain("no pude leer la fecha");
   });
 });
+
+describe("respuestaQueMeToca: nunca da por tomada una franja con algo pendiente", () => {
+  const fila = (nombre: string, tomado: boolean): MedHoy => ({ nombre, hora_programada: "08:00", tomado });
+  it("mismo remedio en dos filas, una tomada y otra pendiente", () => {
+    expect(respuestaQueMeToca([fila("Enalapril", true), fila("Enalapril", false)])).not.toContain("ya la");
+  });
+  it("una fila sin nombre tomada y otra con nombre pendiente", () => {
+    expect(respuestaQueMeToca([fila("", true), fila("Losartán", false)])).not.toContain("ya la");
+  });
+  it("todas las filas tomadas, aunque se repita el nombre", () => {
+    expect(respuestaQueMeToca([fila("Enalapril", true), fila("Enalapril", true)])).toContain("Esa ya la tomaste.");
+  });
+});

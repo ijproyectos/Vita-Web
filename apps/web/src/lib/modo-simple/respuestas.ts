@@ -51,7 +51,7 @@ export function unirNombres(nombres: string[]): string {
   return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
 }
 
-type Grupo = { hora: string | null; nombres: string[]; tomadas: number };
+type Grupo = { hora: string | null; nombres: string[]; tomadas: number; pendientes: number };
 
 /** Agrupa por hora (orden cronológico; las de hora ilegible van al final). */
 function agruparPorHora(meds: MedHoy[]): Grupo[] {
@@ -59,10 +59,11 @@ function agruparPorHora(meds: MedHoy[]): Grupo[] {
   for (const m of meds) {
     const hora = normalizarHora(m.hora_programada);
     const clave = hora ?? "?";
-    const g = mapa.get(clave) ?? { hora, nombres: [], tomadas: 0 };
+    const g = mapa.get(clave) ?? { hora, nombres: [], tomadas: 0, pendientes: 0 };
     const nombre = m.nombre.trim();
     if (nombre && !g.nombres.includes(nombre)) g.nombres.push(nombre);
     if (m.tomado) g.tomadas++;
+    else g.pendientes++;
     mapa.set(clave, g);
   }
   return [...mapa.values()].sort((a, b) => {
@@ -109,7 +110,9 @@ export function respuestaQueMeToca(meds: MedHoy[]): string {
   if (meds.length === 0) return "Hoy no tenés pastillas cargadas.";
   const frases = agruparPorHora(meds).map((g) => {
     const cabecera = g.hora ? horaEnPalabras(g.hora) : "Sin horario";
-    const todas = g.tomadas >= g.nombres.length && g.nombres.length > 0 && g.tomadas > 0;
+    // "Ya la tomaste" solo si no queda NINGUNA fila pendiente a esa hora (contar
+    // filas, no nombres: puede haber filas repetidas o sin nombre).
+    const todas = g.pendientes === 0 && g.tomadas > 0;
     const sufijo = todas ? ` ${g.nombres.length === 1 ? "Esa ya la tomaste." : "Esas ya las tomaste."}` : "";
     return `${cabecera}, ${unirNombres(g.nombres)}.${sufijo}`;
   });

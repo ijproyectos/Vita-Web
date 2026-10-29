@@ -80,7 +80,8 @@ export async function guardarMedicionSimpleAction(datos: {
     const validado = validarMedicion(entrada);
     if (!validado.ok) return { status: "error", message: validado.message };
     const supabase = await createClient();
-    await agregarMedicion(supabase, user.id, entrada);
+    // Lo validado (normalizado) es lo que la persona vio y confirmó, no el objeto crudo del cliente.
+    await agregarMedicion(supabase, user.id, validado.datos);
     revalidatePath("/app/mi-salud");
     return { status: "success" };
   } catch {
