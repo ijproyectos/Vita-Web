@@ -30,10 +30,12 @@ export function haceCuanto(dias: number): string {
 
 /** Hora de pared argentina ("HH:MM") de un instante. Seguro en el cliente (a diferencia de `horaEnAR`, que vive en un módulo server-only). */
 export function horaActualEnAR(fecha: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  const hora = new Intl.DateTimeFormat("en-GB", {
     timeZone: "America/Argentina/Buenos_Aires",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
   }).format(fecha);
+  // Defensive: some engines still format midnight as "24:MM" (h24).
+  return hora.startsWith("24") ? `00${hora.slice(2)}` : hora;
 }

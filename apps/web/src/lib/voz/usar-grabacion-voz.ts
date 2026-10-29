@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EstadoVoz } from "./tipos";
+import { conPlazo } from "./plazo";
 
 // VAD por umbral de amplitud simple (RMS de la señal en el dominio del
 // tiempo) — no hace falta nada más sofisticado para detectar "el usuario
 // dejó de hablar" en un chat de salud, un modelo de VAD dedicado sería
 // sobre-ingeniería acá.
 const UMBRAL_VOLUMEN = 0.02;
+const PLAZO_REANUDAR_AUDIO_MS = 1500; // AudioContext.resume() may never resolve without a gesture (iOS)
 const SILENCIO_MS = 800; // debounce: cuánto silencio antes de cerrar el turno
 const DURACION_MINIMA_MS = 300; // segmentos más cortos se descartan como ruido
 
@@ -247,7 +249,9 @@ export function useGrabacionVoz({
     activoRef.current = true;
 
     // Safari/iOS crea el contexto "suspended" si no hubo gesto: sin reanudarlo el VAD lee silencio.
-    if (audioContext.state === "suspended") await audioContext.resume().catch(() => {});
+    // `resume()` can stay pending forever without user activation, so it is bounded: a still-suspended
+    // context is reported as `suspendido` and the caller tears the mic down (`detener`).
+    if (audioContext.state === "suspended") await conPlazo(audioContext.resume(), PLAZO_REANUDAR_AUDIO_MS);
     const fuente = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 2048;
