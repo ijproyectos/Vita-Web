@@ -59,6 +59,7 @@ type Fase = "esperando" | "alertado" | "confirmado" | "descanso";
 const INTERVALO_REFRESCO_MS = 45_000;
 
 export function Pantalla({
+  usuarioId,
   nombre,
   saludo,
   fechaTexto,
@@ -75,6 +76,8 @@ export function Pantalla({
   telefonoAyuda,
   nombreAyuda,
 }: {
+  /** Cuenta logueada: el modo simple queda recordado solo para ella. */
+  usuarioId: string;
   nombre: string;
   saludo: string;
   fechaTexto: string;
@@ -131,8 +134,8 @@ export function Pantalla({
   // Entrar al modo simple lo deja activo en este dispositivo: si la app se
   // cierra, al abrirla de nuevo vuelve acá y no al Inicio normal.
   useEffect(() => {
-    recordarModoSimple();
-  }, []);
+    recordarModoSimple(usuarioId);
+  }, [usuarioId]);
 
   async function reproducirAnuncio() {
     if (!hayGrupo || silenciada || !config.voz) return;

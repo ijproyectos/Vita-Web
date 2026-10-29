@@ -36,6 +36,7 @@ export default async function ModoSimplePage() {
   const { primera, momento, enGrupo, resto, invalidas } = proximoGrupoPendiente(hoy, ahoraHHMM);
 
   const cabecera = {
+    usuarioId: usuario.id,
     nombre: perfil?.nombre?.trim() || "",
     saludo: saludoEnAR(),
     fechaTexto: fechaLargaEnAR(),
