@@ -593,16 +593,19 @@ export function CharlaSimple({
           </div>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto pt-6">
-          <VitaAvatar size={104} estado={estadoAvatar} interactivo={false} />
-          <h1 className="mt-4 font-heading text-[32px] font-extrabold tracking-[-0.03em]">¿En qué te ayudo?</h1>
-          <p className="mt-1.5 text-center text-[20px] font-medium text-slate-brand">Hablame, o tocá una pregunta.</p>
-          {!enLinea && (
-            <div role="status" className="mt-4 self-stretch rounded-[20px] bg-foreground px-4 py-3.5 text-center text-[18px] font-bold leading-[1.35] text-primary-foreground">
+        // Offline, the banner takes the subtitle's place and the header shrinks, so the mic
+        // and "Prefiero escribir" still fit on a ~844px-tall phone without scrolling.
+        <div className={cn("flex min-h-0 flex-1 flex-col items-center overflow-y-auto", enLinea ? "pt-6" : "pt-3")}>
+          <VitaAvatar size={enLinea ? 104 : 72} estado={estadoAvatar} interactivo={false} />
+          <h1 className={cn("font-heading text-[32px] font-extrabold tracking-[-0.03em]", enLinea ? "mt-4" : "mt-2")}>¿En qué te ayudo?</h1>
+          {enLinea ? (
+            <p className="mt-1.5 text-center text-[20px] font-medium text-slate-brand">Hablame, o tocá una pregunta.</p>
+          ) : (
+            <div role="status" className="mt-3 self-stretch rounded-[20px] bg-foreground px-4 py-3 text-center text-[18px] font-bold leading-[1.3] text-primary-foreground">
               Sin internet. Te respondo sobre tus pastillas y turnos.
             </div>
           )}
-          <div className="mt-5 flex flex-col gap-2.5 self-stretch">
+          <div className={cn("flex flex-col gap-2.5 self-stretch", enLinea ? "mt-5" : "mt-4")}>
             {chips.map((c) => (
               <button
                 key={c.id}
