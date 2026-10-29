@@ -285,3 +285,18 @@ export const TOOL_PEDIR_AYUDA_FAMILIA: Anthropic.Tool = {
     required: ["motivo"],
   },
 };
+
+export const TOOL_PROPONER_MEDICION: Anthropic.Tool = {
+  name: "proponer_medicion",
+  description:
+    "No guarda nada: le propone a la pantalla anotar una medición que la persona acaba de decir (glucosa o presión) y la pantalla le pregunta '¿Lo anoto así?'. Nunca digas que quedó anotada. Glucemia: valor en mg/dL ('me dio 110'). Presión: valor = máxima y valor_secundario = mínima ('13 y 8' = 130 y 80).",
+  input_schema: {
+    type: "object",
+    properties: {
+      tipo: { type: "string", enum: ["glucemia", "presion"] },
+      valor: { type: "number", description: "Glucemia en mg/dL, o la presión máxima en mmHg." },
+      valor_secundario: { type: "number", description: "Solo presión: la mínima en mmHg." },
+    },
+    required: ["tipo", "valor"],
+  },
+};

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { rolSobre } from "@/lib/familia/perfil-activo";
+import { agregar as agregarMedicion } from "@/lib/mediciones/nucleo";
+import { validarMedicion } from "@/lib/mediciones/tipos";
 import { actualizarPrefs } from "./nucleo";
 import { CLAVES_BOOLEANAS_MS, esMinutosPosponer, type ParcheModoSimple } from "./tipos";
 
@@ -59,4 +61,29 @@ export async function guardarPrefsModoSimpleAction(personaId: string, parche: Pa
   revalidatePath("/app/modo-simple");
   revalidatePath(`/app/familia/${personaId}/modo-simple`);
   return { status: "success" };
+}
+
+/**
+ * "¿Lo anoto así?" de la pantalla de voz: guarda la medición que vita propuso (`medicion_propuesta`) y la
+ * persona confirmó. Siempre para la cuenta LOGUEADA (nunca un id que venga del cliente); la RLS manda.
+ */
+export async function guardarMedicionSimpleAction(datos: {
+  tipo: "glucemia" | "presion";
+  valor: number;
+  valorSecundario?: number | null;
+}): Promise<EstadoModoSimple> {
+  const user = await requireUser();
+  const MENSAJE_MEDICION = "No pudimos anotarlo. Probá de nuevo.";
+  try {
+    if (!datos || (datos.tipo !== "glucemia" && datos.tipo !== "presion")) return { status: "error", message: MENSAJE_MEDICION };
+    const entrada = { tipo: datos.tipo, valor: datos.valor, valorSecundario: datos.valorSecundario ?? undefined };
+    const validado = validarMedicion(entrada);
+    if (!validado.ok) return { status: "error", message: validado.message };
+    const supabase = await createClient();
+    await agregarMedicion(supabase, user.id, entrada);
+    revalidatePath("/app/mi-salud");
+    return { status: "success" };
+  } catch {
+    return { status: "error", message: MENSAJE_MEDICION };
+  }
 }
