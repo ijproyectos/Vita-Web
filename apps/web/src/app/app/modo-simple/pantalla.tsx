@@ -17,7 +17,6 @@ import { usePosponer } from "@/lib/modo-simple/usar-posponer";
 import { olvidarModoSimple, recordarModoSimple } from "@/lib/modo-simple/recordar";
 import { VELOCIDAD_VOZ_LENTA, type PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { BarraSinConexion } from "@/components/vita/barra-sin-conexion";
-import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { cancelarPosposicionAction, posponerDosisAction } from "@/lib/notificaciones/actions";
 import { usePushActivo } from "@/lib/notificaciones/usar-push-activo";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
@@ -41,6 +40,8 @@ import {
 import { marcarTomadoAction } from "../rutina/actions";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
+import type { MedHoy, TurnoProximo } from "@/lib/modo-simple/respuestas";
+import { CharlaSimple } from "./charla-simple";
 
 // Coincide EXACTO con el regex del diseño — nunca se toca esta lista de
 // palabras sin actualizar también design/tasks.
@@ -73,6 +74,8 @@ export function Pantalla({
   config,
   turno,
   mediciones,
+  turnoProximo,
+  medsHoy,
   telefonoAyuda,
   nombreAyuda,
 }: {
@@ -90,6 +93,10 @@ export function Pantalla({
   turno: TurnoSimple | null;
   /** Presión/azúcar con datos reales (null = nada que mostrar, o la sección está apagada). */
   mediciones: { titulo: string; items: MedicionSimple[] } | null;
+  /** Próximo turno (cualquier día) para la respuesta hablada de la charla; null = ninguno o sección apagada. */
+  turnoProximo: TurnoProximo | null;
+  /** Medicación de hoy con su estado, para las respuestas locales de la charla. */
+  medsHoy: MedHoy[];
   /** Dosis pendientes del momento actual — la tarjeta principal. */
   grupo: Dosis[];
   momento: MomentoDia | null;
@@ -114,7 +121,7 @@ export function Pantalla({
   const hayGrupo = grupo.length > 0;
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
-  const { abrir: abrirChat } = useChatOverlay();
+  const [charlaAbierta, setCharlaAbierta] = useState(false);
   const posponer = usePosponer(grupo.map((m) => m.id).join(","), config.posponer_min);
   const pushActivo = usePushActivo();
   const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
@@ -222,6 +229,15 @@ export function Pantalla({
     },
   });
 
+  // La charla de voz tiene el micrófono para ella: se corta cualquier escucha de confirmación y el anuncio.
+  function abrirCharla() {
+    desbloquearVoz();
+    cancelarVoz();
+    detenerVoz();
+    setReproduciendoAudio(false);
+    setCharlaAbierta(true);
+  }
+
   // Silenciar corta en el mismo click: audio en curso y micrófono.
   function alternarSonido() {
     if (!silenciada) {
@@ -277,7 +293,7 @@ export function Pantalla({
       ) : pendienteDeGesto ? (
         <>
           <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
-          <BarraInferior estado={estadoAvatar} onHablar={() => abrirChat()} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
+          <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
         </>
       ) : (
         <>
@@ -343,7 +359,7 @@ export function Pantalla({
               {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
             </div>
           </div>
-          <BarraInferior estado={estadoAvatar} onHablar={() => abrirChat()} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
+          <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
         </>
       )}
 
@@ -354,6 +370,15 @@ export function Pantalla({
         onAlternarSonido={alternarSonido}
       />
       <SheetAyudaSinContacto open={ayudaAbierta && !telefonoAyuda} onOpenChange={setAyudaAbierta} />
+      {charlaAbierta && (
+        <CharlaSimple
+          nombre={nombre}
+          config={config}
+          medsHoy={medsHoy}
+          turnoProximo={turnoProximo}
+          onCerrar={() => setCharlaAbierta(false)}
+        />
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { fechaConOffset, fechaDeHoyISO, fechaISOEnAR } from "@/lib/rutina/format
 import { formatearValor, META_MEDICION } from "@/lib/mediciones/tipos";
 import { normalizarLlevar } from "@/lib/turnos/tipos";
 import type { MedicionSimple, TurnoSimple } from "@/lib/modo-simple/tipos";
+import type { TurnoProximo } from "./respuestas";
 
 export { proximoGrupoPendiente } from "./seleccion";
 
@@ -34,6 +35,31 @@ export async function turnoParaMostrar(supabase: Cliente, usuarioId: string): Pr
       llevar: normalizarLlevar(t.llevar)
         .filter((i) => !i.ok)
         .map((i) => i.t),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Próximo turno (cualquier día futuro) para la respuesta hablada de "¿Cuándo es mi próximo turno?".
+ * Los de hoy cuya hora ya pasó no cuentan. Nunca lanza: sin turno o ante un error, null.
+ */
+export async function proximoTurnoParaCharla(
+  supabase: Cliente,
+  usuarioId: string,
+  ahoraHHMM: string
+): Promise<TurnoProximo | null> {
+  try {
+    const hoy = fechaDeHoyISO();
+    const proximos = await turnosNucleo.listarProximos(supabase, usuarioId, 5);
+    const t = proximos.find((x) => x.fecha > hoy || x.hora.slice(0, 5) >= ahoraHHMM);
+    if (!t) return null;
+    return {
+      fecha: t.fecha,
+      hora: t.hora.slice(0, 5),
+      especialidad: t.especialidad,
+      profesional: t.profesional?.trim() || null,
     };
   } catch {
     return null;

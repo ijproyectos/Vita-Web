@@ -1,29 +1,17 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
+import { useEnLinea } from "@/lib/red/usar-en-linea";
 
 // Aviso de "Sin conexión" (V7 estados del sistema): una barra oscura arriba de
 // cada pantalla de /app/* mientras el navegador reporta que no hay red. Es
 // honesta: vita no encola cambios sin conexión, así que no promete guardarlos.
-function suscribir(avisar: () => void) {
-  window.addEventListener("online", avisar);
-  window.addEventListener("offline", avisar);
-  return () => {
-    window.removeEventListener("online", avisar);
-    window.removeEventListener("offline", avisar);
-  };
-}
-
 export function BarraSinConexion({ grande = false }: { grande?: boolean } = {}) {
   const router = useRouter();
-  const enLinea = useSyncExternalStore(
-    suscribir,
-    () => navigator.onLine,
-    () => true
-  );
+  const enLinea = useEnLinea();
   const [conectando, setConectando] = useState(false);
 
   if (enLinea) return null;

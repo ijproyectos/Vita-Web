@@ -27,3 +27,13 @@ export function haceCuanto(dias: number): string {
   if (dias === 1) return "Ayer";
   return `Hace ${dias} días`;
 }
+
+/** Hora de pared argentina ("HH:MM") de un instante. Seguro en el cliente (a diferencia de `horaEnAR`, que vive en un módulo server-only). */
+export function horaActualEnAR(fecha: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(fecha);
+}

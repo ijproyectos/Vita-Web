@@ -6,7 +6,7 @@ import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaLargaEnAR, saludoEnAR } from "@/lib/rutina/formato";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
-import { medicionesParaMostrar, proximoGrupoPendiente, turnoParaMostrar } from "@/lib/modo-simple/datos";
+import { medicionesParaMostrar, proximoGrupoPendiente, proximoTurnoParaCharla, turnoParaMostrar } from "@/lib/modo-simple/datos";
 import type { PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { Pantalla } from "./pantalla";
 
@@ -28,11 +28,13 @@ export default async function ModoSimplePage() {
     perfilNucleo.obtenerPerfil(supabase, usuario.id),
     obtenerPrefs(supabase, usuario.id),
   ]);
-  const [turno, mediciones] = await Promise.all([
+  const ahoraHHMM = medicamentos.horaEnAR();
+  const [turno, mediciones, turnoProximo] = await Promise.all([
     config.ver_turnos ? turnoParaMostrar(supabase, usuario.id) : null,
     config.ver_mediciones ? medicionesParaMostrar(supabase, usuario.id) : null,
+    // Solo para la respuesta hablada de la charla: sin "ver turnos" no se menciona ninguno.
+    config.ver_turnos ? proximoTurnoParaCharla(supabase, usuario.id, ahoraHHMM) : null,
   ]);
-  const ahoraHHMM = medicamentos.horaEnAR();
   const { primera, momento, enGrupo, resto, invalidas } = proximoGrupoPendiente(hoy, ahoraHHMM);
 
   const cabecera = {
@@ -47,6 +49,8 @@ export default async function ModoSimplePage() {
     config: config satisfies PrefsModoSimple,
     turno,
     mediciones,
+    turnoProximo,
+    medsHoy: hoy.map((m) => ({ nombre: m.nombre, hora_programada: m.hora_programada, tomado: m.tomado })),
   };
 
   const vencida = primera ? medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN) : false;
