@@ -377,6 +377,9 @@ export function Pantalla({
           medsHoy={medsHoy}
           turnoProximo={turnoProximo}
           onCerrar={() => setCharlaAbierta(false)}
+          telefonoAyuda={telefonoAyuda}
+          nombreAyuda={nombreAyuda}
+          onAyudaSinContacto={() => setAyudaAbierta(true)}
         />
       )}
     </div>

@@ -52,7 +52,8 @@ describe("accionPedidoAyuda", () => {
   it("solo emite con confirmación del servidor", () => {
     expect(accionPedidoAyuda({ status: "enviado", nombres: ["Mica"] })).toEqual({ type: "ayuda_enviada", nombres: ["Mica"] });
     expect(accionPedidoAyuda({ status: "repetido", nombres: ["Mica"] })).toEqual({ type: "ayuda_enviada", nombres: ["Mica"] });
-    expect(accionPedidoAyuda({ status: "tope" })).toBeUndefined();
+    expect(accionPedidoAyuda({ status: "tope" })).toEqual({ type: "ayuda_tope" });
+    expect(accionPedidoAyuda({ status: "tope" })?.type).not.toBe("ayuda_enviada");
     expect(accionPedidoAyuda({ status: "sin-cuidadores" })).toBeUndefined();
     expect(accionPedidoAyuda({ status: "error", message: "x" })).toBeUndefined();
   });

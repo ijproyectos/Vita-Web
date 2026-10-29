@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { VitaIcon } from "@/lib/vita-icons";
+import { BotonAyuda } from "@/components/vita/modo-simple/piezas";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,8 @@ export type VistaInicialCharla = {
   respuesta?: string;
   /** Nombres de quienes recibieron el pedido de ayuda. */
   ayuda?: string[];
+  /** The help cap was reached: highlight the red call button. */
+  ayudaTope?: boolean;
   medicion?: MedicionPropuesta;
   sinInternet?: boolean;
 };
@@ -85,6 +88,9 @@ export function CharlaSimple({
   medsHoy,
   turnoProximo,
   onCerrar,
+  telefonoAyuda,
+  nombreAyuda,
+  onAyudaSinContacto,
   inicial,
 }: {
   nombre: string;
@@ -92,6 +98,11 @@ export function CharlaSimple({
   medsHoy: MedHoy[];
   turnoProximo: TurnoProximo | null;
   onCerrar: () => void;
+  /** Same emergency contact the red Ayuda button of the home screen calls. */
+  telefonoAyuda: string | null;
+  nombreAyuda: string | null;
+  /** Opens the sheet that explains where to set the contact (no phone). */
+  onAyudaSinContacto: () => void;
   inicial?: VistaInicialCharla;
 }) {
   const enLinea = useEnLinea() && !inicial?.sinInternet;
@@ -101,6 +112,7 @@ export function CharlaSimple({
   const [pregunta, setPregunta] = useState(inicial?.pregunta ?? "");
   const [respuesta, setRespuesta] = useState(inicial?.respuesta ?? "");
   const [ayuda, setAyuda] = useState<string[] | null>(inicial?.ayuda ?? null);
+  const [ayudaTope, setAyudaTope] = useState(inicial?.ayudaTope ?? false);
   const [medicion, setMedicion] = useState<MedicionPropuesta | null>(inicial?.medicion ?? null);
   const [borrador, setBorrador] = useState("");
   const [resaltarMic, setResaltarMic] = useState(false);
@@ -178,11 +190,12 @@ export function CharlaSimple({
     }
   }
 
-  function mostrarRespuesta(preg: string, texto: string, extras?: { ayuda?: string[] | null; mood?: EstadoAvatar | null }) {
+  function mostrarRespuesta(preg: string, texto: string, extras?: { ayuda?: string[] | null; ayudaTope?: boolean; mood?: EstadoAvatar | null }) {
     setFase("respuesta");
     setPregunta(preg);
     setRespuesta(texto);
     setAyuda(extras?.ayuda ?? null);
+    setAyudaTope(extras?.ayudaTope ?? false);
     setMedicion(null);
     setMood(extras?.mood ?? null);
   }
@@ -202,6 +215,7 @@ export function CharlaSimple({
     setFase("pensando");
     setPregunta(texto);
     setAyuda(null);
+    setAyudaTope(false);
     setMedicion(null);
     setMood(null);
 
@@ -217,6 +231,7 @@ export function CharlaSimple({
     let acumulado = "";
     let errorServidor: string | null = null;
     let nombresAyuda: string[] | null = null;
+    let topeAyuda = false;
     let propuesta: MedicionPropuesta | null = null;
     let moodModelo: EstadoAvatar | null = null;
     let cortada = false;
@@ -239,6 +254,8 @@ export function CharlaSimple({
           if (e.accion.type === "ayuda_enviada" && Array.isArray(e.accion.nombres)) {
             const nombres = e.accion.nombres.filter((n): n is string => typeof n === "string" && n.trim() !== "");
             if (nombres.length) nombresAyuda = nombres;
+          } else if (e.accion.type === "ayuda_tope") {
+            topeAyuda = true;
           } else if (e.accion.type === "medicion_propuesta") {
             propuesta = leerMedicionPropuesta(e.accion) ?? propuesta;
           } else if (e.accion.type === "avatar_mood") {
@@ -261,12 +278,13 @@ export function CharlaSimple({
       setFase("confirmar");
       setMedicion(propuestaFinal);
       setRespuesta(frase);
+      setAyudaTope(topeAyuda);
       setAyuda(nombresAyuda); // si en el mismo turno se pidió ayuda, el aviso sigue visible
       void hablar(frase, turno);
       return;
     }
     const textoFinal = textoRespuestaFinal(acumulado, cortada, errorServidor);
-    mostrarRespuesta(texto, textoFinal, { ayuda: nombresAyuda, mood: moodModelo });
+    mostrarRespuesta(texto, textoFinal, { ayuda: nombresAyuda, ayudaTope: topeAyuda, mood: moodModelo });
     void hablar(textoFinal, turno);
   }
 
@@ -546,6 +564,15 @@ export function CharlaSimple({
                 {respuesta}
               </div>
             </div>
+            {ayudaTope && (
+              <BotonAyuda
+                telefono={telefonoAyuda}
+                contacto={nombreAyuda}
+                onAyuda={onAyudaSinContacto}
+                etiqueta="Llamar a mi familia"
+                className="h-[66px] w-full justify-center text-[21px] animate-pulse motion-reduce:animate-none"
+              />
+            )}
             {textoAyuda && (
               <div className="flex items-center gap-3 rounded-[22px] border-2 border-primary/40 bg-persona-1-tint px-[18px] py-4 text-[20px] font-bold text-foreground">
                 <VitaIcon name="check" size={26} strokeWidth={3} className="shrink-0 text-teal-deep" />

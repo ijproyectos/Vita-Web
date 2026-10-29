@@ -83,8 +83,12 @@ export function textoPedidoAyudaParaModelo(r: ResultadoPedidoAyuda): string {
   }
 }
 
-/** Evento SSE para la pantalla: solo cuando el servidor confirmó que hay aviso (nuevo o reciente). */
-export function accionPedidoAyuda(r: ResultadoPedidoAyuda): { type: "ayuda_enviada"; nombres: string[] } | undefined {
+/** Evento SSE para la pantalla: `ayuda_enviada` solo cuando el servidor confirmó que hay aviso (nuevo o reciente); `ayuda_tope` cuando no se pudo mandar otro. */
+export function accionPedidoAyuda(
+  r: ResultadoPedidoAyuda
+): { type: "ayuda_enviada"; nombres: string[] } | { type: "ayuda_tope" } | undefined {
   if (r.status === "enviado" || r.status === "repetido") return { type: "ayuda_enviada", nombres: r.nombres };
+  // Cap reached: nothing was sent, so the screen must highlight the red Ayuda button (never "X recibió tu pedido").
+  if (r.status === "tope") return { type: "ayuda_tope" };
   return undefined;
 }

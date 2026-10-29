@@ -73,6 +73,41 @@ export function tituloGrupo(n: number, momento: MomentoDia | null): string {
 // Encabezado V7: fecha + "Buen día, {nombre}" y el botón rojo "Ayuda". Con
 // contacto de emergencia cargado es un link `tel:` (llama directo); sin él
 // abre una hoja que explica dónde cargarlo.
+const CLASES_AYUDA =
+  "flex h-[58px] shrink-0 items-center gap-2 rounded-full bg-destructive px-5 text-[19px] font-extrabold text-primary-foreground shadow-[0_8px_20px_color-mix(in_srgb,var(--destructive)_32%,transparent)] transition-transform active:scale-[0.96] motion-reduce:transition-none";
+
+/**
+ * Red help control: a `tel:` link when there is a phone, otherwise a button that calls `onAyuda`
+ * (which opens the sheet explaining where to set the contact). Single source of the phone handling.
+ */
+export function BotonAyuda({
+  telefono,
+  contacto,
+  onAyuda,
+  etiqueta = "Ayuda",
+  className,
+}: {
+  telefono: string | null;
+  contacto: string | null;
+  onAyuda: () => void;
+  etiqueta?: string;
+  className?: string;
+}) {
+  const clases = cn(CLASES_AYUDA, className);
+  const telLimpio = telefono?.replace(/[^\d+]/g, "");
+  return telLimpio ? (
+    <a href={`tel:${telLimpio}`} aria-label={contacto ? `Pedir ayuda: llamar a ${contacto}` : "Pedir ayuda: llamar a tu contacto de emergencia"} className={clases}>
+      <VitaIcon name="alert-triangle" size={24} strokeWidth={2.4} />
+      {etiqueta}
+    </a>
+  ) : (
+    <button type="button" onClick={onAyuda} className={clases}>
+      <VitaIcon name="alert-triangle" size={24} strokeWidth={2.4} />
+      {etiqueta}
+    </button>
+  );
+}
+
 export function Cabecera({
   saludo,
   nombre,
@@ -91,10 +126,6 @@ export function Cabecera({
   /** Configurar modo simple puede ocultar el botón rojo. */
   conAyuda?: boolean;
 }) {
-  const clasesAyuda =
-    "flex h-[58px] shrink-0 items-center gap-2 rounded-full bg-destructive px-5 text-[19px] font-extrabold text-primary-foreground shadow-[0_8px_20px_color-mix(in_srgb,var(--destructive)_32%,transparent)] transition-transform active:scale-[0.96] motion-reduce:transition-none";
-  const telLimpio = telefono?.replace(/[^\d+]/g, "");
-
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -110,17 +141,7 @@ export function Cabecera({
           )}
         </h1>
       </div>
-      {!conAyuda ? null : telLimpio ? (
-        <a href={`tel:${telLimpio}`} aria-label={contacto ? `Pedir ayuda: llamar a ${contacto}` : "Pedir ayuda: llamar a tu contacto de emergencia"} className={clasesAyuda}>
-          <VitaIcon name="alert-triangle" size={24} strokeWidth={2.4} />
-          Ayuda
-        </a>
-      ) : (
-        <button type="button" onClick={onAyuda} className={clasesAyuda}>
-          <VitaIcon name="alert-triangle" size={24} strokeWidth={2.4} />
-          Ayuda
-        </button>
-      )}
+      {conAyuda && <BotonAyuda telefono={telefono} contacto={contacto} onAyuda={onAyuda} />}
     </div>
   );
 }

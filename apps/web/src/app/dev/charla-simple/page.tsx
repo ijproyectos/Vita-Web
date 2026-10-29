@@ -6,7 +6,7 @@ import { fechaISOEnAR } from "@/lib/rutina/formato";
 
 // Vista previa de la charla de voz del modo simple SIN login, para capturas. Solo dev/test:
 // 404 en producción salvo NEXT_PUBLIC_ENABLE_TEST_LOGIN === "true" (mismo criterio que /dev/emails).
-// `?vista=` abre directo en un estado: inicio (default) | escribir | respuesta | ayuda | medicion | sin-internet.
+// `?vista=` abre directo en un estado: inicio (default) | escribir | respuesta | ayuda | tope | medicion | sin-internet.
 
 const VISTAS: Record<string, VistaInicialCharla> = {
   inicio: { fase: "inicio" },
@@ -21,6 +21,12 @@ const VISTAS: Record<string, VistaInicialCharla> = {
     pregunta: "Me siento mal, necesito ayuda",
     respuesta: "Quedate tranquila, Elsa. Ya les avisé para que te ayuden.",
     ayuda: ["Mica"],
+  },
+  tope: {
+    fase: "respuesta",
+    pregunta: "Me siento mal otra vez",
+    respuesta: "Elsa, no pude mandar otro aviso. Llamá ahora a tu familia, o al 107 si es una emergencia.",
+    ayudaTope: true,
   },
   medicion: { fase: "confirmar", pregunta: "Me medí el azúcar y me dio 110", medicion: { tipo: "glucemia", valor: 110, valorSecundario: null } },
   "sin-internet": { fase: "inicio", sinInternet: true },
