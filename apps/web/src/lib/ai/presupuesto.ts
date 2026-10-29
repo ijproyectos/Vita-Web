@@ -1,8 +1,6 @@
 // Presupuesto de tiempo de una respuesta del chat: matemática pura (sin I/O ni `server-only`).
 // Todos los tiempos son milisegundos de `performance.now()`.
 
-import { usoDeAnthropic, type UsoTokens } from "@/lib/uso-ia/tipos";
-
 /**
  * Tiempo total que se le da a una respuesta del chat, contado desde que entra el request.
  *
@@ -71,9 +69,30 @@ export function textoCortePorTiempo(escriturasHechas: number): string {
   return escriturasHechas > 0 ? `${base} Lo que alcancé a guardar ya quedó guardado.` : base;
 }
 
-/** Uso parcial de una llamada que se cortó (snapshot del stream), o ceros si no hay. */
+/** Tokens parciales de una llamada que se cortó (snapshot del stream), o 0 si no hay. */
 export function usoParcial(
-  mensaje: { usage?: Parameters<typeof usoDeAnthropic>[0] } | undefined
-): UsoTokens {
-  return usoDeAnthropic(mensaje?.usage);
+  mensaje:
+    | {
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_input_tokens?: number | null;
+          cache_creation_input_tokens?: number | null;
+        };
+      }
+    | undefined
+): {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+} {
+  const u = mensaje?.usage;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : 0);
+  return {
+    input: n(u?.input_tokens),
+    output: n(u?.output_tokens),
+    cacheRead: n(u?.cache_read_input_tokens),
+    cacheWrite: n(u?.cache_creation_input_tokens),
+  };
 }

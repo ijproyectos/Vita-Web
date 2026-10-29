@@ -1,5 +1,5 @@
 -- Solo lectura: lista las filas de public.medicamentos que harían fallar la
--- migración 040 (medicamentos_sin_horarios_duplicados). Funciona ANTES de
+-- migración 037 (medicamentos_sin_horarios_duplicados). Funciona ANTES de
 -- aplicarla: la normalización está inlineada y replica las funciones
 -- medicamento_nombre_clave / medicamento_hora_clave / medicamento_dias_clave.
 -- Ejecutar con psql contra la base a migrar; no modifica nada.
@@ -8,9 +8,9 @@
 -- fila repetida, y volver a correr hasta que no devuelva filas.
 --
 -- tipo = 'incompatible': nombre vacío, hora fuera de H:MM / HH:MM / HH:MM:00 o
---   días con un valor distinto de lunes..domingo (el CHECK de 040 la rechaza).
+--   días con un valor distinto de lunes..domingo (el CHECK de 037 la rechaza).
 -- tipo = 'duplicado': dos filas del mismo usuario con el mismo nombre
---   normalizado, la misma hora y algún día en común (el EXCLUDE de 040 las
+--   normalizado, la misma hora y algún día en común (el EXCLUDE de 037 las
 --   rechaza). Sin días = todos los días. 'otra_fila' es la pareja.
 with base as (
   select
@@ -29,7 +29,7 @@ with base as (
         select array_position(array['lunes','martes','miercoles','jueves','viernes','sabado','domingo'], d) - 1
         from unnest(m.dias_recurrentes) as d)
     end as dias_idx,
-    -- 040: medicamento_dias_clave(NULL) es NULL (función strict) y el CHECK la rechaza.
+    -- 037: medicamento_dias_clave(NULL) es NULL (función strict) y el CHECK la rechaza.
     m.dias_recurrentes is null or (cardinality(m.dias_recurrentes) > 0 and exists (
       select 1 from unnest(m.dias_recurrentes) as d
       where d is null or d <> all (array['lunes','martes','miercoles','jueves','viernes','sabado','domingo'])

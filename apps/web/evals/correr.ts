@@ -9,7 +9,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { MAX_TOKENS_CHAT, MODELO_IA } from "@/lib/ai/modelo";
 import { mensajeEsperandoConfirmacion, mensajeFaltaConfirmacion, resolverDestino, TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
-import { bloqueHoy, construirContextoPersonas, construirContextoVariable, construirSystem, SYSTEM_PROMPT } from "@/lib/ai/sistema";
+import { armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat, SYSTEM_PROMPT } from "@/lib/ai/prompt-chat";
 import { TOOLS } from "@/lib/ai/tools-definiciones";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { AHORA, CASOS, HOY_ISO, USUARIO_ID } from "./casos";
@@ -42,13 +42,13 @@ function miembros(caso: CasoEval): MiembroFamilia[] {
 export function sistemaDelCaso(caso: CasoEval): Anthropic.TextBlockParam[] {
   const familia = miembros(caso);
   const abierto = familia.find((f) => f.id === caso.contexto.abiertoId);
-  return construirSystem(
-    construirContextoVariable(
-      construirContextoPersonas(USUARIO_ID, familia, abierto),
-      bloqueHoy(caso.contexto.medicamentosHoy, caso.contexto.turnosHoy),
-      AHORA,
-      HOY_ISO
-    )
+  return armarSystemChat(
+    contextoDinamicoChat({
+      contextoPerfil: construirContextoPersonas(USUARIO_ID, familia, abierto),
+      contextoHoy: bloqueHoy(caso.contexto.medicamentosHoy, caso.contexto.turnosHoy),
+      ahora: AHORA,
+      hoyISO: HOY_ISO,
+    })
   );
 }
 

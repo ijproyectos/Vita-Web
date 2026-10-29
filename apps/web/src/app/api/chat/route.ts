@@ -22,7 +22,7 @@ import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { LIMITES_CHAT } from "@/lib/limites/logica";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
-import { construirContextoPersonas, construirContextoVariable, bloqueHoy, construirSystem, SYSTEM_PROMPT } from "@/lib/ai/sistema";
+import { SYSTEM_PROMPT, armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
 import {
   ejecutarToolIdempotente,
   normalizarPedidoId,
@@ -36,7 +36,6 @@ import {
 import { detectarEmergencia, textoEmergencia } from "@/lib/ai/emergencia";
 import * as chat from "@/lib/chat/nucleo";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
-import { sumarUso, usoDeAnthropic, type UsoTokens } from "@/lib/uso-ia/tipos";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { descripcionAhoraEnAR, fechaDeHoyISO } from "@/lib/rutina/formato";
@@ -67,7 +66,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetr
 
 // Versión del prompt para registros_chat: hash de la plantilla ESTÁTICA (SYSTEM_PROMPT, que se arma una
 // sola vez al cargar el módulo; la guía de pantallas es constante) + TOOLS + modelo. El contexto por
-// request (Personas, Hoy, fecha) se agrega DESPUÉS en el bloque variable de `construirSystem` y no entra al hash.
+// request (Personas, Hoy, fecha) se agrega DESPUÉS en el segundo bloque de `armarSystemChat` y no entra al hash.
 // (No se exporta: un route.ts solo puede exportar handlers.)
 const VERSION_PROMPT = calcularVersionPrompt(SYSTEM_PROMPT, TOOLS, MODELO_IA);
 
@@ -206,8 +205,10 @@ export async function POST(request: Request) {
 
       let textoAcumulado = ""; // se persiste como UN mensaje del asistente al final,
       // igual a como el cliente lo muestra en una sola burbuja.
-      let usoAcumulado: UsoTokens = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
-      // Sumado por turno (lib/uso-ia/nucleo.ts) —
+      let tokensInputAcumulados = 0;
+      let tokensCacheLecturaAcumulados = 0;
+      let tokensCacheEscrituraAcumulados = 0;
+      let tokensOutputAcumulados = 0; // sumado por turno (lib/uso-ia/nucleo.ts) —
       // el chat es el punto que más consume de los tres (loop de hasta
       // MAX_TURNOS_TOOL_USE llamadas reales a Anthropic por mensaje del
       // usuario), así que el límite diario se chequea acá antes de nada.
@@ -341,8 +342,10 @@ export async function POST(request: Request) {
 
         const contextoHoy = await construirContextoHoy(supabase, user.id);
 
-        const system = construirSystem(
-          construirContextoVariable(contextoPerfil, contextoHoy, descripcionAhoraEnAR(), fechaDeHoyISO())
+        // Prompt caching: el bloque estático (reglas + tools, que se renderizan antes) lleva el breakpoint; todo
+        // lo volátil (Personas, Hoy, fecha) va en un segundo bloque SIN cache_control, después del breakpoint.
+        const system = armarSystemChat(
+          contextoDinamicoChat({ contextoPerfil, contextoHoy, ahora: descripcionAhoraEnAR(), hoyISO: fechaDeHoyISO() })
         );
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
@@ -376,11 +379,14 @@ export async function POST(request: Request) {
             // La llamada no terminó (corte, error del proveedor): lo que el stream ya reportó igual
             // se consumió, así que se suma al uso en vez de perderlo.
             const parcial = usoParcial(respuesta.currentMessage);
-            usoAcumulado = sumarUso(usoAcumulado, parcial);
-            medicion.tokensEntrada += parcial.inputTokens;
-            medicion.tokensSalida += parcial.outputTokens;
-            medicion.tokensCacheLectura += parcial.cacheReadTokens ?? 0;
-            medicion.tokensCacheEscritura += parcial.cacheCreationTokens ?? 0;
+            tokensInputAcumulados += parcial.input;
+            tokensOutputAcumulados += parcial.output;
+            tokensCacheLecturaAcumulados += parcial.cacheRead;
+            tokensCacheEscrituraAcumulados += parcial.cacheWrite;
+            medicion.tokensCacheLectura += parcial.cacheRead;
+            medicion.tokensCacheEscritura += parcial.cacheWrite;
+            medicion.tokensEntrada += parcial.input;
+            medicion.tokensSalida += parcial.output;
             // El corte del presupuesto abortó la llamada: no es un error del proveedor.
             const pasadoElCorte =
               controlador.signal.aborted ||
@@ -392,7 +398,10 @@ export async function POST(request: Request) {
             throw e;
           }
           historial.push({ role: "assistant", content: mensajeFinal.content });
-          usoAcumulado = sumarUso(usoAcumulado, usoDeAnthropic(mensajeFinal.usage));
+          tokensInputAcumulados += mensajeFinal.usage.input_tokens;
+          tokensOutputAcumulados += mensajeFinal.usage.output_tokens;
+          tokensCacheLecturaAcumulados += mensajeFinal.usage.cache_read_input_tokens ?? 0;
+          tokensCacheEscrituraAcumulados += mensajeFinal.usage.cache_creation_input_tokens ?? 0;
           medicion.tokensEntrada += mensajeFinal.usage.input_tokens;
           medicion.tokensSalida += mensajeFinal.usage.output_tokens;
           medicion.tokensCacheLectura += mensajeFinal.usage.cache_read_input_tokens ?? 0;
@@ -460,7 +469,13 @@ export async function POST(request: Request) {
           await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
         }
 
-        const usoNuevo = await registrarUsoIA(user.id, usoAcumulado);
+        const usoNuevo = await registrarUsoIA(user.id, {
+          modelo: MODELO_IA,
+          inputTokens: tokensInputAcumulados,
+          outputTokens: tokensOutputAcumulados,
+          cacheReadTokens: tokensCacheLecturaAcumulados,
+          cacheWriteTokens: tokensCacheEscrituraAcumulados,
+        });
         if (usoNuevo) enviarUso(usoNuevo);
         if (fallaPorTiempo) enviar({ error: "Se me hizo largo y no pude responderte. Probá de nuevo." });
         enviarFin();
@@ -470,7 +485,13 @@ export async function POST(request: Request) {
         // llegaron a completarse antes.
         medicion.resultado = "error";
         medicion.errorCodigo = clasificarError(e);
-        const usoNuevo = await registrarUsoIA(user.id, usoAcumulado);
+        const usoNuevo = await registrarUsoIA(user.id, {
+          modelo: MODELO_IA,
+          inputTokens: tokensInputAcumulados,
+          outputTokens: tokensOutputAcumulados,
+          cacheReadTokens: tokensCacheLecturaAcumulados,
+          cacheWriteTokens: tokensCacheEscrituraAcumulados,
+        });
         if (usoNuevo) enviarUso(usoNuevo);
         // Anthropic caído o sin respuesta: si el mensaje parece una emergencia,
         // igual sale el texto fijo con los teléfonos (si el modelo ya lo dijo, no se repite).

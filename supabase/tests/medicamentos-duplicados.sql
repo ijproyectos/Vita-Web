@@ -1,4 +1,4 @@
--- SOLO base local desechable, con auth y migraciones existentes + 040.
+-- SOLO base local desechable, con auth y migraciones existentes + 037.
 -- psql <conexion-local> -X -v ON_ERROR_STOP=1 -f supabase/tests/medicamentos-duplicados.sql
 -- Ejecutar como postgres: fixtures sintéticas, roles reales y ROLLBACK final.
 -- No necesita cuentas, credenciales ni filas de personas reales.

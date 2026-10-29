@@ -43,16 +43,12 @@ describe("presupuesto de tiempo", () => {
     expect(textoCortePorTiempo(2)).toContain("ya quedó guardado");
   });
   it("usoParcial suma lo que el stream ya reportó y es robusto", () => {
-    const cero = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
-    expect(usoParcial({ usage: { input_tokens: 120, output_tokens: 8 } })).toEqual({ ...cero, inputTokens: 120, outputTokens: 8 });
-    expect(usoParcial({ usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 30, cache_creation_input_tokens: 4 } })).toEqual({
-      inputTokens: 1,
-      outputTokens: 2,
-      cacheCreationTokens: 4,
-      cacheReadTokens: 30,
-    });
-    expect(usoParcial(undefined)).toEqual(cero);
-    expect(usoParcial({ usage: { input_tokens: Number.NaN, output_tokens: -3 } })).toEqual(cero);
-    expect(usoParcial({})).toEqual(cero);
+    expect(usoParcial({ usage: { input_tokens: 120, output_tokens: 8 } })).toEqual({ input: 120, output: 8, cacheRead: 0, cacheWrite: 0 });
+    expect(usoParcial(undefined)).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+    expect(usoParcial({ usage: { input_tokens: Number.NaN, output_tokens: -3 } })).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+    expect(
+      usoParcial({ usage: { input_tokens: 5, output_tokens: 1, cache_read_input_tokens: 4000, cache_creation_input_tokens: null } })
+    ).toEqual({ input: 5, output: 1, cacheRead: 4000, cacheWrite: 0 });
+    expect(usoParcial({})).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
   });
 });
