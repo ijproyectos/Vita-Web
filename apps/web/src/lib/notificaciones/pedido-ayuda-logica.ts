@@ -3,8 +3,12 @@
 import { limpiarDato } from "@/lib/ai/limpiar";
 import { unirNombres } from "@/lib/modo-simple/respuestas";
 
-/** Como máximo un pedido de ayuda cada este tiempo por persona. */
+/** Ventana (minutos) del tope de pedidos por persona y de la deduplicación por motivo. */
 export const MINUTOS_ENTRE_PEDIDOS_AYUDA = 15;
+/** Tope duro de pedidos por persona dentro de la ventana, sin importar el motivo. */
+export const MAX_PEDIDOS_AYUDA_POR_VENTANA = 3;
+/** Plazo por cuidador para entregar el aviso (un push lento no puede pasar el timeout del cliente). */
+export const TIMEOUT_ENTREGA_AYUDA_MS = 5_000;
 export const MAX_MOTIVO = 140;
 
 export type ResultadoPedidoAyuda =
@@ -38,6 +42,16 @@ export type AvisoReciente = { motivoClave: string | null; destinatarioId: string
 export function esPedidoRepetido(recientes: AvisoReciente[], motivo: string): boolean {
   const clave = normalizarMotivo(motivo);
   return recientes.some((r) => r.motivoClave === clave);
+}
+
+/**
+ * Tope duro: cada pedido deja una fila por cuidador, así que los pedidos distintos son las
+ * "tandas" (se cuentan por el destinatario con más filas). Con >= MAX no se manda otro.
+ */
+export function superaTopePedidos(recientes: AvisoReciente[]): boolean {
+  const porDestinatario = new Map<string, number>();
+  for (const r of recientes) porDestinatario.set(r.destinatarioId, (porDestinatario.get(r.destinatarioId) ?? 0) + 1);
+  return Math.max(0, ...porDestinatario.values()) >= MAX_PEDIDOS_AYUDA_POR_VENTANA;
 }
 
 /** Destinatarios que ya recibieron el aviso anterior con el mismo motivo. */

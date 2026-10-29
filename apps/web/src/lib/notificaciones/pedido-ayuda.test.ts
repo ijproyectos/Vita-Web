@@ -63,6 +63,33 @@ describe("pedirAyudaAFamilia", () => {
     expect(aviso.datos).toEqual({ personaId: "u1", motivoClave: "me duele el pecho" });
   });
 
+  it("tope duro: con 3 pedidos recientes, aun con motivo distinto es repetido y no entrega", async () => {
+    const fila = (c: string, m: string) => ({ usuario_id: c, datos: { personaId: "u1", motivoClave: m } });
+    adminCon([fila("c1", "a"), fila("c2", "a"), fila("c1", "b"), fila("c2", "b"), fila("c1", "c"), fila("c2", "c")]);
+    const r = await pedirAyudaAFamilia(sesion, "u1", "algo nuevo");
+    expect(r).toEqual({ status: "repetido", nombres: ["Ana", "Luis"] });
+    expect(entregarAviso).not.toHaveBeenCalled();
+  });
+
+  it("con 2 pedidos recientes todavía entrega", async () => {
+    const fila = (c: string, m: string) => ({ usuario_id: c, datos: { personaId: "u1", motivoClave: m } });
+    adminCon([fila("c1", "a"), fila("c1", "b")]);
+    expect((await pedirAyudaAFamilia(sesion, "u1", "otra cosa")).status).toBe("enviado");
+  });
+
+  it("un push lento no frena a los demás: pasado el plazo se lo da por no entregado", async () => {
+    vi.useFakeTimers();
+    try {
+      adminCon([]);
+      vi.mocked(entregarAviso).mockImplementationOnce(() => new Promise(() => {})).mockResolvedValueOnce(ok as never);
+      const p = pedirAyudaAFamilia(sesion, "u1", "mareada");
+      await vi.advanceTimersByTimeAsync(5_001);
+      expect(await p).toEqual({ status: "enviado", nombres: ["Luis"] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("si fallan todas las entregas es error, nunca enviado", async () => {
     adminCon([]);
     vi.mocked(entregarAviso).mockRejectedValueOnce(new Error("x")).mockResolvedValueOnce({ feed: false } as never);

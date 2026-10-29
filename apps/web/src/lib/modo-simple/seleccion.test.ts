@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
-import { proximoGrupoPendiente } from "./seleccion";
+import { elegirProximoTurno, proximoGrupoPendiente } from "./seleccion";
 
 function toma(id: string, hora: string, tomado = false): MedicamentoConToma {
   return {
@@ -80,5 +80,21 @@ describe("selección de tomas en modo simple", () => {
     expect(r.resto.map((m) => m.id)).toEqual(["ok"]);
     expect(r.pendientes.map((m) => m.id)).toEqual(["ok"]);
     expect(r.enGrupo).toEqual([]);
+  });
+});
+
+describe("elegirProximoTurno", () => {
+  const hoy = "2026-10-29";
+  const pasados = Array.from({ length: 6 }, (_, i) => ({ fecha: hoy, hora: `0${i + 1}:00:00` }));
+  it("salta los turnos de hoy que ya pasaron, aunque sean más de 5", () => {
+    const futuro = { fecha: "2026-10-31", hora: "10:00:00" };
+    expect(elegirProximoTurno([...pasados, futuro], hoy, "12:00")).toBe(futuro);
+  });
+  it("hoy a la misma hora o más tarde todavía cuenta", () => {
+    const ahora = { fecha: hoy, hora: "12:00:00" };
+    expect(elegirProximoTurno([...pasados, ahora], hoy, "12:00")).toBe(ahora);
+  });
+  it("sin ninguno vigente devuelve null", () => {
+    expect(elegirProximoTurno(pasados, hoy, "12:00")).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accionPedidoAyuda, destinatariosDelRepetido, esPedidoRepetido, limpiarMotivo, MAX_MOTIVO, normalizarMotivo, textoPedidoAyudaParaModelo } from "./pedido-ayuda-logica";
+import { accionPedidoAyuda, destinatariosDelRepetido, esPedidoRepetido, limpiarMotivo, MAX_MOTIVO, superaTopePedidos, normalizarMotivo, textoPedidoAyudaParaModelo } from "./pedido-ayuda-logica";
 import { payloadPedidoAyuda } from "./mensajes";
 
 describe("limpiarMotivo", () => {
@@ -76,5 +76,14 @@ describe("normalizarMotivo / repetido", () => {
   });
   it("devuelve los destinatarios del aviso previo", () => {
     expect(destinatariosDelRepetido([rec("a", "x"), rec("b", "y"), rec("a", "z")], "A")).toEqual(["x", "z"]);
+  });
+});
+
+describe("superaTopePedidos", () => {
+  const f = (d: string, m: string) => ({ destinatarioId: d, motivoClave: m });
+  it("cuenta pedidos por destinatario, no filas totales", () => {
+    expect(superaTopePedidos([f("c1", "a"), f("c2", "a"), f("c1", "b"), f("c2", "b")])).toBe(false);
+    expect(superaTopePedidos([f("c1", "a"), f("c1", "b"), f("c1", "c")])).toBe(true);
+    expect(superaTopePedidos([])).toBe(false);
   });
 });

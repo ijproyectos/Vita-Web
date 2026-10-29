@@ -12,6 +12,8 @@ import {
   limpiarMotivo,
   MINUTOS_ENTRE_PEDIDOS_AYUDA,
   normalizarMotivo,
+  superaTopePedidos,
+  TIMEOUT_ENTREGA_AYUDA_MS,
   type AvisoReciente,
   type ResultadoPedidoAyuda,
 } from "./pedido-ayuda-logica";
@@ -30,8 +32,11 @@ export type { ResultadoPedidoAyuda } from "./pedido-ayuda-logica";
  * cuidadores (RPC `listar_mis_cuidadores`, solo vínculos aceptados de ESTA persona);
  * `usuarioId` sale de la sesión, nunca del modelo ni del cliente.
  *
- * Tope: no se repite el MISMO motivo dentro de 15 min por persona, consultando `avisos` (sin tabla
- * nueva). Un motivo distinto (escalada) siempre se entrega. Si la consulta falla se envía igual:
+ * Tope: no se repite el MISMO motivo dentro de la ventana (MINUTOS_ENTRE_PEDIDOS_AYUDA) por persona,
+ * consultando `avisos` (sin tabla nueva), y como máximo MAX_PEDIDOS_AYUDA_POR_VENTANA pedidos en esa
+ * ventana sea cual sea el motivo (devuelve "repetido" nombrando a quienes ya recibieron). Un motivo
+ * distinto (escalada) se entrega mientras no se llegue a ese tope. Cada entrega tiene un plazo
+ * (TIMEOUT_ENTREGA_AYUDA_MS) para que un push lento no pase el timeout del cliente. Si la consulta falla se envía igual:
  * es un pedido explícito de ayuda y un push duplicado es el fallo más barato.
  * Best-effort ante concurrencia (dos pedidos simultáneos podrían pasar los dos).
  * "enviado" solo si se escribió al menos una fila del feed. Nunca lanza.
@@ -70,8 +75,9 @@ export async function pedirAyudaAFamilia(
           destinatarioId: f.usuario_id,
           motivoClave: typeof f.datos?.motivoClave === "string" ? f.datos.motivoClave : null,
         }));
-    if (esPedidoRepetido(recientes, motivo)) {
-      const ids = new Set(destinatariosDelRepetido(recientes, motivo));
+    const tope = superaTopePedidos(recientes);
+    if (tope || esPedidoRepetido(recientes, motivo)) {
+      const ids = new Set(tope ? recientes.map((r) => r.destinatarioId) : destinatariosDelRepetido(recientes, motivo));
       const previos = cuidadores.filter((c) => ids.has(c.cuidadorId)).map((c) => c.nombre);
       return { status: "repetido", nombres: previos.length > 0 ? previos : nombresTodos };
     }
@@ -80,7 +86,7 @@ export async function pedirAyudaAFamilia(
     const entregas = await Promise.all(
       cuidadores.map(async (c) => {
         try {
-          const { feed } = await entregarAviso(
+          const entrega = entregarAviso(
             admin,
             c.cuidadorId,
             {
@@ -93,7 +99,17 @@ export async function pedirAyudaAFamilia(
             },
             payload
           );
-          return feed ? c.nombre : null;
+          entrega.catch(() => {}); // si pierde la carrera, que no quede un rechazo sin atender
+          let reloj: ReturnType<typeof setTimeout> | undefined;
+          const plazo = new Promise<null>((resolve) => {
+            reloj = setTimeout(() => resolve(null), TIMEOUT_ENTREGA_AYUDA_MS);
+          });
+          try {
+            const resultado = await Promise.race([entrega, plazo]);
+            return resultado?.feed ? c.nombre : null;
+          } finally {
+            clearTimeout(reloj);
+          }
         } catch {
           return null;
         }

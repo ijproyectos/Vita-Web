@@ -8,6 +8,7 @@ import {
   textoSinInternet,
   TEXTO_CORTADA,
   TEXTO_NO_ENTENDI,
+  TEXTO_SIN_CONEXION_PEDIDO,
   textoRespuestaFinal,
   destinoTrasIniciar,
   escuchaTrabada,
@@ -59,6 +60,9 @@ describe("textoRespuestaFinal", () => {
   it("sin texto usa el error del servidor o el genérico", () => {
     expect(textoRespuestaFinal("", true, "Mandaste muchos mensajes.")).toBe("Mandaste muchos mensajes.");
     expect(textoRespuestaFinal("  ", false, null)).toBe(TEXTO_NO_ENTENDI);
+  });
+  it("cortada sin nada de texto es un problema de conexión, no de escucha", () => {
+    expect(textoRespuestaFinal("", true, null)).toBe(TEXTO_SIN_CONEXION_PEDIDO);
   });
 });
 

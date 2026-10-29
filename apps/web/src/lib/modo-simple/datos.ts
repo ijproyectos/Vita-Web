@@ -10,6 +10,8 @@ import { normalizarLlevar } from "@/lib/turnos/tipos";
 import type { MedicionSimple, TurnoSimple } from "@/lib/modo-simple/tipos";
 import type { TurnoProximo } from "./respuestas";
 
+import { elegirProximoTurno } from "./seleccion";
+
 export { proximoGrupoPendiente } from "./seleccion";
 
 // Datos REALES de una persona para su pantalla de modo simple (y para la vista
@@ -52,8 +54,9 @@ export async function proximoTurnoParaCharla(
 ): Promise<TurnoProximo | null> {
   try {
     const hoy = fechaDeHoyISO();
-    const proximos = await turnosNucleo.listarProximos(supabase, usuarioId, 5);
-    const t = proximos.find((x) => x.fecha > hoy || x.hora.slice(0, 5) >= ahoraHHMM);
+    // Margen amplio: varios turnos de hoy ya pasados no pueden esconder el siguiente.
+    const proximos = await turnosNucleo.listarProximos(supabase, usuarioId, 30);
+    const t = elegirProximoTurno(proximos, hoy, ahoraHHMM);
     if (!t) return null;
     return {
       fecha: t.fecha,

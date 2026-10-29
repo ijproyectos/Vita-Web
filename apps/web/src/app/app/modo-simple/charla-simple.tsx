@@ -20,6 +20,7 @@ import {
   TEXTO_MEDICION_NO,
   TEXTO_MEDICION_OK,
   TEXTO_NO_ENTENDI,
+  TEXTO_SIN_CONEXION_PEDIDO,
   textoRespuestaFinal,
   etiquetaMedicion,
   leerMedicionPropuesta,
@@ -148,6 +149,7 @@ export function CharlaSimple({
     turnoRef.current += 1;
     if (vigiaRef.current) clearTimeout(vigiaRef.current);
     setResaltarMic(false);
+    prefijoRef.current = false; // solo la primera respuesta a "¿Cómo estás hoy?" lleva el prefijo
     abortRef.current?.abort();
     cancelarVoz();
     setHablando(false);
@@ -188,9 +190,8 @@ export function CharlaSimple({
   }
 
   async function preguntar(texto: string) {
-    const turno = nuevoTurno();
     const prefijo = prefijoRef.current ? PREFIJO_ANIMO : "";
-    prefijoRef.current = false;
+    const turno = nuevoTurno();
     setAviso(null);
     setFase("pensando");
     setPregunta(texto);
@@ -222,7 +223,7 @@ export function CharlaSimple({
       });
       if (!resp.ok || !resp.body) {
         const cuerpo = (await resp.json().catch(() => null)) as { error?: unknown } | null;
-        throw new ErrorMostrable(typeof cuerpo?.error === "string" && cuerpo.error ? cuerpo.error : TEXTO_NO_ENTENDI);
+        throw new ErrorMostrable(typeof cuerpo?.error === "string" && cuerpo.error ? cuerpo.error : TEXTO_SIN_CONEXION_PEDIDO);
       }
       const { terminoBien } = await leerEventosChat(resp.body, (e) => {
         if (e.tipo === "sesion") sesionIdRef.current = e.id;
@@ -242,7 +243,7 @@ export function CharlaSimple({
       cortada = !terminoBien;
     } catch (e) {
       cortada = true;
-      if (!acumulado.trim() && !errorServidor) errorServidor = e instanceof ErrorMostrable ? e.message : TEXTO_NO_ENTENDI;
+      if (!acumulado.trim() && !errorServidor) errorServidor = e instanceof ErrorMostrable ? e.message : TEXTO_SIN_CONEXION_PEDIDO;
     } finally {
       clearTimeout(timeout);
     }
@@ -254,13 +255,13 @@ export function CharlaSimple({
       setFase("confirmar");
       setMedicion(propuestaFinal);
       setRespuesta(frase);
-      setAyuda(null);
+      setAyuda(nombresAyuda); // si en el mismo turno se pidió ayuda, el aviso sigue visible
       void hablar(frase, turno);
       return;
     }
-    const texto2 = textoRespuestaFinal(acumulado, cortada, errorServidor);
-    mostrarRespuesta(texto, texto2, { ayuda: nombresAyuda, mood: moodModelo });
-    void hablar(texto2, turno);
+    const textoFinal = textoRespuestaFinal(acumulado, cortada, errorServidor);
+    mostrarRespuesta(texto, textoFinal, { ayuda: nombresAyuda, mood: moodModelo });
+    void hablar(textoFinal, turno);
   }
 
   function alTocarChip(chip: Chip) {
@@ -347,8 +348,10 @@ export function CharlaSimple({
       detener();
       return;
     }
-    // `nuevoTurno` apaga el resaltado; el micrófono se abre ya dentro del gesto.
+    // `nuevoTurno` apaga el resaltado y el prefijo; si se tocó el mic que pedía el saludo, sigue siendo esa respuesta.
+    const eraRespuestaAlSaludo = prefijoRef.current && resaltarMic;
     nuevoTurno();
+    prefijoRef.current = eraRespuestaAlSaludo;
     setAviso(null);
     await empezarAEscuchar();
   }
@@ -362,7 +365,7 @@ export function CharlaSimple({
       return;
     }
     setHablando(true);
-    void reproducirBlob(blob, config.voz_lenta ? VELOCIDAD_VOZ_LENTA : 1).finally(() => {
+    void reproducirBlob(blob, config.voz_lenta ? VELOCIDAD_VOZ_LENTA : 1).catch(() => {}).finally(() => {
       if (turno === turnoRef.current) setHablando(false);
     });
   }
@@ -397,6 +400,7 @@ export function CharlaSimple({
 
   function cerrar() {
     turnoRef.current += 1;
+    prefijoRef.current = false;
     detener();
     onCerrar();
   }
@@ -514,6 +518,7 @@ export function CharlaSimple({
           medicion={medicion}
           estado={estadoAvatar}
           guardando={guardando}
+          textoAyuda={textoAyuda}
           onSi={confirmarMedicion}
           onNo={rechazarMedicion}
         />
@@ -634,6 +639,7 @@ function VistaConfirmar({
   medicion,
   estado,
   guardando,
+  textoAyuda,
   onSi,
   onNo,
 }: {
@@ -641,6 +647,7 @@ function VistaConfirmar({
   medicion: MedicionPropuesta;
   estado: EstadoAvatar;
   guardando: boolean;
+  textoAyuda: string;
   onSi: () => void;
   onNo: () => void;
 }) {
@@ -663,6 +670,12 @@ function VistaConfirmar({
         <div className="font-heading text-[72px] font-extrabold leading-none tracking-[-0.04em] tabular-nums">{valor}</div>
         <div className="text-[20px] font-bold text-slate-brand">{unidad}</div>
       </div>
+      {textoAyuda && (
+        <div className="flex items-center gap-3 rounded-[22px] border-2 border-primary/40 bg-persona-1-tint px-[18px] py-4 text-[20px] font-bold text-foreground">
+          <VitaIcon name="check" size={26} strokeWidth={3} className="shrink-0 text-teal-deep" />
+          {textoAyuda}
+        </div>
+      )}
       <div className="flex-1" />
       <div className="flex flex-col gap-2.5">
         <button

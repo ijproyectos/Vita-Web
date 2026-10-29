@@ -5,6 +5,8 @@ import { unirNombres } from "./respuestas";
 export const PREFIJO_ANIMO = "Vita me preguntó cómo estoy hoy. ";
 
 export const TEXTO_NO_ENTENDI = "Perdón, no te escuché bien. ¿Me lo decís de nuevo?";
+/** Timeout, corte de red o error sin mensaje: no es que no se la haya escuchado. */
+export const TEXTO_SIN_CONEXION_PEDIDO = "No pude conectarme. Probá de nuevo en un ratito.";
 export const TEXTO_CORTADA = "Se me cortó la respuesta. Si querés, preguntame de nuevo.";
 
 /**
@@ -13,7 +15,7 @@ export const TEXTO_CORTADA = "Se me cortó la respuesta. Si querés, preguntame 
  */
 export function textoRespuestaFinal(acumulado: string, cortada: boolean, error: string | null): string {
   const texto = acumulado.trim();
-  if (!texto) return error || TEXTO_NO_ENTENDI;
+  if (!texto) return error || (cortada ? TEXTO_SIN_CONEXION_PEDIDO : TEXTO_NO_ENTENDI);
   return cortada ? `${texto} ${TEXTO_CORTADA}` : texto;
 }
 export const TEXTO_MEDICION_NO = "Bueno, no lo anoto.";
