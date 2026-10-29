@@ -6,6 +6,9 @@ import {
   textoPreguntaMedicion,
   textoSaludoAnimo,
   textoSinInternet,
+  TEXTO_CORTADA,
+  TEXTO_NO_ENTENDI,
+  textoRespuestaFinal,
 } from "./charla";
 
 describe("textos de la charla", () => {
@@ -37,5 +40,18 @@ describe("medición propuesta", () => {
     expect(leerMedicionPropuesta({ tipo: "peso", valor: 70 })).toBeNull();
     expect(leerMedicionPropuesta({ tipo: "glucemia", valor: "110" })).toBeNull();
     expect(leerMedicionPropuesta({ tipo: "presion", valor: 130 })).toBeNull();
+  });
+});
+
+describe("textoRespuestaFinal", () => {
+  it("respuesta completa se muestra tal cual", () => {
+    expect(textoRespuestaFinal(" Hola, Elsa. ", false, null)).toBe("Hola, Elsa.");
+  });
+  it("respuesta cortada avisa que quedó incompleta", () => {
+    expect(textoRespuestaFinal("Tu turno es", true, null)).toBe(`Tu turno es ${TEXTO_CORTADA}`);
+  });
+  it("sin texto usa el error del servidor o el genérico", () => {
+    expect(textoRespuestaFinal("", true, "Mandaste muchos mensajes.")).toBe("Mandaste muchos mensajes.");
+    expect(textoRespuestaFinal("  ", false, null)).toBe(TEXTO_NO_ENTENDI);
   });
 });

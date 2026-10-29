@@ -20,6 +20,7 @@ import {
   TEXTO_MEDICION_NO,
   TEXTO_MEDICION_OK,
   TEXTO_NO_ENTENDI,
+  textoRespuestaFinal,
   etiquetaMedicion,
   leerMedicionPropuesta,
   textoAyudaEnviada,
@@ -92,7 +93,10 @@ export function CharlaSimple({
   useEffect(() => {
     const previo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     botonVolverRef.current?.focus();
+    const turnos = turnoRef;
     return () => {
+      // Invalida el turno en curso: un audio que todavía se está pidiendo no suena después de cerrar.
+      turnos.current += 1;
       cancelarVoz();
       abortRef.current?.abort();
       if (previo?.isConnected) previo.focus();
@@ -131,6 +135,8 @@ export function CharlaSimple({
       if (turno !== turnoRef.current) return;
       blobRef.current = blob;
       await reproducirBlob(blob, config.voz_lenta ? VELOCIDAD_VOZ_LENTA : 1);
+    } catch {
+      // Sin voz igual queda el texto en pantalla; nunca cortar el flujo (p. ej. abrir el micrófono).
     } finally {
       if (turno === turnoRef.current) setHablando(false);
     }
@@ -178,6 +184,7 @@ export function CharlaSimple({
     let nombresAyuda: string[] | null = null;
     let propuesta: MedicionPropuesta | null = null;
     let moodModelo: EstadoAvatar | null = null;
+    let cortada = false;
     try {
       const resp = await fetch("/api/chat", {
         method: "POST",
@@ -189,7 +196,7 @@ export function CharlaSimple({
         const cuerpo = (await resp.json().catch(() => null)) as { error?: unknown } | null;
         throw new ErrorMostrable(typeof cuerpo?.error === "string" && cuerpo.error ? cuerpo.error : TEXTO_NO_ENTENDI);
       }
-      await leerEventosChat(resp.body, (e) => {
+      const { terminoBien } = await leerEventosChat(resp.body, (e) => {
         if (e.tipo === "sesion") sesionIdRef.current = e.id;
         else if (e.tipo === "chunk") acumulado += e.texto;
         else if (e.tipo === "error") errorServidor = e.mensaje;
@@ -199,12 +206,14 @@ export function CharlaSimple({
             if (nombres.length) nombresAyuda = nombres;
           } else if (e.accion.type === "medicion_propuesta") {
             propuesta = leerMedicionPropuesta(e.accion) ?? propuesta;
-          } else if (e.accion.type === "set_avatar_mood") {
+          } else if (e.accion.type === "avatar_mood") {
             moodModelo = MOOD_A_ESTADO[String(e.accion.mood)] ?? null;
           }
         }
       });
+      cortada = !terminoBien;
     } catch (e) {
+      cortada = true;
       if (!acumulado.trim() && !errorServidor) errorServidor = e instanceof ErrorMostrable ? e.message : TEXTO_NO_ENTENDI;
     } finally {
       clearTimeout(timeout);
@@ -221,7 +230,7 @@ export function CharlaSimple({
       void hablar(frase, turno);
       return;
     }
-    const texto2 = acumulado.trim() || errorServidor || TEXTO_NO_ENTENDI;
+    const texto2 = textoRespuestaFinal(acumulado, cortada, errorServidor);
     mostrarRespuesta(texto, texto2, { ayuda: nombresAyuda, mood: moodModelo });
     void hablar(texto2, turno);
   }

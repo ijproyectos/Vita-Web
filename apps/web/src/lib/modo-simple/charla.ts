@@ -5,6 +5,17 @@ import { unirNombres } from "./respuestas";
 export const PREFIJO_ANIMO = "Vita me preguntó cómo estoy hoy. ";
 
 export const TEXTO_NO_ENTENDI = "Perdón, no te escuché bien. ¿Me lo decís de nuevo?";
+export const TEXTO_CORTADA = "Se me cortó la respuesta. Si querés, preguntame de nuevo.";
+
+/**
+ * Texto final de una respuesta de vita: si el stream se cortó (timeout, conexión) lo que
+ * llegó se muestra igual, pero avisando que quedó incompleto en vez de presentarlo entero.
+ */
+export function textoRespuestaFinal(acumulado: string, cortada: boolean, error: string | null): string {
+  const texto = acumulado.trim();
+  if (!texto) return error || TEXTO_NO_ENTENDI;
+  return cortada ? `${texto} ${TEXTO_CORTADA}` : texto;
+}
 export const TEXTO_MEDICION_NO = "Bueno, no lo anoto.";
 export const TEXTO_MEDICION_OK = "Listo, lo anoté.";
 
