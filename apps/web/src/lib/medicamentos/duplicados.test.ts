@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { horariosCoinciden, normalizarHoraDuplicados, normalizarHorarioMedicamento, traducirErrorDuplicado, ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado } from "./duplicados";
+import { mensajeSeguroMedicamento, horariosCoinciden, normalizarHoraDuplicados, normalizarHorarioMedicamento, traducirErrorDuplicado, ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado } from "./duplicados";
 import type { DiaSemana } from "./tipos";
 
 const toma = (nombre = "Losartán", horaProgramada = "08:00", diasRecurrentes: DiaSemana[] = []) => ({ nombre, horaProgramada, diasRecurrentes });
@@ -39,5 +39,14 @@ describe("identidad de un horario de medicamento", () => {
     expect(() => traducirErrorDuplicado({ code: "23P01", message: 'conflicts with exclusion constraint "medicamentos_sin_horarios_duplicados"' })).toThrow(ErrorHorarioMedicamentoDuplicado);
     expect(() => traducirErrorDuplicado({ code: "23505", message: '"medicamentos_sin_horarios_duplicados"' })).not.toThrow();
     expect(() => traducirErrorDuplicado({ code: "23P01", message: '"otra_exclusion"' })).not.toThrow();
+  });
+});
+
+describe("mensajeSeguroMedicamento", () => {
+  it("conserva el mensaje de los errores de dominio y oculta el texto crudo de la DB", () => {
+    expect(mensajeSeguroMedicamento(new ErrorEntradaMedicamento("Revisá los horarios."), "x")).toBe("Revisá los horarios.");
+    expect(mensajeSeguroMedicamento(new ErrorHorarioMedicamentoDuplicado(), "x")).toContain("ya está agregado");
+    expect(mensajeSeguroMedicamento(new Error('No se pudo crear el medicamento: relation "medicamentos" ...'), "Probá de nuevo.")).toBe("Probá de nuevo.");
+    expect(mensajeSeguroMedicamento("boom", "Probá de nuevo.")).toBe("Probá de nuevo.");
   });
 });

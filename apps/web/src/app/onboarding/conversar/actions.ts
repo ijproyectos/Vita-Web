@@ -1,6 +1,6 @@
 "use server";
 
-import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado } from "@/lib/medicamentos/duplicados";
+import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, mensajeSeguroMedicamento } from "@/lib/medicamentos/duplicados";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
@@ -181,8 +181,7 @@ export async function guardarMedicamentoPropioAction(datos: DatosMedicamentoConf
   try {
     tomas = normalizarTomas(Array.isArray(datos.tomas) ? datos.tomas : []);
   } catch (e) {
-    if (e instanceof ErrorEntradaMedicamento) return { status: "error", message: e.message };
-    throw e;
+    return { status: "error", message: mensajeSeguroMedicamento(e, "Revisá los horarios.") };
   }
   if (tomas.length === 0) return { status: "error", message: "Falta al menos un horario." };
 

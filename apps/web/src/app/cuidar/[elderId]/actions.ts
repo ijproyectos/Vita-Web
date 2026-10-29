@@ -10,7 +10,7 @@ import type { ResultadoCodigoAcceso } from "@/lib/acceso-codigo/tipos";
 import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import type { EstadoAccion } from "@/app/app/rutina/actions";
-import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado } from "@/lib/medicamentos/duplicados";
+import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, mensajeSeguroMedicamento } from "@/lib/medicamentos/duplicados";
 import { leerTomas } from "@/lib/medicamentos/formulario";
 
 // Único punto de escritura real del cuidador sobre datos del elder (fuera
@@ -44,8 +44,7 @@ export async function crearMedicamentoParaElderAction(
   try {
     tomas = leerTomas(formData);
   } catch (e) {
-    if (e instanceof ErrorEntradaMedicamento) return { status: "error", message: e.message };
-    throw e;
+    return { status: "error", message: mensajeSeguroMedicamento(e, "Revisá los horarios.") };
   }
   const duracion = String(formData.get("duracion") ?? "");
   const notas = String(formData.get("notas") ?? "").trim().slice(0, 500);

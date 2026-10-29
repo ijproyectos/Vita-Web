@@ -64,3 +64,13 @@ export function traducirErrorDuplicado(error: { code?: string; message: string }
     throw new ErrorHorarioMedicamentoDuplicado();
   }
 }
+
+/**
+ * Texto apto para mostrar al usuario ante un error del núcleo de medicamentos: los errores de
+ * dominio llevan su mensaje; cualquier otro (p. ej. una falla de DB con `error.message` crudo)
+ * se reemplaza por `alternativo`, nunca se filtra.
+ */
+export function mensajeSeguroMedicamento(error: unknown, alternativo: string): string {
+  if (error instanceof ErrorEntradaMedicamento || error instanceof ErrorHorarioMedicamentoDuplicado) return error.message;
+  return alternativo;
+}
