@@ -15,6 +15,8 @@ export type ResultadoPedidoAyuda =
   | { status: "enviado"; nombres: string[] }
   | { status: "sin-cuidadores" }
   | { status: "repetido"; nombres: string[] }
+  /** Hard cap hit with a NEW motivo: nothing was sent this time. */
+  | { status: "tope" }
   | { status: "error"; message: string };
 
 /** El motivo lo escribe el modelo a partir de lo que dijo la persona: sin control chars, 1 línea, tope. */
@@ -72,6 +74,8 @@ export function textoPedidoAyudaParaModelo(r: ResultadoPedidoAyuda): string {
       return `ENVIADO: la app le avisó de verdad a ${nombresParaModelo(r.nombres)} (aviso en la app y notificación). Decíselo con ese nombre y tranquilizala en una frase. Si lo que cuenta suena grave, agregá que toque el botón Ayuda para llamar.`;
     case "repetido":
       return `YA AVISADO: hace pocos minutos ya se le avisó a ${nombresParaModelo(r.nombres)} y no se mandó otro aviso. Decile que ya les avisaste y que enseguida se van a comunicar. Si suena grave, que toque el botón Ayuda para llamar.`;
+    case "tope":
+      return "NO SE MANDÓ ESTE AVISO: ya se mandaron varios pedidos en los últimos minutos y no se pudo mandar otro. NO digas que avisaste ni que les va a llegar. Decile que llame ahora mismo a su familia, o al 107 si es una emergencia, o que toque el botón rojo Ayuda.";
     case "sin-cuidadores":
       return "NO SE AVISÓ A NADIE: no tiene familiares vinculados en vita. NO digas que avisaste a alguien. Decile que toque el botón Ayuda para llamar a su contacto.";
     case "error":

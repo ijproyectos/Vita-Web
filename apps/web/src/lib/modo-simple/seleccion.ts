@@ -28,8 +28,9 @@ export function proximoGrupoPendiente(hoy: MedicamentoConToma[], ahoraHHMM: stri
 
 /**
  * Primer turno que todavía no pasó: de un día futuro, o de hoy con hora >= ahora.
- * Espera la lista ordenada por fecha y hora. Puro.
+ * Una fila de un día anterior nunca cuenta, aunque su hora sea tarde. Devuelve el
+ * primero EN EL ORDEN RECIBIDO: espera la lista ordenada por fecha y hora. Puro.
  */
 export function elegirProximoTurno<T extends { fecha: string; hora: string }>(turnos: T[], hoyISO: string, ahoraHHMM: string): T | null {
-  return turnos.find((t) => t.fecha > hoyISO || t.hora.slice(0, 5) >= ahoraHHMM) ?? null;
+  return turnos.find((t) => t.fecha > hoyISO || (t.fecha === hoyISO && t.hora.slice(0, 5) >= ahoraHHMM)) ?? null;
 }

@@ -4,7 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { listarMisCuidadores } from "@/lib/familia/nucleo";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { entregarAviso } from "./avisos";
+import { crearAviso } from "./avisos";
+import { enviarPush } from "./push";
 import { payloadPedidoAyuda } from "./mensajes";
 import {
   destinatariosDelRepetido,
@@ -34,9 +35,11 @@ export type { ResultadoPedidoAyuda } from "./pedido-ayuda-logica";
  *
  * Tope: no se repite el MISMO motivo dentro de la ventana (MINUTOS_ENTRE_PEDIDOS_AYUDA) por persona,
  * consultando `avisos` (sin tabla nueva), y como máximo MAX_PEDIDOS_AYUDA_POR_VENTANA pedidos en esa
- * ventana sea cual sea el motivo (devuelve "repetido" nombrando a quienes ya recibieron). Un motivo
- * distinto (escalada) se entrega mientras no se llegue a ese tope. Cada entrega tiene un plazo
- * (TIMEOUT_ENTREGA_AYUDA_MS) para que un push lento no pase el timeout del cliente. Si la consulta falla se envía igual:
+ * ventana sea cual sea el motivo. Mismo motivo = "repetido" (nombra a quienes ya recibieron); tope con un
+ * motivo NUEVO = "tope" (no se mandó nada: nunca se afirma una entrega que no ocurrió). Un motivo
+ * distinto (escalada) se entrega mientras no se llegue a ese tope. Un cuidador cuenta como avisado apenas
+ * se confirma la fila del feed; el plazo (TIMEOUT_ENTREGA_AYUDA_MS) aplica solo al push posterior, para que
+ * uno lento no pase el timeout del cliente. Si la consulta falla se envía igual:
  * es un pedido explícito de ayuda y un push duplicado es el fallo más barato.
  * Best-effort ante concurrencia (dos pedidos simultáneos podrían pasar los dos).
  * "enviado" solo si se escribió al menos una fila del feed. Nunca lanza.
@@ -76,40 +79,42 @@ export async function pedirAyudaAFamilia(
           motivoClave: typeof f.datos?.motivoClave === "string" ? f.datos.motivoClave : null,
         }));
     const tope = superaTopePedidos(recientes);
-    if (tope || esPedidoRepetido(recientes, motivo)) {
-      const ids = new Set(tope ? recientes.map((r) => r.destinatarioId) : destinatariosDelRepetido(recientes, motivo));
+    if (esPedidoRepetido(recientes, motivo)) {
+      const ids = new Set(destinatariosDelRepetido(recientes, motivo));
       const previos = cuidadores.filter((c) => ids.has(c.cuidadorId)).map((c) => c.nombre);
       return { status: "repetido", nombres: previos.length > 0 ? previos : nombresTodos };
     }
+    if (tope) return { status: "tope" };
 
     const payload = payloadPedidoAyuda({ personaId: usuarioId, personaNombre: primerNombre, motivo });
     const entregas = await Promise.all(
       cuidadores.map(async (c) => {
         try {
-          const entrega = entregarAviso(
-            admin,
-            c.cuidadorId,
-            {
-              tipo: "pedido_ayuda",
-              titulo: payload.title,
-              cuerpo: payload.body,
-              url: payload.url,
-              datos: { personaId: usuarioId, motivoClave: normalizarMotivo(motivo) },
-              personaId: usuarioId,
-            },
-            payload
-          );
-          entrega.catch(() => {}); // si pierde la carrera, que no quede un rechazo sin atender
+          const feed = await crearAviso(admin, c.cuidadorId, {
+            tipo: "pedido_ayuda",
+            titulo: payload.title,
+            cuerpo: payload.body,
+            url: payload.url,
+            datos: { personaId: usuarioId, motivoClave: normalizarMotivo(motivo) },
+            personaId: usuarioId,
+          });
+          if (!feed) return null;
+          // From here on the caregiver counts as notified (the feed row exists); the push is best-effort.
+          const push = enviarPush(admin, c.cuidadorId, payload);
+          push.catch(() => {}); // if it loses the race, don't leave an unhandled rejection
           let reloj: ReturnType<typeof setTimeout> | undefined;
-          const plazo = new Promise<null>((resolve) => {
-            reloj = setTimeout(() => resolve(null), TIMEOUT_ENTREGA_AYUDA_MS);
+          const plazo = new Promise<"plazo">((resolve) => {
+            reloj = setTimeout(() => resolve("plazo"), TIMEOUT_ENTREGA_AYUDA_MS);
           });
           try {
-            const resultado = await Promise.race([entrega, plazo]);
-            return resultado?.feed ? c.nombre : null;
+            const r = await Promise.race([push, plazo]);
+            if (r === "plazo") console.warn("pedir_ayuda_familia: push timed out (feed row already saved)");
+          } catch {
+            console.warn("pedir_ayuda_familia: push failed (feed row already saved)");
           } finally {
             clearTimeout(reloj);
           }
+          return c.nombre;
         } catch {
           return null;
         }

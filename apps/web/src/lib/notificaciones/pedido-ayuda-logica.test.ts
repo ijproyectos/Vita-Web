@@ -27,6 +27,13 @@ describe("textoPedidoAyudaParaModelo", () => {
     expect(t).toContain("YA AVISADO");
     expect(t).toContain("no se mandó otro");
   });
+  it("tope aclara que NO se mandó y manda a llamar", () => {
+    const t = textoPedidoAyudaParaModelo({ status: "tope" });
+    expect(t).toContain("NO SE MANDÓ");
+    expect(t).toContain("NO digas que avisaste");
+    expect(t).toContain("107");
+    expect(t).toContain("Ayuda");
+  });
   it("sin cuidadores y error prohíben afirmar que se avisó y sugieren Ayuda", () => {
     for (const r of [{ status: "sin-cuidadores" as const }, { status: "error" as const, message: "x" }]) {
       const t = textoPedidoAyudaParaModelo(r);
@@ -45,6 +52,7 @@ describe("accionPedidoAyuda", () => {
   it("solo emite con confirmación del servidor", () => {
     expect(accionPedidoAyuda({ status: "enviado", nombres: ["Mica"] })).toEqual({ type: "ayuda_enviada", nombres: ["Mica"] });
     expect(accionPedidoAyuda({ status: "repetido", nombres: ["Mica"] })).toEqual({ type: "ayuda_enviada", nombres: ["Mica"] });
+    expect(accionPedidoAyuda({ status: "tope" })).toBeUndefined();
     expect(accionPedidoAyuda({ status: "sin-cuidadores" })).toBeUndefined();
     expect(accionPedidoAyuda({ status: "error", message: "x" })).toBeUndefined();
   });

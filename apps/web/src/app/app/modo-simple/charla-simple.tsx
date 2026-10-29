@@ -74,6 +74,11 @@ class ErrorMostrable extends Error {}
 const clasesBoton =
   "flex items-center justify-center gap-2.5 rounded-[22px] text-[18px] font-bold transition-transform active:scale-[0.98] motion-reduce:transition-none disabled:opacity-60";
 
+// Wrapped so the purity lint does not read a clock call inside an event handler as render-time impurity.
+function ahoraMs() {
+  return Date.now();
+}
+
 export function CharlaSimple({
   nombre,
   config,
@@ -108,6 +113,7 @@ export function CharlaSimple({
   const turnoRef = useRef(0);
   const sesionIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const inicioEscuchaRef = useRef(0);
   const blobRef = useRef<Blob | null>(null);
   const prefijoRef = useRef(false);
   const botonVolverRef = useRef<HTMLButtonElement>(null);
@@ -308,8 +314,10 @@ export function CharlaSimple({
     } else {
       // Red de seguridad: si el contexto sigue suspendido y no se oyó nada, no queda colgado en "Te escucho…".
       if (vigiaRef.current) clearTimeout(vigiaRef.current);
+      inicioEscuchaRef.current = ahoraMs();
       vigiaRef.current = setTimeout(() => {
-        if (turno === turnoRef.current && escuchaTrabada(obtenerEstado(), contextoSuspendido(), ESPERA_SIN_OIR_MS)) avisarTocarMic();
+        const esperadoMs = ahoraMs() - inicioEscuchaRef.current;
+        if (turno === turnoRef.current && escuchaTrabada(obtenerEstado(), contextoSuspendido(), esperadoMs)) avisarTocarMic();
       }, ESPERA_SIN_OIR_MS);
     }
   }

@@ -94,6 +94,17 @@ describe("elegirProximoTurno", () => {
     const ahora = { fecha: hoy, hora: "12:00:00" };
     expect(elegirProximoTurno([...pasados, ahora], hoy, "12:00")).toBe(ahora);
   });
+  it("una fila de un día anterior con hora tardía no cuenta", () => {
+    const ayerTarde = { fecha: "2026-10-28", hora: "23:00:00" };
+    const futuro = { fecha: "2026-10-30", hora: "08:00:00" };
+    expect(elegirProximoTurno([ayerTarde, futuro], hoy, "12:00")).toBe(futuro);
+    expect(elegirProximoTurno([ayerTarde], hoy, "12:00")).toBeNull();
+  });
+  it("devuelve el primero en el orden recibido (la lista debe venir ordenada)", () => {
+    const a = { fecha: "2026-10-31", hora: "10:00:00" };
+    const b = { fecha: "2026-10-30", hora: "10:00:00" };
+    expect(elegirProximoTurno([a, b], hoy, "12:00")).toBe(a);
+  });
   it("sin ninguno vigente devuelve null", () => {
     expect(elegirProximoTurno(pasados, hoy, "12:00")).toBeNull();
   });
