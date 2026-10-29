@@ -14,6 +14,7 @@ import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { usePosponer } from "@/lib/modo-simple/usar-posponer";
+import { olvidarModoSimple, recordarModoSimple } from "@/lib/modo-simple/recordar";
 import { VELOCIDAD_VOZ_LENTA, type PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { BarraSinConexion } from "@/components/vita/barra-sin-conexion";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
@@ -126,6 +127,12 @@ export function Pantalla({
     const id = setInterval(() => router.refresh(), INTERVALO_REFRESCO_MS);
     return () => clearInterval(id);
   }, [router]);
+
+  // Entrar al modo simple lo deja activo en este dispositivo: si la app se
+  // cierra, al abrirla de nuevo vuelve acá y no al Inicio normal.
+  useEffect(() => {
+    recordarModoSimple();
+  }, []);
 
   async function reproducirAnuncio() {
     if (!hayGrupo || silenciada || !config.voz) return;
@@ -476,6 +483,7 @@ function SheetAjustes({
               esto en una pantalla sin retorno real. */}
           <Link
             href="/app/perfil"
+            onClick={olvidarModoSimple}
             className="flex min-h-14 items-center gap-3 rounded-[var(--radius-item)] bg-secondary px-4 text-[16px] font-extrabold text-slate-brand"
           >
             <VitaIcon name="logout" size={24} />
