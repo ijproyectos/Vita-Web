@@ -22,7 +22,7 @@ import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { LIMITES_CHAT } from "@/lib/limites/logica";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
-import { INSTRUCCIONES_ESTILO_SIMPLE, RESULTADO_TOOL_NO_DISPONIBLE, leerModoChat, toolPermitida, toolsParaModo } from "@/lib/ai/modo-simple";
+import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
 import { SYSTEM_PROMPT, armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
 import {
   ejecutarToolIdempotente,
@@ -358,7 +358,7 @@ export async function POST(request: Request) {
         // Prompt caching: el bloque estático (reglas + tools, que se renderizan antes) lleva el breakpoint; todo
         // lo volátil (Personas, Hoy, fecha) va en un segundo bloque SIN cache_control, después del breakpoint.
         const contextoDinamico = contextoDinamicoChat({ contextoPerfil, contextoHoy, ahora: descripcionAhoraEnAR(), hoyISO: fechaDeHoyISO() });
-        const system = armarSystemChat(modoSimple ? `${contextoDinamico}${INSTRUCCIONES_ESTILO_SIMPLE}` : contextoDinamico);
+        const system = armarSystemChat(contextoDinamicoParaModo(modo, contextoDinamico));
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
           // Antes de otra vuelta del modelo: si el presupuesto ya no alcanza, se corta acá.
@@ -433,8 +433,9 @@ export async function POST(request: Request) {
           const resultadosTool: Anthropic.ToolResultBlockParam[] = [];
           for (const uso of usosDeTool) {
             // Una tool fuera de la lista activa se rechaza aunque el modelo la nombre.
-            if (!toolPermitida(modo, uso.name)) {
-              resultadosTool.push({ type: "tool_result", tool_use_id: uso.id, content: RESULTADO_TOOL_NO_DISPONIBLE, is_error: true });
+            const bloqueada = resultadoToolBloqueada(modo, uso);
+            if (bloqueada) {
+              resultadosTool.push(bloqueada);
               continue;
             }
             const resultado = await ejecutarToolIdempotente(

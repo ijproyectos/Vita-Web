@@ -4,7 +4,10 @@ import {
   TOOLS_PERMITIDAS_SIMPLE,
   TEXTO_SUGERIR_LLAMAR_AYUDA,
   TOOLS_SOLO_SIMPLE,
+  RESULTADO_TOOL_NO_DISPONIBLE,
+  contextoDinamicoParaModo,
   leerModoChat,
+  resultadoToolBloqueada,
   toolPermitida,
   toolsParaModo,
 } from "./modo-simple";
@@ -74,5 +77,35 @@ describe("ayuda sin notificar", () => {
     expect(TEXTO_SUGERIR_LLAMAR_AYUDA).toContain("No se envió ningún aviso");
     expect(TEXTO_SUGERIR_LLAMAR_AYUDA).toContain("NUNCA digas que avisaste");
     expect(TEXTO_SUGERIR_LLAMAR_AYUDA).not.toMatch(/avisé|les avisé/);
+  });
+});
+
+describe("resultadoToolBloqueada (lo que /api/chat devuelve por cada uso de tool)", () => {
+  it("simple: una escritura que el modelo nombre igual se rechaza sin ejecutarse", () => {
+    expect(resultadoToolBloqueada("simple", { id: "tu_1", name: "add_medication" })).toEqual({
+      type: "tool_result",
+      tool_use_id: "tu_1",
+      content: RESULTADO_TOOL_NO_DISPONIBLE,
+      is_error: true,
+    });
+  });
+
+  it("simple: las permitidas pasan", () => {
+    for (const nombre of TOOLS_PERMITIDAS_SIMPLE) expect(resultadoToolBloqueada("simple", { id: "x", name: nombre })).toBeNull();
+  });
+
+  it("normal: las tools solo-simple se rechazan y las de siempre pasan", () => {
+    for (const nombre of TOOLS_SOLO_SIMPLE) expect(resultadoToolBloqueada("normal", { id: "x", name: nombre })?.is_error).toBe(true);
+    for (const t of TOOLS) expect(resultadoToolBloqueada("normal", { id: "x", name: t.name })).toBeNull();
+  });
+});
+
+describe("contextoDinamicoParaModo", () => {
+  it("simple suma el estilo al final del bloque dinámico", () => {
+    expect(contextoDinamicoParaModo("simple", "HOY")).toBe(`HOY${INSTRUCCIONES_ESTILO_SIMPLE}`);
+  });
+
+  it("normal deja el bloque intacto", () => {
+    expect(contextoDinamicoParaModo("normal", "HOY")).toBe("HOY");
   });
 });

@@ -44,6 +44,12 @@ export const TEXTO_SUGERIR_LLAMAR_AYUDA =
 
 export const RESULTADO_TOOL_NO_DISPONIBLE = "Esa herramienta no está disponible ahora. No la uses; respondé sin ella.";
 
+/** Respuesta a una tool que el modo no permite (o `null` si se puede ejecutar). Lo usa /api/chat por cada uso. */
+export function resultadoToolBloqueada(modo: ModoChat, uso: { id: string; name: string }): Anthropic.ToolResultBlockParam | null {
+  if (toolPermitida(modo, uso.name)) return null;
+  return { type: "tool_result", tool_use_id: uso.id, content: RESULTADO_TOOL_NO_DISPONIBLE, is_error: true };
+}
+
 /** Bloque que se agrega al contexto dinámico cuando `modo === "simple"`. */
 export const INSTRUCCIONES_ESTILO_SIMPLE = `
 
@@ -55,3 +61,8 @@ MODO SIMPLE (tiene prioridad sobre el estilo habitual): te habla una persona may
 - Si lo que cuenta suena grave (dolor de pecho, falta de aire, desmayo, caída fuerte), llamá a ${SUGERIR_AYUDA} y decile que llame ya al 107, y después a su familia.
 - Si dice un valor de glucosa o de presión ("me dio 110", presión "13 y 8" = 130 y 80): llamá a ${PROPONER_MEDICION} (glucemia o presion; en la presión, valor = la máxima y valor_secundario = la mínima). NO digas que quedó anotado. Si el resultado de la tool confirma la propuesta, la pantalla le va a preguntar "¿Lo anoto así?": recién ahí decile algo breve como "Fijate en la pantalla y confirmame si está bien". Si el resultado dice que el valor no es válido, no lo mandes a la pantalla: pedile que te repita el valor.
 - Seguí llamando a set_avatar_mood en cada respuesta.`;
+
+/** Bloque dinámico del system prompt según el modo: el simple suma su estilo al final, el normal queda igual. */
+export function contextoDinamicoParaModo(modo: ModoChat, contextoDinamico: string): string {
+  return modo === "simple" ? `${contextoDinamico}${INSTRUCCIONES_ESTILO_SIMPLE}` : contextoDinamico;
+}
