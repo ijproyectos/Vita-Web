@@ -29,6 +29,14 @@ describe("presupuesto de tiempo", () => {
       expect(timeoutSdkMs(0, ahora, 9000)).toBe(msHastaElCorte(0, ahora, 9000) + HOLGURA_TIMEOUT_SDK_MS);
     }
   });
+  it("el timeout del SDK es entero aunque performance.now() traiga decimales", () => {
+    // El SDK de Anthropic rechaza un timeout no entero ("timeout must be an integer").
+    for (const [inicio, ahora] of [[12.345, 2987.891], [0.5, 0.25], [1000.999, 9100.001]]) {
+      const t = timeoutSdkMs(inicio, ahora, 9000);
+      expect(Number.isInteger(t)).toBe(true);
+      expect(t).toBeGreaterThanOrEqual(msHastaElCorte(inicio, ahora, 9000) + HOLGURA_TIMEOUT_SDK_MS);
+    }
+  });
   it("el mínimo para otra vuelta escala con el presupuesto y tiene techo", () => {
     expect(minimoParaOtraVueltaMs(9000)).toBe(2700);
     expect(minimoParaOtraVueltaMs(25_000)).toBe(7500);
