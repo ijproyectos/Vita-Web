@@ -304,7 +304,7 @@ export function TarjetaDescanso({ nombre, hayMedsHoy, proximaHora }: { nombre: s
 }
 
 
-// Barra inferior V7: "Ajustes" a la izquierda y, al centro, "Hablar con Vita"
+// Barra inferior V7: "Ajustes" a la derecha y, al centro, "Hablar con Vita"
 // con la mascota (abre el chat, que ya tiene el modo voz).
 export function BarraInferior({
   estado,
@@ -324,16 +324,7 @@ export function BarraInferior({
       style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
     >
       <div className="relative flex h-[88px] items-end justify-between rounded-[28px] bg-card px-5 pb-3 shadow-nav">
-        <button
-          type="button"
-          onClick={onAjustes}
-          className="flex flex-col items-center gap-1 transition-transform active:scale-[0.95] motion-reduce:transition-none"
-        >
-          <span className="flex size-11 items-center justify-center rounded-full bg-secondary text-slate-brand">
-            <VitaIcon name="settings" size={24} />
-          </span>
-          <span className="text-[13px] font-extrabold text-slate-brand">Ajustes</span>
-        </button>
+        <span className="w-11" aria-hidden />
         {conCharla && (
         <button
           type="button"
@@ -346,7 +337,16 @@ export function BarraInferior({
           <span className="whitespace-nowrap font-heading text-[17px] font-extrabold tracking-[-0.02em]">Hablar con Vita</span>
         </button>
         )}
-        <span className="w-11" aria-hidden />
+        <button
+          type="button"
+          onClick={onAjustes}
+          className="flex flex-col items-center gap-1 transition-transform active:scale-[0.95] motion-reduce:transition-none"
+        >
+          <span className="flex size-11 items-center justify-center rounded-full bg-secondary text-slate-brand">
+            <VitaIcon name="settings" size={24} />
+          </span>
+          <span className="text-[13px] font-extrabold text-slate-brand">Ajustes</span>
+        </button>
       </div>
     </div>
   );
