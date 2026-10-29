@@ -61,8 +61,10 @@ const MAX_CARACTERES_MENSAJE = 4000;
 const MAX_ITEMS_HOY = 20;
 // Tools que no consultan ni cambian datos: solo disparan un efecto de UI. Si el
 // turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo. (`proponer_medicion` NO
-// está: su resultado puede ser un error de validación que el modelo tiene que ver para pedir el valor de nuevo.)
-const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen", "sugerir_llamar_ayuda"]);
+// está: su resultado puede ser un error de validación que el modelo tiene que ver para pedir el valor de nuevo.
+// `sugerir_llamar_ayuda` tampoco: el modelo tiene que leer su resultado ("no se mandó ningún aviso") para no
+// decir nunca "le avisé a tu familia" en un momento de ayuda.)
+const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen"]);
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: REINTENTOS_SDK });
 
