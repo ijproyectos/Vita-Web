@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accionPedidoAyuda, limpiarMotivo, MAX_MOTIVO, textoPedidoAyudaParaModelo } from "./pedido-ayuda-logica";
+import { accionPedidoAyuda, destinatariosDelRepetido, esPedidoRepetido, limpiarMotivo, MAX_MOTIVO, normalizarMotivo, textoPedidoAyudaParaModelo } from "./pedido-ayuda-logica";
 import { payloadPedidoAyuda } from "./mensajes";
 
 describe("limpiarMotivo", () => {
@@ -60,5 +60,21 @@ describe("payloadPedidoAyuda", () => {
   });
   it("sin motivo usa un cuerpo por defecto", () => {
     expect(payloadPedidoAyuda({ personaId: "p1", personaNombre: "Elsa", motivo: "" }).body).not.toBe("");
+  });
+});
+
+describe("normalizarMotivo / repetido", () => {
+  const rec = (motivoClave: string | null, destinatarioId = "c1") => ({ motivoClave, destinatarioId });
+  it("normaliza espacios y mayúsculas, conserva tildes", () => {
+    expect(normalizarMotivo("  Estoy   MAREADA ")).toBe("estoy mareada");
+    expect(normalizarMotivo("Está")).not.toBe(normalizarMotivo("Esta"));
+  });
+  it("solo es repetido con el mismo motivo", () => {
+    expect(esPedidoRepetido([rec("mareada")], " Mareada ")).toBe(true);
+    expect(esPedidoRepetido([rec("mareada")], "me duele el pecho")).toBe(false);
+    expect(esPedidoRepetido([rec(null)], "mareada")).toBe(false);
+  });
+  it("devuelve los destinatarios del aviso previo", () => {
+    expect(destinatariosDelRepetido([rec("a", "x"), rec("b", "y"), rec("a", "z")], "A")).toEqual(["x", "z"]);
   });
 });

@@ -4,6 +4,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { TOOL_PEDIR_AYUDA_FAMILIA, TOOL_PROPONER_MEDICION, TOOLS } from "./tools-definiciones";
 
+const PEDIR_AYUDA = TOOL_PEDIR_AYUDA_FAMILIA.name;
+const PROPONER_MEDICION = TOOL_PROPONER_MEDICION.name;
+
 export type ModoChat = "normal" | "simple";
 
 /** Solo `"simple"` activa el modo; cualquier otra cosa es el chat normal. */
@@ -12,15 +15,15 @@ export function leerModoChat(valor: unknown): ModoChat {
 }
 
 /** Tools que existen únicamente en el modo simple: en el normal no se ofrecen ni se ejecutan. */
-export const TOOLS_SOLO_SIMPLE: ReadonlySet<string> = new Set(["pedir_ayuda_familia", "proponer_medicion"]);
+export const TOOLS_SOLO_SIMPLE: ReadonlySet<string> = new Set([PEDIR_AYUDA, PROPONER_MEDICION]);
 
 /** Lo único que puede usar el modo simple (lectura + avatar + los dos pedidos explícitos). */
 export const TOOLS_PERMITIDAS_SIMPLE: ReadonlySet<string> = new Set([
   "list_today_medications",
   "list_today_appointments",
   "set_avatar_mood",
-  "pedir_ayuda_familia",
-  "proponer_medicion",
+  PEDIR_AYUDA,
+  PROPONER_MEDICION,
 ]);
 
 /** Tools que se le ofrecen al modelo en cada modo (el normal queda idéntico a `TOOLS`). */
@@ -44,7 +47,7 @@ MODO SIMPLE (tiene prioridad sobre el estilo habitual): te habla una persona may
 - Respondé en 1 o 2 frases MUY cortas, cálidas, con palabras simples y en voseo. Nada de listas, viñetas, markdown, emojis ni paréntesis.
 - Decí las horas en palabras ("a las 10 de la mañana", "a las 8 de la noche"), nunca "10:00" ni "20:00".
 - Preguntas médicas o cambios de medicación (dosis, dejar o cambiar un remedio): no opines; decile con cariño que lo consulte con su médico.
-- Si dice que se siente mal, cuenta un síntoma, pide ayuda o pide que le consigan un turno: llamá a pedir_ayuda_familia con el motivo. Contale que avisaste SOLO si el resultado de la tool lo confirma, nombrando a quien dice el resultado; si no hay nadie vinculado o falló, no digas que avisaste y decile que toque el botón Ayuda.
+- Si dice que se siente mal, cuenta un síntoma, pide ayuda o pide que le consigan un turno: llamá a ${PEDIR_AYUDA} con el motivo. Contale que avisaste SOLO si el resultado de la tool lo confirma, nombrando a quien dice el resultado; si no hay nadie vinculado o falló, no digas que avisaste y decile que toque el botón Ayuda.
 - Si lo que cuenta suena grave (dolor de pecho, falta de aire, desmayo, caída fuerte), decile que toque ya el botón Ayuda para llamar, además de avisar a la familia.
-- Si dice un valor de glucosa o de presión ("me dio 110", presión "13 y 8" = 130 y 80): llamá a proponer_medicion (glucemia o presion; en la presión, valor = la máxima y valor_secundario = la mínima). NO digas que quedó anotado: la pantalla le va a preguntar "¿Lo anoto así?". Decile algo breve como "Fijate en la pantalla y confirmame si está bien".
+- Si dice un valor de glucosa o de presión ("me dio 110", presión "13 y 8" = 130 y 80): llamá a ${PROPONER_MEDICION} (glucemia o presion; en la presión, valor = la máxima y valor_secundario = la mínima). NO digas que quedó anotado. Si el resultado de la tool confirma la propuesta, la pantalla le va a preguntar "¿Lo anoto así?": recién ahí decile algo breve como "Fijate en la pantalla y confirmame si está bien". Si el resultado dice que el valor no es válido, no lo mandes a la pantalla: pedile que te repita el valor.
 - Seguí llamando a set_avatar_mood en cada respuesta.`;

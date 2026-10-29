@@ -1,6 +1,7 @@
 // Parte PURA del pedido de ayuda a la familia (sin I/O, testeable sin Supabase).
 // Sin `server-only` a propósito: la importan la tool del chat y los tests.
 import { limpiarDato } from "@/lib/ai/limpiar";
+import { unirNombres } from "@/lib/modo-simple/respuestas";
 
 /** Como máximo un pedido de ayuda cada este tiempo por persona. */
 export const MINUTOS_ENTRE_PEDIDOS_AYUDA = 15;
@@ -23,10 +24,31 @@ export function limpiarMotivo(crudo: unknown): string {
     .trim();
 }
 
+/** Clave para comparar motivos: sin espacios de más, en minúsculas, con tildes (distinguen palabras). */
+export function normalizarMotivo(motivo: string): string {
+  return motivo.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export type AvisoReciente = { motivoClave: string | null; destinatarioId: string };
+
+/**
+ * Un pedido es "repetido" solo si ya hay uno reciente con el MISMO motivo. Un motivo distinto
+ * dentro de la ventana es una escalada ("mareada" y después "me duele el pecho") y se entrega.
+ */
+export function esPedidoRepetido(recientes: AvisoReciente[], motivo: string): boolean {
+  const clave = normalizarMotivo(motivo);
+  return recientes.some((r) => r.motivoClave === clave);
+}
+
+/** Destinatarios que ya recibieron el aviso anterior con el mismo motivo. */
+export function destinatariosDelRepetido(recientes: AvisoReciente[], motivo: string): string[] {
+  const clave = normalizarMotivo(motivo);
+  return [...new Set(recientes.filter((r) => r.motivoClave === clave).map((r) => r.destinatarioId))];
+}
+
 function nombresParaModelo(nombres: string[]): string {
   const lista = nombres.map((n) => limpiarDato(n, 40)).filter(Boolean);
-  if (lista.length <= 1) return lista[0] ?? "su familia";
-  return `${lista.slice(0, -1).join(", ")} y ${lista[lista.length - 1]}`;
+  return unirNombres(lista) || "su familia";
 }
 
 /** Lo que vuelve al modelo como tool_result: explícito sobre si se avisó o no (nunca afirma de más). */

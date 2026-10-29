@@ -116,3 +116,15 @@ describe("respuestaQueMeToca: nunca da por tomada una franja con algo pendiente"
     expect(respuestaQueMeToca([fila("Enalapril", true), fila("Enalapril", true)])).toContain("Esa ya la tomaste.");
   });
 });
+
+describe("nombres vacíos", () => {
+  it("respuestaQueMeToca usa una palabra neutra si ninguna fila tiene nombre", () => {
+    expect(respuestaQueMeToca([med("", "08:00", false)])).toBe("A las 8 de la mañana, una pastilla.");
+    expect(respuestaQueMeToca([med(" ", "08:00", false), med("", "08:00", false)])).toBe("A las 8 de la mañana, 2 pastillas.");
+  });
+  it("respuestaYaTome no deja frases vacías", () => {
+    const r = respuestaYaTome([med("", "08:00", false), med("", "08:00", false)], "09:00");
+    expect(r).toContain("2 pastillas");
+    expect(r).not.toMatch(/\s\./);
+  });
+});

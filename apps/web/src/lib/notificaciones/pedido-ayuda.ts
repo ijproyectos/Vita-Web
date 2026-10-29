@@ -6,7 +6,15 @@ import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { entregarAviso } from "./avisos";
 import { payloadPedidoAyuda } from "./mensajes";
-import { limpiarMotivo, MINUTOS_ENTRE_PEDIDOS_AYUDA, type ResultadoPedidoAyuda } from "./pedido-ayuda-logica";
+import {
+  destinatariosDelRepetido,
+  esPedidoRepetido,
+  limpiarMotivo,
+  MINUTOS_ENTRE_PEDIDOS_AYUDA,
+  normalizarMotivo,
+  type AvisoReciente,
+  type ResultadoPedidoAyuda,
+} from "./pedido-ayuda-logica";
 
 type Cliente = SupabaseClient;
 
@@ -22,7 +30,9 @@ export type { ResultadoPedidoAyuda } from "./pedido-ayuda-logica";
  * cuidadores (RPC `listar_mis_cuidadores`, solo vínculos aceptados de ESTA persona);
  * `usuarioId` sale de la sesión, nunca del modelo ni del cliente.
  *
- * Tope: un pedido cada 15 min por persona, consultando `avisos` (sin tabla nueva).
+ * Tope: no se repite el MISMO motivo dentro de 15 min por persona, consultando `avisos` (sin tabla
+ * nueva). Un motivo distinto (escalada) siempre se entrega. Si la consulta falla se envía igual:
+ * es un pedido explícito de ayuda y un push duplicado es el fallo más barato.
  * Best-effort ante concurrencia (dos pedidos simultáneos podrían pasar los dos).
  * "enviado" solo si se escribió al menos una fila del feed. Nunca lanza.
  */
@@ -46,15 +56,25 @@ export async function pedirAyudaAFamilia(
 
     // `datos.personaId` (siempre existe) en vez de la columna persona_id: no depende de la migración 028.
     const desde = new Date(Date.now() - MINUTOS_ENTRE_PEDIDOS_AYUDA * 60_000).toISOString();
-    const { data: recientes, error: errorRecientes } = await admin
+    const { data: filas, error: errorRecientes } = await admin
       .from("avisos")
-      .select("id")
+      .select("usuario_id, datos")
       .eq("tipo", "pedido_ayuda")
       .contains("datos", { personaId: usuarioId })
       .gte("created_at", desde)
-      .limit(1);
-    if (errorRecientes) return { status: "error", message: "No pudimos verificar el pedido." };
-    if ((recientes ?? []).length > 0) return { status: "repetido", nombres: nombresTodos };
+      .limit(50);
+    // Fail open: si no se pudo verificar, se manda igual (ver el comentario de la función).
+    const recientes: AvisoReciente[] = errorRecientes
+      ? []
+      : ((filas ?? []) as { usuario_id: string; datos: { motivoClave?: unknown } | null }[]).map((f) => ({
+          destinatarioId: f.usuario_id,
+          motivoClave: typeof f.datos?.motivoClave === "string" ? f.datos.motivoClave : null,
+        }));
+    if (esPedidoRepetido(recientes, motivo)) {
+      const ids = new Set(destinatariosDelRepetido(recientes, motivo));
+      const previos = cuidadores.filter((c) => ids.has(c.cuidadorId)).map((c) => c.nombre);
+      return { status: "repetido", nombres: previos.length > 0 ? previos : nombresTodos };
+    }
 
     const payload = payloadPedidoAyuda({ personaId: usuarioId, personaNombre: primerNombre, motivo });
     const entregas = await Promise.all(
@@ -68,7 +88,7 @@ export async function pedirAyudaAFamilia(
               titulo: payload.title,
               cuerpo: payload.body,
               url: payload.url,
-              datos: { personaId: usuarioId },
+              datos: { personaId: usuarioId, motivoClave: normalizarMotivo(motivo) },
               personaId: usuarioId,
             },
             payload

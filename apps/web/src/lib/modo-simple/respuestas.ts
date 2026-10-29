@@ -51,7 +51,13 @@ export function unirNombres(nombres: string[]): string {
   return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
 }
 
-type Grupo = { hora: string | null; nombres: string[]; tomadas: number; pendientes: number };
+type Grupo = { hora: string | null; nombres: string[]; filas: number; tomadas: number; pendientes: number };
+
+/** Los nombres del grupo, o una palabra neutra por cantidad de filas si ninguna tiene nombre. */
+function nombresODefault(g: Grupo): string {
+  if (g.nombres.length > 0) return unirNombres(g.nombres);
+  return g.filas === 1 ? "una pastilla" : `${g.filas} pastillas`;
+}
 
 /** Agrupa por hora (orden cronológico; las de hora ilegible van al final). */
 function agruparPorHora(meds: MedHoy[]): Grupo[] {
@@ -59,9 +65,10 @@ function agruparPorHora(meds: MedHoy[]): Grupo[] {
   for (const m of meds) {
     const hora = normalizarHora(m.hora_programada);
     const clave = hora ?? "?";
-    const g = mapa.get(clave) ?? { hora, nombres: [], tomadas: 0, pendientes: 0 };
+    const g = mapa.get(clave) ?? { hora, nombres: [], filas: 0, tomadas: 0, pendientes: 0 };
     const nombre = m.nombre.trim();
     if (nombre && !g.nombres.includes(nombre)) g.nombres.push(nombre);
+    g.filas++;
     if (m.tomado) g.tomadas++;
     else g.pendientes++;
     mapa.set(clave, g);
@@ -90,7 +97,7 @@ export function respuestaYaTome(meds: MedHoy[], ahoraHHMM: string): string {
 
   if (vencidas.length > 0) {
     const partes = agruparPorHora(vencidas).map((g) => {
-      const nombres = unirNombres(g.nombres);
+      const nombres = nombresODefault(g);
       return g.hora ? `${nombres} ${deLaHora(g.hora)}` : nombres;
     });
     return `Todavía no tomaste ${unirNombres(partes)}.`;
@@ -113,8 +120,8 @@ export function respuestaQueMeToca(meds: MedHoy[]): string {
     // "Ya la tomaste" solo si no queda NINGUNA fila pendiente a esa hora (contar
     // filas, no nombres: puede haber filas repetidas o sin nombre).
     const todas = g.pendientes === 0 && g.tomadas > 0;
-    const sufijo = todas ? ` ${g.nombres.length === 1 ? "Esa ya la tomaste." : "Esas ya las tomaste."}` : "";
-    return `${cabecera}, ${unirNombres(g.nombres)}.${sufijo}`;
+    const sufijo = todas ? ` ${(g.nombres.length > 0 ? g.nombres.length === 1 : g.filas === 1) ? "Esa ya la tomaste." : "Esas ya las tomaste."}` : "";
+    return `${cabecera}, ${nombresODefault(g)}.${sufijo}`;
   });
   return frases.join(" ");
 }
