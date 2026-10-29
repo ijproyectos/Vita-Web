@@ -23,7 +23,7 @@ describe("textos de la charla", () => {
     expect(textoSaludoAnimo("  ")).toBe("Hola. ¿Cómo estás hoy?");
   });
   it("sin internet", () => {
-    expect(textoSinInternet("Elsa")).toBe("Ahora no tengo internet, Elsa. Tus pastillas y turnos siguen guardados y te aviso igual.");
+    expect(textoSinInternet("Elsa")).toBe("Ahora no tengo internet, Elsa. Tus pastillas y turnos siguen guardados y te aviso igual. Si necesitás ayuda, llamá a tu familia.");
     expect(textoSinInternet("")).toMatch(/^Ahora no tengo internet\. /);
   });
 });

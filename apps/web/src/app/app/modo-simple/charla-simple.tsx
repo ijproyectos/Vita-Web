@@ -214,7 +214,9 @@ export function CharlaSimple({
     setMood(null);
 
     if (!enLinea) {
-      mostrarRespuesta(texto, textoSinInternet(nombre));
+      // Without internet vita can't tell whether this is a help request, so the call button always shows
+      // (calm, no pulse): a `tel:` call goes over the phone line and still works offline.
+      mostrarRespuesta(texto, textoSinInternet(nombre), { ayudaLlamar: true });
       void hablar(textoSinInternet(nombre), turno);
       return;
     }
@@ -561,7 +563,7 @@ export function CharlaSimple({
                 contacto={nombreAyuda}
                 onAyuda={onAyudaSinContacto}
                 etiqueta="Llamar a mi familia"
-                className="h-[66px] w-full justify-center text-[21px] animate-pulse motion-reduce:animate-none"
+                className={cn("h-[66px] w-full justify-center text-[21px]", enLinea && "animate-pulse motion-reduce:animate-none")}
               />
             )}
           </div>

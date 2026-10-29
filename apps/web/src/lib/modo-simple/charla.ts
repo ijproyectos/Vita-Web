@@ -27,7 +27,7 @@ export function textoSaludoAnimo(nombre: string): string {
 }
 
 export function textoSinInternet(nombre: string): string {
-  return `${conNombre("Ahora no tengo internet", nombre)}. Tus pastillas y turnos siguen guardados y te aviso igual.`;
+  return `${conNombre("Ahora no tengo internet", nombre)}. Tus pastillas y turnos siguen guardados y te aviso igual. Si necesitás ayuda, llamá a tu familia.`;
 }
 
 export type MedicionPropuesta = { tipo: "glucemia" | "presion"; valor: number; valorSecundario?: number | null };
