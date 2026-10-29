@@ -48,9 +48,13 @@ export function msHastaElCorte(inicioMs: number, ahoraMs: number, totalMs: numbe
   return Math.max(TIMEOUT_MINIMO_MS, restanteMs(inicioMs, ahoraMs, totalMs) - MARGEN_CIERRE_MS);
 }
 
-/** Timeout que se le pasa al SDK: siempre posterior al corte del AbortController. */
+/**
+ * Timeout que se le pasa al SDK: siempre posterior al corte del AbortController.
+ * Entero: `performance.now()` devuelve milisegundos con decimales y el SDK de
+ * Anthropic rechaza un timeout no entero ("timeout must be an integer").
+ */
 export function timeoutSdkMs(inicioMs: number, ahoraMs: number, totalMs: number = PRESUPUESTO_RESPUESTA_MS): number {
-  return msHastaElCorte(inicioMs, ahoraMs, totalMs) + HOLGURA_TIMEOUT_SDK_MS;
+  return Math.ceil(msHastaElCorte(inicioMs, ahoraMs, totalMs) + HOLGURA_TIMEOUT_SDK_MS);
 }
 
 /** Mínimo restante para arrancar otra vuelta del modelo: 30 % del presupuesto, con techo de 8 s. */
