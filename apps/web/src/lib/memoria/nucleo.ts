@@ -545,10 +545,14 @@ export async function resolverContradiccion(supabase: Cliente, id: string, vale:
   }
 }
 
-/** Descarta lo pendiente de la consolidación de la persona (pedidos en vuelo y contradicciones). `false` = falló por algo distinto de "falta la migración". */
-export async function descartarConsolidacionPendiente(supabase: Cliente): Promise<boolean> {
+/**
+ * Descarta lo pendiente de la consolidación de la persona: pedidos en vuelo y, con `contradicciones`, también las contradicciones
+ * pendientes (apagar la memoria). Los caminos que borran recuerdos no las piden: el trigger de la base cierra solo las de los
+ * recuerdos olvidados. `false` = falló por algo distinto de "falta la migración".
+ */
+export async function descartarConsolidacionPendiente(supabase: Cliente, contradicciones = false): Promise<boolean> {
   try {
-    const { error } = await supabase.rpc("descartar_consolidacion_pendiente");
+    const { error } = await supabase.rpc("descartar_consolidacion_pendiente", { p_contradicciones: contradicciones });
     return !error || faltaMigracion(error);
   } catch {
     return false;

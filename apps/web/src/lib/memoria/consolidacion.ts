@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import {
   alcanzaParaCrearLote,
+  reunirPorTandas,
   armarPedidoLote,
   armarSnapshot,
   CONCURRENCIA_APLICAR,
@@ -84,8 +85,6 @@ export type ResumenEnvio = {
   salteados: number;
 };
 
-type Elegidos = Map<string, MemoriaConsolidable[]>;
-
 /** Recuerdos que viajan de una persona, o null si no corresponde mandarla (límite diario superado, pocos recuerdos, falla). */
 async function recuerdosDe(admin: Admin, usuarioId: string): Promise<MemoriaConsolidable[] | null> {
   const limite = await verificarLimiteDiario(usuarioId);
@@ -115,17 +114,8 @@ export async function enviarLoteConsolidacion(admin: Admin = createAdminClient()
     res.candidatos = ids.length;
     if (ids.length === 0) return res;
 
-    // Solo recuerdos (nunca texto de mensajes del chat), de a tandas para no pasarse del tiempo.
-    const elegidosPorUsuario: Elegidos = new Map();
-    for (let i = 0; i < ids.length; i += 10) {
-      if (!alcanzaParaCrearLote(limiteMs - performance.now() - 1_000)) return { ...res, estado: "sin_tiempo" };
-      await Promise.all(
-        ids.slice(i, i + 10).map(async (usuarioId) => {
-          const elegidos = await recuerdosDe(admin, usuarioId).catch(() => null);
-          if (elegidos) elegidosPorUsuario.set(usuarioId, elegidos);
-        })
-      );
-    }
+    // Solo recuerdos (nunca texto de mensajes del chat), de a tandas. Si el tiempo se acaba se manda lo que ya se juntó.
+    const { reunidos: elegidosPorUsuario } = await reunirPorTandas<MemoriaConsolidable[]>(ids, (id) => recuerdosDe(admin, id), () => limiteMs - performance.now());
     res.salteados = ids.length - elegidosPorUsuario.size;
     if (elegidosPorUsuario.size === 0) return res;
     // Antes de reservar (después ya no se puede deshacer sin dejar personas en 'error'): ¿alcanza para crear el lote?
@@ -254,6 +244,7 @@ export async function procesarLotesConsolidacion(admin: Admin = createAdminClien
         continue;
       }
       if (decision === "cerrar_vencido") {
+        await facturarLoteAbandonado(admin, lote.id, lote.batch_id as string);
         await cerrarLoteFallido(admin, lote.id, lote.estado === "enviado" ? "lote_vencido" : "reintentos_agotados");
         continue;
       }
@@ -278,6 +269,7 @@ export async function procesarLotesConsolidacion(admin: Admin = createAdminClien
       const fila = (Array.isArray(rec) ? rec[0] : rec) as { o_reclamado?: boolean; o_intentos?: number } | undefined;
       if (!fila?.o_reclamado) continue;
       if ((fila.o_intentos ?? 0) > MAX_RECLAMOS_LOTE) {
+        await facturarLoteAbandonado(admin, lote.id, batchId);
         await cerrarLoteFallido(admin, lote.id, "reintentos_agotados");
         continue;
       }
@@ -311,6 +303,8 @@ async function aplicarLote(admin: Admin, loteId: string, batchId: string, limite
       streamCompleto = true;
     } catch (e) {
       console.warn("consolidacion: no se pudieron leer los resultados", codigoError(e));
+      // Lo que sí se alcanzó a leer ya se gastó: se cobra ahora (una sola vez por pedido) aunque el resto se reintente.
+      await facturarLeidos(admin, loteId, trabajo, resultados);
       return; // el reclamo vence y otro poll lo retoma
     }
   }
@@ -332,6 +326,37 @@ async function aplicarLote(admin: Admin, loteId: string, batchId: string, limite
   // faltó tiempo, el lote sigue 'terminado' y se retoma cuando venza el reclamo.
   const { error: errCierre } = await admin.rpc("cerrar_lote_consolidacion", { p_lote: loteId, p_error: null });
   if (errCierre) console.warn("consolidacion: no se pudo cerrar el lote", errCierre.code ?? "");
+}
+
+/** Cobra el uso de los pedidos exitosos ya leídos (idempotente: `marcar_uso_lote_usuario` deja pasar a uno solo). */
+async function facturarLeidos(admin: Admin, loteId: string, filas: FilaLoteUsuario[], resultados: Map<string, ItemLote>): Promise<void> {
+  for (const fila of filas) {
+    const item = resultados.get(fila.custom_id);
+    if (!item) continue;
+    const r = interpretarResultado(item.result);
+    if (r.tipo === "plan" || r.tipo === "invalido") await contabilizarUso(admin, loteId, fila.usuario_id, r.uso);
+  }
+}
+
+/**
+ * Antes de dar un lote por perdido (reclamos agotados / vencido) se intenta UNA lectura más de sus resultados para cobrar lo que
+ * Anthropic ya procesó. Si tampoco se puede, queda un error claro en el log: el gasto de ese lote no entró al límite diario.
+ */
+async function facturarLoteAbandonado(admin: Admin, loteId: string, batchId: string): Promise<void> {
+  try {
+    const { data, error } = await admin.from("lote_usuarios").select(SELECT_USUARIO_LOTE).eq("lote_id", loteId).is("uso_registrado_at", null);
+    if (error) throw new Error("db");
+    const filas = ((data ?? []) as FilaLoteUsuario[]).filter((f) => esCustomIdValido(f.custom_id));
+    if (filas.length === 0) return;
+    const conocidos = new Set(filas.map((f) => f.custom_id));
+    const resultados = new Map<string, ItemLote>();
+    for await (const item of await anthropic.messages.batches.results(batchId, LECTURA)) {
+      if (conocidos.has(item.custom_id)) resultados.set(item.custom_id, item as unknown as ItemLote);
+    }
+    await facturarLeidos(admin, loteId, filas, resultados);
+  } catch (e) {
+    console.error("consolidacion: lote cerrado sin poder leer sus resultados; su gasto NO entró al límite diario", codigoError(e));
+  }
 }
 
 async function marcarError(admin: Admin, loteId: string, usuarioId: string, codigo: string): Promise<boolean> {

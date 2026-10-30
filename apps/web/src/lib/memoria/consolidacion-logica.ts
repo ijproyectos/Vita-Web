@@ -43,6 +43,35 @@ export const CONCURRENCIA_APLICAR = 5;
 /** Margen mínimo para empezar a aplicar a otra persona. */
 export const MARGEN_APLICAR_PERSONA_MS = 1_500;
 
+/** Lo que cuesta, como mucho, leer los recuerdos de una tanda de personas. */
+export const COSTO_TANDA_MS = 1_500;
+/** Personas por tanda al reunir recuerdos. */
+export const PERSONAS_POR_TANDA = 10;
+
+/**
+ * Reúne datos de cada persona por tandas mientras quede tiempo: antes de cada tanda exige lo que cuesta CREAR el lote más una
+ * tanda; si no alcanza, deja de reunir y devuelve lo que ya juntó (se manda eso, no se tira). La puerta dura va después, justo
+ * antes de reservar/crear. `restanteMs` se consulta en cada tanda (reloj inyectable para probarlo).
+ */
+export async function reunirPorTandas<T>(
+  ids: string[],
+  obtener: (id: string) => Promise<T | null>,
+  restanteMs: () => number,
+  tanda: number = PERSONAS_POR_TANDA
+): Promise<{ reunidos: Map<string, T>; completo: boolean }> {
+  const reunidos = new Map<string, T>();
+  for (let i = 0; i < ids.length; i += tanda) {
+    if (restanteMs() < TIMEOUT_CREAR_LOTE_MS + MARGEN_CIERRE_MS + COSTO_TANDA_MS) return { reunidos, completo: false };
+    await Promise.all(
+      ids.slice(i, i + tanda).map(async (id) => {
+        const valor = await obtener(id).catch(() => null);
+        if (valor !== null) reunidos.set(id, valor);
+      })
+    );
+  }
+  return { reunidos, completo: true };
+}
+
 /** ¿Alcanza el tiempo para crear el lote (llamada completa + cierre)? Se pregunta ANTES de llamar a Anthropic. */
 export function alcanzaParaCrearLote(restanteMs: number): boolean {
   return restanteMs >= TIMEOUT_CREAR_LOTE_MS + MARGEN_CIERRE_MS;
@@ -282,6 +311,18 @@ export function extraerJson(texto: string): unknown {
   }
 }
 
+/**
+ * Texto comparable: minúsculas, sin tildes y solo [a-z0-9]. Misma regla que `normalizar_texto_memoria` en la migración 043
+ * (que vuelve a chequear al aplicar). Dos textos "iguales" para la consolidación son los que dan el mismo resultado.
+ */
+export function textoComparable(valor: string | null | undefined): string {
+  return (valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
 /** Una línea saneada (sin control, `<>"` ni marcadores de rol) y acotada: lo que escribió el modelo es DATO. */
 function lineaSaneada(valor: string, max: number): string {
   return sanearTextoLargo(valor, max).replace(/\s+/g, " ").trim();
@@ -316,6 +357,10 @@ export function validarPlan(crudo: unknown, enviados: MemoriaConsolidable[]): Pl
     const texto = normalizarTexto(lineaSaneada(item.texto, 400));
     const clave = normalizarClave(item.clave);
     if (!texto.ok || !clave) continue;
+    // El texto unido no puede inventar nada: tiene que ser, normalizado, el de alguno de los recuerdos que une (duplicados
+    // exactos). Un texto alucinado o inyectado nunca se vuelve un recuerdo vigente.
+    const comparable = textoComparable(texto.texto);
+    if (comparable === "" || !validos.some((m) => textoComparable(m.texto) === comparable)) continue;
     ids.forEach((id) => usadosEnUnion.add(id));
     unir.push({ ids, texto: texto.texto, clave });
   }

@@ -107,11 +107,73 @@ revoke all on table contradicciones_memoria from anon;
 revoke insert, update, delete on table contradicciones_memoria from authenticated;
 
 -- ---------------------------------------------------------------------------
+-- Helpers internos (sin permisos para nadie: los usan el trigger y aplicar_consolidacion)
+-- ---------------------------------------------------------------------------
+-- Texto comparable: minúsculas, sin tildes y solo [a-z0-9]. Misma regla que `textoComparable` en consolidacion-logica.ts.
+create or replace function normalizar_texto_memoria(p_texto text)
+returns text
+language sql
+immutable
+set search_path = public
+as $$
+  select regexp_replace(
+           translate(lower(coalesce(p_texto, '')), 'áéíóúüñàèìòùâêîôû', 'aeiouunaeiouaeiou'),
+           '[^a-z0-9]+', '', 'g');
+$$;
+
+-- Saca de la memoria los mensajes de origen de los recuerdos que se acaban de borrar por cascada y la respuesta de vita a cada
+-- uno (los assistant de la misma sesión hasta el siguiente mensaje de la persona), igual que olvidar_memoria. Devuelve cuántos.
+create or replace function excluir_mensajes_de_origen(p_usuario uuid, p_origenes uuid[])
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int := 0;
+begin
+  if p_origenes is null or cardinality(p_origenes) = 0 then
+    return 0;
+  end if;
+  update mensajes_chat y
+     set excluido_memoria = true
+   where y.usuario_id = p_usuario
+     and not y.excluido_memoria
+     and (
+       y.id = any(p_origenes)
+       or (
+         y.role = 'assistant'
+         and exists (
+           select 1
+             from mensajes_chat o
+            where o.usuario_id = p_usuario
+              and o.id = any(p_origenes)
+              and o.sesion_id = y.sesion_id
+              and y.created_at > o.created_at
+              and not exists (
+                select 1
+                  from mensajes_chat n
+                 where n.usuario_id = p_usuario
+                   and n.sesion_id = o.sesion_id
+                   and n.role = 'user'
+                   and n.created_at > o.created_at
+                   and n.created_at < y.created_at
+              )
+         )
+       )
+     );
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Cascada de estado (trigger)
 -- ---------------------------------------------------------------------------
 -- 1) Un recuerdo que deja de estar vigente cierra las contradicciones pendientes que lo mencionan (y borra su pregunta).
 -- 2) Un recuerdo que queda 'borrado' arrastra a los que él reemplazó ('reemplazado' conserva texto) y, si él salió de una
---    unión de consolidación, a la unión: un dato olvidado no puede seguir vivo dentro de un recuerdo unido.
+--    unión de consolidación, a la unión: un dato olvidado no puede seguir vivo dentro de un recuerdo unido. Lo arrastrado se
+--    trata como "dejar de recordar": sus mensajes de origen (y la respuesta de vita) salen de la memoria y el resumen se vacía.
 -- Corre por fila y en la misma transacción, también cuando el borrado viene de la app sin RPC (caminos de respaldo).
 create or replace function memorias_cascada_estado()
 returns trigger
@@ -119,6 +181,11 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_origenes uuid[] := '{}';
+  v_extra uuid[];
+  v_arrastrados int := 0;
+  v_n int;
 begin
   if old.estado = 'vigente' and new.estado <> 'vigente' then
     update contradicciones_memoria c
@@ -129,15 +196,39 @@ begin
   end if;
 
   if new.estado = 'borrado' then
-    update memorias m
-       set estado = 'borrado', texto = null, destacado = false, updated_at = now()
-     where m.usuario_id = new.usuario_id and m.reemplazada_por_id = new.id and m.estado <> 'borrado';
-
-    if new.reemplazada_por_id is not null then
+    with b as (
       update memorias m
          set estado = 'borrado', texto = null, destacado = false, updated_at = now()
-       where m.id = new.reemplazada_por_id and m.usuario_id = new.usuario_id
-         and m.estado <> 'borrado' and m.origen = 'consolidacion';
+       where m.usuario_id = new.usuario_id and m.reemplazada_por_id = new.id and m.estado <> 'borrado'
+      returning m.mensaje_origen_id
+    )
+    select count(*), coalesce(array_agg(b.mensaje_origen_id) filter (where b.mensaje_origen_id is not null), '{}')
+      into v_n, v_extra from b;
+    v_arrastrados := v_arrastrados + v_n;
+    v_origenes := v_origenes || v_extra;
+
+    if new.reemplazada_por_id is not null then
+      with b as (
+        update memorias m
+           set estado = 'borrado', texto = null, destacado = false, updated_at = now()
+         where m.id = new.reemplazada_por_id and m.usuario_id = new.usuario_id
+           and m.estado <> 'borrado' and m.origen = 'consolidacion'
+        returning m.mensaje_origen_id
+      )
+      select count(*), coalesce(array_agg(b.mensaje_origen_id) filter (where b.mensaje_origen_id is not null), '{}')
+        into v_n, v_extra from b;
+      v_arrastrados := v_arrastrados + v_n;
+      v_origenes := v_origenes || v_extra;
+    end if;
+
+    if v_arrastrados > 0 then
+      perform excluir_mensajes_de_origen(new.usuario_id, v_origenes);
+      -- Mismo efecto que invalidar_resumen() pero sobre la persona dueña (acá no hay auth.uid() confiable).
+      insert into resumen_conversacion as r (usuario_id, resumen, pendientes, version)
+      values (new.usuario_id, '', '[]'::jsonb, 1)
+      on conflict (usuario_id) do update
+        set resumen = '', pendientes = '[]'::jsonb, version = r.version + 1,
+            pendiente_desde = null, reservada_hasta = null, intentos = 0, error = null, updated_at = now();
     end if;
   end if;
   return null;
@@ -359,6 +450,14 @@ begin
         into v_sobres, v_algun_destacado, v_usos
         from memorias m where m.id = any(v_ok);
       if v_sobres <> 1 then
+        v_omitidos := v_omitidos + 1;
+        continue;
+      end if;
+
+      -- El texto unido no puede inventar nada: tiene que ser, normalizado, el de alguno de los recuerdos que une (duplicados exactos).
+      if normalizar_texto_memoria(v_texto) = '' or not exists (
+           select 1 from memorias m where m.id = any(v_ok) and normalizar_texto_memoria(m.texto) = normalizar_texto_memoria(v_texto)
+         ) then
         v_omitidos := v_omitidos + 1;
         continue;
       end if;
@@ -605,9 +704,13 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Funciones de la persona (authenticated, SECURITY DEFINER con auth.uid())
 -- ---------------------------------------------------------------------------
--- Descarta lo pendiente de la persona: sus pedidos en vuelo pasan a 'omitido' (cuando el lote termine no se aplica nada) y sus
--- contradicciones pendientes se cierran sin pregunta. Solo toca filas de auth.uid().
-create or replace function descartar_consolidacion_pendiente()
+-- Descarta lo pendiente de la persona: sus pedidos en vuelo pasan a 'omitido' (cuando el lote termine no se aplica nada). Con
+-- p_contradicciones también cierra sus contradicciones pendientes sin pregunta (apagar la memoria); los caminos que borran
+-- recuerdos NO lo piden: ahí el trigger cierra solo las contradicciones de los recuerdos que dejaron de estar vigentes, y el par
+-- de otros recuerdos sigue siendo válido. Solo toca filas de auth.uid().
+-- ORDEN DE BLOQUEOS (el mismo en todo el sistema, para que no haya deadlocks): lote_usuarios -> memorias -> contradicciones.
+-- Por eso los olvidar_* y resolver_contradiccion('ninguna') la llaman PRIMERO, antes de tocar recuerdos.
+create or replace function descartar_consolidacion_pendiente(p_contradicciones boolean default false)
 returns void
 language plpgsql
 security definer
@@ -621,8 +724,10 @@ begin
   end if;
   update lote_usuarios u set estado = 'omitido', error = 'descartado', aplicado_at = clock_timestamp()
    where u.usuario_id = v_uid and u.estado = 'enviado';
-  update contradicciones_memoria c set estado = 'descartada', pregunta = '', resuelta_at = now()
-   where c.usuario_id = v_uid and c.estado = 'pendiente';
+  if p_contradicciones then
+    update contradicciones_memoria c set estado = 'descartada', pregunta = '', resuelta_at = now()
+     where c.usuario_id = v_uid and c.estado = 'pendiente';
+  end if;
 end;
 $$;
 
@@ -670,8 +775,13 @@ begin
     raise exception 'valor inválido' using errcode = '22023';
   end if;
 
+  -- Orden de bloqueos: lote_usuarios -> memorias -> contradicciones (ver descartar_consolidacion_pendiente).
+  if p_vale = 'ninguna' then
+    perform descartar_consolidacion_pendiente();
+  end if;
+
   select c.* into v_c from contradicciones_memoria c
-   where c.id = p_id and c.usuario_id = v_uid and c.estado = 'pendiente' for update;
+   where c.id = p_id and c.usuario_id = v_uid and c.estado = 'pendiente';
   if not found then
     return query select 'no_encontrada'::text;
     return;
@@ -679,8 +789,15 @@ begin
 
   select count(*) into v_vigentes from (
     select m.id from memorias m
-     where m.usuario_id = v_uid and m.id in (v_c.memoria_a, v_c.memoria_b) and m.estado = 'vigente' for update
+     where m.usuario_id = v_uid and m.id in (v_c.memoria_a, v_c.memoria_b) and m.estado = 'vigente' order by m.id for update
   ) s;
+
+  select c.* into v_c from contradicciones_memoria c
+   where c.id = p_id and c.usuario_id = v_uid and c.estado = 'pendiente' for update;
+  if not found then
+    return query select 'no_encontrada'::text;
+    return;
+  end if;
   if v_vigentes <> 2 then
     update contradicciones_memoria c set estado = 'descartada', pregunta = '', resuelta_at = now() where c.id = v_c.id;
     return query select 'obsoleta'::text;
@@ -732,6 +849,9 @@ begin
     return;
   end if;
 
+  -- Primero lo pendiente (lote_usuarios), después los recuerdos: mismo orden de bloqueos que aplicar_consolidacion.
+  perform descartar_consolidacion_pendiente();
+
   with recursive cadena as (
     select m.id, m.corrige_id, m.mensaje_origen_id from memorias m where m.id = p_id and m.usuario_id = v_uid
     union
@@ -779,7 +899,6 @@ begin
 
   if v_recuerdos > 0 or v_mensajes > 0 then
     perform invalidar_resumen();
-    perform descartar_consolidacion_pendiente();
   end if;
 
   return query select v_recuerdos, v_mensajes;
@@ -801,6 +920,9 @@ begin
     raise exception 'no autenticado' using errcode = '28000';
   end if;
 
+  -- Primero lo pendiente (lote_usuarios), después los recuerdos (el trigger cierra todas las contradicciones).
+  perform descartar_consolidacion_pendiente();
+
   update memorias m
      set estado = 'borrado', texto = null, destacado = false, updated_at = now()
    where m.usuario_id = v_uid and m.estado <> 'borrado';
@@ -812,7 +934,6 @@ begin
   get diagnostics v_mensajes = row_count;
 
   perform invalidar_resumen();
-  perform descartar_consolidacion_pendiente();
 
   return query select v_recuerdos, v_mensajes;
 end;
@@ -832,6 +953,11 @@ begin
     raise exception 'no autenticado' using errcode = '28000';
   end if;
 
+  -- Primero lo pendiente (lote_usuarios), después los recuerdos.
+  if exists (select 1 from sesiones_chat s where s.usuario_id = v_uid and s.updated_at < p_corte) then
+    perform descartar_consolidacion_pendiente();
+  end if;
+
   update memorias m
      set estado = 'borrado', texto = null, destacado = false, updated_at = now()
    where m.usuario_id = v_uid
@@ -846,7 +972,6 @@ begin
 
   if exists (select 1 from sesiones_chat s where s.usuario_id = v_uid and s.updated_at < p_corte) then
     perform invalidar_resumen();
-    perform descartar_consolidacion_pendiente();
   end if;
   return v_n;
 end;
@@ -856,6 +981,8 @@ $$;
 -- Permisos
 -- ---------------------------------------------------------------------------
 revoke all on function memorias_cascada_estado() from public, anon, authenticated;
+revoke all on function normalizar_texto_memoria(text) from public, anon, authenticated;
+revoke all on function excluir_mensajes_de_origen(uuid, uuid[]) from public, anon, authenticated;
 
 revoke all on function candidatos_consolidacion(int, int) from public, anon, authenticated;
 revoke all on function recuerdos_para_consolidar(uuid, int) from public, anon, authenticated;
@@ -878,13 +1005,13 @@ grant execute on function marcar_error_lote_usuario(uuid, uuid, text) to service
 grant execute on function marcar_uso_lote_usuario(uuid, uuid) to service_role;
 grant execute on function limpiar_lotes_consolidacion(int) to service_role;
 
-revoke execute on function descartar_consolidacion_pendiente() from public, anon;
+revoke execute on function descartar_consolidacion_pendiente(boolean) from public, anon;
 revoke execute on function marcar_contradicciones_preguntadas(uuid[]) from public, anon;
 revoke execute on function resolver_contradiccion(uuid, text) from public, anon;
 revoke execute on function olvidar_memoria(uuid) from public, anon;
 revoke execute on function olvidar_todo_memoria() from public, anon;
 revoke execute on function borrar_recuerdos_de_sesiones_hasta(timestamptz) from public, anon;
-grant execute on function descartar_consolidacion_pendiente() to authenticated;
+grant execute on function descartar_consolidacion_pendiente(boolean) to authenticated;
 grant execute on function marcar_contradicciones_preguntadas(uuid[]) to authenticated;
 grant execute on function resolver_contradiccion(uuid, text) to authenticated;
 grant execute on function olvidar_memoria(uuid) to authenticated;

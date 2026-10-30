@@ -140,7 +140,7 @@ export async function cargarVistaMemoria(supabase: Cliente, usuarioId: string): 
 export async function cambiarMemoriaActiva(supabase: Cliente, usuarioId: string, activa: boolean): Promise<boolean> {
   try {
     // Apagar descarta lo pendiente de la consolidación (pedidos en vuelo y contradicciones) además de vaciar el resumen.
-    if (!activa && !((await invalidarResumen(supabase)) && (await descartarConsolidacionPendiente(supabase)))) return false;
+    if (!activa && !((await invalidarResumen(supabase)) && (await descartarConsolidacionPendiente(supabase, true)))) return false;
     const { data, error } = await supabase.from("perfiles").update({ memoria_activa: activa }).eq("id", usuarioId).select("id");
     return !error && (data?.length ?? 0) > 0;
   } catch {

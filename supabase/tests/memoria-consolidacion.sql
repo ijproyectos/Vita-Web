@@ -5,6 +5,8 @@
 --   4  Cascada (trigger): olvidar una unión borra sus ingredientes; olvidar un ingrediente borra la unión; cierra contradicciones.
 --   5  resolver_contradiccion: a / b / ambas / ninguna, obsoleta y ajena.
 --   6  Privacidad: olvidar todo / dejar de recordar descartan lo pendiente; los excluidos no viajan ni se aplican.
+--   7  Texto unido = texto de una fuente; la cascada excluye los mensajes de origen y vacía el resumen; 'ninguna' no cierra
+--      contradicciones ajenas al par.
 --
 -- Script de psql escrito a mano, mismo estilo que memoria-resumen.sql: cada sección es su propia transacción y termina en ROLLBACK.
 -- NO SE CORRIÓ al escribirlo (sin base de datos en la sesión de autoría): correrlo después de aplicar la 043.
@@ -367,4 +369,85 @@ begin;
     if n <> 0 then raise exception 'FAIL: quedó texto de la pregunta'; end if;
     raise notice 'PASS: olvidar todo descarta pedidos en vuelo y contradicciones';
   end $$;
+rollback;
+
+-- ===========================================================================
+-- 7 — Texto de la unión, cascada con mensajes de origen y alcance de 'ninguna'
+-- ===========================================================================
+begin;
+  select set_config('t.a', :user_a, true), set_config('t.b', :user_b, true);
+  update perfiles set memoria_activa = true where id = :user_a;
+  insert into sesiones_chat (id, usuario_id) values ('ffffffff-0000-0000-0000-0000000000a9', :user_a);
+  insert into mensajes_chat (id, usuario_id, sesion_id, role, contenido) values
+    ('ffffffff-0000-0000-0000-0000000000a7', :user_a, 'ffffffff-0000-0000-0000-0000000000a9', 'user', 'Tomo té'),
+    ('ffffffff-0000-0000-0000-0000000000a8', :user_a, 'ffffffff-0000-0000-0000-0000000000a9', 'user', 'Tomo té de tilo');
+  insert into memorias (id, usuario_id, sobre_tipo, clave, texto, mensaje_origen_id) values
+    ('ffffffff-0000-0000-0000-000000000071', :user_a, 'yo', 'zz_i1', 'Toma té', 'ffffffff-0000-0000-0000-0000000000a7'),
+    ('ffffffff-0000-0000-0000-000000000072', :user_a, 'yo', 'zz_i2', 'Toma té.', 'ffffffff-0000-0000-0000-0000000000a8'),
+    ('ffffffff-0000-0000-0000-000000000073', :user_a, 'yo', 'zz_i3', 'Camina', null),
+    ('ffffffff-0000-0000-0000-000000000074', :user_a, 'yo', 'zz_i4', 'No camina', null),
+    ('ffffffff-0000-0000-0000-000000000075', :user_a, 'yo', 'zz_i5', 'Vive sola', null),
+    ('ffffffff-0000-0000-0000-000000000076', :user_a, 'yo', 'zz_i6', 'Vive con su hija', null);
+  insert into resumen_conversacion (usuario_id, resumen, version) values (:user_a, 'Resumen previo', 1)
+  on conflict (usuario_id) do update set resumen = 'Resumen previo', version = 1;
+  do $$
+  declare v_lote uuid; v_snap jsonb; r record; v_union uuid; n int; v_ver int;
+  begin
+    select jsonb_object_agg(m.id::text, m.updated_at) into v_snap from memorias m where m.id::text like 'ffffffff-0000-0000-0000-00000000007%';
+    select o_lote_id into v_lote from reservar_lote_consolidacion(jsonb_build_array(jsonb_build_object('usuario_id', current_setting('t.a')::uuid, 'snapshot', '[]'::jsonb)));
+
+    -- Un texto que no es el de ninguna fuente (alucinado / inyectado) no crea la unión.
+    select * into r from aplicar_consolidacion(v_lote, current_setting('t.a')::uuid, jsonb_build_object(
+      'unir', jsonb_build_array(jsonb_build_object('ids', jsonb_build_array('ffffffff-0000-0000-0000-000000000071', 'ffffffff-0000-0000-0000-000000000072'), 'texto', 'Toma té y es alérgica a la penicilina', 'clave', 'zz_te')),
+      'destacados', '[]'::jsonb, 'contradicciones', '[]'::jsonb), v_snap);
+    if r.o_unidos <> 0 or exists (select 1 from memorias m where m.usuario_id = current_setting('t.a')::uuid and m.clave = 'zz_te') then
+      raise exception 'FAIL: se creó una unión con un texto que no es el de sus fuentes';
+    end if;
+    raise notice 'PASS: texto unido distinto de las fuentes = se omite';
+  end $$;
+
+  -- Ahora una unión válida (texto = el de una fuente, normalizado) en un lote nuevo.
+  update lote_usuarios set estado = 'omitido' where usuario_id = :user_a and estado = 'enviado';
+  do $$
+  declare v_lote uuid; v_snap jsonb; r record; v_union uuid; n int; v_ver int;
+  begin
+    select jsonb_object_agg(m.id::text, m.updated_at) into v_snap from memorias m where m.id::text like 'ffffffff-0000-0000-0000-00000000007%';
+    select o_lote_id into v_lote from reservar_lote_consolidacion(jsonb_build_array(jsonb_build_object('usuario_id', current_setting('t.a')::uuid, 'snapshot', '[]'::jsonb)));
+    select * into r from aplicar_consolidacion(v_lote, current_setting('t.a')::uuid, jsonb_build_object(
+      'unir', jsonb_build_array(jsonb_build_object('ids', jsonb_build_array('ffffffff-0000-0000-0000-000000000071', 'ffffffff-0000-0000-0000-000000000072'), 'texto', 'TOMA TÉ!', 'clave', 'zz_te')),
+      'destacados', '[]'::jsonb, 'contradicciones', jsonb_build_array(
+        jsonb_build_object('a', 'ffffffff-0000-0000-0000-000000000073', 'b', 'ffffffff-0000-0000-0000-000000000074', 'pregunta', '¿Camina?'),
+        jsonb_build_object('a', 'ffffffff-0000-0000-0000-000000000075', 'b', 'ffffffff-0000-0000-0000-000000000076', 'pregunta', '¿Con quién vive?'))), v_snap);
+    if r.o_unidos <> 1 or r.o_contradicciones <> 2 then raise exception 'FAIL: no aplicó la unión válida (%, %)', r.o_unidos, r.o_contradicciones; end if;
+    raise notice 'PASS: texto unido = texto de una fuente (normalizado) se acepta';
+
+    -- Borrar una fuente (p. ej. con Borrar historial) arrastra a la unión y a la otra fuente, excluye SUS mensajes de origen y vacía el resumen.
+    update memorias set estado = 'borrado', texto = null where id::text = 'ffffffff-0000-0000-0000-000000000071';
+    select count(*) into n from mensajes_chat x where x.id::text in ('ffffffff-0000-0000-0000-0000000000a7', 'ffffffff-0000-0000-0000-0000000000a8') and not x.excluido_memoria;
+    -- El de la fuente borrada a mano NO lo marca el trigger (eso lo hace olvidar_memoria); el de la fuente ARRASTRADA sí.
+    if (select excluido_memoria from mensajes_chat where id::text = 'ffffffff-0000-0000-0000-0000000000a8') is not true then
+      raise exception 'FAIL: el mensaje de origen de la fuente arrastrada sigue en la memoria';
+    end if;
+    select version into v_ver from resumen_conversacion where usuario_id = current_setting('t.a')::uuid;
+    if v_ver < 2 or (select resumen from resumen_conversacion where usuario_id = current_setting('t.a')::uuid) <> '' then
+      raise exception 'FAIL: el resumen no se vació tras el borrado en cascada';
+    end if;
+    raise notice 'PASS: la cascada excluye los mensajes de origen de lo arrastrado y vacía el resumen';
+  end $$;
+
+  -- 'ninguna' sobre un par no cierra las contradicciones de otros recuerdos.
+  select set_config('request.jwt.claims', json_build_object('sub', :user_a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  do $$
+  declare r text; n int; v_c uuid;
+  begin
+    select c.id into v_c from contradicciones_memoria c where c.memoria_a::text like 'ffffffff-0000-0000-0000-00000000007%' and c.memoria_b in ('ffffffff-0000-0000-0000-000000000073', 'ffffffff-0000-0000-0000-000000000074') and c.estado = 'pendiente';
+    select o_resultado into r from resolver_contradiccion(v_c, 'ninguna');
+    if r <> 'ok' then raise exception 'FAIL: resolver ninguna devolvió %', r; end if;
+    select count(*) into n from contradicciones_memoria c
+     where c.estado = 'pendiente' and c.memoria_a::text like 'ffffffff-0000-0000-0000-00000000007%';
+    if n <> 1 then raise exception 'FAIL: ninguna cerró contradicciones ajenas al par (% pendientes)', n; end if;
+    raise notice 'PASS: ninguna solo cierra las contradicciones del par olvidado';
+  end $$;
+  reset role;
 rollback;
