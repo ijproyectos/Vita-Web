@@ -86,3 +86,27 @@ create policy memorias_select_self on memorias for select using (usuario_id = au
 create policy memorias_insert_self on memorias for insert with check (usuario_id = auth.uid());
 create policy memorias_update_self on memorias for update using (usuario_id = auth.uid()) with check (usuario_id = auth.uid());
 create policy memorias_delete_self on memorias for delete using (usuario_id = auth.uid());
+
+-- La memoria es una decisión de la propia persona: un cuidador con rol `editar`
+-- puede actualizar su perfil, pero no prender ni apagar su memoria.
+create or replace function public.perfiles_proteger_columnas_ajenas()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is not null and auth.uid() <> old.id then
+    if new.id is distinct from old.id
+      or new.uso_app is distinct from old.uso_app
+      or new.onboarding_completado_at is distinct from old.onboarding_completado_at
+      or new.avatar_url is distinct from old.avatar_url
+      or new.created_at is distinct from old.created_at
+      or new.memoria_activa is distinct from old.memoria_activa
+      or new.memoria_aviso_visto_at is distinct from old.memoria_aviso_visto_at
+    then
+      raise exception 'columna_no_editable_por_cuidador';
+    end if;
+  end if;
+  return new;
+end;
+$$;
