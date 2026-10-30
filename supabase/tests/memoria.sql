@@ -243,7 +243,7 @@ begin;
     if n <> 4 then raise exception 'FAIL: faltan mensajes excluidos (orígenes y respuestas): %', n; end if;
     select count(*) into n from mensajes_chat where id = 'eeeeeeee-0000-0000-0000-0000000000b4' and not excluido_memoria;
     if n <> 1 then raise exception 'FAIL: se excluyó un mensaje ajeno al recuerdo'; end if;
-    select count(*) into n from mensajes_chat where id like 'eeeeeeee-0000-0000-0000-0000000000b%';
+    select count(*) into n from mensajes_chat where id::text like 'eeeeeeee-0000-0000-0000-0000000000b%';
     if n <> 5 then raise exception 'FAIL: olvidar_memoria borró mensajes'; end if;
     raise notice 'PASS: los mensajes de origen y sus respuestas quedan excluidos, sin borrarse';
 
@@ -301,7 +301,7 @@ begin;
 
     select count(*) into n from mensajes_chat where usuario_id = auth.uid() and not excluido_memoria;
     if n <> 0 then raise exception 'FAIL: quedaron mensajes sin excluir (%)', n; end if;
-    select count(*) into n from mensajes_chat where id like 'eeeeeeee-0000-0000-0000-0000000000b%';
+    select count(*) into n from mensajes_chat where id::text like 'eeeeeeee-0000-0000-0000-0000000000b%';
     if n <> 5 then raise exception 'FAIL: los mensajes debían seguir visibles en el historial'; end if;
     raise notice 'PASS: todos los mensajes quedan excluidos y siguen en el historial';
 

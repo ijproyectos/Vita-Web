@@ -27,8 +27,7 @@ describe("calcularUso", () => {
   it("límite 0 cuenta como agotado", () => {
     expect(calcularUso(0, 0).agotado).toBe(true);
   });
-  // Bug conocido: 0/0 deja el porcentaje en NaN (Math.min/max lo propagan). Pasarlo a it al arreglarlo.
-  it.fails("límite 0 da un porcentaje numérico", () => {
-    expect(Number.isFinite(calcularUso(0, 0).porcentajeUsado)).toBe(true);
+  it("límite 0 da un porcentaje numérico (100 %)", () => {
+    expect(calcularUso(0, 0).porcentajeUsado).toBe(100);
   });
 });
