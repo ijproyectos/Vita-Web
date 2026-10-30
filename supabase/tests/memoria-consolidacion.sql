@@ -340,8 +340,8 @@ begin;
   values ('ffffffff-0000-0000-0000-0000000000d8', :user_a, 'ffffffff-0000-0000-0000-0000000000d9', 'user', 'Dato olvidado', true);
   insert into memorias (id, usuario_id, sobre_tipo, clave, texto, mensaje_origen_id) values
     ('ffffffff-0000-0000-0000-000000000081', :user_a, 'yo', 'zz_h1', 'De un mensaje excluido', 'ffffffff-0000-0000-0000-0000000000d8'),
-    ('ffffffff-0000-0000-0000-000000000082', :user_a, 'yo', 'zz_h2', 'Normal'),
-    ('ffffffff-0000-0000-0000-000000000083', :user_a, 'yo', 'zz_h3', 'Otro normal');
+    ('ffffffff-0000-0000-0000-000000000082', :user_a, 'yo', 'zz_h2', 'Normal', null),
+    ('ffffffff-0000-0000-0000-000000000083', :user_a, 'yo', 'zz_h3', 'Otro normal', null);
   do $$
   declare n int;
   begin
