@@ -36,6 +36,8 @@ import {
 } from "@/lib/chat/pedidos";
 import { detectarEmergencia, textoEmergencia } from "@/lib/ai/emergencia";
 import * as chat from "@/lib/chat/nucleo";
+import { cargarMemoriasParaContexto, estadoMemoria } from "@/lib/memoria/nucleo";
+import { contextoMemoria } from "@/lib/memoria/contexto";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
@@ -276,7 +278,9 @@ export async function POST(request: Request) {
         // Si el estado es "desconocido" (la DB falló dos veces) NO se reinserta: el cliente marcó
         // reintento, así que el primer intento probablemente ya lo guardó (mejor no duplicar que perder
         // el contexto); si no estaba, se suma al historial en memoria más abajo.
-        if (previo.estado === "nuevo") await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
+        // El id del mensaje guardado es el origen de los recuerdos que vita saque de él (para poder olvidarlos).
+        let mensajeOrigenId: string | null = null;
+        if (previo.estado === "nuevo") mensajeOrigenId = await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
 
         // El modelo no sabe qué día es: sin esto resolvía "mañana" con su
         // propio año de referencia y agendaba turnos un año en el pasado
@@ -357,7 +361,26 @@ export async function POST(request: Request) {
 
         // Prompt caching: el bloque estático (reglas + tools, que se renderizan antes) lleva el breakpoint; todo
         // lo volátil (Personas, Hoy, fecha) va en un segundo bloque SIN cache_control, después del breakpoint.
-        const contextoDinamico = contextoDinamicoChat({ contextoPerfil, contextoHoy, ahora: descripcionAhoraEnAR(), hoyISO: fechaDeHoyISO() });
+        // Memoria (fase 2): estado + recuerdos vigentes, con tope en tokens, en el bloque DINÁMICO. El modo simple no la usa.
+        // Sin la migración 038 queda vacío y el chat funciona igual.
+        let textoMemoria = "";
+        if (!modoSimple) {
+          const estadoMem = await estadoMemoria(supabase, user.id);
+          const memorias = estadoMem.disponible && estadoMem.activa ? await cargarMemoriasParaContexto(supabase, user.id) : [];
+          textoMemoria = contextoMemoria({
+            disponible: estadoMem.disponible,
+            activa: estadoMem.activa,
+            memorias,
+            familia: familia.map((f) => ({ id: f.id, nombre: f.nombre })),
+          });
+        }
+        const contextoDinamico = contextoDinamicoChat({
+          contextoPerfil,
+          contextoHoy,
+          contextoMemoria: textoMemoria,
+          ahora: descripcionAhoraEnAR(),
+          hoyISO: fechaDeHoyISO(),
+        });
         const system = armarSystemChat(contextoDinamicoParaModo(modo, contextoDinamico));
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
@@ -451,6 +474,7 @@ export async function POST(request: Request) {
                 confirmacionId,
                 familia,
                 abiertoId: abierto?.id,
+                mensajeOrigenId,
               }
             );
             if (resultado.accionUI) enviar({ action: resultado.accionUI });

@@ -60,6 +60,20 @@ export type ConversacionExportada = {
   mensajes: Pick<MensajeChat, "role" | "contenido" | "created_at">[];
 };
 
+/** Recuerdos de vita (vigentes y reemplazados; un recuerdo borrado no conserva texto, así que no hay nada para exportar). */
+export type RecuerdoExportado = {
+  id: string;
+  sobre: string;
+  tema: string;
+  texto: string;
+  tipo: string;
+  estado: "vigente" | "reemplazado";
+  vence_el: string | null;
+  origen: string;
+  corrige_a: string | null;
+  creado_el: string;
+};
+
 export type EstudioExportado = Omit<Estudio, "usuario_id" | "archivo_path">;
 
 export type HistorialExportado = {
@@ -75,6 +89,8 @@ export type HistorialExportado = {
   personas_que_cuido: { nombre: string }[];
   borradores_de_personas_que_cuido: BorradorExportado[];
   conversaciones: ConversacionExportada[];
+  /** Lo que vita recuerda de vos (solo del dueño: ni cuidadores ni la persona cuidada lo ven). Vacío sin la migración 038. */
+  recuerdos_de_vita: RecuerdoExportado[];
 };
 
 type Pagina = PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
@@ -222,6 +238,49 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
     ),
   ]);
 
+  // Memoria de vita (038): sin la migración (tabla inexistente) o ante cualquier falla de lectura no se exporta nada;
+  // el resto del export sigue igual. La RLS es owner-only: al exportar a alguien que se cuida, esto sale vacío.
+  let recuerdos: RecuerdoExportado[] = [];
+  try {
+    const filas = await leerTodas<{
+      id: string;
+      sobre_tipo: string;
+      sobre_nombre: string | null;
+      clave: string;
+      texto: string | null;
+      tipo: string;
+      estado: "vigente" | "reemplazado" | "borrado";
+      vence_at: string | null;
+      origen: string;
+      corrige_id: string | null;
+      created_at: string;
+    }>("tus recuerdos", (d, h) =>
+      supabase
+        .from("memorias")
+        .select("id, sobre_tipo, sobre_nombre, clave, texto, tipo, estado, vence_at, origen, corrige_id, created_at")
+        .eq("usuario_id", usuarioId)
+        .in("estado", ["vigente", "reemplazado"])
+        .order("created_at", { ascending: true })
+        .range(d, h)
+    );
+    recuerdos = filas
+      .filter((m) => m.texto)
+      .map((m) => ({
+        id: m.id,
+        sobre: m.sobre_tipo === "yo" ? "vos" : (m.sobre_nombre ?? "un familiar"),
+        tema: m.clave,
+        texto: m.texto as string,
+        tipo: m.tipo,
+        estado: m.estado as "vigente" | "reemplazado",
+        vence_el: m.vence_at,
+        origen: m.origen,
+        corrige_a: m.corrige_id,
+        creado_el: m.created_at,
+      }));
+  } catch {
+    recuerdos = [];
+  }
+
   const nombrePorMedicamento = new Map(medicamentos.map((m) => [m.id, m.nombre]));
 
   const mensajesPorSesion = new Map<string, MensajeChat[]>();
@@ -303,5 +362,6 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
         })),
       }))
       .filter((c) => c.mensajes.length > 0),
+    recuerdos_de_vita: recuerdos,
   };
 }

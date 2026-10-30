@@ -53,7 +53,7 @@ export default function PrivacidadPage() {
           </li>
           <li>
             <strong>Conversaciones con vita:</strong> los mensajes que intercambiás con el asistente se guardan para
-            que puedas retomar tus conversaciones. Podés borrar el historial desde el chat.
+            que puedas retomar tus conversaciones. Podés borrar el historial desde Perfil → Privacidad y datos. Lo que vita recuerda de ellas se describe en la sección 6.
           </li>
           <li>
             <strong>Voz:</strong> si usás el modo voz, el audio de tu micrófono se envía a un servicio externo para
@@ -148,17 +148,51 @@ export default function PrivacidadPage() {
         </p>
       </Seccion>
 
-      <Seccion titulo="6. Cuánto tiempo conservamos tus datos">
+      <Seccion titulo="6. La memoria de vita">
+        <p>
+          Para no empezar de cero en cada charla, vita puede recordar cosas que le contás, sobre vos o sobre tu familia
+          (por ejemplo, quién te acompaña a los turnos). Guarda una frase corta por cada cosa, la fecha, de quién es y
+          qué mensaje la originó. No guarda lo que deduce ni copia tus datos de salud: esos se leen siempre de lo que
+          cargaste en la app.
+        </p>
+        <Lista>
+          <li>
+            <strong>Es tuyo y lo ves vos:</strong> en Perfil → Privacidad y datos → Lo que vita recuerda de vos ves todo
+            lo que recuerda, y podés pedirle que deje de recordar algo puntual o que olvide todo. Al dejar de recordar,
+            los mensajes de donde salió siguen en tu historial del chat pero vita ya no los busca; para borrar los mensajes
+            usás “Borrar historial”.
+          </li>
+          <li>
+            <strong>Lo podés apagar:</strong> con el interruptor “vita recuerda lo que le contás” deja de guardar cosas
+            nuevas y de usar las que tiene, sin borrarlas.
+          </li>
+          <li>
+            <strong>No lo ven otras personas:</strong> los cuidadores y las personas que cuidás no ven lo que vita
+            recuerda de vos.
+          </li>
+          <li>
+            <strong>Las cosas del momento vencen:</strong> lo pasajero (como cómo te sentías hoy) se olvida solo a los 3
+            días.
+          </li>
+          <li>
+            Para recordar y buscar, el texto que vita guarda y el de tus conversaciones se procesa con Anthropic, como el
+            resto del chat. Si borrás tu historial o tu cuenta, se borra también lo que vita recuerda de esas
+            conversaciones. El modo simple no usa la memoria.
+          </li>
+        </Lista>
+      </Seccion>
+
+      <Seccion titulo="7. Cuánto tiempo conservamos tus datos">
         <p>
           Conservamos tus datos mientras tengas tu cuenta. Cuando eliminás tu cuenta (Perfil → Privacidad y datos →
           Eliminar mi cuenta) se borran de forma permanente tu perfil, medicamentos, historial de tomas, turnos,
-          estudios y sus fotos, conversaciones, vínculos de cuidado y contadores de uso. Esta acción no se puede
+          estudios y sus fotos, conversaciones, recuerdos de vita, vínculos de cuidado y contadores de uso. Esta acción no se puede
           deshacer. Los proveedores mencionados pueden conservar copias de seguridad o registros por el tiempo que
           establezcan sus propias políticas.
         </p>
       </Seccion>
 
-      <Seccion titulo="7. Tus derechos">
+      <Seccion titulo="8. Tus derechos">
         <Lista>
           <li>
             <strong>Acceso:</strong> podés ver tus datos en la app y descargarlos desde Perfil → Privacidad y datos →
@@ -185,7 +219,7 @@ export default function PrivacidadPage() {
         </p>
       </Seccion>
 
-      <Seccion titulo="8. Seguridad">
+      <Seccion titulo="9. Seguridad">
         <p>
           Aplicamos medidas razonables para proteger tu información: cada persona accede únicamente a sus propios
           datos mediante reglas de seguridad a nivel de fila en la base de datos, las fotos de estudios se guardan en
@@ -194,7 +228,7 @@ export default function PrivacidadPage() {
         </p>
       </Seccion>
 
-      <Seccion titulo="9. Menores de edad">
+      <Seccion titulo="10. Menores de edad">
         <p>
           vita está pensada para personas mayores de 18 años. Si sos menor de edad, solo podés usarla con el
           consentimiento y la supervisión de tu madre, padre o tutor. Si tomamos conocimiento de datos de un menor
@@ -202,14 +236,14 @@ export default function PrivacidadPage() {
         </p>
       </Seccion>
 
-      <Seccion titulo="10. Cambios en esta política">
+      <Seccion titulo="11. Cambios en esta política">
         <p>
           Podemos actualizar esta política. Cuando el cambio sea relevante te lo vamos a informar dentro de la app, y
           la fecha de &ldquo;Última actualización&rdquo; de arriba siempre indica la versión vigente.
         </p>
       </Seccion>
 
-      <Seccion titulo="11. Contacto">
+      <Seccion titulo="12. Contacto">
         <p>
           Para consultas sobre privacidad o para ejercer tus derechos: {CONTACTO_EMAIL}. Las condiciones de uso del
           servicio están en los{" "}

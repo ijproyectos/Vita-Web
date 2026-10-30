@@ -22,6 +22,7 @@ import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
 import { validarMedicion } from "@/lib/mediciones/tipos";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
+import { ejecutarToolMemoria, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
 
 export { TOOLS } from "./tools-definiciones";
 
@@ -44,6 +45,8 @@ export type ContextoTool = {
   familia: MiembroFamilia[];
   /** Perfil de un familiar abierto en pantalla (ya validado contra `familia`), si lo hay. */
   abiertoId?: string;
+  /** Mensaje del usuario que originó este pedido (mensajes_chat.id), si se conoce: lo usa `recordar`. */
+  mensajeOrigenId?: string | null;
 };
 
 /** Frontera común del input del modelo para el precheck y la escritura. */
@@ -101,6 +104,9 @@ export async function ejecutarTool(
   input: Record<string, unknown>,
   ctx: ContextoTool
 ): Promise<ResultadoTool> {
+  // Memoria: solo la cuenta logueada, nunca un `persona_id` (no pasa por resolverDestino).
+  if (NOMBRES_TOOLS_MEMORIA.has(nombre)) return ejecutarToolMemoria(nombre, input, ctx);
+
   const destino = resolverDestino(nombre, input, ctx);
   if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
   // Defensa en profundidad: quien llama (pedidos.ts) ya exigió la confirmación

@@ -12,7 +12,7 @@ export function esRangoBorrado(v: unknown): v is RangoBorrado {
   return v === "1y" || v === "6m" || v === "all";
 }
 
-export type CantidadesBorradas = { tomas: number; mediciones: number; estudios: number; conversaciones: number };
+export type CantidadesBorradas = { tomas: number; mediciones: number; estudios: number; conversaciones: number; recuerdos: number };
 
 export type EstadoBorrado =
   | { status: "success"; borrado: CantidadesBorradas }

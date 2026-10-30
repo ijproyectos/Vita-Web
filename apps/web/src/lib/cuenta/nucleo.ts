@@ -12,7 +12,8 @@ export type ResultadoEliminarCuenta = { ok: true } | { ok: false; error: string 
  *
  * Toda tabla de negocio referencia auth.users con `on delete cascade`
  * (perfiles, medicamentos, tomas, turnos, estudios, chat, vínculos de
- * cuidador en ambas direcciones, borradores pendientes, uso de IA), así
+ * cuidador en ambas direcciones, borradores pendientes, uso de IA y los recuerdos
+ * de la memoria de vita, `memorias`, con `references auth.users on delete cascade` en 038), así
  * que borrar el usuario de Auth arrastra todas las filas. Lo único que NO
  * cascadea son los archivos de Storage — por eso se borran primero: si
  * fallara después, el usuario sigue existiendo y puede reintentar, en vez

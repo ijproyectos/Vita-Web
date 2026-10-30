@@ -48,6 +48,32 @@ describe("prompt caching del chat", () => {
     // ~4 caracteres por token en español: con holgura, el prefijo es mucho mayor que 1024 tokens.
     expect(prefijoCacheado(ctx(1)).length / 4).toBeGreaterThan(1024);
   });
+  it("las tools de memoria van al final y no aceptan persona_id", () => {
+    const nombres = TOOLS.map((t) => t.name);
+    expect(nombres.slice(-2)).toEqual(["recordar", "buscar_memoria"]);
+    for (const n of ["recordar", "buscar_memoria"]) {
+      const props = (TOOLS.find((t) => t.name === n)!.input_schema as { properties: Record<string, unknown> }).properties;
+      expect(props).not.toHaveProperty("persona_id");
+      expect(props).not.toHaveProperty("confirmado");
+    }
+  });
+  it("las reglas de memoria son estáticas; los recuerdos y el estado por persona van en el bloque dinámico", () => {
+    expect(SYSTEM_PROMPT).toContain("buscar_memoria");
+    const conRecuerdos = contextoDinamicoChat({
+      contextoPerfil: "",
+      contextoHoy: "",
+      contextoMemoria: "\n\nSobre quien te habla:\n- [dia_visita] Laura viene los jueves",
+      ahora: "lunes 1 de octubre de 2026, 10:00",
+      hoyISO: "2026-10-01",
+    });
+    const sinRecuerdos = contextoDinamicoChat({ contextoPerfil: "", contextoHoy: "", ahora: "lunes 1 de octubre de 2026, 10:00", hoyISO: "2026-10-01" });
+    expect(conRecuerdos).toContain("Laura viene los jueves");
+    expect(sinRecuerdos).not.toContain("Laura");
+    // El prefijo cacheado es idéntico con o sin recuerdos y con la memoria apagada.
+    expect(prefijoCacheado(conRecuerdos)).toBe(prefijoCacheado(sinRecuerdos));
+    expect(prefijoCacheado(conRecuerdos)).not.toContain("Laura viene los jueves");
+    expect(armarSystemChat(conRecuerdos)[1].text).toContain("Laura viene los jueves");
+  });
   it("el orden de las tools es fijo: cambiarlo invalida el caché, así que tiene que ser a propósito", () => {
     expect(TOOLS.map((t) => t.name)).toMatchInlineSnapshot(`
       [
@@ -67,6 +93,8 @@ describe("prompt caching del chat", () => {
         "show_all_medications",
         "open_screen",
         "set_avatar_mood",
+        "recordar",
+        "buscar_memoria",
       ]
     `);
   });
