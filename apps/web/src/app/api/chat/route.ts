@@ -22,6 +22,7 @@ import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { LIMITES_CHAT } from "@/lib/limites/logica";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
+import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
 import { SYSTEM_PROMPT, armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
 import {
   ejecutarToolIdempotente,
@@ -59,7 +60,10 @@ const MAX_CARACTERES_MENSAJE = 4000;
 // Tope de ítems del bloque "Hoy" del contexto.
 const MAX_ITEMS_HOY = 20;
 // Tools que no consultan ni cambian datos: solo disparan un efecto de UI. Si el
-// turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo.
+// turno ya trajo texto y usó solo estas, no hace falta otra llamada al modelo. (`proponer_medicion` NO
+// está: su resultado puede ser un error de validación que el modelo tiene que ver para pedir el valor de nuevo.
+// `sugerir_llamar_ayuda` tampoco: el modelo tiene que leer su resultado ("no se mandó ningún aviso") para no
+// decir nunca "le avisé a tu familia" en un momento de ayuda.)
 const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen"]);
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: REINTENTOS_SDK });
@@ -69,6 +73,9 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetr
 // request (Personas, Hoy, fecha) se agrega DESPUÉS en el segundo bloque de `armarSystemChat` y no entra al hash.
 // (No se exporta: un route.ts solo puede exportar handlers.)
 const VERSION_PROMPT = calcularVersionPrompt(SYSTEM_PROMPT, TOOLS, MODELO_IA);
+// El modo simple ofrece otras tools (y su estilo va en el bloque dinámico): se distingue en los registros.
+const TOOLS_SIMPLE = toolsParaModo("simple");
+const VERSION_PROMPT_SIMPLE = `${calcularVersionPrompt(SYSTEM_PROMPT, TOOLS_SIMPLE, MODELO_IA)}:simple`;
 
 // Bloque "Hoy" del contexto: medicamentos (con estado) y turnos de hoy de quien
 // chatea, para no gastar una llamada a tool en "qué me toca hoy". Nombres y
@@ -124,6 +131,7 @@ export async function POST(request: Request) {
     reintento?: boolean;
     perfilActivoId?: string;
     confirmacionId?: unknown;
+    modo?: unknown;
   };
   try {
     cuerpo = await request.json();
@@ -141,6 +149,11 @@ export async function POST(request: Request) {
     );
   }
   const mensaje = cuerpo.mensaje;
+  // Chat de modo simple (pantalla de voz de la persona): estilo corto + tools acotadas. Opera SOLO sobre la
+  // cuenta logueada: sin familia ni perfil abierto, así ninguna tool puede apuntar a otra persona.
+  const modo = leerModoChat(cuerpo.modo);
+  const modoSimple = modo === "simple";
+  const toolsDelModo = modoSimple ? TOOLS_SIMPLE : TOOLS;
   // Id de la acción pendiente cuyo botón tocó el usuario: solo un uuid; el servidor lo valida contra su fila.
   const confirmacionId =
     typeof cuerpo.confirmacionId === "string" && UUID_RE.test(cuerpo.confirmacionId) ? cuerpo.confirmacionId : undefined;
@@ -162,7 +175,7 @@ export async function POST(request: Request) {
         construirFilaRegistro({
           usuarioId: user.id,
           pedidoId,
-          versionPrompt: VERSION_PROMPT,
+          versionPrompt: modoSimple ? VERSION_PROMPT_SIMPLE : VERSION_PROMPT,
           modelo: MODELO_IA,
           inicioMs,
           finMs: performance.now(),
@@ -275,12 +288,12 @@ export async function POST(request: Request) {
         // path /app); solo cuenta si es el propio usuario o un miembro.
         let familia: MiembroFamilia[] = [];
         try {
-          familia = await listarFamilia(supabase);
+          familia = modoSimple ? [] : await listarFamilia(supabase);
         } catch {
           // Sin la lista el chat sigue, solo con la cuenta propia.
         }
         const abierto =
-          typeof perfilActivoId === "string" && perfilActivoId !== user.id
+          !modoSimple && typeof perfilActivoId === "string" && perfilActivoId !== user.id
             ? familia.find((f) => f.id === perfilActivoId)
             : undefined;
         // Botón "Confirmar" de una borrada/cambio de horario: lo resuelve el servidor SIN modelo,
@@ -344,9 +357,8 @@ export async function POST(request: Request) {
 
         // Prompt caching: el bloque estático (reglas + tools, que se renderizan antes) lleva el breakpoint; todo
         // lo volátil (Personas, Hoy, fecha) va en un segundo bloque SIN cache_control, después del breakpoint.
-        const system = armarSystemChat(
-          contextoDinamicoChat({ contextoPerfil, contextoHoy, ahora: descripcionAhoraEnAR(), hoyISO: fechaDeHoyISO() })
-        );
+        const contextoDinamico = contextoDinamicoChat({ contextoPerfil, contextoHoy, ahora: descripcionAhoraEnAR(), hoyISO: fechaDeHoyISO() });
+        const system = armarSystemChat(contextoDinamicoParaModo(modo, contextoDinamico));
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
           // Antes de otra vuelta del modelo: si el presupuesto ya no alcanza, se corta acá.
@@ -359,7 +371,7 @@ export async function POST(request: Request) {
               model: MODELO_IA,
               max_tokens: MAX_TOKENS_CHAT,
               system,
-              tools: TOOLS,
+              tools: toolsDelModo,
               messages: historial,
             },
             { signal: controlador.signal, timeout: timeoutSdkMs(inicioMs, performance.now()) }
@@ -420,6 +432,12 @@ export async function POST(request: Request) {
 
           const resultadosTool: Anthropic.ToolResultBlockParam[] = [];
           for (const uso of usosDeTool) {
+            // Una tool fuera de la lista activa se rechaza aunque el modelo la nombre.
+            const bloqueada = resultadoToolBloqueada(modo, uso);
+            if (bloqueada) {
+              resultadosTool.push(bloqueada);
+              continue;
+            }
             const resultado = await ejecutarToolIdempotente(
               uso.name,
               uso.input as Record<string, unknown>,

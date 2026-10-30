@@ -2,17 +2,26 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EstadoVoz } from "./tipos";
+import { conPlazo } from "./plazo";
 
 // VAD por umbral de amplitud simple (RMS de la señal en el dominio del
 // tiempo) — no hace falta nada más sofisticado para detectar "el usuario
 // dejó de hablar" en un chat de salud, un modelo de VAD dedicado sería
 // sobre-ingeniería acá.
 const UMBRAL_VOLUMEN = 0.02;
+const PLAZO_REANUDAR_AUDIO_MS = 1500; // AudioContext.resume() may never resolve without a gesture (iOS)
 const SILENCIO_MS = 800; // debounce: cuánto silencio antes de cerrar el turno
 const DURACION_MINIMA_MS = 300; // segmentos más cortos se descartan como ruido
 
 export type MotivoNoIniciado = "no-soportado" | "permiso-denegado";
-export type ResultadoInicioVoz = { ok: true } | { ok: false; motivo: MotivoNoIniciado };
+/** `suspendido`: el AudioContext no pudo reanudarse (iOS fuera de un gesto): el VAD no oiría nada. */
+export type ResultadoInicioVoz = { ok: true; suspendido?: boolean } | { ok: false; motivo: MotivoNoIniciado };
+
+function crearContexto(): AudioContext | null {
+  const Ctor =
+    window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  return Ctor ? new Ctor() : null;
+}
 
 function elegirMimeType(): string | undefined {
   if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return undefined;
@@ -219,36 +228,60 @@ export function useGrabacionVoz({
       return { ok: false, motivo: "no-soportado" };
     }
 
-    const AudioContextCtor =
-      window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) {
+    // Si `preparar()` ya creó (y desbloqueó dentro del gesto) un contexto, se reutiliza.
+    const previo = audioContextRef.current && audioContextRef.current.state !== "closed" ? audioContextRef.current : null;
+    const audioContext = previo ?? crearContexto();
+    if (!audioContext) {
       return { ok: false, motivo: "no-soportado" };
     }
+    audioContextRef.current = audioContext;
 
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
+      audioContext.close().catch(() => {});
+      audioContextRef.current = null;
       return { ok: false, motivo: "permiso-denegado" };
     }
 
     streamRef.current = stream;
     activoRef.current = true;
 
-    const audioContext = new AudioContextCtor();
+    // Safari/iOS crea el contexto "suspended" si no hubo gesto: sin reanudarlo el VAD lee silencio.
+    // `resume()` can stay pending forever without user activation, so it is bounded: a still-suspended
+    // context is reported as `suspendido` and the caller tears the mic down (`detener`).
+    if (audioContext.state === "suspended") await conPlazo(audioContext.resume(), PLAZO_REANUDAR_AUDIO_MS);
     const fuente = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 2048;
     fuente.connect(analyser);
 
-    audioContextRef.current = audioContext;
     analyserRef.current = analyser;
 
     actualizarEstado("escuchando");
     monitorear();
 
-    return { ok: true };
+    return audioContext.state === "running" ? { ok: true } : { ok: true, suspendido: true };
   }, [actualizarEstado, monitorear]);
+
+  /**
+   * Llamar SINCRÓNICAMENTE dentro de un gesto (tap): crea y reanuda el AudioContext para que
+   * `iniciar()` —que puede correr más tarde, fuera del gesto— lo encuentre desbloqueado en iOS.
+   * No pide el micrófono ni graba nada.
+   */
+  const preparar = useCallback(() => {
+    if (typeof window === "undefined") return;
+    let ctx = audioContextRef.current;
+    if (!ctx || ctx.state === "closed") {
+      ctx = crearContexto();
+      audioContextRef.current = ctx;
+    }
+    if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+  }, []);
+
+  const contextoSuspendido = useCallback(() => audioContextRef.current?.state === "suspended", []);
+  const obtenerEstado = useCallback(() => estadoRef.current, []);
 
   const reanudarEscucha = useCallback(() => {
     if (activoRef.current) actualizarEstado("escuchando");
@@ -260,5 +293,5 @@ export function useGrabacionVoz({
     return () => detener();
   }, [detener]);
 
-  return { estado, iniciar, detener, reanudarEscucha };
+  return { estado, iniciar, detener, reanudarEscucha, preparar, contextoSuspendido, obtenerEstado };
 }

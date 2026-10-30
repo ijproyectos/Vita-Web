@@ -55,6 +55,7 @@ const ESTILO_POR_TIPO: Record<string, Estilo> = {
   stock_bajo: STOCK,
   stock_bajo_persona: STOCK,
   persona_en_vita: OK,
+  pedido_ayuda: { icon: "alert-triangle", clases: "bg-destructive/10 text-destructive" },
   resumen_dia_persona: OK,
 };
 

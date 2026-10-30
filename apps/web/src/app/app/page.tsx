@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { COOKIE_MODO_SIMPLE, modoSimpleActivoPara } from "@/lib/modo-simple/recordar";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
@@ -25,6 +28,9 @@ import { TurnosHome } from "./turnos-home";
 
 export default async function HomePage() {
   const usuario = await requireUser();
+  // Abrir la app con el modo simple activo en este dispositivo vuelve ahí,
+  // no al Inicio normal (se apaga con "Salir del modo simple").
+  if (modoSimpleActivoPara((await cookies()).get(COOKIE_MODO_SIMPLE)?.value, usuario.id)) redirect("/app/modo-simple");
   const supabase = await createClient();
   // Familia: los datos son del perfil activo (propio o de alguien que cuido);
   // los avisos y el nudge a vita son siempre de la cuenta logueada.

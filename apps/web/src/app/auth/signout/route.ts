@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { origenPublico } from "@/lib/email/origen";
 import { borrarSuscripcion } from "@/lib/notificaciones/push";
+import { COOKIE_MODO_SIMPLE } from "@/lib/modo-simple/recordar";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -28,5 +29,8 @@ export async function POST(request: Request) {
 
   // Public origin from the request headers (request.url can carry the
   // internal host behind a proxy or when the server listens on 0.0.0.0).
-  return NextResponse.redirect(`${await origenPublico()}/login`, { status: 303 });
+  // The next person on this device should not land in modo simple.
+  const respuesta = NextResponse.redirect(`${await origenPublico()}/login`, { status: 303 });
+  respuesta.cookies.delete({ name: COOKIE_MODO_SIMPLE, path: "/" });
+  return respuesta;
 }

@@ -267,3 +267,27 @@ export const TOOLS: Anthropic.Tool[] = TOOLS_BASE.map((t) => {
     },
   };
 });
+
+// Tools que SOLO existen en el chat de modo simple (`modo: "simple"` en /api/chat). No están en TOOLS: en el
+// modo normal no se ofrecen ni se ejecutan (ver lib/ai/modo-simple.ts).
+export const TOOL_SUGERIR_LLAMAR_AYUDA: Anthropic.Tool = {
+  name: "sugerir_llamar_ayuda",
+  description:
+    "No avisa ni manda nada a nadie: solo hace aparecer en la pantalla el botón rojo para llamar a la familia. Llamala cuando la persona diga que se siente mal, cuente un síntoma, pida ayuda o pida que avisen a su familia. Después decile con calidez que llame a su familia ahora, o al 107 si es una emergencia. Nunca digas que avisaste a alguien.",
+  input_schema: { type: "object", properties: {} },
+};
+
+export const TOOL_PROPONER_MEDICION: Anthropic.Tool = {
+  name: "proponer_medicion",
+  description:
+    "No guarda nada: le propone a la pantalla anotar una medición que la persona acaba de decir (glucosa o presión) y la pantalla le pregunta '¿Lo anoto así?'. Nunca digas que quedó anotada. Glucemia: valor en mg/dL ('me dio 110'). Presión: valor = máxima y valor_secundario = mínima ('13 y 8' = 130 y 80).",
+  input_schema: {
+    type: "object",
+    properties: {
+      tipo: { type: "string", enum: ["glucemia", "presion"] },
+      valor: { type: "number", description: "Glucemia en mg/dL, o la presión máxima en mmHg." },
+      valor_secundario: { type: "number", description: "Solo presión: la mínima en mmHg." },
+    },
+    required: ["tipo", "valor"],
+  },
+};

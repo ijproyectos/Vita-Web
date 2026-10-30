@@ -17,8 +17,10 @@ import {
   momentoDiaAIngles,
 } from "./mapeo";
 import { pantallaPorClave } from "./guia-app";
+import { TEXTO_SUGERIR_LLAMAR_AYUDA } from "./modo-simple";
 import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
+import { validarMedicion } from "@/lib/mediciones/tipos";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 
 export { TOOLS } from "./tools-definiciones";
@@ -313,6 +315,23 @@ async function ejecutarEnDestino(
       // el contenido de esta tool (mismo mecanismo que show_today_medications).
       return { contenido: "Ok.", accionUI: { type: "avatar_mood", mood } };
     }
+
+    case "proponer_medicion": {
+      // Sin efecto en la DB: la pantalla pregunta "¿Lo anoto así?" y recién ahí guarda (guardarMedicionSimpleAction).
+      const validado = validarMedicion({ tipo: input.tipo, valor: input.valor, valorSecundario: input.valor_secundario });
+      if (!validado.ok) {
+        return { contenido: `No es una medición válida: ${validado.message} No la propongas; pedile con tus palabras que la repita.` };
+      }
+      const d = validado.datos;
+      return {
+        contenido: "Propuesta mostrada: la pantalla le pregunta si la anota. NO digas que quedó anotada; pedile que confirme en la pantalla.",
+        accionUI: { type: "medicion_propuesta", tipo: d.tipo, valor: d.valor, valorSecundario: d.valorSecundario },
+      };
+    }
+
+    case "sugerir_llamar_ayuda":
+      // Sin efecto en la DB ni en la red: no se avisa a nadie. Solo muestra el botón rojo de llamada (tel:).
+      return { contenido: TEXTO_SUGERIR_LLAMAR_AYUDA, accionUI: { type: "ayuda_llamar" } };
 
     default:
       return { contenido: `Tool desconocida: ${nombre}` };
