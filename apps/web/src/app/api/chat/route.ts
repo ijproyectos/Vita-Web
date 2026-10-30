@@ -38,6 +38,8 @@ import { detectarEmergencia, textoEmergencia } from "@/lib/ai/emergencia";
 import * as chat from "@/lib/chat/nucleo";
 import { cargarMemoriasParaContexto, estadoMemoria } from "@/lib/memoria/nucleo";
 import { contextoMemoria } from "@/lib/memoria/contexto";
+import { cargarContextoResumen, pedirResumen } from "@/lib/memoria/resumen";
+import { debePedirResumen } from "@/lib/memoria/resumen-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
@@ -169,6 +171,9 @@ export async function POST(request: Request) {
   const inicioMs = performance.now();
   const medicion = medicionInicial();
   let cerrarRegistro: () => void = () => {};
+  // Memoria (fase 3): si la respuesta quedó guardada, se marca el resumen de ESTA persona como pendiente cuando se
+  // juntaron suficientes mensajes. Va en el mismo `after` (con la respuesta ya enviada); nunca en modo simple.
+  let respuestaGuardada = false;
   after(
     new Promise<void>((resolver) => {
       cerrarRegistro = resolver;
@@ -185,7 +190,9 @@ export async function POST(request: Request) {
           toolsDeEscritura: TOOLS_DE_ESCRITURA,
         })
       )
-    )
+    ).then(async () => {
+      if (debePedirResumen({ modoSimple, respuestaGuardada })) await pedirResumen(supabase);
+    })
   );
 
   // Límite de pedidos por usuario/IP (migración 035; falla abierto). Va antes de gastar nada: 429 con el
@@ -373,6 +380,9 @@ export async function POST(request: Request) {
             memorias,
             familia: familia.map((f) => ({ id: f.id, nombre: f.nombre })),
           });
+          // Resumen de charlas anteriores (fase 3): solo de la cuenta logueada y solo con la memoria activa. Va en el
+          // bloque dinámico, saneado y con tope; sin la migración 041 queda vacío.
+          if (estadoMem.disponible && estadoMem.activa) textoMemoria += await cargarContextoResumen(supabase, user.id);
         }
         const contextoDinamico = contextoDinamicoChat({
           contextoPerfil,
@@ -509,6 +519,7 @@ export async function POST(request: Request) {
 
         if (textoAcumulado) {
           await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
+          respuestaGuardada = true;
         }
 
         const usoNuevo = await registrarUsoIA(user.id, {

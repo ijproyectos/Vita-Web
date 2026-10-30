@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { TOOLS } from "./tools";
+import { contextoResumen } from "@/lib/memoria/resumen-logica";
 import { SYSTEM_PROMPT, armarSystemChat, contextoDinamicoChat } from "./prompt-chat";
 
 const ctx = (n: number) =>
@@ -97,5 +98,21 @@ describe("prompt caching del chat", () => {
         "buscar_memoria",
       ]
     `);
+  });
+  it("el resumen de charlas va solo en el bloque dinámico, nunca en el estático ni en las tools", () => {
+    const resumen = contextoResumen({ resumen: "Charlaron sobre el sueño de la persona.", pendientes: ["retomar lo del sueño"] });
+    const dinamico = contextoDinamicoChat({
+      contextoPerfil: "",
+      contextoHoy: "",
+      contextoMemoria: resumen,
+      ahora: "lunes 1 de octubre de 2026, 10:00",
+      hoyISO: "2026-10-01",
+    });
+    const system = armarSystemChat(dinamico);
+    expect(system[1].text).toContain("Charlaron sobre el sueño");
+    expect(system[0].text).not.toContain("Charlaron sobre el sueño");
+    expect(system[0].text).not.toContain("Resumen de charlas anteriores");
+    expect(JSON.stringify(TOOLS)).not.toContain("Charlaron sobre el sueño");
+    expect(SYSTEM_PROMPT).not.toContain("Resumen de charlas anteriores");
   });
 });
