@@ -52,6 +52,8 @@ const ESTILO_POR_TIPO: Record<string, Estilo> = {
   turno_dia_antes: TURNO,
   turno_2h: TURNO,
   turno_persona_dia_antes: TURNO,
+  turno_acompanado: { icon: "users", clases: TURNO.clases },
+  turno_acompanado_dia_antes: { icon: "users", clases: TURNO.clases },
   stock_bajo: STOCK,
   stock_bajo_persona: STOCK,
   persona_en_vita: OK,
