@@ -319,6 +319,22 @@ function Reporte({ h }: { h: HistorialExportado }) {
         </Seccion>
       )}
 
+      {h.resumen_de_charlas_con_vita && (
+        <Seccion titulo="Resumen de tus charlas con vita">
+          <div className="evitar-corte flex flex-col gap-2 rounded-[20px] bg-card p-4.5 text-[13px] leading-snug shadow-card">
+            <p className="whitespace-pre-line">{h.resumen_de_charlas_con_vita.resumen}</p>
+            {h.resumen_de_charlas_con_vita.pendientes.length > 0 && (
+              <ul className="list-disc pl-5">
+                {h.resumen_de_charlas_con_vita.pendientes.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+            <span className="text-[11.5px] text-muted-foreground">· {fechaSimple(h.resumen_de_charlas_con_vita.actualizado_el)}</span>
+          </div>
+        </Seccion>
+      )}
+
       <p className="pb-2 text-center text-[11px] leading-snug text-muted-foreground">
         Este reporte contiene datos de salud personales. Compartilo solo con quien vos decidas. vita no reemplaza la
         consulta con un profesional de la salud.

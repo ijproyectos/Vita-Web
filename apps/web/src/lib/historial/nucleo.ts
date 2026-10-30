@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fechaEnAR } from "@/lib/medicamentos/nucleo";
-import { borrarRecuerdosDeSesionesHasta } from "@/lib/memoria/privacidad";
+import { borrarRecuerdosDeSesionesHasta, invalidarResumen } from "@/lib/memoria/privacidad";
 import type { CantidadesBorradas, RangoBorrado } from "./tipos";
 
 type Cliente = SupabaseClient;
@@ -70,6 +70,8 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
 
   const conversaciones = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId).lt("updated_at", corteTs).select("id");
   if (conversaciones.error) throw new Error("No se pudieron borrar las conversaciones.");
+  // Un resumen armado entre la invalidación de arriba y el borrado podría traer texto de lo que se acaba de borrar.
+  if ((conversaciones.data?.length ?? 0) > 0) await invalidarResumen(supabase);
 
   return {
     tomas: tomas.data?.length ?? 0,

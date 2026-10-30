@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { cambiarMemoriaActiva, olvidarRecuerdo, olvidarTodo } from "@/lib/memoria/privacidad";
+import { borrarResumen } from "@/lib/memoria/resumen";
 
 // Pantalla "Lo que vita recuerda de vos". Todo sobre el usuario de la SESIÓN (el id nunca viene del cliente) y con el
 // cliente de sesión (RLS owner-only). Nunca lanzan.
@@ -55,6 +56,19 @@ export async function olvidarTodoAction(confirmacion: string): Promise<Resultado
     const supabase = await createClient();
     const r = await olvidarTodo(supabase, usuario.id);
     if (!r.ok) return { status: "error", mensaje: ERROR_GENERICO };
+    refrescar();
+    return { status: "success" };
+  } catch {
+    return { status: "error", mensaje: ERROR_GENERICO };
+  }
+}
+
+/** Borra el resumen de las charlas (vita lo arma de nuevo con lo que se cuente después). No toca los recuerdos ni el chat. */
+export async function borrarResumenAction(): Promise<Resultado> {
+  await requireUser();
+  try {
+    const supabase = await createClient();
+    if (!(await borrarResumen(supabase))) return { status: "error", mensaje: ERROR_GENERICO };
     refrescar();
     return { status: "success" };
   } catch {

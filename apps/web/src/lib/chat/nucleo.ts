@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { borrarRecuerdosDeSesionesHasta } from "@/lib/memoria/privacidad";
+import { borrarRecuerdosDeSesionesHasta, invalidarResumen } from "@/lib/memoria/privacidad";
 import type { MensajeChat, RolMensaje, SesionChat } from "./tipos";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts: funciones puras
@@ -141,4 +141,6 @@ export async function eliminarHistorial(supabase: Cliente, usuarioId: string): P
   if (!recuerdos.ok) throw new Error("No se pudo borrar lo que vita recordaba de estas conversaciones.");
   const { error } = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId);
   if (error) throw new Error(`No se pudo borrar el historial: ${error.message}`);
+  // Un resumen armado entre la invalidación de arriba y el borrado podría traer texto de lo que se acaba de borrar.
+  await invalidarResumen(supabase);
 }

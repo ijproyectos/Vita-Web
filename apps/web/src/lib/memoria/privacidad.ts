@@ -11,6 +11,21 @@ import type { Memoria, OrigenMemoria, TipoMemoria } from "./tipos";
 // hacen los mismos pasos desde acá. Nunca lanza.
 type Cliente = SupabaseClient;
 
+/**
+ * Vacía el resumen de la conversación (041). Las RPC de la 040 reemplazadas por la 041 ya lo hacen solas; esto cubre los
+ * caminos de respaldo (sin esas RPC), el interruptor y el cierre de "Borrar historial" (se vuelve a invalidar DESPUÉS de
+ * borrar las sesiones, para descartar un resumen que se haya armado mientras tanto con mensajes que ya no existen).
+ * `false` = falló por algo distinto de "falta la migración".
+ */
+export async function invalidarResumen(supabase: Cliente): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc("invalidar_resumen");
+    return !error || faltaMigracion(error);
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Lectura
 // ---------------------------------------------------------------------------
@@ -100,9 +115,14 @@ export async function cargarVistaMemoria(supabase: Cliente, usuarioId: string): 
 // ---------------------------------------------------------------------------
 // Interruptor
 // ---------------------------------------------------------------------------
-/** Apagar = no se guardan recuerdos nuevos ni se usan los existentes; no se borra nada. */
+/**
+ * Apagar = no se guardan recuerdos nuevos ni se usan los existentes; no se borran los recuerdos. El resumen de la
+ * conversación SÍ se vacía al apagar (se arma de nuevo con lo que se cuente después de prenderla): si no se puede vaciar,
+ * no se apaga y el llamador avisa.
+ */
 export async function cambiarMemoriaActiva(supabase: Cliente, usuarioId: string, activa: boolean): Promise<boolean> {
   try {
+    if (!activa && !(await invalidarResumen(supabase))) return false;
     const { data, error } = await supabase.from("perfiles").update({ memoria_activa: activa }).eq("id", usuarioId).select("id");
     return !error && (data?.length ?? 0) > 0;
   } catch {
@@ -210,7 +230,8 @@ export async function olvidarRecuerdo(supabase: Cliente, usuarioId: string, id: 
       usuarioId,
       cadena.map((c) => c.mensaje_origen_id).filter((x): x is string => !!x)
     );
-    return mensajes === null ? { estado: "error" } : { estado: "ok", recuerdos, mensajes };
+    if (mensajes === null || !(await invalidarResumen(supabase))) return { estado: "error" };
+    return { estado: "ok", recuerdos, mensajes };
   } catch {
     return { estado: "error" };
   }
@@ -242,7 +263,7 @@ export async function olvidarTodo(supabase: Cliente, usuarioId: string): Promise
       .eq("usuario_id", usuarioId)
       .eq("excluido_memoria", false)
       .select("id");
-    if (errMensajes) return { ok: false };
+    if (errMensajes || !(await invalidarResumen(supabase))) return { ok: false };
     return { ok: true, recuerdos: data?.length ?? 0, mensajes: excluidos?.length ?? 0 };
   } catch {
     return { ok: false };
@@ -269,6 +290,7 @@ export async function borrarRecuerdosDeSesionesHasta(supabase: Cliente, usuarioI
     const { data: sesiones, error: errSesiones } = await supabase.from("sesiones_chat").select("id").eq("usuario_id", usuarioId).lt("updated_at", corteIso);
     if (errSesiones) return { ok: false };
     const ids = ((sesiones ?? []) as { id: string }[]).map((s) => s.id);
+    if (ids.length > 0 && !(await invalidarResumen(supabase))) return { ok: false };
     let recuerdos = 0;
     for (let i = 0; i < ids.length; i += TANDA) {
       const { data: mensajes, error: errMensajes } = await supabase

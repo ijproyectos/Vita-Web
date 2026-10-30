@@ -31,6 +31,12 @@ import { createClient } from "@supabase/supabase-js";
  * obtener los cuidadores aceptados con el cliente de sesión (`listar_mis_cuidadores`); el id de la
  * persona sale de la sesión, nunca del modelo.
  *
+ * Trabajador del resumen de conversación (memoria, fase 3; `lib/memoria/resumen.ts`, invocado solo desde
+ * `/api/cron/memoria`, autenticado por `x-cron-secret`): procesa la cola de TODAS las personas (`resumen_conversacion`,
+ * sin policies de escritura), lee sus mensajes y guarda el resumen. Cada tarea trabaja solo sobre el `usuario_id` de la
+ * fila de la cola, respeta `memoria_activa`, los mensajes excluidos de la memoria y el límite diario en dólares, y las
+ * RPC que usa (migración 041) solo las ejecuta service_role. Nunca devuelve texto de mensajes ni de resúmenes.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,

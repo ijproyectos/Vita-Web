@@ -7,12 +7,13 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Interruptor } from "@/components/vita/interruptor";
 import type { GrupoRecuerdos, RecuerdoVista, VistaMemoria } from "@/lib/memoria/privacidad";
-import { cambiarMemoriaActivaAction, olvidarRecuerdoAction, olvidarTodoAction } from "./actions";
+import type { ResumenGuardado } from "@/lib/memoria/resumen";
+import { borrarResumenAction, cambiarMemoriaActivaAction, olvidarRecuerdoAction, olvidarTodoAction } from "./actions";
 
 const TARJETA = "overflow-hidden rounded-[20px] bg-card shadow-card";
 const BOTON_TEXTO = "rounded-full px-2.5 py-1.5 text-[12.5px] font-bold text-teal-deep disabled:opacity-50";
 
-export function PantallaMemoria({ vista }: { vista: VistaMemoria }) {
+export function PantallaMemoria({ vista, resumen }: { vista: VistaMemoria; resumen: ResumenGuardado | null }) {
   const router = useRouter();
   const [activa, setActiva] = useState(vista.activa);
   const [pendiente, startTransition] = useTransition();
@@ -80,7 +81,9 @@ export function PantallaMemoria({ vista }: { vista: VistaMemoria }) {
         </>
       )}
 
-      <OlvidarTodo hayAlgo={hayAlgo} />
+      {resumen && <ResumenCharlas resumen={resumen} />}
+
+      <OlvidarTodo hayAlgo={hayAlgo || !!resumen} />
     </>
   );
 }
@@ -235,6 +238,44 @@ function OlvidarTodo({ hayAlgo }: { hayAlgo: boolean }) {
             </div>
           </div>
         )}
+      </div>
+    </section>
+  );
+}
+
+function ResumenCharlas({ resumen }: { resumen: ResumenGuardado }) {
+  const router = useRouter();
+  const [pendiente, startTransition] = useTransition();
+
+  function borrar() {
+    startTransition(async () => {
+      const r = await borrarResumenAction();
+      if (r.status === "success") {
+        toast.success("Listo, borré el resumen de tus charlas.");
+        router.refresh();
+      } else toast.error(r.mensaje);
+    });
+  }
+
+  return (
+    <section>
+      <h2 className="eyebrow px-0.5 pb-[9px] text-subtle">Resumen de tus charlas</h2>
+      <div className={cn(TARJETA, "p-4")}>
+        <p className="whitespace-pre-line text-pretty text-[13.5px] font-medium leading-[1.5]">{resumen.resumen}</p>
+        {resumen.pendientes.length > 0 && (
+          <ul className="mt-2.5 list-disc pl-5 text-[12.5px] font-medium leading-[1.45] text-slate-brand">
+            {resumen.pendientes.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-2.5 text-pretty text-xs font-medium leading-[1.45] text-slate-brand">
+          Lo arma vita sola a partir de lo que charlan, para retomar una conversación. Si lo borrás, lo vuelve a armar con lo que
+          cuentes de ahora en más. Tus mensajes siguen en el historial del chat.
+        </p>
+        <button type="button" disabled={pendiente} onClick={borrar} className={cn(BOTON_TEXTO, "-ml-2.5 mt-1.5 text-destructive")}>
+          {pendiente ? "Borrando…" : "Borrar resumen"}
+        </button>
       </div>
     </section>
   );

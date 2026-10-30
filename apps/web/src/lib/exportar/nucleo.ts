@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { listarElders } from "@/lib/cuidadores/nucleo";
+import { leerResumen } from "@/lib/memoria/resumen";
 import type { Perfil } from "@/lib/perfil/tipos";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
 import type { Turno } from "@/lib/turnos/tipos";
@@ -74,6 +75,9 @@ export type RecuerdoExportado = {
   creado_el: string;
 };
 
+/** Resumen automático de las charlas con vita (memoria, fase 3). */
+export type ResumenExportado = { resumen: string; pendientes: string[]; actualizado_el: string };
+
 export type EstudioExportado = Omit<Estudio, "usuario_id" | "archivo_path">;
 
 export type HistorialExportado = {
@@ -91,6 +95,8 @@ export type HistorialExportado = {
   conversaciones: ConversacionExportada[];
   /** Lo que vita recuerda de vos (solo del dueño: ni cuidadores ni la persona cuidada lo ven). Vacío sin la migración 038. */
   recuerdos_de_vita: RecuerdoExportado[];
+  /** Resumen de las charlas con vita (solo del dueño). null si no hay o falta la migración 041. */
+  resumen_de_charlas_con_vita: ResumenExportado | null;
 };
 
 type Pagina = PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
@@ -281,6 +287,14 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
     recuerdos = [];
   }
 
+  let resumenCharlas: ResumenExportado | null = null;
+  try {
+    const guardado = await leerResumen(supabase, usuarioId);
+    if (guardado) resumenCharlas = { resumen: guardado.resumen, pendientes: guardado.pendientes, actualizado_el: guardado.actualizadoEl };
+  } catch {
+    resumenCharlas = null;
+  }
+
   const nombrePorMedicamento = new Map(medicamentos.map((m) => [m.id, m.nombre]));
 
   const mensajesPorSesion = new Map<string, MensajeChat[]>();
@@ -363,5 +377,6 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
       }))
       .filter((c) => c.mensajes.length > 0),
     recuerdos_de_vita: recuerdos,
+    resumen_de_charlas_con_vita: resumenCharlas,
   };
 }

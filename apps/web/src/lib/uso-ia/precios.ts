@@ -27,9 +27,15 @@ export type UsoTokens = {
 // Sonnet 5 y 5.5 comparten precios: $2 / $10, lectura de cache $0,20, escritura 5 min = 1,25 x input.
 const SONNET: PreciosModelo = { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 };
 
+// Haiku 5.5, tramo de prompts de hasta 100.000 tokens: $0,10 / $0,50, escritura de cache 5 min $0,125, lectura $0,01.
+// Fuente: https://platform.claude.com/docs/en/about-claude/pricing (verificado 2026-10-30). Por encima de 100.000
+// tokens de prompt el precio es 5x; el resumen nunca se acerca (su entrada está acotada a ~12k tokens).
+const HAIKU_5_5: PreciosModelo = { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 };
+
 export const PRECIOS_POR_MODELO: Readonly<Record<string, PreciosModelo>> = {
   "claude-sonnet-5": SONNET,
   "claude-sonnet-5-5": SONNET,
+  "claude-haiku-5-5": HAIKU_5_5,
 };
 
 function costoPorMillon(p: PreciosModelo): number {
