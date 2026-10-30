@@ -14,6 +14,7 @@ export type UsoDiarioConEstado = UsoDiario & { agotado: boolean };
 
 export function calcularUso(usados: number, limite: number): UsoDiarioConEstado {
   const restantes = Math.max(0, limite - usados);
-  const porcentajeUsado = Math.min(100, Math.max(0, Math.round((usados / limite) * 100)));
+  // Sin cupo (límite 0 o menor) cuenta como 100 % usado: evita el NaN de 0/0.
+  const porcentajeUsado = limite > 0 ? Math.min(100, Math.max(0, Math.round((usados / limite) * 100))) : 100;
   return { usados, limite, restantes, porcentajeUsado, agotado: usados >= limite };
 }
