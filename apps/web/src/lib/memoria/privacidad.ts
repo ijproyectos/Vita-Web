@@ -13,9 +13,11 @@ type Cliente = SupabaseClient;
 
 /**
  * Vacía el resumen de la conversación (041). Las RPC de la 040 reemplazadas por la 041 ya lo hacen solas; esto cubre los
- * caminos de respaldo (sin esas RPC) y el interruptor. `false` = falló por algo distinto de "falta la migración".
+ * caminos de respaldo (sin esas RPC), el interruptor y el cierre de "Borrar historial" (se vuelve a invalidar DESPUÉS de
+ * borrar las sesiones, para descartar un resumen que se haya armado mientras tanto con mensajes que ya no existen).
+ * `false` = falló por algo distinto de "falta la migración".
  */
-async function invalidarResumen(supabase: Cliente): Promise<boolean> {
+export async function invalidarResumen(supabase: Cliente): Promise<boolean> {
   try {
     const { error } = await supabase.rpc("invalidar_resumen");
     return !error || faltaMigracion(error);

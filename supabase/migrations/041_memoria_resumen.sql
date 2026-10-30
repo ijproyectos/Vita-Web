@@ -479,3 +479,27 @@ begin
   perform cron.schedule('memoria-resumen', '*/15 * * * *', v_comando);
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Mensajes escritos con la memoria apagada: nacen excluidos de la memoria
+-- ---------------------------------------------------------------------------
+-- Si la persona apaga la memoria, lo que charle mientras tanto no debe entrar ni en buscar_memoria ni en un resumen
+-- futuro cuando la vuelva a prender. Se resuelve en la base (no en cada llamador): todo mensaje nuevo de alguien con
+-- `memoria_activa = false` se guarda con `excluido_memoria = true`.
+create or replace function public.mensajes_chat_excluir_sin_memoria()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (select 1 from perfiles p where p.id = new.usuario_id and p.memoria_activa is false) then
+    new.excluido_memoria := true;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists mensajes_chat_excluir_sin_memoria on mensajes_chat;
+create trigger mensajes_chat_excluir_sin_memoria
+  before insert on mensajes_chat
+  for each row execute function public.mensajes_chat_excluir_sin_memoria();
