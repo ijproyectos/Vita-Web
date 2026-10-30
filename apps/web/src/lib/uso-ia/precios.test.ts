@@ -43,7 +43,7 @@ describe("precio de Message Batches (50 %)", () => {
     const uso = { input: 1000, output: 400, cacheRead: 5000, cacheWrite: 2000 };
     const estandar = 1000 * 0.1 + 400 * 0.5 + 5000 * 0.01 + 2000 * 0.125;
     expect(costoMicroUSD(H, uso, { lote: true })).toBe(Math.round(estandar * 0.5));
-    // 3 tokens de lectura de cache = 0,03 micro-USD: 0 con o sin lote, y nunca negativo.
+    // Un token de salida por lote = 0,25 micro-USD: se redondea a 0.
     expect(costoMicroUSD(H, { input: 0, output: 1, cacheRead: 0 }, { lote: true })).toBe(0);
     expect(Number.isInteger(costoMicroUSD(H, { input: 7, output: 3, cacheRead: 11, cacheWrite: 13 }, { lote: true }))).toBe(true);
   });
