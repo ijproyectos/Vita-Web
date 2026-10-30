@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizarLlevar, type DatosActualizarTurno, type DatosNuevoTurno, type Turno } from "./tipos";
 import { fechaDeHoyISO } from "@/lib/rutina/formato";
+import { avisarTurnoAcompanado } from "@/lib/notificaciones/turno-acompanado";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts — funciones puras
 // (supabase, usuarioId, ...), consumidas tanto por Server Actions como por
@@ -110,7 +111,10 @@ export async function agregar(
   }
 
   if (error) throw new Error(`No se pudo crear el turno: ${error.message}`);
-  return data as Turno;
+  const creado = data as Turno;
+  // "Voy a ir acompañado": best-effort, nunca bloquea ni lanza (decisión del dueño 2026-10-30).
+  if (creado.acompanado) await avisarTurnoAcompanado(supabase, creado.id, null);
+  return creado;
 }
 
 /** Dueño (usuario_id) de un turno visible para la sesión (propio o de alguien que cuida), o null. */
@@ -145,6 +149,14 @@ export async function actualizar(
   if (datos.telefono !== undefined) cambios.telefono = datos.telefono;
   if (datos.llevar !== undefined) cambios.llevar = normalizarLlevar(datos.llevar);
 
+  // Estado previo, para avisar a los cuidadores solo si "acompañado" se prende o cambia el día/hora.
+  const { data: antes } = await supabase
+    .from("turnos")
+    .select("acompanado, fecha, hora")
+    .eq("id", turnoId)
+    .eq("usuario_id", usuarioId)
+    .maybeSingle();
+
   const intentar = (c: Record<string, unknown>) =>
     supabase.from("turnos").update(c).eq("id", turnoId).eq("usuario_id", usuarioId).select().single();
 
@@ -156,7 +168,14 @@ export async function actualizar(
   }
 
   if (error) throw new Error(`No se pudo actualizar el turno: ${error.message}`);
-  return data as Turno;
+  const guardado = data as Turno;
+  if (guardado.acompanado) {
+    const previo = antes
+      ? { acompanado: antes.acompanado === true, fecha: String(antes.fecha), hora: String(antes.hora) }
+      : null;
+    await avisarTurnoAcompanado(supabase, guardado.id, previo);
+  }
+  return guardado;
 }
 
 export async function eliminar(

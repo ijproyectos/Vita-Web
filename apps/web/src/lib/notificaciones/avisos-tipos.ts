@@ -16,6 +16,9 @@ export type TipoAviso =
   | "turno_persona_dia_antes"
   | "stock_bajo_persona"
   | "persona_en_vita"
+  // "Voy a ir acompañado" de un turno: a los cuidadores, al guardarlo o cambiar día/hora, y el día anterior.
+  | "turno_acompanado"
+  | "turno_acompanado_dia_antes"
   // SOS explícito de la persona cuidada (modo simple): no depende de ninguna preferencia.
   | "pedido_ayuda";
 

@@ -23,6 +23,7 @@ import {
   horaCorta,
   payloadResumenDia,
   payloadStockPersona,
+  payloadTurnoAcompanadoDiaAntes,
   payloadTurnoPersonaDiaAntes,
   payloadDosisHora,
   payloadDosisPospuesta,
@@ -212,7 +213,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   // Turnos de hoy y mañana + stock.
   const { data: turnosData } = await admin
     .from("turnos")
-    .select("id, usuario_id, especialidad, profesional, lugar, fecha, hora")
+    .select("id, usuario_id, especialidad, profesional, lugar, fecha, hora, acompanado")
     .in("fecha", [hoyAR, mananaAR]);
   const turnos = (turnosData ?? []) as {
     id: string;
@@ -222,6 +223,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     lugar: string | null;
     fecha: string;
     hora: string;
+    acompanado: boolean | null;
   }[];
 
   const { data: invData } = await admin.from("inventario_pastillas").select("id, usuario_id, nombre, stock, umbral_alerta");
@@ -418,7 +420,7 @@ type ContextoFamilia = {
   horaAR: string;
   mananaAR: string;
   deHoy: FilaMedicamento[];
-  turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string }[];
+  turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string; acompanado: boolean | null }[];
   stockBajo: { id: string; usuario_id: string; nombre: string; stock: number }[];
   resumen: ResumenProgramados;
 };
@@ -520,6 +522,25 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
     for (const cu of cuidadoresDe.get(t.usuario_id) ?? []) {
       const silenciado = enSilencioNocturno(prefsDe(cu.cuidadorId), horaAR);
       if (!cuidadorRecibe("turno_persona_dia_antes", prefsDe(cu.cuidadorId), cu.rol, silenciado)) continue;
+      if (t.acompanado) {
+        // Turno con "Voy a ir acompañado": reemplaza al aviso genérico (no llegan dos) y pide compañía.
+        if (!(await reclamarEnvio(admin, "turno_acompanado_dia_antes", refDeterminista(t.usuario_id, cu.cuidadorId, t.id), t.fecha, cu.cuidadorId))) continue;
+        const aviso = payloadTurnoAcompanadoDiaAntes({
+          personaId: t.usuario_id,
+          personaNombre: nombre(t.usuario_id),
+          turnoId: t.id,
+          especialidad: t.especialidad,
+          hora: t.hora,
+        });
+        await entregarAviso(
+          admin,
+          cu.cuidadorId,
+          { tipo: "turno_acompanado_dia_antes", titulo: aviso.title, cuerpo: aviso.body, url: aviso.url, personaId: t.usuario_id, datos: { turnoId: t.id } },
+          aviso
+        );
+        resumen.turnoPersona++;
+        continue;
+      }
       if (!(await reclamarEnvio(admin, "turno_persona_dia_antes", refDeterminista(t.usuario_id, cu.cuidadorId, t.id), t.fecha, cu.cuidadorId))) continue;
       const payload = payloadTurnoPersonaDiaAntes({
         personaId: t.usuario_id,

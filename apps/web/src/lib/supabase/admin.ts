@@ -31,6 +31,11 @@ import { createClient } from "@supabase/supabase-js";
  * obtener los cuidadores aceptados con el cliente de sesión (`listar_mis_cuidadores`); el id de la
  * persona sale de la sesión, nunca del modelo.
  *
+ * "Voy a ir acompañado" de un turno (`avisarTurnoAcompanado` en `lib/notificaciones/turno-acompanado.ts`, llamado desde
+ * `lib/turnos/nucleo.ts` tras guardar): escribe el aviso y el push de los CUIDADORES aceptados del dueño del turno. Se
+ * crea RECIÉN después de que el cliente de sesión pudo leer el turno recién escrito (RLS); el actor sale de la sesión
+ * y no se avisa a sí mismo. Best-effort, nunca bloquea el guardado.
+ *
  * Trabajador del resumen de conversación (memoria, fase 3; `lib/memoria/resumen.ts`, invocado solo desde
  * `/api/cron/memoria`, autenticado por `x-cron-secret`): procesa la cola de TODAS las personas (`resumen_conversacion`,
  * sin policies de escritura), lee sus mensajes y guarda el resumen. Cada tarea trabaja solo sobre el `usuario_id` de la

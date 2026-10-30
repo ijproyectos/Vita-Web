@@ -1,6 +1,7 @@
 // Textos de las notificaciones push. Tono de la marca: primero la calma,
 // después la acción; voseo rioplatense; nunca alarmante.
 import type { PayloadPush } from "./push";
+import { fechaHoraTurnoTexto } from "./turno-acompanado-logica";
 
 /** "09:00" -> "9:00" (así se dice en voz alta y se lee más natural). */
 export function horaCorta(hhmm: string): string {
@@ -285,5 +286,39 @@ export function payloadPedidoAyuda(d: { personaId: string; personaNombre: string
     requireInteraction: true,
     renotify: true,
     datos: { personaId: d.personaId },
+  };
+}
+
+/** Al cuidador: la persona marcó que quiere ir acompañada a un turno (alta, o cambio de día/hora). */
+export function payloadTurnoAcompanado(t: {
+  personaId: string;
+  personaNombre: string;
+  turnoId: string;
+  especialidad: string;
+  fecha: string;
+  hora: string;
+}): PayloadPush {
+  return {
+    title: `${primerNombre(t.personaNombre)} pidió compañía para su turno`,
+    body: `${t.especialidad} · ${fechaHoraTurnoTexto(t.fecha, t.hora)}`,
+    url: `/app/familia/${t.personaId}`,
+    tag: `turno-acompanado-${t.turnoId}`,
+    datos: { personaId: t.personaId, turnoId: t.turnoId },
+  };
+}
+
+/** El día anterior (20:00), al cuidador: "Mañana Elsa tiene turno de Cardiología a las 10:30 y pidió compañía". */
+export function payloadTurnoAcompanadoDiaAntes(t: {
+  personaId: string;
+  personaNombre: string;
+  turnoId: string;
+  especialidad: string;
+  hora: string;
+}): PayloadPush {
+  return {
+    title: `Mañana ${primerNombre(t.personaNombre)} tiene turno de ${t.especialidad}`,
+    body: `A las ${horaCorta(t.hora)} · pidió compañía.`,
+    url: `/app/familia/${t.personaId}`,
+    tag: `turno-acompanado-dia-antes-${t.turnoId}`,
   };
 }

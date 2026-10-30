@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EtiquetaSeccion, FranjaDias, NotaLateral, PillsEspecialidad } from "@/components/vita/campos-turno";
 import { FilaHora, SelectorHora } from "@/components/vita/selector-hora";
+import { Interruptor } from "@/components/vita/interruptor";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { crearTurnoAction, type EstadoAccion } from "../rutina/actions";
@@ -35,6 +36,7 @@ export function FormularioAgregarTurno({
   const [fecha, setFecha] = useState(() => fechaConOffset(1));
   const [hora, setHora] = useState("10:00");
   const [pickerAbierto, setPickerAbierto] = useState(false);
+  const [acompanado, setAcompanado] = useState(false);
 
   // "Qué hay que llevar" (D:2256): ítems base, sugerencias por especialidad y propios.
   const [baseOff, setBaseOff] = useState<string[]>(() => BASE_LLEVAR.filter(([, , on]) => !on).map(([t]) => t));
@@ -117,6 +119,17 @@ export function FormularioAgregarTurno({
         <NotaLateral>
           Vita te avisa la noche anterior y unas 2 horas antes del turno{especialidad ? ` de ${especialidad.toLowerCase()}` : ""}.
         </NotaLateral>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-3 rounded-[var(--radius-item)] bg-card px-4 py-[13px] shadow-item">
+          <div className="min-w-0 flex-1">
+            <div className="font-heading text-sm font-bold">Voy a ir acompañado</div>
+            <div className="mt-0.5 text-xs font-medium text-subtle">Si tenés familia en vita, les avisamos para que te acompañen.</div>
+          </div>
+          <Interruptor activo={acompanado} onChange={setAcompanado} label="Voy a ir acompañado" />
+        </div>
+        {acompanado && <input type="hidden" name="acompanado" value="on" />}
       </div>
 
       {llevarDisponible && (
