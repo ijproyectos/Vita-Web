@@ -17,7 +17,8 @@ import {
   momentoDiaAIngles,
 } from "./mapeo";
 import { pantallaPorClave } from "./guia-app";
-import { TEXTO_SUGERIR_LLAMAR_AYUDA } from "./modo-simple";
+import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
+import { accionPedidoAyuda, textoPedidoAyudaParaModelo } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
 import { validarMedicion } from "@/lib/mediciones/tipos";
@@ -106,6 +107,15 @@ export async function ejecutarTool(
 ): Promise<ResultadoTool> {
   // Memoria: solo la cuenta logueada, nunca un `persona_id` (no pasa por resolverDestino).
   if (NOMBRES_TOOLS_MEMORIA.has(nombre)) return ejecutarToolMemoria(nombre, input, ctx);
+
+  // Pedido de ayuda (solo modo simple): avisa a los cuidadores aceptados de QUIEN CHATEA (la sesión), nunca de otra
+  // persona ni con un `persona_id`. El texto para el modelo dice con precisión qué pasó; la pantalla siempre
+  // recibe `ayuda_llamar` (botón rojo) y los nombres solo si el servidor confirmó el aviso.
+  if (nombre === "pedir_ayuda_familia") {
+    const motivo = typeof input.motivo === "string" ? input.motivo : "";
+    const resultado = await pedirAyudaAFamilia(ctx.supabase, ctx.usuarioId, motivo);
+    return { contenido: textoPedidoAyudaParaModelo(resultado), accionUI: accionPedidoAyuda(resultado) };
+  }
 
   const destino = resolverDestino(nombre, input, ctx);
   if (!destino.ok) return { contenido: destino.contenido, accionUI: destino.accionUI };
@@ -334,10 +344,6 @@ async function ejecutarEnDestino(
         accionUI: { type: "medicion_propuesta", tipo: d.tipo, valor: d.valor, valorSecundario: d.valorSecundario },
       };
     }
-
-    case "sugerir_llamar_ayuda":
-      // Sin efecto en la DB ni en la red: no se avisa a nadie. Solo muestra el botón rojo de llamada (tel:).
-      return { contenido: TEXTO_SUGERIR_LLAMAR_AYUDA, accionUI: { type: "ayuda_llamar" } };
 
     default:
       return { contenido: `Tool desconocida: ${nombre}` };

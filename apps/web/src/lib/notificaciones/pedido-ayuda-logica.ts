@@ -1,5 +1,5 @@
-// NOT WIRED to the chat or any UI right now (owner decision 2026-10-29): the simple-mode chat no longer
-// notifies caregivers; vita just tells the person to call family / 107. Kept in case the feature comes back.
+// Wired to the simple-mode chat tool `pedir_ayuda_familia` (owner decision 2026-10-30): vita notifies the
+// caregivers AND the screen always keeps the red "Llamar a mi familia" button.
 // Parte PURA del pedido de ayuda a la familia (sin I/O, testeable sin Supabase).
 // Sin `server-only` a propósito: la importan la tool del chat y los tests.
 import { limpiarDato } from "@/lib/ai/limpiar";
@@ -69,28 +69,29 @@ function nombresParaModelo(nombres: string[]): string {
   return unirNombres(lista) || "su familia";
 }
 
+const LLAMAR = "la pantalla le muestra el botón rojo para llamar a su familia";
+
 /** Lo que vuelve al modelo como tool_result: explícito sobre si se avisó o no (nunca afirma de más). */
 export function textoPedidoAyudaParaModelo(r: ResultadoPedidoAyuda): string {
   switch (r.status) {
     case "enviado":
-      return `ENVIADO: la app le avisó de verdad a ${nombresParaModelo(r.nombres)} (aviso en la app y notificación). Decíselo con ese nombre y tranquilizala en una frase. Si lo que cuenta suena grave, agregá que toque el botón Ayuda para llamar.`;
+      return `ENVIADO: la app le avisó de verdad a ${nombresParaModelo(r.nombres)} (aviso en la app y notificación). Decíselo con ese nombre y tranquilizala en una frase; ${LLAMAR}. Si lo que cuenta suena grave, agregá que llame ya al 107.`;
     case "repetido":
-      return `YA AVISADO: hace pocos minutos ya se le avisó a ${nombresParaModelo(r.nombres)} y no se mandó otro aviso. Decile que ya les avisaste y que enseguida se van a comunicar. Si suena grave, que toque el botón Ayuda para llamar.`;
+      return `YA AVISADO: hace pocos minutos ya se le avisó a ${nombresParaModelo(r.nombres)} y no se mandó otro aviso. Decile que ya les avisaste y que enseguida se van a comunicar; ${LLAMAR}. Si suena grave, que llame ya al 107.`;
     case "tope":
-      return "NO SE MANDÓ ESTE AVISO: ya se mandaron varios pedidos en los últimos minutos y no se pudo mandar otro. NO digas que avisaste ni que les va a llegar. Decile que llame ahora mismo a su familia, o al 107 si es una emergencia, o que toque el botón rojo Ayuda.";
+      return `NO SE MANDÓ ESTE AVISO: ya se mandaron varios pedidos en los últimos minutos y no se pudo mandar otro. NO digas que avisaste ni que les va a llegar. Decile que llame ahora mismo a su familia (${LLAMAR}), o al 107 si es una emergencia.`;
     case "sin-cuidadores":
-      return "NO SE AVISÓ A NADIE: no tiene familiares vinculados en vita. NO digas que avisaste a alguien. Decile que toque el botón Ayuda para llamar a su contacto.";
+      return `NO SE AVISÓ A NADIE: no tiene familiares vinculados en vita. NO digas que avisaste a alguien. Decile que llame ahora a su familia (${LLAMAR}), o al 107 si es una emergencia.`;
     case "error":
-      return "NO SE PUDO AVISAR por un error temporal. NO digas que avisaste a alguien. Decile que toque el botón Ayuda para llamar a su contacto.";
+      return `NO SE PUDO AVISAR por un error temporal y no se confirmó ningún aviso. NO digas que avisaste a alguien. Decile que llame ahora a su familia (${LLAMAR}), o al 107 si es una emergencia.`;
   }
 }
 
-/** Evento SSE para la pantalla: `ayuda_enviada` solo cuando el servidor confirmó que hay aviso (nuevo o reciente); `ayuda_tope` cuando no se pudo mandar otro. */
-export function accionPedidoAyuda(
-  r: ResultadoPedidoAyuda
-): { type: "ayuda_enviada"; nombres: string[] } | { type: "ayuda_tope" } | undefined {
-  if (r.status === "enviado" || r.status === "repetido") return { type: "ayuda_enviada", nombres: r.nombres };
-  // Cap reached: nothing was sent, so the screen must highlight the red Ayuda button (never "X recibió tu pedido").
-  if (r.status === "tope") return { type: "ayuda_tope" };
-  return undefined;
+/**
+ * Evento SSE para la pantalla. SIEMPRE `ayuda_llamar` (el botón rojo de llamada nunca se esconde);
+ * `avisados` lleva los nombres solo cuando el servidor confirmó un aviso (nuevo o reciente), si no va vacío.
+ */
+export function accionPedidoAyuda(r: ResultadoPedidoAyuda): { type: "ayuda_llamar"; avisados: string[] } {
+  if (r.status === "enviado" || r.status === "repetido") return { type: "ayuda_llamar", avisados: r.nombres };
+  return { type: "ayuda_llamar", avisados: [] };
 }

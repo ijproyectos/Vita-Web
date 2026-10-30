@@ -5,6 +5,8 @@ import {
   textoPreguntaMedicion,
   textoSaludoAnimo,
   textoSinInternet,
+  textoAyudaAvisada,
+  leerAvisados,
   TEXTO_CORTADA,
   TEXTO_NO_ENTENDI,
   TEXTO_SIN_CONEXION_PEDIDO,
@@ -23,8 +25,20 @@ describe("textos de la charla", () => {
     expect(textoSaludoAnimo("  ")).toBe("Hola. ¿Cómo estás hoy?");
   });
   it("sin internet", () => {
-    expect(textoSinInternet("Elsa")).toBe("Ahora no tengo internet, Elsa. Tus pastillas y turnos siguen guardados y te aviso igual. Si necesitás ayuda, llamá a tu familia.");
+    expect(textoSinInternet("Elsa")).toBe("Ahora no tengo internet, Elsa. Tus pastillas y turnos siguen guardados y te aviso igual. Si necesitás ayuda, no les puedo avisar ahora: llamá a tu familia.");
     expect(textoSinInternet("")).toMatch(/^Ahora no tengo internet\. /);
+  });
+});
+
+describe("aviso a la familia", () => {
+  it("nombra a quienes recibieron el aviso", () => {
+    expect(textoAyudaAvisada(["Martina"])).toBe("Le avisé a Martina");
+    expect(textoAyudaAvisada(["Martina", "Juan"])).toBe("Le avisé a Martina y Juan");
+    expect(textoAyudaAvisada([])).toBe("");
+  });
+  it("lee los avisados del payload y descarta lo que no es texto", () => {
+    expect(leerAvisados({ type: "ayuda_llamar", avisados: ["Mica", 3, " "] })).toEqual(["Mica"]);
+    expect(leerAvisados({ type: "ayuda_llamar" })).toEqual([]);
   });
 });
 

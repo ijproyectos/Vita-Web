@@ -3,6 +3,7 @@
 // El orden del array es parte del prefijo cacheado por Anthropic: no reordenar sin motivo.
 import type Anthropic from "@anthropic-ai/sdk";
 import { CLAVES_INDICACION, INDICACIONES_COMIDA } from "@/lib/medicamentos/comidas";
+import { MAX_MOTIVO, MINUTOS_ENTRE_PEDIDOS_AYUDA } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { GENEROS, GRUPOS_SANGUINEOS } from "@/lib/perfil/opciones";
 import { CLAVES_PANTALLAS } from "./guia-app";
 import { TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
@@ -315,11 +316,20 @@ export const TOOLS: Anthropic.Tool[] = [...TOOLS_CON_PERSONA, ...TOOLS_MEMORIA];
 
 // Tools que SOLO existen en el chat de modo simple (`modo: "simple"` en /api/chat). No están en TOOLS: en el
 // modo normal no se ofrecen ni se ejecutan (ver lib/ai/modo-simple.ts).
-export const TOOL_SUGERIR_LLAMAR_AYUDA: Anthropic.Tool = {
-  name: "sugerir_llamar_ayuda",
+export const TOOL_PEDIR_AYUDA_FAMILIA: Anthropic.Tool = {
+  name: "pedir_ayuda_familia",
   description:
-    "No avisa ni manda nada a nadie: solo hace aparecer en la pantalla el botón rojo para llamar a la familia. Llamala cuando la persona diga que se siente mal, cuente un síntoma, pida ayuda o pida que avisen a su familia. Después decile con calidez que llame a su familia ahora, o al 107 si es una emergencia. Nunca digas que avisaste a alguien.",
-  input_schema: { type: "object", properties: {} },
+    `Le manda un aviso REAL (notificación en el celular) a los familiares que cuidan a quien te habla, y además la pantalla le muestra el botón rojo para llamar a su familia. Llamala cuando diga que se siente mal, cuente un síntoma, pida ayuda o pida que avisen a su familia. El resultado dice si se avisó o no y a quién: contale a la persona SOLO eso, nunca afirmes que avisaste si el resultado no lo confirma. Se puede enviar como máximo un aviso cada ${MINUTOS_ENTRE_PEDIDOS_AYUDA} minutos con el mismo motivo.`,
+  input_schema: {
+    type: "object",
+    properties: {
+      motivo: {
+        type: "string",
+        description: `Qué le pasa o qué pidió, con sus palabras, en una frase corta (ej. 'Se siente mareado'). Máx. ${MAX_MOTIVO} caracteres.`,
+      },
+    },
+    required: ["motivo"],
+  },
 };
 
 export const TOOL_PROPONER_MEDICION: Anthropic.Tool = {

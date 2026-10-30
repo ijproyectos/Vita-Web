@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   INSTRUCCIONES_ESTILO_SIMPLE,
   TOOLS_PERMITIDAS_SIMPLE,
-  TEXTO_SUGERIR_LLAMAR_AYUDA,
   TOOLS_SOLO_SIMPLE,
   RESULTADO_TOOL_NO_DISPONIBLE,
   contextoDinamicoParaModo,
@@ -41,14 +40,14 @@ describe("toolsParaModo", () => {
 
 describe("toolPermitida", () => {
   it("simple: solo la lista", () => {
-    expect(toolPermitida("simple", "sugerir_llamar_ayuda")).toBe(true);
+    expect(toolPermitida("simple", "pedir_ayuda_familia")).toBe(true);
     expect(toolPermitida("simple", "proponer_medicion")).toBe(true);
     expect(toolPermitida("simple", "list_today_medications")).toBe(true);
     expect(toolPermitida("simple", "add_medication")).toBe(false);
     expect(toolPermitida("simple", "inventada")).toBe(false);
   });
   it("normal: las dos nuevas no se ejecutan, el resto sigue igual", () => {
-    expect(toolPermitida("normal", "sugerir_llamar_ayuda")).toBe(false);
+    expect(toolPermitida("normal", "pedir_ayuda_familia")).toBe(false);
     expect(toolPermitida("normal", "proponer_medicion")).toBe(false);
     expect(toolPermitida("normal", "add_medication")).toBe(true);
     expect(toolPermitida("normal", "set_avatar_mood")).toBe(true);
@@ -57,26 +56,23 @@ describe("toolPermitida", () => {
 
 describe("INSTRUCCIONES_ESTILO_SIMPLE", () => {
   it("menciona las dos tools y la regla de no afirmar de más", () => {
-    expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("sugerir_llamar_ayuda");
-    expect(INSTRUCCIONES_ESTILO_SIMPLE).not.toContain("pedir_ayuda_familia");
+    expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("pedir_ayuda_familia");
+    expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("SOLO si el resultado");
+    expect(INSTRUCCIONES_ESTILO_SIMPLE).not.toContain("NO avisa a nadie");
     expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("proponer_medicion");
-    expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("Nunca digas que avisaste");
+    expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("SOLO si el resultado");
     expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("NO digas que quedó anotado");
   });
 });
 
-describe("ayuda sin notificar", () => {
-  it("el modo simple ofrece sugerir_llamar_ayuda y no pedir_ayuda_familia", () => {
-    const nombres = toolsParaModo("simple").map((t) => t.name);
-    expect(nombres).toContain("sugerir_llamar_ayuda");
-    expect(nombres).not.toContain("pedir_ayuda_familia");
-    expect(toolPermitida("simple", "pedir_ayuda_familia")).toBe(false);
-  });
-  it("el resultado para el modelo manda a llamar, nombra el 107 y no dice que se avisó", () => {
-    expect(TEXTO_SUGERIR_LLAMAR_AYUDA).toContain("107");
-    expect(TEXTO_SUGERIR_LLAMAR_AYUDA).toContain("No se envió ningún aviso");
-    expect(TEXTO_SUGERIR_LLAMAR_AYUDA).toContain("NUNCA digas que avisaste");
-    expect(TEXTO_SUGERIR_LLAMAR_AYUDA).not.toMatch(/avisé|les avisé/);
+describe("pedido de ayuda a la familia", () => {
+  it("la tool existe solo en modo simple y nunca en el array cacheado TOOLS", () => {
+    expect(toolsParaModo("simple").map((t) => t.name)).toContain("pedir_ayuda_familia");
+    expect(toolsParaModo("normal").map((t) => t.name)).not.toContain("pedir_ayuda_familia");
+    expect(TOOLS.map((t) => t.name)).not.toContain("pedir_ayuda_familia");
+    expect(toolsParaModo("simple").map((t) => t.name)).not.toContain("sugerir_llamar_ayuda");
+    expect(toolPermitida("simple", "pedir_ayuda_familia")).toBe(true);
+    expect(toolPermitida("normal", "pedir_ayuda_familia")).toBe(false);
   });
 });
 
