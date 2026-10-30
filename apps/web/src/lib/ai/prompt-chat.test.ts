@@ -51,8 +51,8 @@ describe("prompt caching del chat", () => {
   });
   it("las tools de memoria van al final y no aceptan persona_id", () => {
     const nombres = TOOLS.map((t) => t.name);
-    expect(nombres.slice(-2)).toEqual(["recordar", "buscar_memoria"]);
-    for (const n of ["recordar", "buscar_memoria"]) {
+    expect(nombres.slice(-3)).toEqual(["recordar", "buscar_memoria", "resolver_contradiccion"]);
+    for (const n of ["recordar", "buscar_memoria", "resolver_contradiccion"]) {
       const props = (TOOLS.find((t) => t.name === n)!.input_schema as { properties: Record<string, unknown> }).properties;
       expect(props).not.toHaveProperty("persona_id");
       expect(props).not.toHaveProperty("confirmado");
@@ -96,6 +96,7 @@ describe("prompt caching del chat", () => {
         "set_avatar_mood",
         "recordar",
         "buscar_memoria",
+        "resolver_contradiccion",
       ]
     `);
   });

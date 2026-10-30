@@ -4,7 +4,8 @@
 export type SobreTipo = "yo" | "familiar" | "otro";
 export type TipoMemoria = "estable" | "pasajero";
 export type EstadoMemoria = "vigente" | "reemplazado" | "borrado";
-export type OrigenMemoria = "chat" | "usuario";
+/** `consolidacion`: unión de duplicados armada por la limpieza nocturna (migración 043). */
+export type OrigenMemoria = "chat" | "usuario" | "consolidacion";
 
 export type Memoria = {
   id: string;
@@ -33,3 +34,18 @@ export type Memoria = {
 
 /** Vigencia de un recuerdo pasajero, en días. */
 export const DIAS_VIGENCIA_PASAJERO = 3;
+
+/** Cuál vale en una contradicción marcada por la consolidación nocturna (migración 043). */
+export const VALORES_VALE = ["a", "b", "ambas", "ninguna"] as const;
+export type ValeContradiccion = (typeof VALORES_VALE)[number];
+
+/** Contradicción pendiente con el texto de los dos recuerdos (solo si ambos siguen vigentes). */
+export type ContradiccionMemoria = {
+  id: string;
+  textoA: string;
+  textoB: string;
+  /** Pregunta neutral armada por la consolidación; se vuelve a sanear al mostrarla. */
+  pregunta: string;
+  preguntada_at: string | null;
+  veces_preguntada: number;
+};

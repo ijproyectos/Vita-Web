@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { cambiarMemoriaActiva, olvidarRecuerdo, olvidarTodo } from "@/lib/memoria/privacidad";
 import { borrarResumen } from "@/lib/memoria/resumen";
+import { resolverContradiccion } from "@/lib/memoria/nucleo";
+import { VALORES_VALE, type ValeContradiccion } from "@/lib/memoria/tipos";
 
 // Pantalla "Lo que vita recuerda de vos". Todo sobre el usuario de la SESIÓN (el id nunca viene del cliente) y con el
 // cliente de sesión (RLS owner-only). Nunca lanzan.
@@ -70,6 +72,28 @@ export async function borrarResumenAction(): Promise<Resultado> {
     const supabase = await createClient();
     if (!(await borrarResumen(supabase))) return { status: "error", mensaje: ERROR_GENERICO };
     refrescar();
+    return { status: "success" };
+  } catch {
+    return { status: "error", mensaje: ERROR_GENERICO };
+  }
+}
+
+/** La persona elige cuál vale en una contradicción que marcó la limpieza nocturna (a, b, ambas o ninguna = olvidar las dos). */
+export async function resolverContradiccionAction(id: string, vale: string): Promise<Resultado> {
+  await requireUser();
+  if (typeof id !== "string" || !UUID_RE.test(id) || !VALORES_VALE.includes(vale as ValeContradiccion)) {
+    return { status: "error", mensaje: ERROR_GENERICO };
+  }
+  try {
+    const supabase = await createClient();
+    const r = await resolverContradiccion(supabase, id, vale as ValeContradiccion);
+    if (r === "no_encontrada" || r === "obsoleta") {
+      refrescar();
+      return { status: "error", mensaje: "Esto ya cambió. Actualizamos la pantalla." };
+    }
+    if (r !== "ok") return { status: "error", mensaje: ERROR_GENERICO };
+    refrescar();
+    revalidatePath("/app", "layout");
     return { status: "success" };
   } catch {
     return { status: "error", mensaje: ERROR_GENERICO };

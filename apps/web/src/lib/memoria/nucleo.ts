@@ -15,7 +15,7 @@ import {
   type SobreResuelto,
 } from "./claves";
 import type { MemoriaContexto } from "./contexto";
-import type { Memoria, TipoMemoria } from "./tipos";
+import type { ContradiccionMemoria, Memoria, TipoMemoria, ValeContradiccion } from "./tipos";
 
 // Acceso a datos de la memoria. Todo con el cliente de SESIÓN (RLS owner-only de 038): nunca service_role.
 // Cada función degrada si la migración 038 (o la 039) no está aplicada: nada de esto puede tumbar el chat.
@@ -469,4 +469,88 @@ async function buscarSinRpc(
         })
       );
   return [...delRecuerdo, ...delMensaje].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, MAX_HITS);
+}
+
+// ---------------------------------------------------------------------------
+// Contradicciones (043): pares que la consolidación nocturna marcó; la persona decide cuál vale
+// ---------------------------------------------------------------------------
+type FilaContradiccion = { id: string; memoria_a: string; memoria_b: string; pregunta: string; preguntada_at: string | null; veces_preguntada: number };
+
+/**
+ * Contradicciones pendientes con el texto de los dos recuerdos (solo si ambos siguen vigentes). Cliente de sesión (RLS
+ * owner-only, solo lectura). Sin la migración 043 (o ante cualquier error) devuelve [] y el chat sigue como siempre.
+ */
+export async function listarContradicciones(supabase: Cliente, usuarioId: string, limite = 20): Promise<ContradiccionMemoria[]> {
+  try {
+    const { data, error } = await supabase
+      .from("contradicciones_memoria")
+      .select("id, memoria_a, memoria_b, pregunta, preguntada_at, veces_preguntada")
+      .eq("usuario_id", usuarioId)
+      .eq("estado", "pendiente")
+      .order("created_at", { ascending: true })
+      .limit(limite);
+    if (error || !data || data.length === 0) return [];
+    const filas = data as FilaContradiccion[];
+    const ids = [...new Set(filas.flatMap((f) => [f.memoria_a, f.memoria_b]))];
+    const { data: mems, error: errMems } = await supabase
+      .from("memorias")
+      .select("id, texto")
+      .eq("usuario_id", usuarioId)
+      .eq("estado", "vigente")
+      .in("id", ids);
+    if (errMems) return [];
+    const textos = new Map(((mems ?? []) as { id: string; texto: string | null }[]).filter((m) => !!m.texto).map((m) => [m.id, m.texto as string]));
+    const salida: ContradiccionMemoria[] = [];
+    for (const f of filas) {
+      const textoA = textos.get(f.memoria_a);
+      const textoB = textos.get(f.memoria_b);
+      if (!textoA || !textoB) continue;
+      salida.push({ id: f.id, textoA, textoB, pregunta: f.pregunta, preguntada_at: f.preguntada_at, veces_preguntada: f.veces_preguntada });
+    }
+    return salida;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Marca que vita las puso delante para preguntar (así no se repite la pregunta en cada mensaje). Un solo UPDATE atómico en SQL
+ * (`veces_preguntada = veces_preguntada + 1`, RPC `marcar_contradicciones_preguntadas`); sin 043 no hace nada. Best effort.
+ */
+export async function marcarContradiccionesPreguntadas(supabase: Cliente, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    await supabase.rpc("marcar_contradicciones_preguntadas", { p_ids: ids });
+  } catch {
+    // Sin la marca, la pregunta puede repetirse: molesta, no rompe nada.
+  }
+}
+
+export type ResultadoResolver = "ok" | "no_encontrada" | "obsoleta" | "no_disponible" | "error";
+
+/**
+ * La persona dijo cuál vale. RPC `resolver_contradiccion` (043, una transacción): 'a'/'b' dejan la otra como 'reemplazado'
+ * (historial, igual que una corrección); 'ambas' solo cierra la contradicción; 'ninguna' olvida las dos con la misma lógica de
+ * "dejar de recordar" (que también invalida el resumen). Nunca lanza.
+ */
+export async function resolverContradiccion(supabase: Cliente, id: string, vale: ValeContradiccion): Promise<ResultadoResolver> {
+  try {
+    const { data, error } = await supabase.rpc("resolver_contradiccion", { p_id: id, p_vale: vale });
+    if (error) return faltaMigracion(error) ? "no_disponible" : "error";
+    const fila = (Array.isArray(data) ? data[0] : data) as { o_resultado?: string } | undefined;
+    const r = fila?.o_resultado;
+    return r === "ok" || r === "no_encontrada" || r === "obsoleta" ? r : "error";
+  } catch {
+    return "error";
+  }
+}
+
+/** Descarta lo pendiente de la consolidación de la persona (pedidos en vuelo y contradicciones). `false` = falló por algo distinto de "falta la migración". */
+export async function descartarConsolidacionPendiente(supabase: Cliente): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc("descartar_consolidacion_pendiente");
+    return !error || faltaMigracion(error);
+  } catch {
+    return false;
+  }
 }
