@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fechaEnAR } from "@/lib/medicamentos/nucleo";
+import { borrarRecuerdosDeSesionesHasta } from "@/lib/memoria/privacidad";
 import type { CantidadesBorradas, RangoBorrado } from "./tipos";
 
 type Cliente = SupabaseClient;
@@ -24,7 +25,7 @@ const ES_RELACION_INEXISTENTE = (e: { code?: string }) => e.code === "42P01" || 
 
 /**
  * Borra el historial viejo del usuario: tomas, mediciones, estudios (fila +
- * archivo) y conversaciones con vita anteriores a la fecha de corte. NO toca la
+ * archivo) y conversaciones con vita anteriores a la fecha de corte, junto con los recuerdos que vita sacó de ellas. NO toca la
  * cuenta, los medicamentos, los turnos, el perfil ni los cuidadores.
  *
  * Usa el cliente de SESIÓN: la RLS (`*_all_self`) solo deja borrar filas
@@ -62,6 +63,11 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
     if (rutas.length > 0) await supabase.storage.from(BUCKET_ESTUDIOS).remove(rutas);
   }
 
+  // Lo que vita recordó de las conversaciones que se van se borra primero (después ya no se encuentran sus mensajes).
+  // Si no se puede, no se borran las conversaciones: nunca queda texto derivado sin su origen.
+  const recuerdos = await borrarRecuerdosDeSesionesHasta(supabase, usuarioId, corteTs);
+  if (!recuerdos.ok) throw new Error("No se pudo borrar lo que vita recordaba de esas conversaciones.");
+
   const conversaciones = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId).lt("updated_at", corteTs).select("id");
   if (conversaciones.error) throw new Error("No se pudieron borrar las conversaciones.");
 
@@ -70,5 +76,6 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
     mediciones: mediciones.data?.length ?? 0,
     estudios: viejos.length,
     conversaciones: conversaciones.data?.length ?? 0,
+    recuerdos: recuerdos.recuerdos,
   };
 }

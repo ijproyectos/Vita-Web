@@ -2,6 +2,7 @@ import Link from "next/link";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
+import { datosDeMemoria, TarjetaMemoria } from "./tarjeta-memoria";
 
 export type MensajeChatUI = {
   role: "user" | "assistant";
@@ -166,6 +167,10 @@ function TarjetaAccion({
           <EnlaceTarjeta alCerrar={alCerrar} href={accion.href} texto={`Abrir ${label}`} primario inline />
         </div>
       );
+    }
+    case "memoria_guardada": {
+      const datos = datosDeMemoria(accion);
+      return datos ? <TarjetaMemoria key={datos.id} datos={datos} alCerrar={alCerrar} /> : null;
     }
     default:
       return null;

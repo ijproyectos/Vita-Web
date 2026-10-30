@@ -450,3 +450,12 @@ Rol Cuidador / vínculo con otro usuario ya no está fuera de alcance — ver `v
 ## uso_ia_diario: costo en dólares y cache (migración 036)
 
 Migración 036 (escrita, NO aplicada; aditiva sobre 013). Agrega a `uso_ia_diario` `tokens_cache_lectura`, `tokens_cache_escritura` y `costo_micro_usd` (todas `bigint not null default 0`; micro-USD enteros, 1 USD = 1.000.000). Las columnas de 013 se conservan y se siguen escribiendo. RLS habilitada SIN policies (solo `service_role`). El límite diario es US$0,33 (US$10/mes) y se decide por `costo_micro_usd`; costo = `input*2 + output*10 + cacheRead*0,2 + cacheWrite*2,5` micro-USD (precios de `claude-sonnet-5`, `lib/uso-ia/precios.ts`). Sin la migración la app estima desde los tokens viejos (200.000 ~ US$0,33). Tests: `supabase/tests/uso-ia-costo.sql`.
+
+
+## Memoria de vita (migraciones 038-040, fase 2)
+
+- `memorias` (038): un recuerdo por fila. `usuario_id` dueño (cascade con la cuenta), `sobre_tipo` (`yo`/`familiar`/`otro`) + `sobre_perfil_id`/`sobre_nombre`, `clave` (tema estable), `texto` (null si borrado), `tipo` (`estable`/`pasajero`, el pasajero vence a los 3 días), `estado` (`vigente`/`reemplazado`/`borrado`), `corrige_id`, `origen` (`chat`/`usuario`), `mensaje_origen_id` (sin FK). Un solo vigente por (dueño, sobre quién, clave). RLS owner-only: ningún cuidador la ve.
+- `mensajes_chat.excluido_memoria` + `busqueda` (tsvector GIN) (038): un mensaje excluido sigue visible en el chat pero `buscar_memoria` nunca lo encuentra.
+- `perfiles.memoria_activa` (default true) / `memoria_aviso_visto_at` (038).
+- RPC `guardar_memoria`, `deshacer_memoria`, `buscar_memoria`, `sumar_uso_memorias` (039) y `olvidar_memoria`, `olvidar_todo_memoria`, `borrar_recuerdos_de_sesiones_hasta` (040): todas SECURITY INVOKER, `authenticated`. `olvidar_todo_memoria` deja todos los recuerdos borrados sin texto Y marca todos los mensajes del usuario como `excluido_memoria`. "Borrar historial" llama a `borrar_recuerdos_de_sesiones_hasta` antes de borrar las sesiones.
+- La app degrada sin estas migraciones: memoria apagada y chat normal. Tests: `supabase/tests/memoria.sql`.

@@ -305,6 +305,20 @@ function Reporte({ h }: { h: HistorialExportado }) {
         )}
       </Seccion>
 
+      {h.recuerdos_de_vita.length > 0 && (
+        <Seccion titulo="Lo que vita recuerda" cantidad={h.recuerdos_de_vita.length}>
+          <div className="flex flex-col gap-2 rounded-[20px] bg-card p-4.5 shadow-card">
+            {h.recuerdos_de_vita.map((r) => (
+              <div key={r.id} className="evitar-corte text-[13px] leading-snug">
+                <span className="font-semibold">{r.sobre === "vos" ? "Sobre vos" : `Sobre ${r.sobre}`}</span>
+                {r.estado === "reemplazado" ? " (antes)" : ""}: {r.texto}{" "}
+                <span className="text-[11.5px] text-muted-foreground">· {fechaSimple(r.creado_el)}</span>
+              </div>
+            ))}
+          </div>
+        </Seccion>
+      )}
+
       <p className="pb-2 text-center text-[11px] leading-snug text-muted-foreground">
         Este reporte contiene datos de salud personales. Compartilo solo con quien vos decidas. vita no reemplaza la
         consulta con un profesional de la salud.

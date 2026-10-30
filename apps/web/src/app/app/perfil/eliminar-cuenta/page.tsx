@@ -14,7 +14,7 @@ export default async function EliminarCuentaPage() {
 
   const perdidas = [
     "Se borran tu perfil de salud, tus remedios y su historial de tomas, tus turnos, mediciones y estudios (con sus fotos).",
-    "Se borran tus conversaciones con vita y los vínculos con tus cuidadores.",
+    "Se borran tus conversaciones con vita, lo que vita recuerda de vos y los vínculos con tus cuidadores.",
     "Dejan de llegarte los avisos de remedios y turnos.",
   ];
 
