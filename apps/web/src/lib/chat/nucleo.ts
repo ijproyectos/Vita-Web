@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { borrarRecuerdosDeSesionesHasta } from "@/lib/memoria/privacidad";
 import type { MensajeChat, RolMensaje, SesionChat } from "./tipos";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts: funciones puras
@@ -107,10 +108,12 @@ export async function guardarMensaje(
   sesionId: string,
   role: RolMensaje,
   contenido: string
-): Promise<void> {
-  const { error } = await supabase
+): Promise<string | null> {
+  const { data: fila, error } = await supabase
     .from("mensajes_chat")
-    .insert({ usuario_id: usuarioId, sesion_id: sesionId, role, contenido });
+    .insert({ usuario_id: usuarioId, sesion_id: sesionId, role, contenido })
+    .select("id")
+    .single();
 
   if (error) throw new Error(`No se pudo guardar el mensaje: ${error.message}`);
 
@@ -123,6 +126,9 @@ export async function guardarMensaje(
     .eq("usuario_id", usuarioId);
 
   if (errorUpdate) throw new Error(`No se pudo actualizar la sesión: ${errorUpdate.message}`);
+
+  // Id del mensaje guardado: los recuerdos que vita saque de él lo apuntan como origen.
+  return typeof fila?.id === "string" ? fila.id : null;
 }
 
 /**
@@ -130,6 +136,9 @@ export async function guardarMensaje(
  * replica clearHistory() del ChatProvider original.
  */
 export async function eliminarHistorial(supabase: Cliente, usuarioId: string): Promise<void> {
+  // Lo que vita recordó de estas conversaciones se borra con ellas (antes: después ya no se encuentran sus mensajes).
+  const recuerdos = await borrarRecuerdosDeSesionesHasta(supabase, usuarioId, new Date(Date.now() + 60_000).toISOString());
+  if (!recuerdos.ok) throw new Error("No se pudo borrar lo que vita recordaba de estas conversaciones.");
   const { error } = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId);
   if (error) throw new Error(`No se pudo borrar el historial: ${error.message}`);
 }

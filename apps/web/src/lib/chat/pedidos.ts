@@ -74,6 +74,8 @@ type Contexto = {
   familia: MiembroFamilia[];
   /** Perfil de un familiar abierto en pantalla (ya validado), si lo hay. */
   abiertoId?: string;
+  /** Mensaje del usuario guardado para este pedido (mensajes_chat.id), si se conoce: origen de los recuerdos. */
+  mensajeOrigenId?: string | null;
   /** Botón Confirmar sin modelo: si la pendiente no se puede consumir NO se crea otra, se informa. */
   soloConfirmar?: boolean;
 };
@@ -509,8 +511,8 @@ export async function ejecutarToolIdempotente(
   input: Record<string, unknown>,
   ctx: Contexto
 ): Promise<ResultadoTool> {
-  const { supabase, usuarioId, pedidoId, sesionId, mensajeUsuario, respuestaUsuario, confirmacionId, familia, abiertoId, soloConfirmar } = ctx;
-  const ctxTool = { supabase, usuarioId, familia, abiertoId };
+  const { supabase, usuarioId, pedidoId, sesionId, mensajeUsuario, respuestaUsuario, confirmacionId, familia, abiertoId, soloConfirmar, mensajeOrigenId } = ctx;
+  const ctxTool = { supabase, usuarioId, familia, abiertoId, mensajeOrigenId };
   if (!TOOLS_DE_ESCRITURA.has(nombre)) return ejecutarTool(nombre, input, ctxTool);
 
   // Destino inválido, rol Lector o falta de confirmación: se devuelve el error

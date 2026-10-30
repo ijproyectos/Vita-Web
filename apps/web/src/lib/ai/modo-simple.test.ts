@@ -109,3 +109,27 @@ describe("contextoDinamicoParaModo", () => {
     expect(contextoDinamicoParaModo("normal", "HOY")).toBe("HOY");
   });
 });
+
+describe("memoria de vita en modo simple", () => {
+  const MEMORIA = ["recordar", "buscar_memoria"];
+  it("existen en TOOLS (modo normal)", () => {
+    const nombres = toolsParaModo("normal").map((t) => t.name);
+    for (const n of MEMORIA) expect(nombres).toContain(n);
+  });
+  it("no se ofrecen en modo simple", () => {
+    const nombres = toolsParaModo("simple").map((t) => t.name);
+    for (const n of MEMORIA) expect(nombres).not.toContain(n);
+    for (const n of MEMORIA) expect(TOOLS_PERMITIDAS_SIMPLE.has(n)).toBe(false);
+  });
+  it("si el modelo las nombra igual en modo simple, resultadoToolBloqueada las rechaza", () => {
+    for (const n of MEMORIA) {
+      expect(toolPermitida("simple", n)).toBe(false);
+      expect(resultadoToolBloqueada("simple", { id: "t1", name: n })).toMatchObject({ is_error: true, content: RESULTADO_TOOL_NO_DISPONIBLE });
+      expect(resultadoToolBloqueada("normal", { id: "t1", name: n })).toBeNull();
+    }
+  });
+  it("el estilo simple le dice al modelo que no las tiene", () => {
+    expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("recordar");
+    expect(INSTRUCCIONES_ESTILO_SIMPLE).toContain("buscar_memoria");
+  });
+});
