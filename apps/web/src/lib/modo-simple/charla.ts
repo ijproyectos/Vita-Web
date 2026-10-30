@@ -1,4 +1,5 @@
 // Textos PUROS de la charla de voz del modo simple (voseo, frases cortas). Sin I/O.
+import { unirNombres } from "./respuestas";
 
 /** Lo primero que se le manda al modelo después de "¿Cómo estás hoy?" (vita preguntó, la persona contesta). */
 export const PREFIJO_ANIMO = "Vita me preguntó cómo estoy hoy. ";
@@ -27,7 +28,19 @@ export function textoSaludoAnimo(nombre: string): string {
 }
 
 export function textoSinInternet(nombre: string): string {
-  return `${conNombre("Ahora no tengo internet", nombre)}. Tus pastillas y turnos siguen guardados y te aviso igual. Si necesitás ayuda, llamá a tu familia.`;
+  return `${conNombre("Ahora no tengo internet", nombre)}. Tus pastillas y turnos siguen guardados y te aviso igual. Si necesitás ayuda, no les puedo avisar ahora: llamá a tu familia.`;
+}
+
+/** Banner de la pantalla cuando el servidor confirmó el aviso a la familia (vacío = no se avisó a nadie). */
+export function textoAyudaAvisada(nombres: string[]): string {
+  const limpios = nombres.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim());
+  return limpios.length === 0 ? "" : `Le avisé a ${unirNombres(limpios)}`;
+}
+
+/** Nombres del payload de `ayuda_llamar` (viene del servidor, pero se re-chequea la forma). */
+export function leerAvisados(accion: Record<string, unknown>): string[] {
+  const v = accion.avisados;
+  return Array.isArray(v) ? v.filter((n): n is string => typeof n === "string" && n.trim() !== "") : [];
 }
 
 export type MedicionPropuesta = { tipo: "glucemia" | "presion"; valor: number; valorSecundario?: number | null };

@@ -26,6 +26,8 @@ import {
   etiquetaMedicion,
   leerMedicionPropuesta,
   textoPreguntaMedicion,
+  textoAyudaAvisada,
+  leerAvisados,
   destinoTrasIniciar,
   escuchaTrabada,
   textoParaEnviar,
@@ -53,8 +55,10 @@ export type VistaInicialCharla = {
   fase: "inicio" | "escribir" | "respuesta" | "confirmar";
   pregunta?: string;
   respuesta?: string;
-  /** Show the red "Llamar a mi familia" button (vita suggested calling; nothing was sent to anyone). */
+  /** Show the red "Llamar a mi familia" button (always shown on a help request). */
   ayudaLlamar?: boolean;
+  /** First names of the caregivers the server confirmed it notified. */
+  avisados?: string[];
   medicion?: MedicionPropuesta;
   sinInternet?: boolean;
 };
@@ -109,6 +113,7 @@ export function CharlaSimple({
   const [pregunta, setPregunta] = useState(inicial?.pregunta ?? "");
   const [respuesta, setRespuesta] = useState(inicial?.respuesta ?? "");
   const [ayudaLlamar, setAyudaLlamar] = useState(inicial?.ayudaLlamar ?? false);
+  const [avisados, setAvisados] = useState<string[]>(inicial?.avisados ?? []);
   const [medicion, setMedicion] = useState<MedicionPropuesta | null>(inicial?.medicion ?? null);
   const [borrador, setBorrador] = useState("");
   const [resaltarMic, setResaltarMic] = useState(false);
@@ -186,11 +191,12 @@ export function CharlaSimple({
     }
   }
 
-  function mostrarRespuesta(preg: string, texto: string, extras?: { ayudaLlamar?: boolean; mood?: EstadoAvatar | null }) {
+  function mostrarRespuesta(preg: string, texto: string, extras?: { ayudaLlamar?: boolean; avisados?: string[]; mood?: EstadoAvatar | null }) {
     setFase("respuesta");
     setPregunta(preg);
     setRespuesta(texto);
     setAyudaLlamar(extras?.ayudaLlamar ?? false);
+    setAvisados(extras?.avisados ?? []);
     setMedicion(null);
     setMood(extras?.mood ?? null);
   }
@@ -210,6 +216,7 @@ export function CharlaSimple({
     setFase("pensando");
     setPregunta(texto);
     setAyudaLlamar(false);
+    setAvisados([]);
     setMedicion(null);
     setMood(null);
 
@@ -227,6 +234,7 @@ export function CharlaSimple({
     let acumulado = "";
     let errorServidor: string | null = null;
     let llamarAyuda = false;
+    let nombresAvisados: string[] = [];
     let propuesta: MedicionPropuesta | null = null;
     let moodModelo: EstadoAvatar | null = null;
     let cortada = false;
@@ -248,6 +256,7 @@ export function CharlaSimple({
         else if (e.tipo === "accion") {
           if (e.accion.type === "ayuda_llamar") {
             llamarAyuda = true;
+            nombresAvisados = leerAvisados(e.accion);
           } else if (e.accion.type === "medicion_propuesta") {
             propuesta = leerMedicionPropuesta(e.accion) ?? propuesta;
           } else if (e.accion.type === "avatar_mood") {
@@ -270,12 +279,13 @@ export function CharlaSimple({
       setFase("confirmar");
       setMedicion(propuestaFinal);
       setRespuesta(frase);
-      setAyudaLlamar(llamarAyuda); // if help was also suggested this turn, the call button stays visible
+      setAyudaLlamar(llamarAyuda); // if help was also requested this turn, the notice and call button stay visible
+      setAvisados(nombresAvisados);
       void hablar(frase, turno);
       return;
     }
     const textoFinal = textoRespuestaFinal(acumulado, cortada, errorServidor);
-    mostrarRespuesta(texto, textoFinal, { ayudaLlamar: llamarAyuda, mood: moodModelo });
+    mostrarRespuesta(texto, textoFinal, { ayudaLlamar: llamarAyuda, avisados: nombresAvisados, mood: moodModelo });
     void hablar(textoFinal, turno);
   }
 
@@ -537,6 +547,7 @@ export function CharlaSimple({
           estado={estadoAvatar}
           guardando={guardando}
           ayudaLlamar={ayudaLlamar}
+          avisados={avisados}
           telefonoAyuda={telefonoAyuda}
           nombreAyuda={nombreAyuda}
           onAyudaSinContacto={onAyudaSinContacto}
@@ -559,6 +570,7 @@ export function CharlaSimple({
                 {respuesta}
               </div>
             </div>
+            <AvisoFamilia nombres={avisados} />
             {ayudaLlamar && (
               <BotonAyuda
                 telefono={telefonoAyuda}
@@ -667,6 +679,7 @@ function VistaConfirmar({
   estado,
   guardando,
   ayudaLlamar,
+  avisados,
   telefonoAyuda,
   nombreAyuda,
   onAyudaSinContacto,
@@ -678,6 +691,7 @@ function VistaConfirmar({
   estado: EstadoAvatar;
   guardando: boolean;
   ayudaLlamar: boolean;
+  avisados: string[];
   telefonoAyuda: string | null;
   nombreAyuda: string | null;
   onAyudaSinContacto: () => void;
@@ -703,6 +717,7 @@ function VistaConfirmar({
         <div className="font-heading text-[72px] font-extrabold leading-none tracking-[-0.04em] tabular-nums">{valor}</div>
         <div className="text-[20px] font-bold text-slate-brand">{unidad}</div>
       </div>
+      <AvisoFamilia nombres={avisados} />
       {ayudaLlamar && (
         <BotonAyuda
           telefono={telefonoAyuda}
@@ -730,6 +745,18 @@ function VistaConfirmar({
           No
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Big simple confirmation that vita notified the family (only when the server confirmed it). */
+function AvisoFamilia({ nombres }: { nombres: string[] }) {
+  const texto = textoAyudaAvisada(nombres);
+  if (!texto) return null;
+  return (
+    <div className="flex items-center gap-3 rounded-[22px] border-2 border-primary/40 bg-persona-1-tint px-[18px] py-4 text-[22px] font-extrabold text-foreground">
+      <VitaIcon name="check" size={28} strokeWidth={3} className="shrink-0 text-teal-deep" />
+      {texto}
     </div>
   );
 }

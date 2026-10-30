@@ -32,13 +32,14 @@ describe("textoPedidoAyudaParaModelo", () => {
     expect(t).toContain("NO SE MANDÓ");
     expect(t).toContain("NO digas que avisaste");
     expect(t).toContain("107");
-    expect(t).toContain("Ayuda");
+    expect(t).toContain("botón rojo");
   });
-  it("sin cuidadores y error prohíben afirmar que se avisó y sugieren Ayuda", () => {
+  it("sin cuidadores y error prohíben afirmar que se avisó y mandan a llamar", () => {
     for (const r of [{ status: "sin-cuidadores" as const }, { status: "error" as const, message: "x" }]) {
       const t = textoPedidoAyudaParaModelo(r);
       expect(t).toContain("NO digas que avisaste");
-      expect(t).toContain("Ayuda");
+      expect(t).toContain("107");
+      expect(t).toContain("botón rojo");
     }
   });
   it("limpia nombres hostiles", () => {
@@ -49,13 +50,12 @@ describe("textoPedidoAyudaParaModelo", () => {
 });
 
 describe("accionPedidoAyuda", () => {
-  it("solo emite con confirmación del servidor", () => {
-    expect(accionPedidoAyuda({ status: "enviado", nombres: ["Mica"] })).toEqual({ type: "ayuda_enviada", nombres: ["Mica"] });
-    expect(accionPedidoAyuda({ status: "repetido", nombres: ["Mica"] })).toEqual({ type: "ayuda_enviada", nombres: ["Mica"] });
-    expect(accionPedidoAyuda({ status: "tope" })).toEqual({ type: "ayuda_tope" });
-    expect(accionPedidoAyuda({ status: "tope" })?.type).not.toBe("ayuda_enviada");
-    expect(accionPedidoAyuda({ status: "sin-cuidadores" })).toBeUndefined();
-    expect(accionPedidoAyuda({ status: "error", message: "x" })).toBeUndefined();
+  it("siempre muestra el botón de llamar; los nombres solo con confirmación del servidor", () => {
+    expect(accionPedidoAyuda({ status: "enviado", nombres: ["Mica"] })).toEqual({ type: "ayuda_llamar", avisados: ["Mica"] });
+    expect(accionPedidoAyuda({ status: "repetido", nombres: ["Mica"] })).toEqual({ type: "ayuda_llamar", avisados: ["Mica"] });
+    expect(accionPedidoAyuda({ status: "tope" })).toEqual({ type: "ayuda_llamar", avisados: [] });
+    expect(accionPedidoAyuda({ status: "sin-cuidadores" })).toEqual({ type: "ayuda_llamar", avisados: [] });
+    expect(accionPedidoAyuda({ status: "error", message: "x" })).toEqual({ type: "ayuda_llamar", avisados: [] });
   });
 });
 

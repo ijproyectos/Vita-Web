@@ -19,8 +19,9 @@ const VISTAS: Record<string, VistaInicialCharla> = {
   ayuda: {
     fase: "respuesta",
     pregunta: "Me siento mal, necesito ayuda",
-    respuesta: "Quedate tranquila, Elsa. Llamá ahora a tu familia, o al 107 si es una emergencia.",
+    respuesta: "Quedate tranquila, Elsa. Ya les avisé para que te ayuden. Si querés, llamalos ahora.",
     ayudaLlamar: true,
+    avisados: ["Martina", "Juan"],
   },
   medicion: { fase: "confirmar", pregunta: "Me medí el azúcar y me dio 110", medicion: { tipo: "glucemia", valor: 110, valorSecundario: null } },
   "sin-internet": { fase: "inicio", sinInternet: true },
