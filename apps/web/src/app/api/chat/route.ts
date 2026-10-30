@@ -36,8 +36,8 @@ import {
 } from "@/lib/chat/pedidos";
 import { detectarEmergencia, textoEmergencia } from "@/lib/ai/emergencia";
 import * as chat from "@/lib/chat/nucleo";
-import { cargarMemoriasParaContexto, estadoMemoria } from "@/lib/memoria/nucleo";
-import { contextoMemoria } from "@/lib/memoria/contexto";
+import { cargarMemoriasParaContexto, estadoMemoria, listarContradicciones, marcarContradiccionesPreguntadas } from "@/lib/memoria/nucleo";
+import { contextoContradicciones, contextoMemoria, debeMostrarContradicciones, MAX_CONTRADICCIONES_CONTEXTO, visibilidadContradiccion } from "@/lib/memoria/contexto";
 import { cargarContextoResumen, pedirResumen } from "@/lib/memoria/resumen";
 import { debePedirResumen } from "@/lib/memoria/resumen-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
@@ -174,6 +174,8 @@ export async function POST(request: Request) {
   // Memoria (fase 3): si la respuesta quedó guardada, se marca el resumen de ESTA persona como pendiente cuando se
   // juntaron suficientes mensajes. Va en el mismo `after` (con la respuesta ya enviada); nunca en modo simple.
   let respuestaGuardada = false;
+  // Contradicciones que se le pusieron delante a vita por primera vez en este turno (migración 043).
+  let contradiccionesAMarcar: string[] = [];
   after(
     new Promise<void>((resolver) => {
       cerrarRegistro = resolver;
@@ -383,6 +385,21 @@ export async function POST(request: Request) {
           // Resumen de charlas anteriores (fase 3): solo de la cuenta logueada y solo con la memoria activa. Va en el
           // bloque dinámico, saneado y con tope; sin la migración 041 queda vacío.
           if (estadoMem.disponible && estadoMem.activa) textoMemoria += await cargarContextoResumen(supabase, user.id);
+          // Contradicciones por confirmar (fase 4, migración 043; máx. 2): solo en el chat normal y con la memoria activa. Una
+          // vez preguntadas siguen visibles 30 min (para poder resolverlas cuando contesta) y después se ocultan. Se marcan
+          // como preguntadas SOLO si la respuesta sale completa (más abajo): una falla del modelo no gasta el intento.
+          if (debeMostrarContradicciones({ modoSimple, disponible: estadoMem.disponible, activa: estadoMem.activa })) {
+            const ahoraContexto = new Date();
+            const porConfirmar = (await listarContradicciones(supabase, user.id))
+              .map((c) => ({ c, v: visibilidadContradiccion(c, ahoraContexto) }))
+              .filter((x) => x.v.visible)
+              .slice(0, MAX_CONTRADICCIONES_CONTEXTO);
+            const bloque = contextoContradicciones(porConfirmar.map(({ c, v }) => ({ id: c.id, textoA: c.textoA, textoB: c.textoB, pregunta: c.pregunta, nuevaPregunta: v.nuevaPregunta })));
+            if (bloque) {
+              textoMemoria += bloque;
+              contradiccionesAMarcar = porConfirmar.filter((x) => x.v.nuevaPregunta).map((x) => x.c.id);
+            }
+          }
         }
         const contextoDinamico = contextoDinamicoChat({
           contextoPerfil,
@@ -520,6 +537,8 @@ export async function POST(request: Request) {
         if (textoAcumulado) {
           await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
           respuestaGuardada = true;
+          // La respuesta salió completa y quedó guardada: recién ahora cuenta como "ya se lo pregunté".
+          if (contradiccionesAMarcar.length > 0 && !fallaPorTiempo && !cortePorTiempo) await marcarContradiccionesPreguntadas(supabase, contradiccionesAMarcar);
         }
 
         const usoNuevo = await registrarUsoIA(user.id, {

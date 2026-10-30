@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { limpiarDato } from "@/lib/ai/limpiar";
-import { buscarMemoria, recordarMemoria, type HitMemoria } from "./nucleo";
+import { buscarMemoria, recordarMemoria, resolverContradiccion, type HitMemoria } from "./nucleo";
+import { VALORES_VALE, type ValeContradiccion } from "./tipos";
 
 // Ejecución de las tools `recordar` y `buscar_memoria`. Usan el cliente de SESIÓN (RLS owner-only) y actúan solo
 // sobre la cuenta logueada: no existe `persona_id` para la memoria. Lo que devuelven al modelo son DATOS.
@@ -94,6 +95,35 @@ export async function ejecutarToolMemoria(nombre: string, input: Record<string, 
   }
 
   return { contenido: `Tool desconocida: ${nombre}` };
+}
+
+export const NOMBRE_TOOL_RESOLVER_CONTRADICCION = "resolver_contradiccion";
+
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `resolver_contradiccion`: cliente de sesión (la RPC `security definer` filtra por auth.uid()), solo la cuenta logueada.
+ * Idempotente por naturaleza: una contradicción ya cerrada devuelve "no_encontrada". El modo simple no la ofrece ni la ejecuta
+ * (`toolPermitida`).
+ */
+export async function ejecutarResolverContradiccion(input: Record<string, unknown>, ctx: Pick<Ctx, "supabase">): Promise<ResultadoToolMemoria> {
+  const id = typeof input.id === "string" ? input.id.trim() : "";
+  const vale = input.vale as ValeContradiccion;
+  if (!RE_UUID.test(id) || !VALORES_VALE.includes(vale)) {
+    return { contenido: "ERROR: id o vale inválidos. Usá el id exacto de 'Para confirmar con la persona' y vale 'a', 'b', 'ambas' o 'ninguna'. No se cambió nada." };
+  }
+  const r = await resolverContradiccion(ctx.supabase, id, vale);
+  if (r === "no_encontrada") return { contenido: "Esa contradicción ya no está pendiente (se resolvió o no existe). No se cambió nada." };
+  if (r === "obsoleta") return { contenido: "Uno de los dos recuerdos ya cambió, así que la pregunta quedó sin efecto. No hace falta que la persona decida nada." };
+  if (r === "no_disponible") return { contenido: "Esto no está disponible por ahora: no se cambió nada. No lo menciones salvo que te lo pregunten." };
+  if (r !== "ok") return { contenido: "No se pudo guardar por un problema temporal. No le digas a la persona que quedó resuelto.", codigo: "memoria_error" };
+  const dicho: Record<ValeContradiccion, string> = {
+    a: "Listo: quedó como válido el recuerdo A; el B se conserva solo como historial.",
+    b: "Listo: quedó como válido el recuerdo B; el A se conserva solo como historial.",
+    ambas: "Listo: se dejan los dos recuerdos, no se vuelve a preguntar.",
+    ninguna: "Listo: se olvidaron los dos recuerdos.",
+  };
+  return { contenido: dicho[vale] };
 }
 
 function paraModelo(h: HitMemoria) {

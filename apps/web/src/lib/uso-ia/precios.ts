@@ -51,13 +51,27 @@ export function preciosDe(modelo: string): PreciosModelo {
 
 const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
 
-/** Costo de una llamada en micro-USD enteros. */
-export function costoMicroUSD(modelo: string, uso: UsoTokens): number {
+/**
+ * Message Batches API: 50 % de descuento sobre entrada y salida, y el descuento se apila con el de cache (los
+ * multiplicadores de cache se aplican sobre el precio ya descontado, o sea 50 % de cada línea). Fuente:
+ * https://platform.claude.com/docs/en/about-claude/pricing#batch-processing (verificado 2026-10-30; Haiku 5.5, prompts de
+ * hasta 100.000 tokens: lote $0,05 entrada / $0,25 salida contra $0,10 / $0,50 estándar).
+ */
+export const FACTOR_PRECIO_LOTE = 0.5;
+
+export type OpcionesCosto = {
+  /** La llamada se hizo por Message Batches: se cobra el 50 %. */
+  lote?: boolean;
+};
+
+/** Costo de una llamada en micro-USD enteros (con `lote: true`, al precio de lote). Se redondea UNA vez, al final. */
+export function costoMicroUSD(modelo: string, uso: UsoTokens, opciones: OpcionesCosto = {}): number {
   const p = preciosDe(modelo);
-  return Math.round(n(uso.input) * p.input + n(uso.output) * p.output + n(uso.cacheRead) * p.cacheRead + n(uso.cacheWrite) * p.cacheWrite);
+  const bruto = n(uso.input) * p.input + n(uso.output) * p.output + n(uso.cacheRead) * p.cacheRead + n(uso.cacheWrite) * p.cacheWrite;
+  return Math.round(bruto * (opciones.lote ? FACTOR_PRECIO_LOTE : 1));
 }
 
 /** Costo de una llamada en dólares (solo para mostrar o loguear; la contabilidad usa micro-USD). */
-export function costoUSD(modelo: string, uso: UsoTokens): number {
-  return costoMicroUSD(modelo, uso) / 1_000_000;
+export function costoUSD(modelo: string, uso: UsoTokens, opciones: OpcionesCosto = {}): number {
+  return costoMicroUSD(modelo, uso, opciones) / 1_000_000;
 }

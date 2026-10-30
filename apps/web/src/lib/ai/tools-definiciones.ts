@@ -312,7 +312,23 @@ const TOOL_BUSCAR_MEMORIA: Anthropic.Tool = {
 
 export const TOOLS_MEMORIA: Anthropic.Tool[] = [TOOL_RECORDAR, TOOL_BUSCAR_MEMORIA];
 
-export const TOOLS: Anthropic.Tool[] = [...TOOLS_CON_PERSONA, ...TOOLS_MEMORIA];
+// Memoria, fase 4: cierra una contradicción que la limpieza nocturna marcó (bloque "Para confirmar con la persona" del contexto
+// dinámico). Va al FINAL de TOOLS (nunca se reordena) y no existe en el modo simple. Actúa siempre sobre la cuenta logueada.
+const TOOL_RESOLVER_CONTRADICCION: Anthropic.Tool = {
+  name: "resolver_contradiccion",
+  description:
+    "Cierra una contradicción de la lista 'Para confirmar con la persona' DESPUÉS de que la persona te dijo cuál vale. Nunca la uses sin que lo haya dicho ella. vale: 'a' (vale el recuerdo A; el B queda como historial), 'b' (vale el B), 'ambas' (las dos son ciertas, no se contradicen) o 'ninguna' (ninguna vale: se olvidan las dos; usala solo si lo pidió o lo dejó claro).",
+  input_schema: {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "El id que figura entre corchetes en 'Para confirmar con la persona'." },
+      vale: { type: "string", enum: ["a", "b", "ambas", "ninguna"], description: "Cuál vale según la persona." },
+    },
+    required: ["id", "vale"],
+  },
+};
+
+export const TOOLS: Anthropic.Tool[] = [...TOOLS_CON_PERSONA, ...TOOLS_MEMORIA, TOOL_RESOLVER_CONTRADICCION];
 
 // Tools que SOLO existen en el chat de modo simple (`modo: "simple"` en /api/chat). No están en TOOLS: en el
 // modo normal no se ofrecen ni se ejecutan (ver lib/ai/modo-simple.ts).

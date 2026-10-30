@@ -3,7 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fechaISOEnAR } from "@/lib/rutina/formato";
 import { calcularUso, type UsoDiarioConEstado } from "./tipos";
-import { costoMicroUSD } from "./precios";
+import { costoMicroUSD, FACTOR_PRECIO_LOTE } from "./precios";
 import { LIMITE_MICRO_USD_DIARIO, LIMITE_USD_DIARIO, microDesdeTokensLegacy, microUsdDeFila, superaLimite } from "./limite";
 
 // Límite diario de uso de IA por usuario, en DÓLARES (US$10 por mes = US$0,33
@@ -89,6 +89,8 @@ export type UsoLlamadaIA = {
   cacheReadTokens?: number;
   /** `cache_creation_input_tokens` de la respuesta. */
   cacheWriteTokens?: number;
+  /** La llamada fue por Message Batches (50 % de descuento): el costo registrado es el REAL, ya descontado. */
+  lote?: boolean;
 };
 
 /**
@@ -109,7 +111,7 @@ export async function registrarUsoIA(usuarioId: string, uso: UsoLlamadaIA): Prom
       output: uso.outputTokens,
       cacheRead,
       cacheWrite,
-    });
+    }, { lote: uso.lote === true });
     const ahora = new Date().toISOString();
 
     const completa = await admin
@@ -148,8 +150,10 @@ export async function registrarUsoIA(usuarioId: string, uso: UsoLlamadaIA): Prom
       .maybeSingle();
     if (legacy.error) return null;
     const e = legacy.data;
-    const tokensInput = (Number(e?.tokens_input ?? 0) || 0) + uso.inputTokens + cacheWrite + Math.round(cacheRead / 10);
-    const tokensOutput = (Number(e?.tokens_output ?? 0) || 0) + uso.outputTokens;
+    // Por lote se descuenta el 50 % también acá, para que la estimación legacy en dólares siga siendo la real.
+    const f = uso.lote === true ? FACTOR_PRECIO_LOTE : 1;
+    const tokensInput = (Number(e?.tokens_input ?? 0) || 0) + Math.round((uso.inputTokens + cacheWrite + Math.round(cacheRead / 10)) * f);
+    const tokensOutput = (Number(e?.tokens_output ?? 0) || 0) + Math.round(uso.outputTokens * f);
     const { error } = await admin.from("uso_ia_diario").upsert({
       usuario_id: usuarioId,
       fecha,

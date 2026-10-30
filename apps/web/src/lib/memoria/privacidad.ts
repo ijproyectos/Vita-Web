@@ -1,9 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { limpiarDato } from "@/lib/ai/limpiar";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import { claveSobre, etiquetaSobre } from "./claves";
-import { faltaMigracion } from "./nucleo";
+import { descartarConsolidacionPendiente, faltaMigracion, listarContradicciones } from "./nucleo";
 import type { Memoria, OrigenMemoria, TipoMemoria } from "./tipos";
 
 // Pantalla "Lo que vita recuerda de vos": ver, dejar de recordar uno, olvidar todo y apagar. Todo con el cliente
@@ -39,12 +40,16 @@ export type RecuerdoVista = {
   vence: string | null;
 };
 export type GrupoRecuerdos = { clave: string; titulo: string; recuerdos: RecuerdoVista[] };
+/** Contradicción pendiente que la persona puede resolver desde la pantalla (043). */
+export type ContradiccionVista = { id: string; pregunta: string; textoA: string; textoB: string };
 export type VistaMemoria = {
   /** false = falta la migración 038 (la pantalla lo avisa en vez de mostrar un error). */
   disponible: boolean;
   activa: boolean;
   grupos: GrupoRecuerdos[];
   pasajeros: RecuerdoVista[];
+  /** Pares que la limpieza nocturna marcó (vacío sin la migración 043). */
+  contradicciones: ContradiccionVista[];
 };
 
 const ZONA = "America/Argentina/Buenos_Aires";
@@ -53,13 +58,15 @@ function fechaCorta(iso: string): string {
 }
 function fuenteDe(origen: OrigenMemoria, iso: string): string {
   const f = fechaCorta(iso);
-  return origen === "usuario" ? `Lo corregiste vos el ${f}` : `De una charla del ${f}`;
+  if (origen === "usuario") return `Lo corregiste vos el ${f}`;
+  if (origen === "consolidacion") return `Lo ordené yo el ${f}`;
+  return `De una charla del ${f}`;
 }
 
 type FilaVista = Pick<Memoria, "id" | "sobre_tipo" | "sobre_perfil_id" | "sobre_nombre" | "texto" | "tipo" | "vence_at" | "origen" | "created_at">;
 
 export async function cargarVistaMemoria(supabase: Cliente, usuarioId: string): Promise<VistaMemoria> {
-  const vacia: VistaMemoria = { disponible: false, activa: false, grupos: [], pasajeros: [] };
+  const vacia: VistaMemoria = { disponible: false, activa: false, grupos: [], pasajeros: [], contradicciones: [] };
   try {
     const { data: perfil, error: errPerfil } = await supabase.from("perfiles").select("memoria_activa").eq("id", usuarioId).maybeSingle();
     if (errPerfil || !perfil) return vacia;
@@ -106,7 +113,17 @@ export async function cargarVistaMemoria(supabase: Cliente, usuarioId: string): 
       grupo.recuerdos.push(vista);
     }
     const grupos = [...porSobre.values()].sort((a, b) => (a.clave === "yo" ? -1 : b.clave === "yo" ? 1 : a.titulo.localeCompare(b.titulo, "es")));
-    return { disponible: true, activa: perfil.memoria_activa === true, grupos, pasajeros };
+    // Solo con la memoria activa (apagada, la limpieza no pregunta nada). Cada texto vuelve a pasar por `limpiarDato`.
+    const contradicciones =
+      perfil.memoria_activa === true
+        ? (await listarContradicciones(supabase, usuarioId, 10)).map((c) => ({
+            id: c.id,
+            pregunta: limpiarDato(c.pregunta, 300),
+            textoA: limpiarDato(c.textoA, 200),
+            textoB: limpiarDato(c.textoB, 200),
+          }))
+        : [];
+    return { disponible: true, activa: perfil.memoria_activa === true, grupos, pasajeros, contradicciones };
   } catch {
     return vacia;
   }
@@ -122,7 +139,8 @@ export async function cargarVistaMemoria(supabase: Cliente, usuarioId: string): 
  */
 export async function cambiarMemoriaActiva(supabase: Cliente, usuarioId: string, activa: boolean): Promise<boolean> {
   try {
-    if (!activa && !(await invalidarResumen(supabase))) return false;
+    // Apagar descarta lo pendiente de la consolidación (pedidos en vuelo y contradicciones) además de vaciar el resumen.
+    if (!activa && !((await invalidarResumen(supabase)) && (await descartarConsolidacionPendiente(supabase, true)))) return false;
     const { data, error } = await supabase.from("perfiles").update({ memoria_activa: activa }).eq("id", usuarioId).select("id");
     return !error && (data?.length ?? 0) > 0;
   } catch {
@@ -230,7 +248,7 @@ export async function olvidarRecuerdo(supabase: Cliente, usuarioId: string, id: 
       usuarioId,
       cadena.map((c) => c.mensaje_origen_id).filter((x): x is string => !!x)
     );
-    if (mensajes === null || !(await invalidarResumen(supabase))) return { estado: "error" };
+    if (mensajes === null || !(await invalidarResumen(supabase)) || !(await descartarConsolidacionPendiente(supabase))) return { estado: "error" };
     return { estado: "ok", recuerdos, mensajes };
   } catch {
     return { estado: "error" };
@@ -263,7 +281,7 @@ export async function olvidarTodo(supabase: Cliente, usuarioId: string): Promise
       .eq("usuario_id", usuarioId)
       .eq("excluido_memoria", false)
       .select("id");
-    if (errMensajes || !(await invalidarResumen(supabase))) return { ok: false };
+    if (errMensajes || !(await invalidarResumen(supabase)) || !(await descartarConsolidacionPendiente(supabase))) return { ok: false };
     return { ok: true, recuerdos: data?.length ?? 0, mensajes: excluidos?.length ?? 0 };
   } catch {
     return { ok: false };
@@ -290,7 +308,7 @@ export async function borrarRecuerdosDeSesionesHasta(supabase: Cliente, usuarioI
     const { data: sesiones, error: errSesiones } = await supabase.from("sesiones_chat").select("id").eq("usuario_id", usuarioId).lt("updated_at", corteIso);
     if (errSesiones) return { ok: false };
     const ids = ((sesiones ?? []) as { id: string }[]).map((s) => s.id);
-    if (ids.length > 0 && !(await invalidarResumen(supabase))) return { ok: false };
+    if (ids.length > 0 && !((await invalidarResumen(supabase)) && (await descartarConsolidacionPendiente(supabase)))) return { ok: false };
     let recuerdos = 0;
     for (let i = 0; i < ids.length; i += TANDA) {
       const { data: mensajes, error: errMensajes } = await supabase

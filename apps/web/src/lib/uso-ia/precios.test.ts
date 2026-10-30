@@ -32,6 +32,27 @@ describe("costoMicroUSD / costoUSD", () => {
   });
 });
 
+describe("precio de Message Batches (50 %)", () => {
+  const H = "claude-haiku-5-5";
+  it("Haiku 5.5 por lote: $0,05 entrada y $0,25 salida por millón (la mitad del estándar)", () => {
+    expect(costoMicroUSD(H, { input: 1_000_000, output: 0 }, { lote: true })).toBe(50_000);
+    expect(costoMicroUSD(H, { input: 0, output: 1_000_000 }, { lote: true })).toBe(250_000);
+    expect(costoMicroUSD(H, { input: 1_000_000, output: 0 })).toBe(100_000);
+  });
+  it("el descuento se apila con los de cache y se redondea una sola vez", () => {
+    const uso = { input: 1000, output: 400, cacheRead: 5000, cacheWrite: 2000 };
+    const estandar = 1000 * 0.1 + 400 * 0.5 + 5000 * 0.01 + 2000 * 0.125;
+    expect(costoMicroUSD(H, uso, { lote: true })).toBe(Math.round(estandar * 0.5));
+    // Un token de salida por lote = 0,25 micro-USD: se redondea a 0.
+    expect(costoMicroUSD(H, { input: 0, output: 1, cacheRead: 0 }, { lote: true })).toBe(0);
+    expect(Number.isInteger(costoMicroUSD(H, { input: 7, output: 3, cacheRead: 11, cacheWrite: 13 }, { lote: true }))).toBe(true);
+  });
+  it("sin la opción el costo no cambia", () => {
+    expect(costoMicroUSD(M, { input: 1000, output: 1000 }, {})).toBe(costoMicroUSD(M, { input: 1000, output: 1000 }));
+    expect(costoUSD(H, { input: 1_000_000, output: 0 }, { lote: true })).toBeCloseTo(0.05, 9);
+  });
+});
+
 describe("límite diario en dólares", () => {
   it("US$0,33 = 330.000 micro-USD", () => {
     expect(LIMITE_USD_DIARIO).toBe(0.33);

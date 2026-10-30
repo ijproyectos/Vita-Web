@@ -37,6 +37,13 @@ import { createClient } from "@supabase/supabase-js";
  * fila de la cola, respeta `memoria_activa`, los mensajes excluidos de la memoria y el límite diario en dólares, y las
  * RPC que usa (migración 041) solo las ejecuta service_role. Nunca devuelve texto de mensajes ni de resúmenes.
  *
+ * Consolidación nocturna de la memoria (fase 4; `lib/memoria/consolidacion.ts`, invocado solo desde `/api/cron/memoria-consolidacion`,
+ * autenticado por `x-cron-secret`): recorre a TODAS las personas con memoria activa, arma un lote de Message Batches con sus
+ * recuerdos estables y aplica el resultado. Trabaja sobre `lotes_consolidacion`/`lote_usuarios` (RLS sin policies, a propósito) y
+ * toda escritura sobre recuerdos pasa por las RPC de la migración 043, que solo ejecuta service_role y que vuelven a verificar en
+ * una transacción la versión de cada recuerdo, la memoria activa y los mensajes excluidos. Los `custom_id` del lote son opacos
+ * (nunca el id de la persona). Nunca devuelve texto de recuerdos ni de mensajes.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,

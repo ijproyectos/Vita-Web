@@ -23,7 +23,7 @@ import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
 import { validarMedicion } from "@/lib/mediciones/tipos";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
-import { ejecutarToolMemoria, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
+import { ejecutarResolverContradiccion, ejecutarToolMemoria, NOMBRE_TOOL_RESOLVER_CONTRADICCION, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
 
 export { TOOLS } from "./tools-definiciones";
 
@@ -107,6 +107,7 @@ export async function ejecutarTool(
 ): Promise<ResultadoTool> {
   // Memoria: solo la cuenta logueada, nunca un `persona_id` (no pasa por resolverDestino).
   if (NOMBRES_TOOLS_MEMORIA.has(nombre)) return ejecutarToolMemoria(nombre, input, ctx);
+  if (nombre === NOMBRE_TOOL_RESOLVER_CONTRADICCION) return ejecutarResolverContradiccion(input, ctx);
 
   // Pedido de ayuda (solo modo simple): avisa a los cuidadores aceptados de QUIEN CHATEA (la sesión), nunca de otra
   // persona ni con un `persona_id`. El texto para el modelo dice con precisión qué pasó; la pantalla siempre

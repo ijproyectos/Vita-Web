@@ -4,16 +4,22 @@ vi.mock("server-only", () => ({}));
 
 const recordarMemoria = vi.fn();
 const buscarMemoria = vi.fn();
-vi.mock("./nucleo", () => ({ recordarMemoria: (...a: unknown[]) => recordarMemoria(...a), buscarMemoria: (...a: unknown[]) => buscarMemoria(...a) }));
+const resolverContradiccion = vi.fn();
+vi.mock("./nucleo", () => ({
+  recordarMemoria: (...a: unknown[]) => recordarMemoria(...a),
+  buscarMemoria: (...a: unknown[]) => buscarMemoria(...a),
+  resolverContradiccion: (...a: unknown[]) => resolverContradiccion(...a),
+}));
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ejecutarToolMemoria, NOMBRES_TOOLS_MEMORIA } from "./herramientas";
+import { ejecutarResolverContradiccion, ejecutarToolMemoria, NOMBRES_TOOLS_MEMORIA } from "./herramientas";
 
 const ctx = { supabase: {} as SupabaseClient, usuarioId: "u1", familia: [{ id: "f1", nombre: "Laura" }], mensajeOrigenId: "m1" };
 
 beforeEach(() => {
   recordarMemoria.mockReset();
   buscarMemoria.mockReset();
+  resolverContradiccion.mockReset();
 });
 
 describe("ejecutarToolMemoria: recordar", () => {
@@ -56,5 +62,23 @@ describe("ejecutarToolMemoria: buscar_memoria", () => {
 describe("NOMBRES_TOOLS_MEMORIA", () => {
   it("son exactamente las dos tools", () => {
     expect([...NOMBRES_TOOLS_MEMORIA].sort()).toEqual(["buscar_memoria", "recordar"]);
+  });
+});
+
+describe("ejecutarResolverContradiccion", () => {
+  const ID = "00000000-0000-4000-8000-000000000001";
+  it("valida id y vale antes de tocar la base", async () => {
+    expect((await ejecutarResolverContradiccion({ id: "x", vale: "a" }, ctx)).contenido).toMatch(/inválidos/);
+    expect((await ejecutarResolverContradiccion({ id: ID, vale: "las dos" }, ctx)).contenido).toMatch(/inválidos/);
+    expect(resolverContradiccion).not.toHaveBeenCalled();
+  });
+  it("traduce cada resultado para el modelo sin afirmar de más", async () => {
+    resolverContradiccion.mockResolvedValue("ok");
+    expect((await ejecutarResolverContradiccion({ id: ID, vale: "ninguna" }, ctx)).contenido).toMatch(/olvidaron los dos/);
+    expect(resolverContradiccion).toHaveBeenCalledWith(ctx.supabase, ID, "ninguna");
+    resolverContradiccion.mockResolvedValue("no_encontrada");
+    expect((await ejecutarResolverContradiccion({ id: ID, vale: "a" }, ctx)).contenido).toMatch(/ya no está pendiente/);
+    resolverContradiccion.mockResolvedValue("error");
+    expect((await ejecutarResolverContradiccion({ id: ID, vale: "a" }, ctx)).contenido).toMatch(/No le digas/);
   });
 });
