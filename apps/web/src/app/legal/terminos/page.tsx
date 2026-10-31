@@ -92,7 +92,46 @@ export default function TerminosPage() {
         </p>
       </Seccion>
 
-      <Seccion titulo="9. Limitación de responsabilidad">
+      <Seccion titulo="9. Costo y suscripción vita+">
+        <p>
+          El uso básico de vita es gratuito. vita+ es una suscripción paga, mensual o anual, que se contrata desde
+          Perfil &rarr; vita+. Los precios se muestran en dólares estadounidenses (mensual US$ 4,99; anual US$ 35,88
+          por año, equivalente a US$ 2,99 por mes), pero el cobro se hace en pesos argentinos a través de Mercado Pago:
+          convertimos el precio al dólar oficial (Banco de la Nación Argentina, cotización vendedor) del día en que te
+          suscribís, y te mostramos el importe en pesos antes de que pagues. Ese importe en pesos se mantiene en las
+          renovaciones de esa suscripción.
+        </p>
+        <Lista>
+          <li>
+            <strong>Renovación automática:</strong> la suscripción se renueva sola cada mes o cada año, según el plan,
+            hasta que la canceles.
+          </li>
+          <li>
+            <strong>Cancelación:</strong> podés cancelar cuando quieras desde Perfil &rarr; vita+ &rarr; Cancelar
+            suscripción. Se corta el cobro de los períodos siguientes y seguís con vita+ hasta el final del período ya
+            pagado.
+          </li>
+          <li>
+            <strong>Sin reembolsos parciales:</strong> no devolvemos el tiempo no utilizado de un período ya pagado,
+            salvo que la ley lo exija.
+          </li>
+          <li>
+            <strong>Derecho de revocación:</strong> como consumidor, podés revocar la contratación dentro de los 10
+            días corridos desde que contrataste, escribiéndonos a {CONTACTO_EMAIL}. En ese caso te devolvemos lo
+            pagado, según lo previsto por la Ley 24.240 de Defensa del Consumidor.
+          </li>
+          <li>
+            <strong>Pagos:</strong> los procesa Mercado Pago. vita no recibe ni guarda los datos de tu tarjeta.
+          </li>
+        </Lista>
+        <p>
+          Por ahora vita+ no habilita funciones exclusivas; las que incluya en el futuro se informarán en la
+          aplicación antes de depender de la suscripción. Podemos cambiar los precios para nuevas suscripciones; si
+          cambia el de una vigente, te lo avisamos con anticipación y podés cancelar sin costo.
+        </p>
+      </Seccion>
+
+      <Seccion titulo="10. Limitación de responsabilidad">
         <p>
           En la medida que lo permita la ley, vita se ofrece &ldquo;tal cual&rdquo; y no nos hacemos responsables por
           decisiones de salud que tomes en base a la información de la aplicación, por errores de la inteligencia
@@ -101,14 +140,14 @@ export default function TerminosPage() {
         </p>
       </Seccion>
 
-      <Seccion titulo="10. Ley aplicable">
+      <Seccion titulo="11. Ley aplicable">
         <p>
           Estos términos se rigen por las leyes de {PAIS}. Cualquier controversia se resolverá ante los tribunales
           competentes de ese país, sin perjuicio de los derechos que te correspondan como consumidor.
         </p>
       </Seccion>
 
-      <Seccion titulo="11. Cambios en los términos">
+      <Seccion titulo="12. Cambios en los términos">
         <p>
           Podemos modificar estos términos. Cuando el cambio sea relevante te lo informaremos dentro de la app. Si
           seguís usando vita después del cambio, se entiende que lo aceptás; la fecha de &ldquo;Última
@@ -116,7 +155,7 @@ export default function TerminosPage() {
         </p>
       </Seccion>
 
-      <Seccion titulo="12. Contacto">
+      <Seccion titulo="13. Contacto">
         <p>Para consultas sobre estos términos: {CONTACTO_EMAIL}.</p>
       </Seccion>
     </Documento>
