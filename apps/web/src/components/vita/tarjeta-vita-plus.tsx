@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
+import { createClient } from "@/lib/supabase/server";
+import { obtenerEstadoVitaPlus } from "@/lib/vita-plus/nucleo";
+import { fechaLarga } from "@/lib/vita-plus/planes";
 import { VMark } from "./v-mark";
 
-// Tarjeta "Probá vita+" de Perfil (V7, variante clara). vita+ todavía no está
-// disponible: lleva a la página informativa, sin suscripción ni cobro.
-export function TarjetaVitaPlus() {
+// Tarjeta de vita+ en Perfil y Familia (V7, variante clara). Sin suscripción invita a probarlo; con vita+
+// vigente muestra "Sos vita+ · hasta <fecha>". Ambas llevan a la pantalla de vita+ (donde se cancela).
+export async function TarjetaVitaPlus() {
+  const estado = await obtenerEstadoVitaPlus(await createClient());
+  const hasta = estado.activo && estado.venceAt ? fechaLarga(estado.venceAt) : null;
   return (
     <Link
       href="/app/vita-plus"
@@ -15,10 +20,13 @@ export function TarjetaVitaPlus() {
       <VMark size={48} className="relative shrink-0" />
       <span className="relative min-w-0 flex-1">
         <span className="block font-heading text-lg font-extrabold tracking-[-0.02em]">
-          Probá vita<span className="text-aviso">+</span>
+          {estado.activo ? "Sos vita" : "Probá vita"}
+          <span className="text-aviso">+</span>
         </span>
         <span className="mt-[3px] block text-pretty text-[12.5px] font-medium leading-[1.4] text-slate-brand">
-          Más herramientas para cuidar a tu familia.
+          {estado.activo
+            ? `${hasta ? `Hasta ${hasta} · ` : ""}${estado.renueva ? "se renueva solo" : "no se renueva"}. Tocá para administrarla.`
+            : "Más herramientas para cuidar a tu familia."}
         </span>
       </span>
       <span className="relative flex size-[34px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
