@@ -11,7 +11,7 @@ export const PAIS = "Argentina";
 
 // Actualizar cada vez que cambie el contenido de cualquiera de los dos
 // documentos.
-export const FECHA_ACTUALIZACION = "11 de octubre de 2026";
+export const FECHA_ACTUALIZACION = "31 de octubre de 2026";
 
 // Casilla real de soporte (la misma que envía los mails transaccionales).
 export const CORREO_SOPORTE = "hola@soyvita.com.ar";
