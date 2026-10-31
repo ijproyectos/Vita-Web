@@ -98,8 +98,9 @@ export default function TerminosPage() {
           Perfil &rarr; vita+. Los precios se muestran en dólares estadounidenses (mensual US$ 4,99; anual US$ 35,88
           por año, equivalente a US$ 2,99 por mes), pero el cobro se hace en pesos argentinos a través de Mercado Pago:
           convertimos el precio al dólar oficial (Banco de la Nación Argentina, cotización vendedor) del día en que te
-          suscribís, y te mostramos el importe en pesos antes de que pagues. Ese importe en pesos se mantiene en las
-          renovaciones de esa suscripción.
+          suscribís. Antes de pasar a Mercado Pago te mostramos en la aplicación el importe exacto en pesos y la
+          cotización usada, y solo seguís si tocás &ldquo;Ir a Mercado Pago&rdquo;. Ese importe en pesos se mantiene en
+          las renovaciones de esa suscripción.
         </p>
         <Lista>
           <li>
@@ -116,9 +117,11 @@ export default function TerminosPage() {
             salvo que la ley lo exija.
           </li>
           <li>
-            <strong>Derecho de revocación:</strong> como consumidor, podés revocar la contratación dentro de los 10
-            días corridos desde que contrataste, escribiéndonos a {CONTACTO_EMAIL}. En ese caso te devolvemos lo
-            pagado, según lo previsto por la Ley 24.240 de Defensa del Consumidor.
+            <strong>Botón de arrepentimiento:</strong> como consumidor, podés revocar la contratación dentro de los 10
+            días corridos desde el primer cobro, con el botón &ldquo;Botón de arrepentimiento&rdquo; que aparece en
+            Perfil &rarr; vita+ mientras ese plazo esté vigente. Al confirmarlo cancelamos la suscripción y registramos
+            tu pedido; el reembolso de lo pagado lo procesamos nosotros (no es automático) según la Ley 24.240 de
+            Defensa del Consumidor y la Resolución 424/2020. También podés escribirnos a {CONTACTO_EMAIL}.
           </li>
           <li>
             <strong>Pagos:</strong> los procesa Mercado Pago. vita no recibe ni guarda los datos de tu tarjeta.
