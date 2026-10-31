@@ -190,3 +190,77 @@ begin;
     end;
   end $$;
 rollback;
+
+-- 6 — 'pending' nunca degrada un estado más avanzado
+begin;
+  select set_config('app.a', (:user_a)::text, true), set_config('app.b', (:user_b)::text, true);
+  delete from public.vita_plus_suscripciones where usuario_id = :user_a;
+  do $$
+  declare v_id uuid; v_estado text;
+  begin
+    v_id := public.iniciar_suscripcion_vita_plus(current_setting('app.a')::uuid, 'ref-test-0000000000000010', 'mensual', 1, 499, 1560, 7784);
+    perform public.actualizar_estado_suscripcion_vita_plus(v_id, 'authorized', 'pre-test-10');
+    perform public.actualizar_estado_suscripcion_vita_plus(v_id, 'pending', 'pre-test-10');
+    select s.estado into v_estado from public.vita_plus_suscripciones s where s.id = v_id;
+    if v_estado <> 'authorized' then raise exception 'FAIL: pending degradó authorized (%)', v_estado; end if;
+    raise notice 'PASS: pending no degrada';
+  end $$;
+rollback;
+
+-- 7 — cobros no acreditados: idempotentes y solo service_role
+begin;
+  select set_config('app.a', (:user_a)::text, true), set_config('app.b', (:user_b)::text, true);
+  do $$
+  declare n int;
+  begin
+    perform public.anotar_pago_no_acreditado_vita_plus('pago-na-1', 'pago-na-1', 'pre-x', 'ref-x', 'monto_distinto', 100, 'ARS', 'approved');
+    perform public.anotar_pago_no_acreditado_vita_plus('pago-na-1', 'pago-na-1', 'pre-x', 'ref-x', 'monto_distinto', 100, 'ARS', 'approved');
+    select count(*) into n from public.vita_plus_pagos_no_acreditados where clave = 'pago-na-1';
+    if n <> 1 then raise exception 'FAIL: el reenvío duplicó la fila (%)', n; end if;
+    raise notice 'PASS: anotar_pago_no_acreditado es idempotente';
+  end $$;
+  select set_config('request.jwt.claims', json_build_object('sub', :user_a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  do $$
+  begin
+    begin
+      perform count(*) from public.vita_plus_pagos_no_acreditados;
+      raise exception 'FAIL: authenticated lee pagos_no_acreditados';
+    exception when insufficient_privilege then
+      raise notice 'PASS: pagos_no_acreditados sin acceso para authenticated';
+    end;
+  end $$;
+rollback;
+
+-- 8 — botón de arrepentimiento: solo dentro de los 10 días del primer cobro, idempotente
+begin;
+  select set_config('app.a', (:user_a)::text, true), set_config('app.b', (:user_b)::text, true);
+  delete from public.vita_plus_suscripciones where usuario_id = :user_a;
+  do $$
+  declare v_id uuid; r record; e record;
+  begin
+    begin
+      perform public.solicitar_arrepentimiento_vita_plus(current_setting('app.a')::uuid);
+      raise exception 'FAIL: permitió arrepentirse sin haber pagado';
+    exception when sqlstate '54000' then
+      raise notice 'PASS: sin cobro no hay arrepentimiento';
+    end;
+
+    v_id := public.iniciar_suscripcion_vita_plus(current_setting('app.a')::uuid, 'ref-test-0000000000000011', 'mensual', 1, 499, 1560, 7784);
+    perform public.registrar_pago_vita_plus(current_setting('app.a')::uuid, 'pago-test-arr-1', v_id, 7784);
+    select * into r from public.solicitar_arrepentimiento_vita_plus(current_setting('app.a')::uuid);
+    if r.vp_suscripcion <> v_id or not r.vp_nueva then raise exception 'FAIL: primer pedido incorrecto'; end if;
+    select * into r from public.solicitar_arrepentimiento_vita_plus(current_setting('app.a')::uuid);
+    if r.vp_nueva then raise exception 'FAIL: el segundo pedido figura como nuevo'; end if;
+    raise notice 'PASS: arrepentimiento registrado una sola vez';
+
+    update public.vita_plus_pagos set creado_at = now() - interval '11 days' where suscripcion_id = v_id;
+    delete from public.vita_plus_arrepentimientos where suscripcion_id = v_id;
+    begin
+      perform public.solicitar_arrepentimiento_vita_plus(current_setting('app.a')::uuid);
+      raise exception 'FAIL: permitió arrepentirse pasados 10 días';
+    exception when sqlstate '54000' then
+      raise notice 'PASS: pasados 10 días no corresponde';
+    end;
+  end $$;
+rollback;
