@@ -102,6 +102,8 @@ export interface EstadoVitaPlus {
   estado: EstadoSuscripcion;
   /** true si Mercado Pago va a seguir cobrando (suscripción autorizada). */
   renueva: boolean;
+  /** true dentro de los 10 días del primer cobro, si no pidió ya el arrepentimiento (Res. 424/2020). */
+  puedeArrepentirse: boolean;
 }
 
 export const ESTADO_SIN_VITA_PLUS: EstadoVitaPlus = {
@@ -110,6 +112,7 @@ export const ESTADO_SIN_VITA_PLUS: EstadoVitaPlus = {
   plan: null,
   estado: "none",
   renueva: false,
+  puedeArrepentirse: false,
 };
 
 /** "12 de noviembre de 2026" en hora argentina. */

@@ -214,8 +214,11 @@ export function verificarFirmaWebhook(e: EntradaFirma): ResultadoFirma {
   if (!firma) return { ok: false, motivo: "malformada" };
   if (!tsReciente(firma.ts, e.ahoraMs)) return { ok: false, motivo: "vieja" };
   for (const dataId of candidatos) {
-    const esperada = calcularFirma(e.secreto, construirManifiesto(dataId, e.requestId, firma.ts));
-    if (igualesEnTiempoConstante(esperada, firma.v1)) return { ok: true, dataId };
+    // Regla de Mercado Pago: si el id es alfanumérico, el manifiesto lo lleva en minúsculas.
+    for (const idManifiesto of new Set([dataId, dataId.toLowerCase()])) {
+      const esperada = calcularFirma(e.secreto, construirManifiesto(idManifiesto, e.requestId, firma.ts));
+      if (igualesEnTiempoConstante(esperada, firma.v1)) return { ok: true, dataId };
+    }
   }
   return { ok: false, motivo: "no_coincide" };
 }
@@ -379,6 +382,9 @@ export function clasificarErrorRpc(error: { message?: string } | null): FalloApi
   const mensaje = error?.message ?? "";
   if (mensaje.includes("already_subscribed")) {
     return { http: 409, codigo: "ya_suscripto", mensaje: "Ya tenés una suscripción de vita+ activa." };
+  }
+  if (mensaje.includes("not_eligible")) {
+    return { http: 409, codigo: "no_corresponde", mensaje: "Ya pasaron los 10 días para el botón de arrepentimiento." };
   }
   if (mensaje.includes("create_throttled")) {
     return { http: 429, codigo: "demasiados_pedidos", mensaje: "Esperá un minuto antes de volver a intentarlo." };

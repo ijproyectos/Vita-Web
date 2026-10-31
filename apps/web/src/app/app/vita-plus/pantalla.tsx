@@ -73,6 +73,10 @@ export function PantallaVitaPlus({
   const [procesando, setProcesando] = useState(false);
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  // Confirmación previa al pago: la persona ve cuánto se cobra en pesos ANTES de ir a Mercado Pago.
+  const [porPagar, setPorPagar] = useState<{ initPoint: string; pesos: number; fx: number; plan: PlanVitaPlus } | null>(null);
+  const [confirmandoArrepentimiento, setConfirmandoArrepentimiento] = useState(false);
+  const [arrepintiendo, setArrepintiendo] = useState(false);
 
   // La cotización se muestra para que se sepa cuántos pesos se cobran; al crear, el servidor vuelve a pedirla.
   useEffect(() => {
@@ -108,10 +112,26 @@ export function PantallaVitaPlus({
       setProcesando(false);
       return;
     }
-    toast.success(`Vas a pagar ${textoPesosPorPeriodo(plan, pesos)} (dólar oficial de hoy, $ ${formatoCotizacion(fx)}).`, {
-      duration: 5000,
+    setPorPagar({ initPoint, pesos, fx, plan });
+    setProcesando(false);
+  }
+
+  async function arrepentirme() {
+    if (arrepintiendo) return;
+    setArrepintiendo(true);
+    const r = await pedirApi({ action: "arrepentimiento" });
+    setArrepintiendo(false);
+    if (!r.ok) {
+      toast.error(mensajeDe(r.datos));
+      return;
+    }
+    const nuevo = r.datos.estado as EstadoVitaPlus | undefined;
+    if (nuevo) setEstado(nuevo);
+    setConfirmandoArrepentimiento(false);
+    toast.success("Registramos tu arrepentimiento y cortamos la suscripción. El reembolso se procesa en los próximos días.", {
+      duration: 8000,
     });
-    window.setTimeout(() => window.location.assign(initPoint), 1400);
+    router.refresh();
   }
 
   async function cancelar() {
@@ -221,6 +241,41 @@ export function PantallaVitaPlus({
                 {estado.renueva ? "Se renueva automáticamente." : "No se renueva: al llegar esa fecha termina."}
               </p>
             </div>
+            {estado.puedeArrepentirse && !confirmandoArrepentimiento && (
+              <button
+                type="button"
+                onClick={() => setConfirmandoArrepentimiento(true)}
+                className="text-center text-[12.5px] font-bold text-slate-brand underline underline-offset-2"
+              >
+                Botón de arrepentimiento
+              </button>
+            )}
+            {estado.puedeArrepentirse && confirmandoArrepentimiento && (
+              <div role="alertdialog" aria-label="Confirmar arrepentimiento" className="rounded-[var(--radius-item)] bg-card p-4 shadow-card">
+                <p className="text-[13.5px] font-bold">¿Te arrepentís de la contratación?</p>
+                <p className="mt-1 text-[12.5px] font-medium text-slate-brand">
+                  Cancelamos la suscripción ahora y procesamos el reembolso de lo que pagaste. Dejás de tener vita+.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={arrepintiendo}
+                    onClick={() => setConfirmandoArrepentimiento(false)}
+                    className="flex-1 rounded-full bg-muted py-3 text-[13.5px] font-bold disabled:opacity-60"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="button"
+                    disabled={arrepintiendo}
+                    onClick={arrepentirme}
+                    className="flex-1 rounded-full bg-ink py-3 text-[13.5px] font-extrabold text-on-ink disabled:opacity-60"
+                  >
+                    {arrepintiendo ? "Enviando…" : "Sí, me arrepiento"}
+                  </button>
+                </div>
+              </div>
+            )}
             {estado.renueva && !confirmandoCancelar && (
               <button
                 type="button"
@@ -256,6 +311,29 @@ export function PantallaVitaPlus({
                 </div>
               </div>
             )}
+          </div>
+) : porPagar ? (
+          <div role="alertdialog" aria-label="Confirmar pago" className="flex flex-col gap-2.5 rounded-[var(--radius-item)] bg-card p-4 text-center shadow-card">
+            <p className="font-heading text-[17px] font-extrabold tracking-[-0.02em]">
+              Vas a pagar {textoPesosPorPeriodo(porPagar.plan, porPagar.pesos)}
+            </p>
+            <p className="text-[12.5px] font-medium text-slate-brand">
+              Dólar oficial de hoy: $ {formatoCotizacion(porPagar.fx)}.
+              {porPagar.plan === "anual" ? ` Equivale a ${formatoUsd(PLANES_VITA_PLUS.anual.usdCentavos)} una vez por año.` : ""} Se renueva
+              automáticamente con ese mismo importe en pesos.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.assign(porPagar.initPoint);
+              }}
+              className="w-full rounded-full bg-primary py-4 text-[15px] font-extrabold text-primary-foreground transition-transform active:scale-[0.98] motion-reduce:transition-none"
+            >
+              Ir a Mercado Pago
+            </button>
+            <button type="button" onClick={() => setPorPagar(null)} className="w-full rounded-full bg-muted py-3 text-[13.5px] font-bold">
+              Volver
+            </button>
           </div>
         ) : (
           <>

@@ -6,6 +6,7 @@ import {
   cancelarSuscripcionVitaPlus,
   cotizarVitaPlus,
   crearSuscripcionVitaPlus,
+  ejercerArrepentimientoVitaPlus,
   obtenerEstadoVitaPlus,
 } from "@/lib/vita-plus/nucleo";
 import { esPlanVitaPlus } from "@/lib/vita-plus/planes";
@@ -30,6 +31,8 @@ function hostPublico(request: Request): string | null {
  * - crear { plan }: crea la suscripción en Mercado Pago y devuelve `initPoint` + los pesos reales a cobrar.
  * - estado: estado de vita+ de la cuenta (lo consulta la pantalla de gracias).
  * - cancelar: corta los cobros futuros; vita+ sigue hasta lo ya pagado.
+ * - arrepentimiento: botón de arrepentimiento (Res. 424/2020), solo dentro de los 10 días del primer cobro:
+ *   registra el pedido, cancela en Mercado Pago y avisa a soporte; el reembolso lo procesa una persona.
  * El cliente nunca manda montos: solo la clave del plan. Nunca lanza: siempre responde JSON.
  */
 export async function POST(request: Request) {
@@ -72,6 +75,11 @@ export async function POST(request: Request) {
       }
       case "cancelar": {
         const r = await cancelarSuscripcionVitaPlus(supabase, user.id);
+        if (!r.ok) return json({ error: r.mensaje }, r.http);
+        return json({ ok: true, estado: await obtenerEstadoVitaPlus(supabase) });
+      }
+      case "arrepentimiento": {
+        const r = await ejercerArrepentimientoVitaPlus(supabase, { id: user.id, email: user.email });
         if (!r.ok) return json({ error: r.mensaje }, r.http);
         return json({ ok: true, estado: await obtenerEstadoVitaPlus(supabase) });
       }

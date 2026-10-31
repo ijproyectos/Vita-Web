@@ -42,6 +42,18 @@ describe("firma del webhook", () => {
     expect(r).toEqual({ ok: true, dataId: "123" });
   });
 
+  it("acepta el manifiesto con el data.id alfanumérico en minúsculas", () => {
+    const ts = String(AHORA);
+    const r = verificarFirmaWebhook({
+      secreto: SECRETO,
+      cabecera: cabecera("2c93a0ab", "req-3", ts),
+      requestId: "req-3",
+      dataIds: ["2C93A0AB"],
+      ahoraMs: AHORA,
+    });
+    expect(r).toEqual({ ok: true, dataId: "2C93A0AB" });
+  });
+
   it("elige el data.id candidato que coincide (cuerpo vs query)", () => {
     const ts = String(AHORA);
     const r = verificarFirmaWebhook({

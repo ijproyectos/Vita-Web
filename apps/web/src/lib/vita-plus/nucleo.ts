@@ -3,6 +3,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { origenPublico } from "@/lib/email/origen";
+import { enviarEmail } from "@/lib/email/smtp";
+import { CORREO_SOPORTE } from "@/lib/legal/datos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MENSAJE_SIN_COTIZACION, obtenerDolarOficial } from "./cotizacion";
 import {
@@ -51,7 +53,7 @@ export async function obtenerEstadoVitaPlus(supabase: Cliente): Promise<EstadoVi
     const { data, error } = await supabase.rpc("mi_estado_vita_plus");
     if (error) return ESTADO_SIN_VITA_PLUS;
     const fila = (Array.isArray(data) ? data[0] : data) as
-      | { vp_activo?: unknown; vp_vence_at?: unknown; vp_plan?: unknown; vp_estado?: unknown; vp_renueva?: unknown }
+      | { vp_activo?: unknown; vp_vence_at?: unknown; vp_plan?: unknown; vp_estado?: unknown; vp_renueva?: unknown; vp_puede_arrepentirse?: unknown }
       | null
       | undefined;
     if (!fila) return ESTADO_SIN_VITA_PLUS;
@@ -61,6 +63,7 @@ export async function obtenerEstadoVitaPlus(supabase: Cliente): Promise<EstadoVi
       plan: esPlanVitaPlus(fila.vp_plan) ? fila.vp_plan : null,
       estado: esEstado(fila.vp_estado) ? fila.vp_estado : "none",
       renueva: fila.vp_renueva === true,
+      puedeArrepentirse: fila.vp_puede_arrepentirse === true,
     };
   } catch {
     return ESTADO_SIN_VITA_PLUS;
@@ -136,9 +139,6 @@ export async function crearSuscripcionVitaPlus(
   const admin = createAdminClient();
   const mp = crearClienteMp(token);
 
-  // Un checkout abandonado todavía podría completarse más tarde y cobrar dos veces: se cancelan los pendientes viejos.
-  await cancelarPendientesViejos(supabase, admin, mp, usuario.id);
-
   const { data: id, error: errorRpc } = await admin.rpc("iniciar_suscripcion_vita_plus", {
     p_usuario: usuario.id,
     p_referencia: referencia,
@@ -149,6 +149,12 @@ export async function crearSuscripcionVitaPlus(
     p_ars: pesos,
   });
   if (errorRpc || typeof id !== "string") return fallo(clasificarErrorRpc(errorRpc));
+
+  // Recién ahora (pasadas las guardas de throttle y de ya-suscripto) se concilian los checkouts viejos.
+  if (await conciliarPendientesViejos(supabase, admin, mp, usuario.id, id)) {
+    await marcarCancelada(admin, id);
+    return fallo(clasificarErrorRpc({ message: "already_subscribed" }));
+  }
 
   const cuerpo = construirCuerpoPreapproval({
     oferta: { razon: def.razon, meses: def.meses, pesos },
@@ -194,21 +200,46 @@ async function guardarPreapproval(admin: Cliente, suscripcionId: string, preappr
   return false;
 }
 
-async function cancelarPendientesViejos(supabase: Cliente, admin: Cliente, mp: ClienteMp, usuarioId: string): Promise<void> {
+/** Un checkout se considera abandonado recién pasado este tiempo desde que se creó. */
+export const MIN_PENDIENTE_ABANDONADO = 30;
+
+/**
+ * Concilia los checkouts `pending` de hace más de 30 min contra Mercado Pago ANTES de cancelar nada: si allá ya
+ * está autorizada o pausada (la persona pagó y el webhook todavía no llegó) NO se cancela, se sincroniza el
+ * estado local y se devuelve true (= ya está suscripta, hay que rechazar la nueva). Si allá sigue `pending`
+ * se cancela; si no se pudo leer, se deja como está (lo cubre el chequeo de duplicados del webhook).
+ */
+async function conciliarPendientesViejos(supabase: Cliente, admin: Cliente, mp: ClienteMp, usuarioId: string, nuevaId: string): Promise<boolean> {
+  let yaSuscripta = false;
   try {
+    const limite = new Date(new Date().getTime() - MIN_PENDIENTE_ABANDONADO * 60_000).toISOString();
     const { data } = await supabase
       .from("vita_plus_suscripciones")
       .select("id, preapproval_id")
       .eq("usuario_id", usuarioId)
       .eq("estado", "pending")
+      .neq("id", nuevaId)
+      .lt("creada_at", limite)
       .not("preapproval_id", "is", null);
     for (const fila of (data ?? []) as Array<{ id: string; preapproval_id: string | null }>) {
-      if (fila.preapproval_id) await mp.cancelar(fila.preapproval_id);
-      await marcarCancelada(admin, fila.id);
+      if (!fila.preapproval_id || !esIdSeguro(fila.preapproval_id)) continue;
+      const leido = await mp.leer(urlPreapproval(fila.preapproval_id));
+      if (leido.clase !== "ok") continue;
+      const estado = leerPreapproval(leido.json)?.estado;
+      if (estado === "authorized" || estado === "paused") {
+        await admin.rpc("actualizar_estado_suscripcion_vita_plus", { p_suscripcion: fila.id, p_estado: estado });
+        yaSuscripta = true;
+      } else if (estado === "pending") {
+        const r = await mp.cancelar(fila.preapproval_id);
+        if (r.status >= 200 && r.status < 300) await marcarCancelada(admin, fila.id);
+      } else if (estado === "cancelled") {
+        await marcarCancelada(admin, fila.id);
+      }
     }
   } catch {
     // Mejor esfuerzo: un fallo acá no impide crear la suscripción nueva.
   }
+  return yaSuscripta;
 }
 
 // --- Cancelar --------------------------------------------------------------------------------------------
@@ -255,6 +286,43 @@ export async function cancelarSuscripcionVitaPlus(supabase: Cliente, usuarioId: 
       p_estado: "cancelled",
     });
     if (errorEstado) return { ok: false, mensaje: "No pudimos cancelar tu suscripción. Probá de nuevo.", http: 500 };
+  }
+  return { ok: true };
+}
+
+// --- Botón de arrepentimiento (Res. 424/2020) -------------------------------------------------------------
+
+/**
+ * Revocación dentro de los 10 días del primer cobro. Primero queda REGISTRADO el pedido (nunca se pierde), después
+ * se corta la suscripción en Mercado Pago y se avisa a soporte por mail (mejor esfuerzo). El reembolso NO es
+ * automático: lo procesa una persona. Los datos de contacto salen de la sesión.
+ */
+export async function ejercerArrepentimientoVitaPlus(
+  supabase: Cliente,
+  usuario: { id: string; email: string | undefined }
+): Promise<ResultadoCancelar> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("solicitar_arrepentimiento_vita_plus", { p_usuario: usuario.id });
+  if (error) {
+    const f = clasificarErrorRpc(error);
+    return { ok: false, mensaje: f.mensaje, http: f.http };
+  }
+  const fila = (Array.isArray(data) ? data[0] : data) as { vp_suscripcion?: string; vp_nueva?: boolean } | null;
+
+  const cancelada = await cancelarSuscripcionVitaPlus(supabase, usuario.id);
+  if (!cancelada.ok) {
+    return { ok: false, mensaje: "Registramos tu pedido, pero no pudimos cortar el cobro. Probá de nuevo en un momento.", http: cancelada.http };
+  }
+
+  if (fila?.vp_nueva) {
+    const texto = `Pedido de arrepentimiento de vita+.\nCuenta: ${usuario.id}\nEmail: ${usuario.email ?? "(sin email)"}\nSuscripción: ${fila.vp_suscripcion ?? ""}\nLa suscripción ya fue cancelada en Mercado Pago; falta procesar el reembolso.`;
+    void enviarEmail({
+      para: CORREO_SOPORTE,
+      asunto: "Arrepentimiento de vita+ (reembolso pendiente)",
+      texto,
+      html: `<p>${texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</p>`,
+      responderA: usuario.email,
+    }).catch(() => undefined);
   }
   return { ok: true };
 }
@@ -316,12 +384,66 @@ async function cancelarDuplicado(admin: Cliente, mp: ClienteMp, suscripcionId: s
   return !error;
 }
 
+interface DatosNoAcreditado {
+  clave: string;
+  pagoId: string | null;
+  preapprovalId: string | null;
+  referencia: string | null;
+  motivo: string;
+  monto: unknown;
+  moneda: unknown;
+  estadoMp: string | null;
+  usuarioId?: string;
+  suscripcionId?: string;
+}
+
+/**
+ * Deja constancia de un cobro (o evento) que NO se acreditó, para revisarlo o reembolsarlo a mano. Un cobro real
+ * nunca se descarta en silencio. Devuelve false si no se pudo escribir: el webhook responde 5xx y Mercado Pago
+ * reintenta.
+ */
+async function anotarNoAcreditado(admin: Cliente, d: DatosNoAcreditado): Promise<boolean> {
+  const { data, error } = await admin.rpc("anotar_pago_no_acreditado_vita_plus", {
+    p_clave: d.clave,
+    p_pago_id: d.pagoId,
+    p_preapproval_id: d.preapprovalId,
+    p_external_reference: d.referencia,
+    p_motivo: d.motivo,
+    p_monto: typeof d.monto === "number" && Number.isFinite(d.monto) ? d.monto : null,
+    p_moneda: typeof d.moneda === "string" ? d.moneda.slice(0, 10) : null,
+    p_estado_mp: d.estadoMp,
+    p_usuario: d.usuarioId ?? null,
+    p_suscripcion: d.suscripcionId ?? null,
+  });
+  if (error || data !== true) {
+    console.error("vita+: no se pudo anotar el cobro no acreditado", error?.code);
+    return false;
+  }
+  return true;
+}
+
+async function ignorarAnotando(admin: Cliente, d: DatosNoAcreditado): Promise<RespuestaWebhook> {
+  if (!(await anotarNoAcreditado(admin, d))) return REINTENTAR();
+  return responder("ignorado", { ignored: d.motivo });
+}
+
 async function manejarPreapproval(admin: Cliente, mp: ClienteMp, id: string): Promise<RespuestaWebhook> {
   const leido = await mp.leer(urlPreapproval(id));
   if (leido.clase !== "ok") return respuestaFallo(leido.clase);
   const info = leerPreapproval(leido.json);
   if (!info) return REINTENTAR();
-  if (!info.estado) return responder("ignorado", { ignored: "unknown_status" });
+  const evento = (motivo: string, extra: Partial<DatosNoAcreditado> = {}): DatosNoAcreditado => ({
+    clave: `pre:${info.id}:${motivo}`,
+    pagoId: null,
+    preapprovalId: info.id,
+    referencia: info.referenciaExterna,
+    motivo,
+    monto: info.monto,
+    moneda: info.moneda,
+    estadoMp: null,
+    ...extra,
+  });
+  if (!info.estado) return ignorarAnotando(admin, evento("estado_desconocido"));
 
   let encontrada = await buscarSuscripcion(admin, "preapproval_id", info.id);
   if (encontrada.fallo) return REINTENTAR();
@@ -330,12 +452,12 @@ async function manejarPreapproval(admin: Cliente, mp: ClienteMp, id: string): Pr
     if (encontrada.fallo) return REINTENTAR();
   }
   const sub = encontrada.fila;
-  if (!sub) return responder("ignorado", { ignored: "unknown_subscription" });
+  if (!sub) return ignorarAnotando(admin, evento("suscripcion_desconocida"));
 
   // Los términos tienen que ser los que guardamos al crear ESTA suscripción (el monto depende del dólar de ese día).
   if (info.tieneMonto && !montoCoincide(info.monto, info.moneda, sub.ars_pesos)) {
     console.error("vita+: el preapproval no coincide con lo guardado");
-    return responder("ignorado", { ignored: "offer_mismatch" });
+    return ignorarAnotando(admin, evento("monto_distinto", { usuarioId: sub.usuario_id, suscripcionId: sub.id }));
   }
 
   let masNuevas: RefAutorizada[] = [];
@@ -378,37 +500,48 @@ async function manejarPagoAutorizado(admin: Cliente, mp: ClienteMp, id: string):
     console.error("vita+: forma inesperada de pago autorizado");
     return responder("transitorio", { error: "unexpected_shape" });
   }
+  const preapprovalId = info.preapprovalId;
+  const pagoId = info.pagoId;
+  const anotar = (motivo: string, extra: Partial<DatosNoAcreditado> = {}): DatosNoAcreditado => ({
+    clave: pagoId,
+    pagoId,
+    preapprovalId,
+    referencia: null,
+    motivo,
+    monto: info.monto,
+    moneda: info.moneda,
+    estadoMp: info.estadoPago,
+    ...extra,
+  });
 
-  let encontrada = await buscarSuscripcion(admin, "preapproval_id", info.preapprovalId);
+  let encontrada = await buscarSuscripcion(admin, "preapproval_id", preapprovalId);
   if (encontrada.fallo) return REINTENTAR();
+  let referencia: string | null = null;
   if (!encontrada.fila) {
     // El preapproval_id puede no estar guardado todavía (la notificación se adelantó): se relaciona por external_reference.
-    if (!esIdSeguro(info.preapprovalId)) return responder("ignorado", { ignored: "unknown_subscription" });
-    const padre = await mp.leer(urlPreapproval(info.preapprovalId));
+    if (!esIdSeguro(preapprovalId)) return ignorarAnotando(admin, anotar("suscripcion_desconocida"));
+    const padre = await mp.leer(urlPreapproval(preapprovalId));
     if (padre.clase !== "ok") return respuestaFallo(padre.clase);
-    const padreInfo = leerPreapproval(padre.json);
-    if (!padreInfo?.referenciaExterna) return responder("ignorado", { ignored: "unknown_subscription" });
-    encontrada = await buscarSuscripcion(admin, "external_reference", padreInfo.referenciaExterna);
+    referencia = leerPreapproval(padre.json)?.referenciaExterna ?? null;
+    if (!referencia) return ignorarAnotando(admin, anotar("suscripcion_desconocida"));
+    encontrada = await buscarSuscripcion(admin, "external_reference", referencia);
     if (encontrada.fallo) return REINTENTAR();
   }
   const sub = encontrada.fila;
-  if (!sub) return responder("ignorado", { ignored: "unknown_subscription" });
+  if (!sub) return ignorarAnotando(admin, anotar("suscripcion_desconocida", { referencia }));
 
-  const decision = decidirPago(info, { preapproval_id: sub.preapproval_id ?? info.preapprovalId, ars_pesos: sub.ars_pesos });
+  const decision = decidirPago(info, { preapproval_id: sub.preapproval_id ?? preapprovalId, ars_pesos: sub.ars_pesos });
   if (decision.tipo === "ignorar") {
     if (decision.motivo === "monto_distinto") console.error("vita+: el cobro no coincide con el monto guardado");
-    return responder("ignorado", { ignored: decision.motivo });
+    return ignorarAnotando(admin, anotar(decision.motivo, { referencia, usuarioId: sub.usuario_id, suscripcionId: sub.id }));
   }
   if (decision.tipo === "forma_inesperada") return responder("transitorio", { error: "unexpected_shape" });
 
   const autorizadas = await cargarAutorizadas(admin, sub.usuario_id);
   if (!autorizadas) return REINTENTAR();
-  if (planificarDuplicados(sub, autorizadas).cancelarEsta) {
-    console.error("vita+: cobro de una suscripción duplicada, no se acredita");
-    await cancelarDuplicado(admin, mp, sub.id, info.preapprovalId);
-    return responder("manejado", { handled: "duplicate_not_credited" });
-  }
+  const duplicada = planificarDuplicados(sub, autorizadas).cancelarEsta;
 
+  // Un cobro aprobado y con el monto correcto SIEMPRE se acredita, también el de una suscripción duplicada.
   const { data, error } = await admin.rpc("registrar_pago_vita_plus", {
     p_usuario: sub.usuario_id,
     p_pago: decision.pagoId,
@@ -418,6 +551,16 @@ async function manejarPagoAutorizado(admin: Cliente, mp: ClienteMp, id: string):
   if (error) {
     console.error("vita+: no se pudo acreditar el pago", error.code);
     return REINTENTAR();
+  }
+
+  if (duplicada) {
+    // Se cortan los cobros futuros de la duplicada (la más nueva) y se anota para decidir a mano el reembolso.
+    console.error("vita+: cobro de una suscripción duplicada: se acredita y se cancela la duplicada");
+    if (!(await cancelarDuplicado(admin, mp, sub.id, preapprovalId))) return REINTENTAR();
+    if (!(await anotarNoAcreditado(admin, anotar("duplicada", { referencia, usuarioId: sub.usuario_id, suscripcionId: sub.id })))) {
+      return REINTENTAR();
+    }
+    return responder("manejado", { handled: "duplicate_credited" });
   }
   // NULL = ese pago ya estaba acreditado (reenvío): sigue siendo un éxito para Mercado Pago.
   return responder("manejado", { handled: data ? "granted" : "already_processed" });
