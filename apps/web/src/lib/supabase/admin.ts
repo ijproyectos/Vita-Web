@@ -49,6 +49,13 @@ import { createClient } from "@supabase/supabase-js";
  * una transacción la versión de cada recuerdo, la memoria activa y los mensajes excluidos. Los `custom_id` del lote son opacos
  * (nunca el id de la persona). Nunca devuelve texto de recuerdos ni de mensajes.
  *
+ * vita+ con Mercado Pago (`lib/vita-plus/nucleo.ts`, migración 044): (1) el webhook público `/api/mercadopago/webhook`,
+ * autenticado por la firma `x-signature` (HMAC con `MP_WEBHOOK_SECRET`) ANTES de tocar nada, que re-pide el recurso a
+ * Mercado Pago con nuestro token y acredita vita+ solo por un pago aprobado cuyo monto es el guardado para esa
+ * suscripción; (2) crear y cancelar la suscripción desde `/api/vita-plus`, DESPUÉS de autenticar la sesión: el
+ * `usuario_id` sale de ella, el precio y la cotización los calcula el servidor (el cliente solo manda la clave del
+ * plan) y las RPC de escritura de la 044 las ejecuta solo service_role. Nunca devuelve ids ni datos de Mercado Pago.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,
