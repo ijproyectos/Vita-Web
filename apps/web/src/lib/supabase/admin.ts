@@ -56,6 +56,12 @@ import { createClient } from "@supabase/supabase-js";
  * `usuario_id` sale de ella, el precio y la cotización los calcula el servidor (el cliente solo manda la clave del
  * plan) y las RPC de escritura de la 044 las ejecuta solo service_role. Nunca devuelve ids ni datos de Mercado Pago.
  *
+ * Panel de administración `/adminvita` (decisión del dueño 2026-11-01; `lib/admin/datos.ts`): lectura de métricas de TODA la
+ * base para los administradores de `ADMIN_EMAILS` (3 personas), y escritura de la auditoría `admin_accesos`. El cliente se crea
+ * RECIÉN después de que `requireAdmin()` (`lib/admin/acceso.ts`) validó con la sesión (`getUser`, email confirmado y en la
+ * lista) y cada función de datos vuelve a exigirlo. Solo ejecuta las RPC `admin_*` de la migración 045 (service_role, sin texto
+ * de usuarios: ni mensajes, ni recuerdos, ni datos de salud) y es de solo lectura salvo la fila de auditoría.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,
