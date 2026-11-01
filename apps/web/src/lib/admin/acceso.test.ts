@@ -6,6 +6,13 @@ const getUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser } }),
 }));
+const revocacion = vi.fn();
+vi.mock("react", async (original) => ({ ...(await original<typeof import("react")>()), cache: <T,>(f: T) => f }));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => revocacion() }) }) }),
+  }),
+}));
 const cookieGet = vi.fn();
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: cookieGet }),
@@ -25,6 +32,8 @@ describe("requireAdmin", () => {
   beforeEach(() => {
     getUser.mockReset();
     cookieGet.mockReset();
+    revocacion.mockReset();
+    revocacion.mockResolvedValue({ data: null, error: null });
     cookieGet.mockReturnValue(undefined);
     process.env.ADMIN_EMAILS = "ana@example.com, bob@example.com";
     process.env.ADMIN_SESSION_SECRET = SECRETO;
@@ -77,5 +86,25 @@ describe("requireAdmin", () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1", email: "Ana@Example.com", email_confirmed_at: "x" } }, error: null });
     cookieGet.mockReturnValue({ value: crearToken({ userId: "u1", email: "ana@example.com", ahoraMs: Date.now(), secreto: SECRETO }) });
     await expect(requireAdmin()).resolves.toEqual({ id: "u1", email: "ana@example.com" });
+  });
+  it("cookie emitida antes del último logout -> pantalla de verificación", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1", email: "ana@example.com", email_confirmed_at: "x" } }, error: null });
+    const emitida = Date.now() - 5 * 60_000;
+    cookieGet.mockReturnValue({ value: crearToken({ userId: "u1", email: "ana@example.com", ahoraMs: emitida, secreto: SECRETO }) });
+    revocacion.mockResolvedValue({ data: { revocado_desde: new Date(emitida + 60_000).toISOString() }, error: null });
+    await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/adminvita/verificar");
+  });
+  it("cookie emitida después del logout sigue valiendo", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1", email: "ana@example.com", email_confirmed_at: "x" } }, error: null });
+    const ahora = Date.now();
+    cookieGet.mockReturnValue({ value: crearToken({ userId: "u1", email: "ana@example.com", ahoraMs: ahora, secreto: SECRETO }) });
+    revocacion.mockResolvedValue({ data: { revocado_desde: new Date(ahora - 60_000).toISOString() }, error: null });
+    await expect(requireAdmin()).resolves.toMatchObject({ id: "u1" });
+  });
+  it("si no se puede leer la revocación, falla cerrado", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1", email: "ana@example.com", email_confirmed_at: "x" } }, error: null });
+    cookieGet.mockReturnValue({ value: crearToken({ userId: "u1", email: "ana@example.com", ahoraMs: Date.now(), secreto: SECRETO }) });
+    revocacion.mockResolvedValue({ data: null, error: { message: "boom" } });
+    await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/adminvita/verificar");
   });
 });

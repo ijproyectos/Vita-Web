@@ -1,7 +1,7 @@
 // Códigos de vita+ (migración 046). Módulo puro, sin `server-only`: lo usan el servidor, el panel y los tests.
 // Un código se GENERA en el servidor, se muestra una sola vez y solo se guarda su hash sha256 + los últimos 4.
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 
 export type TipoCodigo = "plus" | "admin";
 
@@ -26,8 +26,20 @@ export function tieneFormaDeCodigo(normalizado: string): boolean {
   return [...cuerpo].every((c) => ALFABETO_CODIGO.includes(c));
 }
 
-export function hashCodigo(normalizado: string): string {
-  return createHash("sha256").update(normalizado, "utf8").digest("hex");
+/**
+ * Secreto con el que se firman los hashes de los códigos: `VITA_PLUS_CODIGOS_SECRET`, o `SUPABASE_SERVICE_ROLE_KEY`
+ * si no está. Tiene que ser ESTABLE: rotarlo invalida todos los códigos todavía no canjeados.
+ */
+export function leerSecretoCodigos(env: Record<string, string | undefined> = process.env): string | null {
+  const propio = env.VITA_PLUS_CODIGOS_SECRET?.trim();
+  if (propio) return propio;
+  const respaldo = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  return respaldo || null;
+}
+
+/** HMAC-SHA256 hex del código normalizado: con 40 bits de código, un hash sin clave se fuerza offline si la tabla se filtra. */
+export function hashCodigo(normalizado: string, secreto: string): string {
+  return createHmac("sha256", secreto).update(normalizado, "utf8").digest("hex");
 }
 
 /** "VITAABCD2345" -> "VITA-ABCD-2345". */
@@ -105,7 +117,7 @@ export function mensajeCanje(r: ResultadoCanje): string {
   }
 }
 
-// --- Freno de intentos fallidos -------------------------------------------------------------------------
+// --- Freno de intentos -------------------------------------------------------------------------
 
 export const MAX_FALLOS_CANJE = 5;
 export const VENTANA_FALLOS_CANJE_MS = 15 * 60_000;
@@ -120,8 +132,9 @@ export function claveFallosCanje(usuarioId: string): string {
   return `canje:u:${usuarioId}:15min`;
 }
 
-export function bloqueadoPorFallos(fallos: number): boolean {
-  return fallos >= MAX_FALLOS_CANJE;
+/** `cuenta` = intentos de la ventana INCLUIDO el actual (incremento atómico y después chequeo). */
+export function bloqueadoPorFallos(cuenta: number): boolean {
+  return cuenta > MAX_FALLOS_CANJE;
 }
 
 // --- Alta de códigos desde el panel ---------------------------------------------------------------------

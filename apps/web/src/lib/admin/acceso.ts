@@ -1,8 +1,10 @@
 import "server-only";
 
 import type { User } from "@supabase/supabase-js";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { decidirAcceso, parsearAdminEmails, type DecisionAcceso } from "./decision";
 import { COOKIE_ADMIN, leerSecretoSesion, verificarToken } from "./sesion";
@@ -27,6 +29,21 @@ export async function evaluarAccesoAdmin(): Promise<{ usuario: User | null; deci
 }
 
 /**
+ * Instante desde el que valen las cookies del segundo factor de este admin (`admin_2fa_revocaciones`), o 0 si nunca
+ * cerró sesión. Se consulta una vez por request (`cache`). Lanza si no se puede leer: quien llama falla CERRADO.
+ */
+const leerRevocadoDesde = cache(async (email: string): Promise<number> => {
+  const { data, error } = await createAdminClient()
+    .from("admin_2fa_revocaciones")
+    .select("revocado_desde")
+    .eq("admin_email", email)
+    .maybeSingle();
+  if (error) throw new Error("revocaciones no disponibles");
+  const t = data ? Date.parse(String((data as { revocado_desde: unknown }).revocado_desde)) : 0;
+  return Number.isFinite(t) ? t : 0;
+});
+
+/**
  * ¿La sesión de Supabase tiene además la cookie de segundo factor, firmada, vigente y atada a ESTE usuario y email?
  * Sin `ADMIN_SESSION_SECRET` configurado siempre es false (nadie puede completar la verificación).
  */
@@ -35,7 +52,10 @@ export async function tieneVerificacionVigente(usuario: Pick<User, "id">, email:
   if (!secreto) return false;
   try {
     const token = (await cookies()).get(COOKIE_ADMIN)?.value;
-    return verificarToken(token, { secreto, userId: usuario.id, email, ahoraMs: Date.now() }).ok;
+    const r = verificarToken(token, { secreto, userId: usuario.id, email, ahoraMs: Date.now() });
+    if (!r.ok) return false;
+    // Una cookie emitida antes del último cierre de sesión ya no vale. Si no se puede consultar, no se entra.
+    return r.payload.i >= (await leerRevocadoDesde(email.trim().toLowerCase()));
   } catch {
     return false;
   }

@@ -16,7 +16,18 @@ export function validarMensajePush(crudo: { titulo: unknown; cuerpo: unknown }):
   return { ok: true, mensaje: { titulo, cuerpo } };
 }
 
-/** Máx. 10 notificaciones por hora por admin (se cuentan en `admin_acciones`). */
-export function superaLimitePush(enviadasUltimaHora: number): boolean {
-  return enviadasUltimaHora >= PUSH_MAX_POR_HORA;
+/** `cuenta` = envíos de la hora INCLUIDO el actual (incremento atómico con `contar_pedido` y después chequeo). */
+export function superaLimitePush(cuenta: number): boolean {
+  return cuenta > PUSH_MAX_POR_HORA;
+}
+
+const MS_HORA = 3_600_000;
+
+/** Comienzo de la ventana fija de una hora (UTC) para `limites_pedidos`. */
+export function inicioVentanaPush(ahoraMs: number): Date {
+  return new Date(Math.floor(ahoraMs / MS_HORA) * MS_HORA);
+}
+
+export function clavePush(adminEmail: string): string {
+  return `admin-push:${adminEmail.trim().toLowerCase()}:hora`;
 }

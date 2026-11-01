@@ -221,7 +221,7 @@ begin;
           raise exception 'FAIL: % puede ejecutar %', rol, f;
         end if;
       end loop;
-      foreach f in array array['public.vita_plus_codigos', 'public.vita_plus_canjes', 'public.admin_codigos_verificacion', 'public.admin_acciones'] loop
+      foreach f in array array['public.vita_plus_codigos', 'public.vita_plus_canjes', 'public.admin_codigos_verificacion', 'public.admin_acciones', 'public.admin_2fa_revocaciones'] loop
         if has_table_privilege(rol, f, 'select') or has_table_privilege(rol, f, 'insert') then
           raise exception 'FAIL: % tiene acceso directo a %', rol, f;
         end if;
@@ -241,7 +241,7 @@ begin;
   declare
     t text;
   begin
-    foreach t in array array['vita_plus_codigos', 'vita_plus_canjes', 'admin_codigos_verificacion', 'admin_acciones'] loop
+    foreach t in array array['vita_plus_codigos', 'vita_plus_canjes', 'admin_codigos_verificacion', 'admin_acciones', 'admin_2fa_revocaciones'] loop
       if not (select relrowsecurity from pg_class where oid = ('public.' || t)::regclass) then
         raise exception 'FAIL: % sin RLS', t;
       end if;

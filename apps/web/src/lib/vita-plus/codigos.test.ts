@@ -8,6 +8,7 @@ import {
   formatearCodigo,
   generarCodigo,
   hashCodigo,
+  leerSecretoCodigos,
   inicioVentanaCanje,
   mensajeCanje,
   MENSAJE_CODIGO_INVALIDO,
@@ -46,10 +47,21 @@ describe("normalización y hash", () => {
     expect(normalizarCodigo("VITA_ABCD.2345")).toBe("VITAABCD2345");
   });
   it("el mismo código escrito de distintas maneras da el mismo hash", () => {
-    const a = hashCodigo(normalizarCodigo("VITA-ABCD-2345"));
+    const a = hashCodigo(normalizarCodigo("VITA-ABCD-2345"), "secreto-1");
     expect(a).toMatch(/^[0-9a-f]{64}$/);
-    expect(hashCodigo(normalizarCodigo("vita abcd2345"))).toBe(a);
-    expect(hashCodigo(normalizarCodigo("VITA-ABCD-2346"))).not.toBe(a);
+    expect(hashCodigo(normalizarCodigo("vita abcd2345"), "secreto-1")).toBe(a);
+    expect(hashCodigo(normalizarCodigo("VITA-ABCD-2346"), "secreto-1")).not.toBe(a);
+  });
+  it("es un HMAC: otro secreto da otro hash (no sirve un diccionario offline)", () => {
+    expect(hashCodigo("VITAABCD2345", "secreto-1")).not.toBe(hashCodigo("VITAABCD2345", "secreto-2"));
+    // vector conocido de HMAC-SHA256
+    expect(hashCodigo("what do ya want for nothing?", "Jefe")).toBe("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+  });
+  it("secreto: el propio, si no el service role, si no null", () => {
+    expect(leerSecretoCodigos({ VITA_PLUS_CODIGOS_SECRET: " a ", SUPABASE_SERVICE_ROLE_KEY: "b" })).toBe("a");
+    expect(leerSecretoCodigos({ SUPABASE_SERVICE_ROLE_KEY: "b" })).toBe("b");
+    expect(leerSecretoCodigos({ VITA_PLUS_CODIGOS_SECRET: "  " })).toBeNull();
+    expect(leerSecretoCodigos({})).toBeNull();
   });
   it("forma de código y últimos 4", () => {
     expect(tieneFormaDeCodigo("VITAABCD2345")).toBe(true);
@@ -103,9 +115,9 @@ describe("mensajes y freno de fallos", () => {
     expect(mensajeCanje("ya_canjeado")).toBe("Ya canjeaste este código.");
     expect(mensajeCanje("ya_permanente")).toMatch(/sin vencimiento/);
   });
-  it("5 fallos en una ventana de 15 minutos bloquean", () => {
-    expect(bloqueadoPorFallos(4)).toBe(false);
-    expect(bloqueadoPorFallos(5)).toBe(true);
+  it("el sexto intento en una ventana de 15 minutos bloquea", () => {
+    expect(bloqueadoPorFallos(5)).toBe(false);
+    expect(bloqueadoPorFallos(6)).toBe(true);
     expect(inicioVentanaCanje(Date.UTC(2026, 10, 1, 15, 14, 59)).toISOString()).toBe("2026-11-01T15:00:00.000Z");
     expect(inicioVentanaCanje(Date.UTC(2026, 10, 1, 15, 15, 0)).toISOString()).toBe("2026-11-01T15:15:00.000Z");
     expect(claveFallosCanje("u1")).toBe("canje:u:u1:15min");

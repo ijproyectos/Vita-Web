@@ -1,6 +1,8 @@
 import { FUENTE_CODIGO, MARCA } from "../marca";
 import { ESTILO, esc, layout, textoFooter, type EmailRenderizado } from "./base";
 
+const PIE = "Recibiste este mail porque se pidió entrar al panel de vita. Si no fuiste vos, ignoralo.";
+
 /** Código de verificación (segundo factor) del panel de administración. */
 export function codigoAdmin(args: { codigo: string; minutosVigencia: number; origen: string }): EmailRenderizado {
   const { codigo, minutosVigencia, origen } = args;
@@ -21,11 +23,11 @@ export function codigoAdmin(args: { codigo: string; minutosVigencia: number; ori
     "",
     "Si no pediste este código, no lo compartas con nadie y avisá al equipo.",
     "",
-    textoFooter(origen),
+    textoFooter(origen, PIE),
   ].join("\n");
   return {
     asunto,
-    html: layout({ preheader: `Tu código es ${codigo}. Vence en ${minutosVigencia} minutos.`, contenido, origen }),
+    html: layout({ preheader: `Tu código es ${codigo}. Vence en ${minutosVigencia} minutos.`, contenido, origen, pie: PIE }),
     texto,
   };
 }

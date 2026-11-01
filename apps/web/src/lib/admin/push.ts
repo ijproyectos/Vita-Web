@@ -4,8 +4,8 @@ import { entregarAviso } from "@/lib/notificaciones/avisos";
 import type { PayloadPush } from "@/lib/notificaciones/push";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Admin } from "./acceso";
-import { contarAccionesUltimaHora, registrarAccionAdmin } from "./auditoria";
-import { superaLimitePush, validarMensajePush } from "./push-form";
+import { registrarAccionAdmin } from "./auditoria";
+import { clavePush, inicioVentanaPush, superaLimitePush, validarMensajePush } from "./push-form";
 
 export type ResultadoPushAdmin = { status: "success"; mensaje: string } | { status: "error"; mensaje: string };
 
@@ -24,12 +24,16 @@ export async function enviarMensajeAUsuario(admin: Admin, usuarioId: string, tit
   if (!v.ok) return { status: "error", mensaje: v.error };
 
   try {
-    const hechas = await contarAccionesUltimaHora(admin.email, "push_enviado");
-    // Falla cerrado: si no se puede contar, no se manda (el límite es lo que evita un envío masivo por error).
-    if (hechas === null) return ERROR_GENERICO;
-    if (superaLimitePush(hechas)) return { status: "error", mensaje: "Llegaste al máximo de 10 notificaciones por hora. Probá más tarde." };
-
     const cliente = createAdminClient();
+    // Incremento atómico y después chequeo (`contar_pedido`), no "leer y sumar". Falla cerrado: si no se puede
+    // contar, no se manda (el límite es lo que evita un envío masivo por error).
+    const { data: cuenta, error: errorConteo } = await cliente.rpc("contar_pedido", {
+      p_clave: clavePush(admin.email),
+      p_ventana_inicio: inicioVentanaPush(Date.now()).toISOString(),
+    });
+    if (errorConteo || typeof cuenta !== "number") return ERROR_GENERICO;
+    if (superaLimitePush(cuenta)) return { status: "error", mensaje: "Llegaste al máximo de 10 notificaciones por hora. Probá más tarde." };
+
     const { data: existe, error: errorUsuario } = await cliente.auth.admin.getUserById(usuarioId);
     if (errorUsuario || !existe?.user) return { status: "error", mensaje: "El usuario no existe." };
 

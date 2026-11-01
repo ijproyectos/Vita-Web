@@ -7,6 +7,7 @@ import {
   esResultadoCanje,
   hashCodigo,
   inicioVentanaCanje,
+  leerSecretoCodigos,
   MENSAJE_CODIGO_INVALIDO,
   MENSAJE_DEMASIADOS_INTENTOS,
   mensajeCanje,
@@ -23,8 +24,8 @@ export type ResultadoCanjeServidor =
  * sesión: nunca un id del cliente. Usa `service_role` porque las tablas de códigos no tienen policies (uso
  * sancionado, ver `lib/supabase/admin.ts`).
  *
- * Freno de intentos fallidos: máx. 5 por usuario cada 15 minutos (ventana fija en `limites_pedidos`, vía
- * `contar_pedido`); los aciertos no cuentan. Falla CERRADO si el freno no se puede leer: un código de vita+ vale
+ * Freno: máx. 5 intentos por usuario cada 15 minutos (ventana fija en `limites_pedidos`, vía `contar_pedido`, que
+ * incrementa y devuelve la cuenta en una sola sentencia). Falla CERRADO si el freno no se puede leer: un código de vita+ vale
  * plata, y con la base caída no se canjea igual. El mensaje al usuario es genérico.
  */
 export async function canjearCodigoVitaPlus(usuarioId: string, codigoCrudo: string): Promise<ResultadoCanjeServidor> {
@@ -34,30 +35,21 @@ export async function canjearCodigoVitaPlus(usuarioId: string, codigoCrudo: stri
     const ventana = inicioVentanaCanje(ahora).toISOString();
     const clave = claveFallosCanje(usuarioId);
 
-    const { data: previa, error: errorLectura } = await admin
-      .from("limites_pedidos")
-      .select("cuenta")
-      .eq("clave", clave)
-      .eq("ventana_inicio", ventana)
-      .maybeSingle();
-    if (errorLectura) return { ok: false, http: 503, mensaje: "No pudimos canjear el código. Probá de nuevo." };
-    if (bloqueadoPorFallos((previa as { cuenta: number } | null)?.cuenta ?? 0)) {
-      return { ok: false, http: 429, mensaje: MENSAJE_DEMASIADOS_INTENTOS };
-    }
+    // Incremento atómico y después chequeo: cuenta TODOS los intentos de la ventana (5 por 15 minutos), así dos
+    // pedidos en paralelo no pueden pasar ambos por un "leer y después sumar". Falla cerrado si no se puede contar.
+    const { data: cuenta, error: errorConteo } = await admin.rpc("contar_pedido", { p_clave: clave, p_ventana_inicio: ventana });
+    if (errorConteo || typeof cuenta !== "number") return { ok: false, http: 503, mensaje: "No pudimos canjear el código. Probá de nuevo." };
+    if (bloqueadoPorFallos(cuenta)) return { ok: false, http: 429, mensaje: MENSAJE_DEMASIADOS_INTENTOS };
 
-    const registrarFallo = async () => {
-      await admin.rpc("contar_pedido", { p_clave: clave, p_ventana_inicio: ventana });
-    };
+    const secreto = leerSecretoCodigos();
+    if (!secreto) return { ok: false, http: 503, mensaje: "No pudimos canjear el código. Probá de nuevo." };
 
     const normalizado = normalizarCodigo(codigoCrudo.slice(0, 64));
-    if (!tieneFormaDeCodigo(normalizado)) {
-      await registrarFallo();
-      return { ok: false, http: 400, mensaje: MENSAJE_CODIGO_INVALIDO };
-    }
+    if (!tieneFormaDeCodigo(normalizado)) return { ok: false, http: 400, mensaje: MENSAJE_CODIGO_INVALIDO };
 
     const { data, error } = await admin.rpc("canjear_codigo_vita_plus", {
       p_usuario: usuarioId,
-      p_hash: hashCodigo(normalizado),
+      p_hash: hashCodigo(normalizado, secreto),
     });
     if (error) return { ok: false, http: 503, mensaje: "No pudimos canjear el código. Probá de nuevo." };
 
@@ -75,8 +67,6 @@ export async function canjearCodigoVitaPlus(usuarioId: string, codigoCrudo: stri
         permanente: fila?.cj_permanente === true,
       };
     }
-    // Solo los códigos que no sirven cuentan como fallo; "ya lo canjeaste" no es un intento de adivinar.
-    if (resultado !== "ya_canjeado" && resultado !== "ya_permanente") await registrarFallo();
     return { ok: false, http: 400, mensaje: mensajeCanje(resultado) };
   } catch {
     return { ok: false, http: 503, mensaje: "No pudimos canjear el código. Probá de nuevo." };

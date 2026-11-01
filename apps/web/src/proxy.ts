@@ -37,11 +37,12 @@ export async function proxy(request: NextRequest) {
 
   // Panel /adminvita: la cookie de verificación (segundo factor) es DESLIZANTE. Los Server Components no pueden
   // escribir cookies, así que el vencimiento de 30 minutos de inactividad se corre acá, en cada vista del panel.
-  // Los prefetch del router no cuentan como actividad. Solo se renueva una cookie ya válida para esta sesión.
+  // Los prefetch del router no cuentan como actividad y los POST (Server Actions, entre ellas el cierre de sesión) nunca renuevan: así el Set-Cookie que borra la cookie no se pisa. Solo se renueva una cookie ya válida para esta sesión.
   const ruta = request.nextUrl.pathname;
   if (
     (ruta === "/adminvita" || ruta.startsWith("/adminvita/")) &&
     user?.email &&
+    (request.method === "GET" || request.method === "HEAD") &&
     !request.headers.get("next-router-prefetch") &&
     request.headers.get("purpose") !== "prefetch"
   ) {

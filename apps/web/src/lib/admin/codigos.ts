@@ -1,6 +1,6 @@
 import "server-only";
 
-import { generarCodigo, hashCodigo, estadoCodigo, normalizarCodigo, ultimos4, type EntradaAltaCodigos, type EstadoCodigo, type TipoCodigo } from "@/lib/vita-plus/codigos";
+import { generarCodigo, hashCodigo, estadoCodigo, leerSecretoCodigos, normalizarCodigo, ultimos4, type EntradaAltaCodigos, type EstadoCodigo, type TipoCodigo } from "@/lib/vita-plus/codigos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Admin } from "./acceso";
 import { registrarAccionAdmin } from "./auditoria";
@@ -64,6 +64,8 @@ export type ResultadoAlta = { ok: true; codigos: string[]; aviso?: string } | { 
 
 export async function crearCodigos(admin: Admin, datos: EntradaAltaCodigos): Promise<ResultadoAlta> {
   try {
+    const secreto = leerSecretoCodigos();
+    if (!secreto) return { ok: false, mensaje: "Falta configurar VITA_PLUS_CODIGOS_SECRET (o SUPABASE_SERVICE_ROLE_KEY)." };
     const cliente = createAdminClient();
     const codigos: string[] = [];
     const ids: string[] = [];
@@ -77,7 +79,7 @@ export async function crearCodigos(admin: Admin, datos: EntradaAltaCodigos): Pro
           p_tipo: datos.tipo,
           p_usos_max: datos.usosMax,
           p_vence: datos.venceCodigoAt,
-          p_hash: hashCodigo(normalizado),
+          p_hash: hashCodigo(normalizado, secreto),
           p_ultimos4: ultimos4(normalizado),
           p_creado_por: admin.email,
         });

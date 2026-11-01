@@ -23,19 +23,3 @@ export async function registrarAccionAdmin(
     console.error("admin_acciones: no se pudo registrar la acción");
   }
 }
-
-/** Cuántas veces hizo `accion` este admin en la última hora. null = no se pudo saber (quien llama decide si frena). */
-export async function contarAccionesUltimaHora(adminEmail: string, accion: AccionAdmin): Promise<number | null> {
-  try {
-    const desde = new Date(Date.now() - 3_600_000).toISOString();
-    const { count, error } = await createAdminClient()
-      .from("admin_acciones")
-      .select("id", { count: "exact", head: true })
-      .eq("admin_email", adminEmail)
-      .eq("accion", accion)
-      .gte("created_at", desde);
-    return error ? null : (count ?? 0);
-  } catch {
-    return null;
-  }
-}

@@ -116,6 +116,21 @@ export async function confirmarCodigoVerificacion(codigoCrudo: string): Promise<
   }
 }
 
+/**
+ * Revoca en el servidor el segundo factor de un admin: toda cookie emitida hasta ahora deja de valer, aunque el
+ * navegador la conserve (o un POST la haya re-escrito). Best-effort al cerrar sesión; quien lee falla cerrado.
+ */
+export async function revocarVerificacion(email: string): Promise<void> {
+  try {
+    const { error } = await createAdminClient()
+      .from("admin_2fa_revocaciones")
+      .upsert({ admin_email: email.trim().toLowerCase(), revocado_desde: new Date().toISOString() }, { onConflict: "admin_email" });
+    if (error) console.error("admin_2fa_revocaciones: no se pudo registrar la revocación");
+  } catch {
+    console.error("admin_2fa_revocaciones: no se pudo registrar la revocación");
+  }
+}
+
 /** Borra la cookie de verificación (logout o inactividad). */
 export async function limpiarCookieVerificacion(): Promise<void> {
   try {

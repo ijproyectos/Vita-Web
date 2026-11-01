@@ -21,6 +21,8 @@
 --     Revocar un código impide nuevos canjes; no le quita el vita+ a quien ya lo canjeó.
 --   * admin_codigos_verificacion: códigos de 6 dígitos del segundo factor del panel (solo el hash, vencen a los 10
 --     minutos, máximo 5 intentos). RPC verificar_codigo_admin atómica. RLS sin policies.
+--   * admin_2fa_revocaciones: "cookies del segundo factor emitidas antes de este instante ya no valen" por admin
+--     (logout / inactividad). RLS sin policies.
 --   * admin_acciones: auditoría de acciones del panel (códigos creados/revocados, push enviados). Sin texto libre
 --     más allá del título del mensaje. RLS sin policies.
 --   * Se redefinen (create or replace / drop+create) las funciones admin_* de la 045 para exponer origen y
@@ -30,7 +32,7 @@
 --   drop function if exists public.verificar_codigo_admin(text, text), public.revocar_codigo_vita_plus(uuid),
 --     public.crear_codigo_vita_plus(text, int, timestamptz, text, text, text),
 --     public.canjear_codigo_vita_plus(uuid, text);
---   drop table if exists public.admin_acciones, public.admin_codigos_verificacion, public.vita_plus_canjes,
+--   drop table if exists public.admin_2fa_revocaciones, public.admin_acciones, public.admin_codigos_verificacion, public.vita_plus_canjes,
 --     public.vita_plus_codigos;
 --   alter table public.vita_plus_vigencia drop column if exists permanente, drop column if exists origen;
 
@@ -111,6 +113,13 @@ create table if not exists public.admin_codigos_verificacion (
 create index if not exists idx_admin_codigos_verificacion_email
   on public.admin_codigos_verificacion (admin_email, created_at desc);
 
+-- Revocación del segundo factor: al cerrar sesión (o por inactividad) se anota "desde cuándo" valen las cookies de
+-- ese admin. `requireAdmin` rechaza una cookie emitida antes de `revocado_desde`, aunque el navegador la conserve.
+create table if not exists public.admin_2fa_revocaciones (
+  admin_email text primary key check (char_length(admin_email) between 3 and 320),
+  revocado_desde timestamptz not null
+);
+
 create table if not exists public.admin_acciones (
   id uuid primary key default gen_random_uuid(),
   admin_email text not null check (char_length(admin_email) between 3 and 320),
@@ -124,7 +133,9 @@ create index if not exists idx_admin_acciones_admin on public.admin_acciones (ad
 
 alter table public.admin_codigos_verificacion enable row level security;
 alter table public.admin_acciones enable row level security;
-revoke all on table public.admin_codigos_verificacion, public.admin_acciones from public, anon, authenticated;
+alter table public.admin_2fa_revocaciones enable row level security;
+revoke all on table public.admin_codigos_verificacion, public.admin_acciones, public.admin_2fa_revocaciones from public, anon, authenticated;
+grant select, insert, update on table public.admin_2fa_revocaciones to service_role;
 grant select, insert, update on table public.admin_codigos_verificacion to service_role;
 grant select, insert on table public.admin_acciones to service_role;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CUERPO_PUSH_MAX, PUSH_MAX_POR_HORA, superaLimitePush, TITULO_PUSH_MAX, validarMensajePush } from "./push-form";
+import { clavePush, CUERPO_PUSH_MAX, inicioVentanaPush, PUSH_MAX_POR_HORA, superaLimitePush, TITULO_PUSH_MAX, validarMensajePush } from "./push-form";
 
 describe("validarMensajePush", () => {
   it("recorta espacios y acepta en el límite", () => {
@@ -22,7 +22,9 @@ describe("validarMensajePush", () => {
 describe("límite por hora", () => {
   it("10 por hora", () => {
     expect(PUSH_MAX_POR_HORA).toBe(10);
-    expect(superaLimitePush(9)).toBe(false);
-    expect(superaLimitePush(10)).toBe(true);
+    expect(superaLimitePush(10)).toBe(false); // el décimo todavía pasa
+    expect(superaLimitePush(11)).toBe(true);
+    expect(inicioVentanaPush(Date.UTC(2026, 10, 1, 15, 59, 59)).toISOString()).toBe("2026-11-01T15:00:00.000Z");
+    expect(clavePush(" Ana@Example.com ")).toBe("admin-push:ana@example.com:hora");
   });
 });
