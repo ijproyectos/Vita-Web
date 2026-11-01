@@ -104,6 +104,10 @@ export interface EstadoVitaPlus {
   renueva: boolean;
   /** true dentro de los 10 días del primer cobro, si no pidió ya el arrepentimiento (Res. 424/2020). */
   puedeArrepentirse: boolean;
+  /** true = vita+ sin vencimiento (código admin); `venceAt` queda como referencia y no se muestra. */
+  permanente: boolean;
+  /** Por qué tiene vita+: pago, código plus (15 días) o código admin (sin vencimiento). */
+  origen: "pago" | "codigo_plus" | "codigo_admin" | null;
 }
 
 export const ESTADO_SIN_VITA_PLUS: EstadoVitaPlus = {
@@ -113,6 +117,8 @@ export const ESTADO_SIN_VITA_PLUS: EstadoVitaPlus = {
   estado: "none",
   renueva: false,
   puedeArrepentirse: false,
+  permanente: false,
+  origen: null,
 };
 
 /** "12 de noviembre de 2026" en hora argentina. */

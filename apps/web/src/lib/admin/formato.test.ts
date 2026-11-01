@@ -7,6 +7,7 @@ import {
   formatoFechaAR,
   formatoFechaHoraAR,
   formatoUSD,
+  resumenVitaPlus,
 } from "./formato";
 
 describe("chipInactividad", () => {
@@ -70,5 +71,21 @@ describe("fechas en hora de Argentina", () => {
   it("día corto", () => {
     expect(formatoDiaCorto("2026-11-01")).toBe("01/11");
     expect(formatoDiaCorto("raro")).toBe("raro");
+  });
+});
+
+describe("resumenVitaPlus", () => {
+  it("pago con plan, código plus con fecha, código admin sin vencimiento", () => {
+    expect(resumenVitaPlus({ permanente: false, origen: "pago", vence: null, plan: "anual" }).etiqueta).toBe("vita+ · Pago (anual)");
+    const plus = resumenVitaPlus({ permanente: false, origen: "codigo_plus", vence: "2026-11-16T12:00:00Z", plan: null });
+    expect(plus.etiqueta).toBe("vita+ · Código plus");
+    expect(plus.detalle).toMatch(/^hasta /);
+    expect(resumenVitaPlus({ permanente: true, origen: "codigo_admin", vence: "2026-11-01T00:00:00Z", plan: null })).toEqual({
+      etiqueta: "vita+ · Código admin",
+      detalle: "sin vencimiento",
+    });
+  });
+  it("sin origen se toma como pago (cuentas anteriores a la 046)", () => {
+    expect(resumenVitaPlus({ permanente: false, origen: null, vence: null, plan: null }).etiqueta).toBe("vita+ · Pago");
   });
 });

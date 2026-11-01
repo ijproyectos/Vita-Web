@@ -3,6 +3,21 @@
 
 const ZONA_AR = "America/Argentina/Buenos_Aires";
 
+/** Chip de vita+ en listas y detalle: origen y vencimiento ("sin vencimiento" para los permanentes). */
+export function resumenVitaPlus(v: {
+  permanente: boolean;
+  origen: "pago" | "codigo_plus" | "codigo_admin" | null;
+  vence: string | null;
+  plan: string | null;
+}): { etiqueta: string; detalle: string } {
+  const origen = v.origen === "codigo_admin" ? "Código admin" : v.origen === "codigo_plus" ? "Código plus" : "Pago";
+  const plan = origen === "Pago" && v.plan ? ` (${v.plan})` : "";
+  return {
+    etiqueta: `vita+ · ${origen}${plan}`,
+    detalle: v.permanente ? "sin vencimiento" : v.vence ? `hasta ${formatoFechaAR(v.vence)}` : "",
+  };
+}
+
 export function formatoUSD(valor: number): string {
   const n = Number.isFinite(valor) ? valor : 0;
   return `US$ ${n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

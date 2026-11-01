@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { entrarAlPanel, FILTROS_USUARIOS, obtenerUsuarios, TAMANO_PAGINA, type FiltroUsuarios } from "@/lib/admin/datos";
-import { ETIQUETA_TIPO_CUENTA, formatoFechaAR, formatoNumero, formatoUSD } from "@/lib/admin/formato";
+import { ETIQUETA_TIPO_CUENTA, formatoNumero, formatoFechaAR, formatoUSD, resumenVitaPlus } from "@/lib/admin/formato";
 import { ChipInactividad, ErrorDatos, Etiqueta, TD, TH, Tabla, Vacio } from "../_componentes/ui";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,9 @@ export const dynamic = "force-dynamic";
 const ETIQUETA_FILTRO: Record<FiltroUsuarios, string> = {
   todos: "Todos",
   vita_plus: "vita+",
+  vp_pago: "vita+ · Pago",
+  vp_codigo_plus: "vita+ · Código plus",
+  vp_codigo_admin: "vita+ · Código admin",
   inactivos_7: "Inactivos 7 días",
   inactivos_30: "Inactivos 30 días",
   gestionados: "Gestionados",
@@ -108,8 +111,8 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
                     <ChipInactividad dias={u.diasInactivo} />
                   </td>
                   <td className={TD}>
-                    {u.vitaPlus ? <Etiqueta tono="ok">vita+ {u.plan ?? ""}</Etiqueta> : <span className="text-subtle">—</span>}
-                    {u.vitaPlus && u.vence ? <div className="text-xs text-subtle">hasta {formatoFechaAR(u.vence)}</div> : null}
+                    {u.vitaPlus ? <Etiqueta tono="ok">{resumenVitaPlus(u).etiqueta}</Etiqueta> : <span className="text-subtle">—</span>}
+                    {u.vitaPlus && resumenVitaPlus(u).detalle ? <div className="text-xs text-subtle">{resumenVitaPlus(u).detalle}</div> : null}
                   </td>
                   <td className={TD}>
                     <span className="text-xs text-slate-brand">

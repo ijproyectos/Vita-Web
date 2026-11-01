@@ -15,9 +15,17 @@ export default async function VitaPlusPage() {
       <h1 className="text-2xl font-extrabold tracking-tight text-ink">vita+</h1>
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi titulo="Activos" valor={formatoNumero(v.activos)} tono="ok" detalle={`${formatoNumero(v.vencidos)} vencidos`} />
+        <Kpi
+          titulo="Activos"
+          valor={formatoNumero(v.activos)}
+          tono="ok"
+          detalle={`${formatoNumero(v.vencidos)} vencidos · ${formatoNumero(v.permanentes)} sin vencimiento`}
+        />
         <Kpi titulo="Suscripciones" valor={formatoNumero(v.autorizadas)} detalle={`${formatoNumero(v.pausadas)} pausadas · ${formatoNumero(v.pendientes)} pendientes`} />
         <Kpi titulo="Canceladas" valor={formatoNumero(v.canceladas)} />
+        <Kpi titulo="Activos por pago" valor={formatoNumero(v.activosPago)} />
+        <Kpi titulo="Activos por código plus" valor={formatoNumero(v.activosCodigoPlus)} detalle="15 días" />
+        <Kpi titulo="Activos por código admin" valor={formatoNumero(v.activosCodigoAdmin)} detalle="sin vencimiento" />
         <Kpi titulo="Ingresos (30 días)" valor={formatoARS(v.ingresosArs30d)} detalle={`${formatoNumero(v.pagos30d)} cobros · total ${formatoARS(v.ingresosArsTotal)}`} />
       </div>
 

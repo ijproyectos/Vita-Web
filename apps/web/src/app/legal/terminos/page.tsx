@@ -178,6 +178,10 @@ export default function TerminosPage() {
           aplicación antes de depender de la suscripción. Podemos cambiar los precios para nuevas suscripciones; si
           cambia el de una vigente, te lo avisamos con anticipación y podés cancelar sin costo.
         </p>
+        <p>
+          vita+ también puede activarse con un código promocional emitido por vita (por 15 días o sin vencimiento).
+          Cada código se puede canjear una sola vez por cuenta y podemos revocarlo ante un uso abusivo.
+        </p>
       </Seccion>
 
       <Seccion titulo="10. Disponibilidad del servicio">

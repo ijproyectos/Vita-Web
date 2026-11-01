@@ -16,6 +16,10 @@ export const txt = (v: unknown): string => (typeof v === "string" ? v : "");
 export const txtONull = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
 export const bool = (v: unknown): boolean => v === true;
 
+export type OrigenVitaPlus = "pago" | "codigo_plus" | "codigo_admin";
+export const origenONull = (v: unknown): OrigenVitaPlus | null =>
+  v === "pago" || v === "codigo_plus" || v === "codigo_admin" ? v : null;
+
 // Filas { o_seccion, o_datos } -> mapa seccion -> datos.
 export function porSeccion(filas: unknown): Map<string, unknown> {
   const mapa = new Map<string, unknown>();
@@ -79,6 +83,10 @@ export type FilaUsuario = {
   diasInactivo: number | null;
   vitaPlus: boolean;
   vence: string | null;
+  /** vita+ sin vencimiento (código admin). */
+  permanente: boolean;
+  /** Por qué tiene vita+: pago, código plus o código admin. */
+  origen: OrigenVitaPlus | null;
   plan: string | null;
   tipo: string;
   personasCuida: number;
@@ -102,6 +110,8 @@ export function leerUsuarios(filas: unknown): { total: number; filas: FilaUsuari
       diasInactivo: numONull(r.o_dias_inactivo),
       vitaPlus: bool(r.o_vita_plus),
       vence: txtONull(r.o_vence),
+      permanente: bool(r.o_permanente),
+      origen: origenONull(r.o_origen),
       plan: txtONull(r.o_plan),
       tipo: txt(r.o_tipo) || "real",
       personasCuida: num(r.o_personas_cuida),
@@ -160,6 +170,8 @@ export type UsuarioDetalle = {
     memoriaActiva: boolean;
     vitaPlus: boolean;
     vence: string | null;
+    permanente: boolean;
+    origen: OrigenVitaPlus | null;
     plan: string | null;
   };
   usoDiario: UsoDia[];
@@ -198,6 +210,8 @@ export function leerUsuarioDetalle(filas: unknown): UsuarioDetalle | null {
       memoriaActiva: c.memoria_activa !== false,
       vitaPlus: bool(c.vita_plus),
       vence: txtONull(c.vence),
+      permanente: bool(c.permanente),
+      origen: origenONull(c.origen),
       plan: txtONull(c.plan),
     },
     usoDiario: lista(s.get("uso_diario")).map(leerUsoDia),
@@ -263,6 +277,10 @@ export function leerIA(filas: unknown): PanelIA {
 export type PanelVitaPlus = {
   activos: number;
   vencidos: number;
+  permanentes: number;
+  activosPago: number;
+  activosCodigoPlus: number;
+  activosCodigoAdmin: number;
   canceladas: number;
   autorizadas: number;
   pausadas: number;
@@ -297,6 +315,10 @@ export function leerVitaPlus(filas: unknown): PanelVitaPlus {
   return {
     activos: num(r.activos),
     vencidos: num(r.vencidos),
+    permanentes: num(r.permanentes),
+    activosPago: num(r.activos_pago),
+    activosCodigoPlus: num(r.activos_codigo_plus),
+    activosCodigoAdmin: num(r.activos_codigo_admin),
     canceladas: num(r.canceladas),
     autorizadas: num(r.autorizadas),
     pausadas: num(r.pausadas),

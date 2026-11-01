@@ -115,3 +115,22 @@ describe("leerIA / leerVitaPlus / leerSistema", () => {
     expect(s).toMatchObject({ dbBytes: 2048, migracion: "044" });
   });
 });
+
+describe("origen de vita+ (migración 046)", () => {
+  it("lista de usuarios: permanente y origen, con basura = null", () => {
+    const { filas } = leerUsuarios([
+      { o_total: 2, o_id: "u1", o_vita_plus: true, o_permanente: true, o_origen: "codigo_admin" },
+      { o_total: 2, o_id: "u2", o_vita_plus: true, o_permanente: false, o_origen: "otra-cosa" },
+    ]);
+    expect(filas[0]).toMatchObject({ permanente: true, origen: "codigo_admin" });
+    expect(filas[1]).toMatchObject({ permanente: false, origen: null });
+  });
+  it("detalle: permanente y origen de la cuenta", () => {
+    const d = leerUsuarioDetalle([{ o_seccion: "cuenta", o_datos: { id: "u1", vita_plus: true, permanente: true, origen: "codigo_plus" } }]);
+    expect(d?.cuenta).toMatchObject({ vitaPlus: true, permanente: true, origen: "codigo_plus" });
+  });
+  it("panel vita+: conteos por origen", () => {
+    const v = leerVitaPlus([{ o_seccion: "resumen", o_datos: { activos: 5, permanentes: 2, activos_pago: 1, activos_codigo_plus: 2, activos_codigo_admin: 2 } }]);
+    expect(v).toMatchObject({ activos: 5, permanentes: 2, activosPago: 1, activosCodigoPlus: 2, activosCodigoAdmin: 2 });
+  });
+});
