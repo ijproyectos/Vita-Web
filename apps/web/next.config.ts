@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "15mb",
     },
+    // Sin caché de Turbopack en disco durante el build: esa caché guarda una
+    // copia de las variables de entorno, y el escaneo de secretos de Netlify
+    // frena el deploy al encontrar ahí el valor de MP_WEBHOOK_SECRET. Así el
+    // secreto nunca queda escrito y el escaneo sigue cubriendo todo.
+    turbopackFileSystemCacheForBuild: false,
   },
 };
 
