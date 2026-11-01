@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 import { canjearCodigoVitaPlus } from "@/lib/vita-plus/canje";
 import { origenPermitido } from "@/lib/vita-plus/logica";
 import { vitaPlusConfigurado } from "@/lib/vita-plus/mercadopago";
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return json({ error: "Sin sesión." }, 401);
+    if (await respuestaSiSuspendida()) return json({ error: "cuenta_suspendida" }, 403);
 
     switch (cuerpo.action) {
       case "estado": {

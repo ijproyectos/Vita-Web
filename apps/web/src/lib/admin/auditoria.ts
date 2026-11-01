@@ -3,9 +3,19 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Auditoría de acciones del panel (tabla `admin_acciones`, migración 046). Siempre se llama DESPUÉS de `requireAdmin`.
-// El detalle nunca lleva texto libre más allá del título de un mensaje: ni cuerpos, ni emails de terceros.
+// El detalle nunca lleva texto libre más allá del título de un mensaje: ni cuerpos de mensajes ni notas internas.
+// El único email de un tercero que se registra es el del administrador que se agrega o se quita.
 
-export type AccionAdmin = "push_enviado" | "codigo_creado" | "codigo_revocado";
+export type AccionAdmin =
+  | "push_enviado"
+  | "codigo_creado"
+  | "codigo_revocado"
+  | "admin_agregado"
+  | "admin_revocado"
+  | "cuenta_suspendida"
+  | "cuenta_reactivada"
+  | "envio_masivo_creado"
+  | "envio_masivo_cancelado";
 
 /** Best-effort: una auditoría que falla no tumba la acción (se loguea sin datos). */
 export async function registrarAccionAdmin(

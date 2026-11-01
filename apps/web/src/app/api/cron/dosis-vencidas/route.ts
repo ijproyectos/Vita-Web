@@ -5,6 +5,7 @@ import { entregarAviso, obtenerPreferenciasDe } from "@/lib/notificaciones/aviso
 import { PREFERENCIAS_POR_DEFECTO } from "@/lib/notificaciones/avisos-tipos";
 import { procesarAvisosProgramados, type ResumenProgramados } from "@/lib/notificaciones/programados";
 import { payloadDosisVencida } from "@/lib/notificaciones/mensajes";
+import { procesarEnviosMasivos } from "@/lib/notificaciones/masivos";
 import { purgarAnteriores } from "@/lib/notificaciones/retencion";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
+  const inicioMs = Date.now();
   const admin = createAdminClient();
   // Si la detección falla (ej. error transitorio de lectura) no se pierden los
   // avisos programados de este tick: se sigue con una lista vacía.
@@ -183,6 +185,10 @@ export async function POST(request: Request) {
     programados = { error: e instanceof Error ? e.message : "Fallo en los avisos programados." };
   }
 
+  // Envíos masivos del panel (migración 047): por lotes y con el presupuesto que quede de este tick. Van DESPUÉS de
+  // todo lo de dosis y turnos, que tiene prioridad. Nunca lanza.
+  const masivos = await procesarEnviosMasivos(admin, inicioMs);
+
   // Retención (sin jobs nuevos; cada tabla degrada a 0 si no existe o falla):
   // - `acciones_agente` (030): datos de salud del chat (incluso de terceros) que solo sirven durante
   //   un reintento o una confirmación de minutos -> 48 h.
@@ -203,6 +209,7 @@ export async function POST(request: Request) {
     sinCanal,
     pushEnviados,
     programados,
+    masivos,
     ...(errorDeteccion ? { errorDeteccion } : {}),
   });
 }

@@ -5,6 +5,7 @@ import { requireAdmin, type Admin } from "./acceso";
 import {
   leerIA,
   leerResumen,
+  leerSuspensiones,
   leerSistema,
   leerUsuarioDetalle,
   leerUsuarios,
@@ -12,11 +13,12 @@ import {
   type PanelIA,
   type PanelSistema,
   type PanelVitaPlus,
+  type FilaSuspension,
   type Resumen,
   type UsuarioDetalle,
 } from "./tipos";
 
-export const FILTROS_USUARIOS = ["todos", "vita_plus", "vp_pago", "vp_codigo_plus", "vp_codigo_admin", "inactivos_7", "inactivos_30", "gestionados", "sin_onboarding"] as const;
+export const FILTROS_USUARIOS = ["todos", "vita_plus", "vp_pago", "vp_codigo_plus", "vp_codigo_admin", "inactivos_7", "inactivos_30", "gestionados", "sin_onboarding", "suspendidos"] as const;
 export type FiltroUsuarios = (typeof FILTROS_USUARIOS)[number];
 export const TAMANO_PAGINA = 25;
 
@@ -101,4 +103,14 @@ export async function obtenerVitaPlus(): Promise<PanelVitaPlus | null> {
 export async function obtenerSistema(): Promise<PanelSistema | null> {
   const data = await rpc("admin_sistema");
   return data === null ? null : leerSistema(data);
+}
+
+/** Historial de suspensiones de una cuenta (migración 047). null = no se pudo leer. */
+export async function obtenerSuspensiones(id: string): Promise<FilaSuspension[] | null> {
+  if (!UUID.test(id)) {
+    await requireAdmin();
+    return [];
+  }
+  const data = await rpc("admin_suspensiones_de", { p_usuario: id });
+  return data === null ? null : leerSuspensiones(data);
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { entrarAlPanel, FILTROS_USUARIOS, obtenerUsuarios, TAMANO_PAGINA, type FiltroUsuarios } from "@/lib/admin/datos";
 import { ETIQUETA_TIPO_CUENTA, formatoNumero, formatoFechaAR, formatoUSD, resumenVitaPlus } from "@/lib/admin/formato";
+import { ETIQUETA_MOTIVO } from "@/lib/suspensiones/logica";
 import { Avatar, Encabezado, PillFiltro, ChipInactividad, ErrorDatos, Etiqueta, TD, TH, Tabla, Vacio } from "../_componentes/ui";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ const ETIQUETA_FILTRO: Record<FiltroUsuarios, string> = {
   inactivos_30: "Inactivos 30 días",
   gestionados: "Gestionados",
   sin_onboarding: "Sin onboarding",
+  suspendidos: "Suspendidos",
 };
 
 function primero(v: string | string[] | undefined): string {
@@ -99,6 +101,9 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
                         </Link>
                         <div className="max-w-[260px] truncate text-xs text-subtle">{u.email}</div>
                         <div className="mt-1 flex flex-wrap gap-1">
+                          {u.suspendido ? (
+                            <Etiqueta tono="alerta">Suspendida{u.suspensionMotivo ? ` · ${ETIQUETA_MOTIVO[u.suspensionMotivo]}` : ""}</Etiqueta>
+                          ) : null}
                           {u.tipo !== "real" ? <Etiqueta>{ETIQUETA_TIPO_CUENTA[u.tipo] ?? u.tipo}</Etiqueta> : null}
                           {!u.onboarding && u.tipo !== "gestionado" ? <Etiqueta tono="aviso">Sin onboarding</Etiqueta> : null}
                         </div>

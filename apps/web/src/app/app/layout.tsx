@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
+import { requireNoSuspendida } from "@/lib/suspensiones/guardia";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { ChatOverlayProvider } from "@/lib/chat/overlay-context";
@@ -12,6 +13,8 @@ import { VitaChatOverlay } from "./_chat/vita-chat-overlay";
 
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const usuario = await requireUser();
+  // Cuenta suspendida (mal uso / falta de pago): no ve la app, ve /suspendida. Una consulta indexada por request.
+  await requireNoSuspendida();
   const supabase = await createClient();
   const perfil = await perfilNucleo.obtenerPerfil(supabase, usuario.id);
 

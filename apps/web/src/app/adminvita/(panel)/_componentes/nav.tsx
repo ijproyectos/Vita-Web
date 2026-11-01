@@ -11,6 +11,8 @@ const ITEMS = [
   { href: "/adminvita/ia", etiqueta: "IA y costos", exacto: false },
   { href: "/adminvita/vita-plus", etiqueta: "vita+", exacto: false },
   { href: "/adminvita/codigos", etiqueta: "Códigos", exacto: false },
+  { href: "/adminvita/notificaciones", etiqueta: "Notificaciones", exacto: false },
+  { href: "/adminvita/administradores", etiqueta: "Administradores", exacto: false },
   { href: "/adminvita/sistema", etiqueta: "Sistema", exacto: false },
 ] as const;
 

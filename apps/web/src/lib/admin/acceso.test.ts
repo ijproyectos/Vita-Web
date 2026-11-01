@@ -7,9 +7,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser } }),
 }));
 const revocacion = vi.fn();
+const esAdminRpc = vi.fn();
 vi.mock("react", async (original) => ({ ...(await original<typeof import("react")>()), cache: <T,>(f: T) => f }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
+    rpc: (nombre: string, args: unknown) => esAdminRpc(nombre, args),
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => revocacion() }) }) }),
   }),
 }));
@@ -33,6 +35,8 @@ describe("requireAdmin", () => {
     getUser.mockReset();
     cookieGet.mockReset();
     revocacion.mockReset();
+    esAdminRpc.mockReset();
+    esAdminRpc.mockResolvedValue({ data: false, error: null });
     revocacion.mockResolvedValue({ data: null, error: null });
     cookieGet.mockReturnValue(undefined);
     process.env.ADMIN_EMAILS = "ana@example.com, bob@example.com";
@@ -85,7 +89,7 @@ describe("requireAdmin", () => {
   it("admin confirmado con cookie vigente -> devuelve id y email normalizado", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1", email: "Ana@Example.com", email_confirmed_at: "x" } }, error: null });
     cookieGet.mockReturnValue({ value: crearToken({ userId: "u1", email: "ana@example.com", ahoraMs: Date.now(), secreto: SECRETO }) });
-    await expect(requireAdmin()).resolves.toEqual({ id: "u1", email: "ana@example.com" });
+    await expect(requireAdmin()).resolves.toEqual({ id: "u1", email: "ana@example.com", rol: "dueno" });
   });
   it("cookie emitida antes del último logout -> pantalla de verificación", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1", email: "ana@example.com", email_confirmed_at: "x" } }, error: null });
@@ -106,5 +110,45 @@ describe("requireAdmin", () => {
     cookieGet.mockReturnValue({ value: crearToken({ userId: "u1", email: "ana@example.com", ahoraMs: Date.now(), secreto: SECRETO }) });
     revocacion.mockResolvedValue({ data: null, error: { message: "boom" } });
     await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/adminvita/verificar");
+  });
+
+  describe("administradores gestionados desde la base", () => {
+    const sesion = { data: { user: { id: "u9", email: "Eve@Example.com", email_confirmed_at: "x" } }, error: null };
+    const cookie = () =>
+      cookieGet.mockReturnValue({ value: crearToken({ userId: "u9", email: "eve@example.com", ahoraMs: Date.now(), secreto: SECRETO }) });
+
+    it("administrador activo con cookie vigente entra con rol admin", async () => {
+      getUser.mockResolvedValue(sesion);
+      cookie();
+      esAdminRpc.mockResolvedValue({ data: true, error: null });
+      await expect(requireAdmin()).resolves.toEqual({ id: "u9", email: "eve@example.com", rol: "admin" });
+      expect(esAdminRpc).toHaveBeenCalledWith("admin_es_administrador", { p_email: "eve@example.com" });
+    });
+    it("administrador revocado o inexistente -> pantalla de ingreso", async () => {
+      getUser.mockResolvedValue(sesion);
+      cookie();
+      await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/adminvita/ingresar");
+    });
+    it("si no se puede consultar la tabla, un administrador de la base falla cerrado", async () => {
+      getUser.mockResolvedValue(sesion);
+      cookie();
+      esAdminRpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+      await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/adminvita/ingresar");
+      esAdminRpc.mockRejectedValue(new Error("down"));
+      await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/adminvita/ingresar");
+    });
+    it("un dueño entra aunque la tabla de administradores no responda (y ni se consulta)", async () => {
+      getUser.mockResolvedValue({ data: { user: { id: "u1", email: "ana@example.com", email_confirmed_at: "x" } }, error: null });
+      cookieGet.mockReturnValue({ value: crearToken({ userId: "u1", email: "ana@example.com", ahoraMs: Date.now(), secreto: SECRETO }) });
+      esAdminRpc.mockRejectedValue(new Error("down"));
+      await expect(requireAdmin()).resolves.toMatchObject({ rol: "dueno" });
+      expect(esAdminRpc).not.toHaveBeenCalled();
+    });
+    it("email sin confirmar nunca llega a la base", async () => {
+      getUser.mockResolvedValue({ data: { user: { id: "u9", email: "eve@example.com", email_confirmed_at: null } }, error: null });
+      esAdminRpc.mockResolvedValue({ data: true, error: null });
+      await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/adminvita/ingresar");
+      expect(esAdminRpc).not.toHaveBeenCalled();
+    });
   });
 });

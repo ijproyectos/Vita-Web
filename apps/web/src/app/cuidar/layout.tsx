@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/dal";
+import { requireNoSuspendida } from "@/lib/suspensiones/guardia";
 import { createClient } from "@/lib/supabase/server";
 import { listarDosisVencidasDeMisElders, listarElders } from "@/lib/cuidadores/nucleo";
 import { RastreadorNavegacion } from "@/lib/navegacion/rastreador";
@@ -19,6 +20,7 @@ import { AlertaDosisPopup } from "./alerta-dosis-popup";
 // popup de alerta, que se muestra en todo el árbol `/cuidar/*`.
 export default async function CuidarLayout({ children }: LayoutProps<"/cuidar">) {
   const usuario = await requireUser();
+  await requireNoSuspendida();
   const supabase = await createClient();
   const elders = await listarElders(supabase, usuario.id);
   const dosisVencidas = elders.length > 0 ? await listarDosisVencidasDeMisElders(supabase, elders) : [];
