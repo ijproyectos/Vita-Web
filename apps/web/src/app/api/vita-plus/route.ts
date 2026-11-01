@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canjearCodigoVitaPlus } from "@/lib/vita-plus/canje";
 import { origenPermitido } from "@/lib/vita-plus/logica";
 import { vitaPlusConfigurado } from "@/lib/vita-plus/mercadopago";
 import {
@@ -31,6 +32,7 @@ function hostPublico(request: Request): string | null {
  * - crear { plan }: crea la suscripción en Mercado Pago y devuelve `initPoint` + los pesos reales a cobrar.
  * - estado: estado de vita+ de la cuenta (lo consulta la pantalla de gracias).
  * - cancelar: corta los cobros futuros; vita+ sigue hasta lo ya pagado.
+ * - canjear { codigo }: canjea un código promocional de vita+ (15 días o sin vencimiento). No depende de Mercado Pago.
  * - arrepentimiento: botón de arrepentimiento (Res. 424/2020), solo dentro de los 10 días del primer cobro:
  *   registra el pedido, cancela en Mercado Pago y avisa a soporte; el reembolso lo procesa una persona.
  * El cliente nunca manda montos: solo la clave del plan. Nunca lanza: siempre responde JSON.
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
     return json({ error: "Formato no soportado." }, 415);
   }
 
-  let cuerpo: { action?: unknown; plan?: unknown };
+  let cuerpo: { action?: unknown; plan?: unknown; codigo?: unknown };
   try {
     cuerpo = await request.json();
   } catch {
@@ -75,6 +77,12 @@ export async function POST(request: Request) {
       }
       case "cancelar": {
         const r = await cancelarSuscripcionVitaPlus(supabase, user.id);
+        if (!r.ok) return json({ error: r.mensaje }, r.http);
+        return json({ ok: true, estado: await obtenerEstadoVitaPlus(supabase) });
+      }
+      case "canjear": {
+        if (typeof cuerpo.codigo !== "string") return json({ error: "Código inválido o vencido." }, 400);
+        const r = await canjearCodigoVitaPlus(user.id, cuerpo.codigo);
         if (!r.ok) return json({ error: r.mensaje }, r.http);
         return json({ ok: true, estado: await obtenerEstadoVitaPlus(supabase) });
       }

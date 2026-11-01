@@ -20,7 +20,9 @@ export type TipoAviso =
   | "turno_acompanado"
   | "turno_acompanado_dia_antes"
   // SOS explícito de la persona cuidada (modo simple): no depende de ninguna preferencia.
-  | "pedido_ayuda";
+  | "pedido_ayuda"
+  // Mensaje enviado a mano por un administrador de vita desde el panel (/adminvita).
+  | "admin_mensaje";
 
 export type Aviso = {
   id: string;

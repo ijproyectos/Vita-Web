@@ -6,6 +6,7 @@ import { origenPublico } from "@/lib/email/origen";
 import { enviarEmail } from "@/lib/email/smtp";
 import { CORREO_SOPORTE } from "@/lib/legal/datos";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { esOrigenVitaPlus } from "./codigos";
 import { MENSAJE_SIN_COTIZACION, obtenerDolarOficial } from "./cotizacion";
 import {
   clasificarErrorRpc,
@@ -53,7 +54,7 @@ export async function obtenerEstadoVitaPlus(supabase: Cliente): Promise<EstadoVi
     const { data, error } = await supabase.rpc("mi_estado_vita_plus");
     if (error) return ESTADO_SIN_VITA_PLUS;
     const fila = (Array.isArray(data) ? data[0] : data) as
-      | { vp_activo?: unknown; vp_vence_at?: unknown; vp_plan?: unknown; vp_estado?: unknown; vp_renueva?: unknown; vp_puede_arrepentirse?: unknown }
+      | { vp_activo?: unknown; vp_vence_at?: unknown; vp_plan?: unknown; vp_estado?: unknown; vp_renueva?: unknown; vp_puede_arrepentirse?: unknown; vp_permanente?: unknown; vp_origen?: unknown }
       | null
       | undefined;
     if (!fila) return ESTADO_SIN_VITA_PLUS;
@@ -64,6 +65,8 @@ export async function obtenerEstadoVitaPlus(supabase: Cliente): Promise<EstadoVi
       estado: esEstado(fila.vp_estado) ? fila.vp_estado : "none",
       renueva: fila.vp_renueva === true,
       puedeArrepentirse: fila.vp_puede_arrepentirse === true,
+      permanente: fila.vp_permanente === true,
+      origen: esOrigenVitaPlus(fila.vp_origen) ? fila.vp_origen : null,
     };
   } catch {
     return ESTADO_SIN_VITA_PLUS;
@@ -77,9 +80,12 @@ export async function obtenerEstadoVitaPlus(supabase: Cliente): Promise<EstadoVi
  */
 export async function esVitaPlus(supabase: Cliente, usuarioId: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase.from("vita_plus_vigencia").select("vence_at").eq("usuario_id", usuarioId).maybeSingle();
+    const { data, error } = await supabase.from("vita_plus_vigencia").select("*").eq("usuario_id", usuarioId).maybeSingle();
     if (error || !data) return false;
-    const vence = Date.parse(String((data as { vence_at: unknown }).vence_at));
+    const fila = data as { vence_at: unknown; permanente?: unknown };
+    // Sin la 046 la columna `permanente` no existe y `fila.permanente` es undefined: se decide por `vence_at`.
+    if (fila.permanente === true) return true;
+    const vence = Date.parse(String(fila.vence_at));
     return Number.isFinite(vence) && vence > new Date().getTime();
   } catch {
     return false;

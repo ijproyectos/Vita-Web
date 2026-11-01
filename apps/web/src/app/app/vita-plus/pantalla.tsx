@@ -77,6 +77,11 @@ export function PantallaVitaPlus({
   const [porPagar, setPorPagar] = useState<{ initPoint: string; pesos: number; fx: number; plan: PlanVitaPlus } | null>(null);
   const [confirmandoArrepentimiento, setConfirmandoArrepentimiento] = useState(false);
   const [arrepintiendo, setArrepintiendo] = useState(false);
+  // Canje de un código promocional ("Tengo un código"): no depende de Mercado Pago.
+  const [codigoAbierto, setCodigoAbierto] = useState(false);
+  const [codigo, setCodigo] = useState("");
+  const [canjeando, setCanjeando] = useState(false);
+  const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
 
   // La cotización se muestra para que se sepa cuántos pesos se cobran; al crear, el servidor vuelve a pedirla.
   useEffect(() => {
@@ -114,6 +119,31 @@ export function PantallaVitaPlus({
     }
     setPorPagar({ initPoint, pesos, fx, plan });
     setProcesando(false);
+  }
+
+  async function canjear() {
+    if (canjeando || codigo.trim() === "") return;
+    setCanjeando(true);
+    setErrorCodigo(null);
+    const r = await pedirApi({ action: "canjear", codigo });
+    setCanjeando(false);
+    if (!r.ok) {
+      setErrorCodigo(mensajeDe(r.datos));
+      return;
+    }
+    const nuevo = r.datos.estado as EstadoVitaPlus | undefined;
+    if (nuevo) setEstado(nuevo);
+    setCodigo("");
+    setCodigoAbierto(false);
+    toast.success(
+      nuevo?.permanente
+        ? "Listo: tenés vita+ sin vencimiento"
+        : nuevo?.venceAt
+          ? `Listo: tenés vita+ hasta ${fechaLarga(nuevo.venceAt)}`
+          : "Listo: ya tenés vita+",
+      { duration: 8000 },
+    );
+    router.refresh();
   }
 
   async function arrepentirme() {
@@ -235,10 +265,14 @@ export function PantallaVitaPlus({
             <div className="rounded-[var(--radius-item)] bg-card p-4 text-center shadow-card">
               <div className="font-heading text-[17px] font-extrabold tracking-[-0.02em]">
                 Sos vita<span className="text-aviso">+</span>
-                {estado.venceAt ? ` · hasta ${fechaLarga(estado.venceAt)}` : ""}
+                {estado.permanente ? " · sin vencimiento" : estado.venceAt ? ` · hasta ${fechaLarga(estado.venceAt)}` : ""}
               </div>
               <p className="mt-1 text-[12.5px] font-medium text-slate-brand">
-                {estado.renueva ? "Se renueva automáticamente." : "No se renueva: al llegar esa fecha termina."}
+                {estado.permanente
+                  ? "vita+ sin vencimiento."
+                  : estado.renueva
+                    ? "Se renueva automáticamente."
+                    : "No se renueva: al llegar esa fecha termina."}
               </p>
             </div>
             {estado.puedeArrepentirse && !confirmandoArrepentimiento && (
@@ -391,6 +425,50 @@ export function PantallaVitaPlus({
                   Todavía no está disponible · no se cobra nada
                 </p>
               </>
+            )}
+            {codigoAbierto ? (
+              <form
+                className="flex flex-col gap-2 rounded-[var(--radius-item)] bg-card p-3.5 shadow-card"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void canjear();
+                }}
+              >
+                <label htmlFor="codigo-vita-plus" className="text-[12.5px] font-bold">
+                  Tu código
+                </label>
+                <input
+                  id="codigo-vita-plus"
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={32}
+                  placeholder="VITA-XXXX-XXXX"
+                  className="w-full rounded-full border border-line bg-paper px-4 py-3 text-center text-[15px] font-bold uppercase tracking-wider"
+                />
+                {errorCodigo ? (
+                  <p role="alert" className="text-center text-[12.5px] font-semibold text-destructive">
+                    {errorCodigo}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={canjeando || codigo.trim() === ""}
+                  className="w-full rounded-full bg-ink py-3 text-[14px] font-extrabold text-on-ink disabled:opacity-60"
+                >
+                  {canjeando ? "Canjeando…" : "Canjear"}
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCodigoAbierto(true)}
+                className="text-center text-[12.5px] font-bold text-slate-brand underline underline-offset-2"
+              >
+                Tengo un código
+              </button>
             )}
           </>
         )}

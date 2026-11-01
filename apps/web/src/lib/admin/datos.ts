@@ -16,7 +16,7 @@ import {
   type UsuarioDetalle,
 } from "./tipos";
 
-export const FILTROS_USUARIOS = ["todos", "vita_plus", "inactivos_7", "inactivos_30", "gestionados", "sin_onboarding"] as const;
+export const FILTROS_USUARIOS = ["todos", "vita_plus", "vp_pago", "vp_codigo_plus", "vp_codigo_admin", "inactivos_7", "inactivos_30", "gestionados", "sin_onboarding"] as const;
 export type FiltroUsuarios = (typeof FILTROS_USUARIOS)[number];
 export const TAMANO_PAGINA = 25;
 

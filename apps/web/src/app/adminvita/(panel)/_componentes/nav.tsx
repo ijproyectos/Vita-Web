@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/adminvita/usuarios", etiqueta: "Usuarios", icono: "users", exacto: false },
   { href: "/adminvita/ia", etiqueta: "IA y costos", icono: "chart", exacto: false },
   { href: "/adminvita/vita-plus", etiqueta: "vita+", icono: "sparkle", exacto: false },
+  { href: "/adminvita/codigos", etiqueta: "Códigos", icono: "lock", exacto: false },
   { href: "/adminvita/sistema", etiqueta: "Sistema", icono: "settings", exacto: false },
 ] as const;
 

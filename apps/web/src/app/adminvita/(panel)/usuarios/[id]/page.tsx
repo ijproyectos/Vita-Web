@@ -9,7 +9,9 @@ import {
   formatoFechaHoraAR,
   formatoNumero,
   formatoUSD,
+  resumenVitaPlus,
 } from "@/lib/admin/formato";
+import { FormularioPush } from "./formulario-push";
 import { BarrasDiarias, ChipInactividad, ErrorDatos, Etiqueta, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../../_componentes/ui";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +49,12 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <ChipInactividad dias={c.diasInactivo} />
         <Etiqueta>{ETIQUETA_TIPO_CUENTA[c.tipo] ?? c.tipo}</Etiqueta>
-        {c.vitaPlus ? <Etiqueta tono="ok">vita+ {c.plan ?? ""}</Etiqueta> : null}
+        {c.vitaPlus ? (
+          <Etiqueta tono="ok">
+            {resumenVitaPlus(c).etiqueta}
+            {resumenVitaPlus(c).detalle ? ` · ${resumenVitaPlus(c).detalle}` : ""}
+          </Etiqueta>
+        ) : null}
         {!c.onboarding ? <Etiqueta tono="aviso">Sin onboarding</Etiqueta> : null}
         {!c.emailConfirmado ? <Etiqueta tono="alerta">Email sin confirmar</Etiqueta> : null}
         {!c.memoriaActiva ? <Etiqueta>Memoria apagada</Etiqueta> : null}
@@ -58,8 +65,16 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
           <Kpi titulo="Alta" valor={formatoFechaAR(c.creado)} />
           <Kpi titulo="Último ingreso" valor={formatoFechaAR(c.ultimoLogin)} />
           <Kpi titulo="Última actividad" valor={formatoFechaHoraAR(c.ultimaActividad)} />
-          <Kpi titulo="vita+ hasta" valor={c.vence ? formatoFechaAR(c.vence) : "—"} />
+          <Kpi
+            titulo="vita+"
+            valor={!c.vitaPlus ? "—" : c.permanente ? "Sin vencimiento" : c.vence ? formatoFechaAR(c.vence) : "—"}
+            detalle={c.vitaPlus ? resumenVitaPlus(c).etiqueta : undefined}
+          />
         </div>
+      </Seccion>
+
+      <Seccion titulo="Enviar notificación">
+        <FormularioPush usuarioId={c.id} dispositivos={d.conteos.dispositivos_push ?? 0} />
       </Seccion>
 
       <Seccion titulo="Uso de IA (30 días)">

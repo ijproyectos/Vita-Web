@@ -30,9 +30,13 @@ const ISOTIPO = `<table role="presentation" cellpadding="0" cellspacing="0" bord
   <td width="40" height="40" align="center" valign="middle" bgcolor="${MARCA.teal}" style="width:40px;height:40px;border-radius:12px;background:${MARCA.teal};font-family:${FUENTE_EMAIL};font-size:26px;font-weight:800;line-height:40px;color:${MARCA.cream};">v<span style="color:${MARCA.amber};font-size:10px;vertical-align:top;line-height:20px;">&#9679;</span></td>
 </tr></table>`;
 
+/** Pie por defecto (invitaciones y vinculación). */
+const PIE_INVITACION = "Este correo lo envió vita porque alguien te invitó a acompañar su cuidado. Si no esperabas este mensaje, podés ignorarlo.";
+
 /** Layout compartido: 600px máx, tablas, estilos inline, fondo crema. */
-export function layout(args: { preheader: string; contenido: string; origen: string }): string {
+export function layout(args: { preheader: string; contenido: string; origen: string; pie?: string }): string {
   const { preheader, contenido, origen } = args;
+  const pie = args.pie ?? PIE_INVITACION;
   const link = `color:${MARCA.tealDeep};text-decoration:underline;`;
   return `<!doctype html>
 <html lang="es">
@@ -58,7 +62,7 @@ export function layout(args: { preheader: string; contenido: string; origen: str
 ${contenido}
     </td></tr>
     <tr><td style="padding:20px 12px 0;font-family:${FUENTE_EMAIL};font-size:12px;line-height:18px;color:${MARCA.slate};text-align:center;">
-      Este correo lo envió vita porque alguien te invitó a acompañar su cuidado. Si no esperabas este mensaje, podés ignorarlo.<br>
+      ${esc(pie)}<br>
       <a href="${esc(origen)}/legal/privacidad" style="${link}">Privacidad</a> &middot; <a href="${esc(origen)}/legal/terminos" style="${link}">Términos</a>
     </td></tr>
   </table>
@@ -74,6 +78,6 @@ export const ESTILO = {
   chico: `margin:0;font-family:${FUENTE_EMAIL};font-size:13px;line-height:20px;color:${MARCA.slate};`,
 };
 
-export function textoFooter(origen: string): string {
-  return `--\nEste correo lo envió vita porque alguien te invitó a acompañar su cuidado. Si no esperabas este mensaje, podés ignorarlo.\nPrivacidad: ${origen}/legal/privacidad\nTérminos: ${origen}/legal/terminos`;
+export function textoFooter(origen: string, pie: string = PIE_INVITACION): string {
+  return `--\n${pie}\nPrivacidad: ${origen}/legal/privacidad\nTérminos: ${origen}/legal/terminos`;
 }

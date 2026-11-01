@@ -9,7 +9,7 @@ import { VMark } from "./v-mark";
 // vigente muestra "Sos vita+ · hasta <fecha>". Ambas llevan a la pantalla de vita+ (donde se cancela).
 export async function TarjetaVitaPlus() {
   const estado = await obtenerEstadoVitaPlus(await createClient());
-  const hasta = estado.activo && estado.venceAt ? fechaLarga(estado.venceAt) : null;
+  const hasta = estado.activo && !estado.permanente && estado.venceAt ? fechaLarga(estado.venceAt) : null;
   return (
     <Link
       href="/app/vita-plus"
@@ -25,7 +25,9 @@ export async function TarjetaVitaPlus() {
         </span>
         <span className="mt-[3px] block text-pretty text-[12.5px] font-medium leading-[1.4] text-slate-brand">
           {estado.activo
-            ? `${hasta ? `Hasta ${hasta} · ` : ""}${estado.renueva ? "se renueva solo" : "no se renueva"}. Tocá para administrarla.`
+            ? estado.permanente
+              ? "Sin vencimiento."
+              : `${hasta ? `Hasta ${hasta} · ` : ""}${estado.renueva ? "se renueva solo" : "no se renueva"}. Tocá para administrarla.`
             : "Más herramientas para cuidar a tu familia."}
         </span>
       </span>
