@@ -20,7 +20,9 @@ const MOTIVOS: Record<Exclude<MotivoRechazo, "sin_sesion">, string> = {
 
 // Pantalla de ingreso del panel. Queda FUERA del grupo protegido (panel): si ya sos admin te manda adentro; si no,
 // ofrece entrar con Google (la misma autenticación de vita) o explica por qué la cuenta actual no tiene acceso.
-export default async function IngresarAdminPage() {
+export default async function IngresarAdminPage({ searchParams }: PageProps<"/adminvita/ingresar">) {
+  const sp = await searchParams;
+  const porInactividad = (Array.isArray(sp.motivo) ? sp.motivo[0] : sp.motivo) === "inactividad";
   const { usuario, decision } = await evaluarAccesoAdmin();
   if (decision.permitido) redirect("/adminvita");
 
@@ -36,6 +38,12 @@ export default async function IngresarAdminPage() {
           </span>
           <span className="eyebrow">panel de administración</span>
         </div>
+
+        {porInactividad && !conSesion ? (
+          <p role="status" className="rounded-[var(--radius-item)] bg-mint p-3 text-sm font-semibold text-teal-deep">
+            Cerramos tu sesión por inactividad. Volvé a entrar para seguir.
+          </p>
+        ) : null}
 
         {conSesion ? (
           <div className="flex flex-col gap-1.5">
