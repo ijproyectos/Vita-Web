@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { entrarAlPanel, obtenerVitaPlus } from "@/lib/admin/datos";
 import { formatoARS, formatoFechaHoraAR, formatoNumero } from "@/lib/admin/formato";
-import { ErrorDatos, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../_componentes/ui";
+import { Encabezado, ErrorDatos, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../_componentes/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +12,9 @@ export default async function VitaPlusPage() {
 
   return (
     <>
-      <h1 className="text-2xl font-extrabold tracking-tight text-ink">vita+</h1>
+      <Encabezado titulo="vita+" />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Kpi
           titulo="Activos"
           valor={formatoNumero(v.activos)}

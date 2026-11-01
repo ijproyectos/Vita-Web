@@ -2,7 +2,7 @@ import { entrarAlPanel } from "@/lib/admin/datos";
 import { listarCodigos } from "@/lib/admin/codigos";
 import { formatoFechaAR, formatoFechaHoraAR } from "@/lib/admin/formato";
 import { ETIQUETA_TIPO_CODIGO, type EstadoCodigo } from "@/lib/vita-plus/codigos";
-import { Etiqueta, Seccion, TD, TH, Tabla, Vacio } from "../_componentes/ui";
+import { Encabezado, Etiqueta, Seccion, TD, TH, Tabla, Vacio } from "../_componentes/ui";
 import { BotonRevocar } from "./boton-revocar";
 import { FormularioCodigos } from "./formulario";
 
@@ -21,8 +21,8 @@ export default async function CodigosPage() {
 
   return (
     <>
-      <h1 className="text-2xl font-extrabold tracking-tight text-ink">Códigos de vita+</h1>
-      <p className="mt-1 max-w-2xl text-sm text-slate-brand">
+      <Encabezado titulo="Códigos de vita+" />
+      <p className="-mt-2 mb-2 max-w-2xl px-1 text-sm text-slate-brand">
         Un código <strong>vita plus</strong> da vita+ por 15 días; uno <strong>vita admin</strong> lo da sin vencimiento. Cada cuenta
         puede canjear un código una sola vez. El código completo se muestra una sola vez al crearlo; después solo se ven los últimos 4
         caracteres. Revocar un código impide nuevos canjes, no le quita vita+ a quien ya lo canjeó.
@@ -34,7 +34,7 @@ export default async function CodigosPage() {
 
       <Seccion titulo="Códigos creados">
         {codigos === null ? (
-          <p className="rounded-[var(--radius-item)] border border-destructive/40 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+          <p className="rounded-[28px] bg-destructive/10 p-5 text-sm font-semibold text-destructive">
             No se pudieron leer los códigos. Revisá que la migración 046 esté aplicada y volvé a intentar.
           </p>
         ) : codigos.length === 0 ? (

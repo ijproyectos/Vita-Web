@@ -18,7 +18,7 @@ export function FormularioVerificacion({ email, configurado }: { email: string; 
 
   if (!configurado) {
     return (
-      <p role="alert" className="rounded-[var(--radius-item)] border border-destructive/40 bg-destructive/10 p-3 text-sm font-semibold text-destructive">
+      <p role="alert" className="rounded-2xl bg-destructive/10 p-3 text-sm font-semibold text-destructive">
         Falta configurar el segundo factor del panel (variable ADMIN_SESSION_SECRET, de al menos 32 caracteres). Hasta
         entonces nadie puede entrar.
       </p>
@@ -57,7 +57,7 @@ export function FormularioVerificacion({ email, configurado }: { email: string; 
           pattern="[0-9 ]*"
           maxLength={12}
           required
-          className="w-full rounded-full border border-line bg-paper px-4 py-3 text-center text-xl font-extrabold tracking-[0.3em]"
+          className="w-full rounded-full bg-panel-track px-4 py-3 text-center focus-visible:outline-2 focus-visible:outline-teal text-xl font-extrabold tracking-[0.3em]"
         />
         <button
           type="submit"

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { entrarAlPanel, FILTROS_USUARIOS, obtenerUsuarios, TAMANO_PAGINA, type FiltroUsuarios } from "@/lib/admin/datos";
 import { ETIQUETA_TIPO_CUENTA, formatoNumero, formatoFechaAR, formatoUSD, resumenVitaPlus } from "@/lib/admin/formato";
-import { ChipInactividad, ErrorDatos, Etiqueta, TD, TH, Tabla, Vacio } from "../_componentes/ui";
+import { Avatar, Encabezado, PillFiltro, ChipInactividad, ErrorDatos, Etiqueta, TD, TH, Tabla, Vacio } from "../_componentes/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -44,34 +44,27 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
 
   return (
     <>
-      <h1 className="text-2xl font-extrabold tracking-tight text-ink">Usuarios</h1>
+      <Encabezado titulo="Usuarios" />
 
-      <form action="/adminvita/usuarios" className="mt-4 flex flex-wrap gap-2">
+      <form action="/adminvita/usuarios" className="flex flex-wrap gap-2">
         <input
           type="search"
           name="q"
           defaultValue={q}
           placeholder="Buscar por email, nombre o id"
-          className="min-w-0 flex-1 rounded-full border border-line bg-paper px-4 py-2 text-sm"
+          className="min-w-0 flex-1 rounded-full bg-card px-5 py-3 text-sm shadow-panel placeholder:text-subtle focus-visible:outline-2 focus-visible:outline-teal"
         />
         {filtro !== "todos" ? <input type="hidden" name="filtro" value={filtro} /> : null}
-        <button type="submit" className="rounded-full bg-teal px-5 py-2 text-sm font-bold text-on-ink">
+        <button type="submit" className="rounded-full bg-teal px-6 py-3 text-sm font-bold text-on-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal">
           Buscar
         </button>
       </form>
 
       <nav className="mt-3 flex flex-wrap gap-1.5" aria-label="Filtros">
         {FILTROS_USUARIOS.map((f) => (
-          <Link
-            key={f}
-            href={href(f, q, 1)}
-            aria-current={f === filtro ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-xs font-bold ${
-              f === filtro ? "border-teal bg-mint text-teal-deep" : "border-line bg-paper text-slate-brand"
-            }`}
-          >
+          <PillFiltro key={f} href={href(f, q, 1)} activo={f === filtro}>
             {ETIQUETA_FILTRO[f]}
-          </Link>
+          </PillFiltro>
         ))}
       </nav>
 
@@ -98,13 +91,18 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
               {datos.filas.map((u) => (
                 <tr key={u.id}>
                   <td className={TD}>
-                    <Link href={`/adminvita/usuarios/${u.id}`} className="font-bold text-teal-deep hover:underline">
-                      {u.nombre || u.email || u.id.slice(0, 8)}
-                    </Link>
-                    <div className="max-w-[260px] truncate text-xs text-subtle">{u.email}</div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {u.tipo !== "real" ? <Etiqueta>{ETIQUETA_TIPO_CUENTA[u.tipo] ?? u.tipo}</Etiqueta> : null}
-                      {!u.onboarding && u.tipo !== "gestionado" ? <Etiqueta tono="aviso">Sin onboarding</Etiqueta> : null}
+                    <div className="flex items-center gap-3">
+                      <Avatar nombre={u.nombre || u.email || "?"} />
+                      <div className="min-w-0">
+                        <Link href={`/adminvita/usuarios/${u.id}`} className="font-bold text-ink hover:underline">
+                          {u.nombre || u.email || u.id.slice(0, 8)}
+                        </Link>
+                        <div className="max-w-[260px] truncate text-xs text-subtle">{u.email}</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {u.tipo !== "real" ? <Etiqueta>{ETIQUETA_TIPO_CUENTA[u.tipo] ?? u.tipo}</Etiqueta> : null}
+                          {!u.onboarding && u.tipo !== "gestionado" ? <Etiqueta tono="aviso">Sin onboarding</Etiqueta> : null}
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td className={TD}>

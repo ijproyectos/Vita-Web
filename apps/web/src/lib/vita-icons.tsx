@@ -66,6 +66,9 @@ import {
   Search,
   Bone,
   Smile,
+  ArrowUpRight,
+  RefreshCw,
+  CalendarDays,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -116,6 +119,9 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   "trend-down": TrendingDown,
   camera: Camera,
   logout: LogOut,
+  "arrow-up-right": ArrowUpRight,
+  refresh: RefreshCw,
+  calendar: CalendarDays,
   users: Users,
   link: Link2,
   copy: Copy,
