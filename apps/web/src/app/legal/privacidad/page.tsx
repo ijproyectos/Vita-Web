@@ -91,6 +91,10 @@ export default function PrivacidadPage() {
           <li>Mantener la seguridad del servicio y aplicar el límite diario de uso de IA.</li>
         </Lista>
         <p>No vendemos tus datos ni los usamos para publicidad.</p>
+        <p>
+          El equipo de vita puede ver métricas de cuenta y de uso (por ejemplo, fechas de actividad, planes y costos) para
+          operar y dar soporte al servicio, pero no el contenido de tus conversaciones ni tus datos de salud.
+        </p>
       </Seccion>
 
       <Seccion titulo="4. Con quién compartimos tus datos">
