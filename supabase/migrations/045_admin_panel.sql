@@ -130,7 +130,6 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_tz constant text := 'America/Argentina/Buenos_Aires';
   v_hoy date := (now() at time zone 'America/Argentina/Buenos_Aires')::date;
   v_inicio_hoy timestamptz := ((now() at time zone 'America/Argentina/Buenos_Aires')::date)::timestamp
     at time zone 'America/Argentina/Buenos_Aires';
@@ -213,7 +212,6 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_tz constant text := 'America/Argentina/Buenos_Aires';
   v_hoy date := (now() at time zone 'America/Argentina/Buenos_Aires')::date;
   v_q text := lower(btrim(coalesce(p_busqueda, '')));
   v_filtro text := case when p_filtro in ('vita_plus', 'inactivos_7', 'inactivos_30', 'gestionados', 'sin_onboarding')
