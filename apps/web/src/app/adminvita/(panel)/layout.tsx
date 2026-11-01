@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/admin/acceso";
 import { cerrarSesionAdminAction } from "../acciones-sesion";
 import { InactividadAdmin } from "./_componentes/inactividad";
-import { NavAdmin } from "./_componentes/nav";
+import { BotonActualizar, NavAdmin } from "./_componentes/nav";
+import { Avatar } from "./_componentes/ui";
+import { VitaIcon } from "@/lib/vita-icons";
 
 export const dynamic = "force-dynamic";
 
@@ -16,26 +18,43 @@ export const metadata: Metadata = {
 export default async function AdminLayout({ children }: LayoutProps<"/adminvita">) {
   const admin = await requireAdmin();
   return (
-    <div className="min-h-screen bg-canvas">
+    <div className="min-h-screen bg-panel px-3 py-3 sm:px-6 sm:py-5">
       <InactividadAdmin />
-      <header className="border-b border-line bg-paper">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-extrabold tracking-tight text-ink">vita</span>
-            <span className="eyebrow">panel</span>
+      <div className="mx-auto max-w-7xl">
+        <header className="flex flex-col gap-3 rounded-[32px] bg-card p-3 shadow-panel lg:flex-row lg:items-center lg:justify-between lg:pl-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold tracking-[-0.06em] text-ink">
+                vita<span className="text-amber">.</span>
+              </span>
+              <span className="eyebrow text-subtle">panel</span>
+            </div>
+            <div className="flex items-center gap-2 lg:hidden">
+              <BotonActualizar />
+            </div>
           </div>
           <NavAdmin />
-          <div className="flex items-center gap-3">
-            <p className="min-w-0 truncate text-xs text-subtle">{admin.email}</p>
+          <div className="flex items-center justify-between gap-2 lg:justify-end">
+            <div className="hidden lg:block">
+              <BotonActualizar />
+            </div>
+            <div className="flex min-w-0 items-center gap-2">
+              <Avatar nombre={admin.email} className="size-10" />
+              <p className="min-w-0 truncate text-xs font-semibold text-slate-brand">{admin.email}</p>
+            </div>
             <form action={cerrarSesionAdminAction}>
-              <button type="submit" className="whitespace-nowrap rounded-full border border-line px-3 py-1 text-xs font-bold text-slate-brand hover:bg-line-soft">
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-panel-track px-4 py-2.5 text-xs font-bold text-slate-brand transition-colors hover:bg-line focus-visible:outline-2 focus-visible:outline-teal motion-reduce:transition-none"
+              >
+                <VitaIcon name="logout" size={14} />
                 Cerrar sesión
               </button>
             </form>
           </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 pb-16 pt-6">{children}</main>
+        </header>
+        <main className="pb-16 pt-6">{children}</main>
+      </div>
     </div>
   );
 }

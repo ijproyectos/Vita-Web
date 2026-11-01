@@ -25,6 +25,10 @@
   --color-faint: var(--faint);
   --color-success: var(--success);
   --color-canvas: var(--canvas);
+  --color-panel: var(--panel-canvas);
+  --color-panel-track: var(--panel-track);
+  --color-panel-row: var(--panel-row);
+  --shadow-panel: var(--elevation-panel);
   --color-mint-soft: var(--mint-soft);
   --color-aviso: var(--aviso);
   --color-aviso-ink: var(--aviso-ink);
@@ -271,6 +275,14 @@
   --brand-to: var(--teal-deep);
   /* Indicador "en linea". */
   --online: #10b981;
+  /* Panel de administracion (/adminvita): lienzo gris suave, pista de pills,
+     fila resaltada, tinte de las barras con rayas y sombra de tarjeta blanda. */
+  --panel-canvas: #eceef0;
+  --panel-track: #f0f1f3;
+  --panel-row: #f5f6f7;
+  --panel-stripe: color-mix(in srgb, var(--teal) 38%, transparent);
+  --panel-bar: color-mix(in srgb, var(--teal) 55%, var(--paper));
+  --elevation-panel: 0 1px 2px rgba(15, 25, 35, 0.04), 0 8px 28px rgba(15, 25, 35, 0.05);
   /* Sombra de tarjeta (antes repetida inline con fallback). */
   --elevation-card: 0 2px 12px rgba(15, 25, 35, 0.07);
   /* Items de lista dentro de una timeline (V7). */
@@ -316,6 +328,9 @@
 }
 
 .dark {
+  --panel-canvas: oklch(0.17 0 0);
+  --panel-track: oklch(0.26 0 0);
+  --panel-row: oklch(0.24 0 0);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

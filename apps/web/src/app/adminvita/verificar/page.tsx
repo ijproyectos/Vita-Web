@@ -19,8 +19,8 @@ export default async function VerificarAdminPage() {
   if (await tieneVerificacionVigente(usuario, decision.email)) redirect("/adminvita");
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-10">
-      <div className="flex w-full max-w-sm flex-col gap-5 rounded-[var(--radius-card)] bg-card p-6 shadow-card">
+    <main className="flex min-h-screen items-center justify-center bg-panel px-4 py-10">
+      <div className="flex w-full max-w-md flex-col gap-5 rounded-[32px] bg-card p-8 shadow-panel">
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-extrabold tracking-[-0.06em] text-ink">
             vita<span className="text-amber">.</span>

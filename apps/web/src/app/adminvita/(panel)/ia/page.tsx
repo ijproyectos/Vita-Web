@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { entrarAlPanel, obtenerIA } from "@/lib/admin/datos";
 import { formatoDiaCorto, formatoMs, formatoNumero, formatoPorcentaje, formatoUSD } from "@/lib/admin/formato";
-import { BarrasDiarias, ErrorDatos, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../_componentes/ui";
+import { AreaSuave, Avatar, BarrasDiarias, Encabezado, ErrorDatos, Hero, Kpi, Seccion, TD, TH, Tabla, Toggle, Vacio } from "../_componentes/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -25,46 +25,35 @@ export default async function IAPage({ searchParams }: PageProps<"/adminvita/ia"
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold tracking-tight text-ink">IA y costos</h1>
-        <nav className="flex gap-1.5" aria-label="Período">
-          {RANGOS.map((r) => (
-            <Link
-              key={r}
-              href={`/adminvita/ia?dias=${r}`}
-              aria-current={r === dias ? "page" : undefined}
-              className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                r === dias ? "border-teal bg-mint text-teal-deep" : "border-line bg-paper text-slate-brand"
-              }`}
-            >
-              {r} días
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <Encabezado
+        titulo="IA y costos"
+        derecha={<Toggle etiqueta="Período" opciones={RANGOS.map((r) => ({ href: `/adminvita/ia?dias=${r}`, texto: `${r} días`, activo: r === dias }))} />}
+      />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi titulo={`Costo (${dias} días)`} valor={formatoUSD(costoTotal)} detalle={`${formatoUSD(costoTotal / dias)} por día`} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Hero titulo={`Costo (${dias} días)`} subtitulo="Gasto de IA del período" valor={formatoUSD(costoTotal)} detalle={`${formatoUSD(costoTotal / dias)} por día`} />
         <Kpi titulo="Respuestas de vita" valor={formatoNumero(mensajes)} />
         <Kpi titulo="Lectura de caché" valor={formatoPorcentaje(ratioPeriodo)} detalle="de los tokens de entrada" />
         <Kpi titulo="Respuestas con problema" valor={formatoNumero(erroresTotal)} tono={erroresTotal > 0 ? "alerta" : "neutro"} />
       </div>
 
       <Seccion titulo="Por día">
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <BarrasDiarias
             titulo="Costo diario (USD)"
+            subtitulo={`Últimos ${dias} días`}
             barras={[...ia.diario].reverse().map((x) => ({ etiqueta: formatoDiaCorto(x.fecha), valor: x.costoUsd, detalle: formatoUSD(x.costoUsd) }))}
           />
-          <BarrasDiarias
+          <AreaSuave
             titulo="Respuestas de vita por día"
-            barras={[...ia.diario].reverse().map((x) => ({ etiqueta: formatoDiaCorto(x.fecha), valor: x.mensajes, detalle: formatoNumero(x.mensajes) }))}
+            subtitulo={`Últimos ${dias} días`}
+            puntos={[...ia.diario].reverse().map((x) => ({ etiqueta: formatoDiaCorto(x.fecha), valor: x.mensajes, detalle: formatoNumero(x.mensajes) }))}
           />
         </div>
       </Seccion>
 
       <Seccion titulo="Latencia de respuestas correctas">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Kpi titulo="p50 respuesta" valor={formatoMs(ia.latencia.p50)} />
           <Kpi titulo="p95 respuesta" valor={formatoMs(ia.latencia.p95)} />
           <Kpi titulo="p50 primer token" valor={formatoMs(ia.latencia.p50PrimerToken)} />
@@ -89,10 +78,15 @@ export default async function IAPage({ searchParams }: PageProps<"/adminvita/ia"
               {ia.top.map((u) => (
                 <tr key={u.id}>
                   <td className={TD}>
-                    <Link href={`/adminvita/usuarios/${u.id}`} className="font-bold text-teal-deep hover:underline">
-                      {u.nombre || u.email || u.id.slice(0, 8)}
-                    </Link>
-                    <div className="text-xs text-subtle">{u.email}</div>
+                    <div className="flex items-center gap-3">
+                      <Avatar nombre={u.nombre || u.email || "?"} />
+                      <div className="min-w-0">
+                        <Link href={`/adminvita/usuarios/${u.id}`} className="font-bold text-ink hover:underline">
+                          {u.nombre || u.email || u.id.slice(0, 8)}
+                        </Link>
+                        <div className="truncate text-xs text-subtle">{u.email}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className={TD}>{formatoUSD(u.costoUsd)}</td>
                   <td className={TD}>{formatoNumero(u.tokens)}</td>

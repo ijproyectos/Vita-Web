@@ -5,7 +5,7 @@ import { CUERPO_PUSH_MAX, TITULO_PUSH_MAX, validarMensajePush } from "@/lib/admi
 import type { ResultadoPushAdmin } from "@/lib/admin/push";
 import { enviarPushAction } from "./actions";
 
-const CAMPO = "w-full rounded-[var(--radius-item)] border border-line bg-paper px-3 py-2 text-sm";
+const CAMPO = "w-full rounded-2xl bg-panel-track px-4 py-2.5 text-sm focus-visible:outline-2 focus-visible:outline-teal";
 
 export function FormularioPush({ usuarioId, dispositivos }: { usuarioId: string; dispositivos: number }) {
   const [titulo, setTitulo] = useState("");
@@ -31,7 +31,7 @@ export function FormularioPush({ usuarioId, dispositivos }: { usuarioId: string;
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <form
-        className="flex flex-col gap-3 rounded-[var(--radius-item)] border border-line bg-paper p-4 shadow-item"
+        className="flex flex-col gap-3 rounded-[28px] bg-card p-5 shadow-panel"
         onSubmit={(e) => {
           e.preventDefault();
           if (validacion.ok) setConfirmando(true);
@@ -54,7 +54,7 @@ export function FormularioPush({ usuarioId, dispositivos }: { usuarioId: string;
         {!validacion.ok && (titulo !== "" || cuerpo !== "") ? <p className="text-xs text-destructive">{validacion.error}</p> : null}
 
         {confirmando ? (
-          <div role="alertdialog" aria-label="Confirmar envío" className="flex flex-col gap-2 rounded-[var(--radius-item)] bg-mint p-3">
+          <div role="alertdialog" aria-label="Confirmar envío" className="flex flex-col gap-2 rounded-2xl bg-mint p-3">
             <p className="text-sm font-bold text-teal-deep">¿Enviar esta notificación al usuario?</p>
             <span className="flex gap-2">
               <button type="button" onClick={enviar} disabled={pendiente} className="rounded-full bg-teal px-4 py-1.5 text-xs font-bold text-on-ink disabled:opacity-60">
@@ -77,7 +77,7 @@ export function FormularioPush({ usuarioId, dispositivos }: { usuarioId: string;
         ) : null}
       </form>
 
-      <div aria-label="Vista previa" className="rounded-[var(--radius-item)] border border-dashed border-line bg-canvas p-4">
+      <div aria-label="Vista previa" className="rounded-2xl border border-dashed border-line bg-panel-row p-4">
         <p className="eyebrow">Vista previa</p>
         <div className="mt-2 rounded-[var(--radius-item)] bg-card p-3 shadow-card">
           <p className="text-sm font-extrabold text-ink">{titulo.trim() || "Título de la notificación"}</p>

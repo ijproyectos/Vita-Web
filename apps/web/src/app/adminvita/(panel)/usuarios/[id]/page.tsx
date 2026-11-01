@@ -41,12 +41,12 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
 
   return (
     <>
-      <Link href="/adminvita/usuarios" className="text-sm font-bold text-teal-deep">
+      <Link href="/adminvita/usuarios" className="inline-flex rounded-full bg-card px-4 py-2 text-sm font-bold text-teal-deep shadow-panel focus-visible:outline-2 focus-visible:outline-teal">
         ← Usuarios
       </Link>
-      <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink">{c.nombre || c.email}</h1>
-      <p className="text-sm text-subtle">{c.email}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <h1 className="mt-5 px-1 text-3xl font-extrabold tracking-[-0.04em] text-ink sm:text-4xl">{c.nombre || c.email}</h1>
+      <p className="px-1 text-sm text-subtle">{c.email}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
         <ChipInactividad dias={c.diasInactivo} />
         <Etiqueta>{ETIQUETA_TIPO_CUENTA[c.tipo] ?? c.tipo}</Etiqueta>
         {c.vitaPlus ? (
@@ -61,7 +61,7 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
       </div>
 
       <Seccion titulo="Cuenta">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Kpi titulo="Alta" valor={formatoFechaAR(c.creado)} />
           <Kpi titulo="Último ingreso" valor={formatoFechaAR(c.ultimoLogin)} />
           <Kpi titulo="Última actividad" valor={formatoFechaHoraAR(c.ultimaActividad)} />
@@ -89,7 +89,7 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
       </Seccion>
 
       <Seccion titulo="Cantidad de datos (solo conteos)">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {CONTEOS.map(([k, etiqueta]) => (
             <Kpi key={k} titulo={etiqueta} valor={formatoNumero(d.conteos[k] ?? 0)} />
           ))}
@@ -97,12 +97,12 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
       </Seccion>
 
       <Seccion titulo="Vínculos">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           {([
             ["Sus cuidadores", d.cuidadores],
             ["Personas que cuida", d.cuidaA],
           ] as const).map(([titulo, filas]) => (
-            <div key={titulo} className="rounded-[var(--radius-item)] border border-line bg-paper p-4 shadow-item">
+            <div key={titulo} className="rounded-[28px] bg-card p-5 shadow-panel">
               <p className="eyebrow">{titulo}</p>
               {filas.length === 0 ? (
                 <p className="mt-2 text-sm text-subtle">Ninguno.</p>
