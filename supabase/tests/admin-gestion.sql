@@ -250,6 +250,9 @@ begin;
     v_lote record;
     v_pasos int := 0;
     v_distintos int;
+    v_a uuid := current_setting('app.a')::uuid;
+    v_b uuid := current_setting('app.b')::uuid;
+    v_elegibles int;
   begin
     select count(distinct usuario_id) into v_distintos from public.push_suscripciones;
 
@@ -278,7 +281,13 @@ begin;
     end if;
     raise notice 'PASS: un solo envío activo a la vez';
 
-    -- lotes de a 1 usuario: no se repite ninguno y la unión es todo el universo
+    -- user_b suspendido: no recibe el anuncio
+    delete from public.suspensiones where usuario_id = v_b;
+    insert into public.suspensiones (usuario_id, motivo, suspendido_por) values (v_b, 'mal_uso', 'dueno@example.com');
+    select count(distinct s.usuario_id) into v_elegibles from public.push_suscripciones s
+      where not exists (select 1 from public.suspensiones z where z.usuario_id = s.usuario_id and z.levantada_at is null);
+
+    -- lotes de a 1 usuario: no se repite ninguno y la unión son todos los no suspendidos
     loop
       v_pasos := v_pasos + 1;
       exit when v_pasos > v_total + 5;
@@ -290,9 +299,11 @@ begin;
       v_vistos := v_vistos || v_lote.lt_usuarios[1];
       perform public.registrar_progreso_envio_masivo(v_id, 1, 2, 1);
     end loop;
-    if cardinality(v_vistos) <> v_total then raise exception 'FAIL: se reclamaron % de % usuarios', cardinality(v_vistos), v_total; end if;
+    if cardinality(v_vistos) <> v_elegibles then raise exception 'FAIL: se reclamaron % de % usuarios', cardinality(v_vistos), v_elegibles; end if;
+    if v_b = any (v_vistos) then raise exception 'FAIL: un usuario suspendido recibió el anuncio'; end if;
+    raise notice 'PASS: los suspendidos quedan fuera de los destinatarios';
     if (select estado from public.envios_masivos where id = v_id) <> 'terminado' then raise exception 'FAIL: no terminó'; end if;
-    if (select usuarios_procesados || '/' || enviados || '/' || fallidos from public.envios_masivos where id = v_id) <> v_total || '/' || (2 * v_total) || '/' || v_total then
+    if (select usuarios_procesados || '/' || enviados || '/' || fallidos from public.envios_masivos where id = v_id) <> cardinality(v_vistos) || '/' || (2 * cardinality(v_vistos)) || '/' || cardinality(v_vistos) then
       raise exception 'FAIL: contadores de progreso';
     end if;
     if exists (select 1 from public.reclamar_lote_envio_masivo(10)) then raise exception 'FAIL: reclamó con todo terminado'; end if;
@@ -314,8 +325,16 @@ begin;
     if public.cancelar_envio_masivo(v_id, 'dueno@example.com') then raise exception 'FAIL: canceló dos veces'; end if;
     if exists (select 1 from public.reclamar_lote_envio_masivo(10)) then raise exception 'FAIL: reclamó un envío cancelado'; end if;
     select * into r from public.crear_envio_masivo('Tras cancelar', 'Ok', '/app', 'dueno@example.com');
-    -- El cancelado no cuenta para el límite y el terminado anterior es de hace 11 minutos: tiene que poder crear.
-    if r.cr_resultado <> 'ok' then raise exception 'FAIL: un envío cancelado frenó uno nuevo (%)', r.cr_resultado; end if;
+    -- Cancelado DESPUÉS de reclamar un lote: sigue contando para la ventana (no se puede saltar el límite).
+    if r.cr_resultado <> 'limite' then raise exception 'FAIL: un cancelado que ya envió no cuenta para el límite (%)', r.cr_resultado; end if;
+    -- Cancelado sin haber enviado nada: no cuenta.
+    update public.envios_masivos set cursor_usuario = null, enviados = 0, created_at = now() - interval '11 minutes' where id = v_id;
+    select * into r from public.crear_envio_masivo('Tras cancelar', 'Ok', '/app', 'dueno@example.com');
+    if r.cr_resultado <> 'ok' then raise exception 'FAIL: pasada la ventana no dejó crear (%)', r.cr_resultado; end if;
+    v_id := r.cr_id;
+    if not public.cancelar_envio_masivo(v_id, 'dueno@example.com') then raise exception 'FAIL: no canceló el nuevo'; end if;
+    select * into r from public.crear_envio_masivo('Otro', 'Ok', '/app', 'dueno@example.com');
+    if r.cr_resultado <> 'ok' then raise exception 'FAIL: un cancelado sin enviar nada contó para el límite (%)', r.cr_resultado; end if;
     raise notice 'PASS: cancelar detiene los lotes y un cancelado no cuenta para el límite';
   end;
   $$;

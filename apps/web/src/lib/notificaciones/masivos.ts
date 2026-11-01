@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   puedeReclamarOtroLote,
   sumarLotes,
+  TIMEOUT_USUARIO_MS,
   USUARIOS_POR_LOTE,
   type ResultadoLote,
 } from "@/lib/admin/envios-masivos-logica";
@@ -27,17 +28,35 @@ export type ResumenMasivos = ResultadoLote & { lotes: number };
 
 const VACIO: ResumenMasivos = { usuarios: 0, enviados: 0, fallidos: 0, lotes: 0 };
 
+/** Espera `p` como mucho `ms`; si vence devuelve `alVencer` (el envío puede seguir en segundo plano, ya no se espera). */
+async function conTimeout<T>(p: Promise<T>, ms: number, alVencer: T): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  const limite = new Promise<T>((resolve) => {
+    t = setTimeout(() => resolve(alVencer), ms);
+  });
+  try {
+    return await Promise.race([p, limite]);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function procesarLote(admin: Cliente, lote: LoteReclamado): Promise<ResultadoLote> {
   const resultados = await Promise.all(
     lote.lt_usuarios.map(async (usuarioId) => {
       try {
-        const { push } = await entregarAviso(
-          admin,
-          usuarioId,
-          { tipo: "admin_mensaje", titulo: lote.lt_titulo, cuerpo: lote.lt_cuerpo, url: lote.lt_enlace },
-          { title: lote.lt_titulo, body: lote.lt_cuerpo, url: lote.lt_enlace, tag: `admin-masivo-${lote.lt_envio_id}` },
+        // Tope por usuario: un lote nunca pasa de TIMEOUT_USUARIO_MS aunque un servicio push no responda (los envíos
+        // de un usuario van en paralelo). Vencido cuenta como fallido; no se reintenta (no duplicar avisos).
+        return await conTimeout(
+          entregarAviso(
+            admin,
+            usuarioId,
+            { tipo: "admin_mensaje", titulo: lote.lt_titulo, cuerpo: lote.lt_cuerpo, url: lote.lt_enlace },
+            { title: lote.lt_titulo, body: lote.lt_cuerpo, url: lote.lt_enlace, tag: `admin-masivo-${lote.lt_envio_id}` },
+          ).then(({ push }) => ({ enviados: push.enviados, fallidos: push.fallidos + (push.sinConfigurar ? push.total : 0) })),
+          TIMEOUT_USUARIO_MS,
+          { enviados: 0, fallidos: 1 },
         );
-        return { enviados: push.enviados, fallidos: push.fallidos + (push.sinConfigurar ? push.total : 0) };
       } catch {
         return { enviados: 0, fallidos: 1 };
       }

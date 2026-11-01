@@ -98,8 +98,8 @@ describe("porcentajeEnvio", () => {
 describe("lotes del cron", () => {
   it("arranca otro lote solo con presupuesto de sobra", () => {
     expect(puedeReclamarOtroLote(0, 0)).toBe(true);
-    expect(puedeReclamarOtroLote(5_000, 2)).toBe(true);
-    expect(puedeReclamarOtroLote(5_001, 2)).toBe(false);
+    expect(puedeReclamarOtroLote(4_000, 2)).toBe(true);
+    expect(puedeReclamarOtroLote(4_001, 2)).toBe(false);
     expect(puedeReclamarOtroLote(9_500, 0)).toBe(false);
   });
   it("tope de lotes por tick", () => {

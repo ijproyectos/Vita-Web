@@ -29,6 +29,13 @@ export async function requireNoSuspendida(): Promise<void> {
   if (d.accion === "bloquear") redirect(RUTA_SUSPENDIDA);
 }
 
+export const MENSAJE_CUENTA_SUSPENDIDA = "Tu cuenta está suspendida.";
+
+/** ¿La sesión está suspendida? (falla abierto). Para Server Actions que devuelven `{ status: "error" }` en vez de redirigir. */
+export async function estaSuspendida(): Promise<boolean> {
+  return decidirSuspensionApp(await consultarSuspension()).accion === "bloquear";
+}
+
 /** Para rutas de API de una sesión ya validada: 403 `{ error: "cuenta_suspendida" }` o null si puede seguir. */
 export async function respuestaSiSuspendida(): Promise<NextResponse | null> {
   const d = decidirSuspensionApp(await consultarSuspension());

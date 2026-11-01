@@ -75,8 +75,10 @@ export const USUARIOS_POR_LOTE = 20;
 export const LOTES_MAX_POR_TICK = 5;
 /** Presupuesto total de la función del cron (Netlify corta a ~10 s) y margen mínimo para arrancar otro lote. */
 export const PRESUPUESTO_CRON_MS = 9_000;
-/** Un lote puede tardar hasta el timeout de un envío push (10 s) en el peor caso: no se empieza si falta menos. */
-export const MARGEN_NUEVO_LOTE_MS = 4_000;
+/** Un lote tarda a lo sumo `TIMEOUT_USUARIO_MS` más el registro de progreso: no se empieza si falta menos que este margen. */
+export const MARGEN_NUEVO_LOTE_MS = 5_000;
+/** Tope de espera por los envíos de UN usuario: un lote entero tarda a lo sumo esto (van en paralelo) más el registro de progreso. */
+export const TIMEOUT_USUARIO_MS = 3_000;
 
 /** ¿Se puede reclamar otro lote? `desdeInicioCronMs` es lo que lleva corriendo toda la ruta, no solo los envíos. */
 export function puedeReclamarOtroLote(desdeInicioCronMs: number, lotesHechos: number): boolean {

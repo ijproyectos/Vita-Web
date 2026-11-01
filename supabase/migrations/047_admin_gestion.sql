@@ -275,7 +275,8 @@ as $$
 $$;
 
 -- Crea el envío. Resultado: 'ok' | 'invalido' | 'en_curso' (hay otro pendiente o enviando) | 'limite' (hubo uno hace
--- menos de 10 minutos; cr_espera_seg dice cuánto falta) | 'sin_destinatarios'. Un envío cancelado no cuenta para el límite.
+-- menos de 10 minutos; cr_espera_seg dice cuánto falta) | 'sin_destinatarios'. Un envío cancelado SIN haber enviado nada
+-- no cuenta para el límite; uno cancelado después de reclamar algún lote sí (si no, crear y cancelar saltaría la ventana).
 create or replace function public.crear_envio_masivo(p_titulo text, p_cuerpo text, p_enlace text, p_por text)
 returns table (cr_id uuid, cr_resultado text, cr_espera_seg int, cr_usuarios int, cr_dispositivos int)
 language plpgsql
@@ -307,7 +308,8 @@ begin
     return;
   end if;
 
-  select max(e.created_at) into v_ultimo from public.envios_masivos e where e.estado <> 'cancelado';
+  select max(e.created_at) into v_ultimo from public.envios_masivos e
+  where e.estado <> 'cancelado' or e.enviados > 0 or e.cursor_usuario is not null;
   if v_ultimo is not null and v_ultimo > now() - interval '10 minutes' then
     return query select null::uuid, 'limite'::text,
       ceil(extract(epoch from (v_ultimo + interval '10 minutes' - now())))::int, 0, 0;
@@ -328,7 +330,7 @@ begin
 end;
 $$;
 
--- Reclama el siguiente lote del envío activo más antiguo. Atómico: bloquea la fila del envío con `skip locked` y
+-- Reclama el siguiente lote del envío activo más antiguo (sin cuentas suspendidas). Atómico: bloquea la fila del envío con `skip locked` y
 -- avanza el cursor en la misma transacción, así dos ticks superpuestos nunca reciben los mismos usuarios (si uno
 -- cae después de reclamar, ese lote se pierde: preferimos no repetir un aviso). Sin usuarios que queden, termina
 -- el envío y no devuelve filas.
@@ -357,7 +359,9 @@ begin
   from (
     select distinct s.usuario_id
     from public.push_suscripciones s
-    where v_e.cursor_usuario is null or s.usuario_id > v_e.cursor_usuario
+    where (v_e.cursor_usuario is null or s.usuario_id > v_e.cursor_usuario)
+      -- Las cuentas suspendidas no reciben anuncios.
+      and not exists (select 1 from public.suspensiones z where z.usuario_id = s.usuario_id and z.levantada_at is null)
     order by s.usuario_id
     limit v_limite
   ) x;

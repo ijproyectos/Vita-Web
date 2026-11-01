@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
+import { estaSuspendida, MENSAJE_CUENTA_SUSPENDIDA } from "@/lib/suspensiones/guardia";
 import { borrarSuscripcion, guardarSuscripcion } from "./push";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import {
@@ -27,6 +28,7 @@ type EntradaSuscripcion = {
 };
 
 export async function guardarSuscripcionAction(entrada: EntradaSuscripcion): Promise<EstadoPush> {
+  if (await estaSuspendida()) return { status: "error", message: MENSAJE_CUENTA_SUSPENDIDA };
   await requireUser();
 
   const endpoint = entrada?.endpoint;
