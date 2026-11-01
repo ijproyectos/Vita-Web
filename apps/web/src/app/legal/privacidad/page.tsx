@@ -26,6 +26,11 @@ export default function PrivacidadPage() {
       <Seccion titulo="2. Qué datos recolectamos">
         <Lista>
           <li>
+            <strong>Suscripción vita+:</strong> si te suscribís, guardamos el plan, el importe en dólares y en pesos, la
+            cotización aplicada, el estado de la suscripción, la fecha hasta la que tenés vita+ y los identificadores de
+            Mercado Pago. Nunca guardamos datos de tarjeta.
+          </li>
+          <li>
             <strong>Cuenta:</strong> al iniciar sesión con Google recibimos tu nombre, tu email y tu foto de perfil.
             No recibimos tu contraseña de Google.
           </li>
@@ -110,6 +115,13 @@ export default function PrivacidadPage() {
           <li>
             <strong>Deepgram</strong> (síntesis de voz): recibe el texto de las respuestas de vita, sin emojis, para
             convertirlo en audio.
+          </li>
+          <li>
+            <strong>Mercado Pago</strong> (cobro de la suscripción vita+): procesa el pago y los datos de tu medio de
+            pago en su propia plataforma. vita no recibe ni guarda datos de tarjeta; solo guarda el estado de tu
+            suscripción, los importes cobrados, la cotización del dólar aplicada, la fecha hasta la que tenés vita+ y
+            los identificadores de Mercado Pago (suscripción y pago). Mercado Pago recibe tu email para identificar
+            la suscripción.
           </li>
           <li>
             <strong>Netlify</strong> (alojamiento): aloja la aplicación y por lo tanto procesa el tráfico entre tu

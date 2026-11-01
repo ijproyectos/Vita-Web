@@ -138,11 +138,45 @@ export default function TerminosPage() {
         </Lista>
       </Seccion>
 
-      <Seccion titulo="9. Costo">
+      <Seccion titulo="9. Costo y suscripción vita+">
         <p>
-          Hoy vita es gratuita. Anunciamos una versión vita+ que todavía no está disponible: no cobramos nada ni
-          pedimos datos de pago. Si en el futuro alguna función pasa a ser paga, te lo vamos a informar antes, junto
-          con su precio, y solo se te cobrará si lo aceptás de forma expresa.
+          El uso básico de vita es gratuito. vita+ es una suscripción paga, mensual o anual, que se contrata desde
+          Perfil &rarr; vita+. Los precios se muestran en dólares estadounidenses (mensual US$ 4,99; anual US$ 35,88
+          por año, equivalente a US$ 2,99 por mes), pero el cobro se hace en pesos argentinos a través de Mercado Pago:
+          convertimos el precio al dólar oficial (Banco de la Nación Argentina, cotización vendedor) del día en que te
+          suscribís. Antes de pasar a Mercado Pago te mostramos en la aplicación el importe exacto en pesos y la
+          cotización usada, y solo seguís si tocás &ldquo;Ir a Mercado Pago&rdquo;. Ese importe en pesos se mantiene en
+          las renovaciones de esa suscripción.
+        </p>
+        <Lista>
+          <li>
+            <strong>Renovación automática:</strong> la suscripción se renueva sola cada mes o cada año, según el plan,
+            hasta que la canceles.
+          </li>
+          <li>
+            <strong>Cancelación:</strong> podés cancelar cuando quieras desde Perfil &rarr; vita+ &rarr; Cancelar
+            suscripción. Se corta el cobro de los períodos siguientes y seguís con vita+ hasta el final del período ya
+            pagado.
+          </li>
+          <li>
+            <strong>Sin reembolsos parciales:</strong> no devolvemos el tiempo no utilizado de un período ya pagado,
+            salvo que la ley lo exija.
+          </li>
+          <li>
+            <strong>Botón de arrepentimiento:</strong> como consumidor, podés revocar la contratación dentro de los 10
+            días corridos desde el primer cobro, con el botón &ldquo;Botón de arrepentimiento&rdquo; que aparece en
+            Perfil &rarr; vita+ mientras ese plazo esté vigente. Al confirmarlo cancelamos la suscripción y registramos
+            tu pedido; el reembolso de lo pagado lo procesamos nosotros (no es automático) según la Ley 24.240 de
+            Defensa del Consumidor y la Resolución 424/2020. También podés escribirnos a {CONTACTO_EMAIL}.
+          </li>
+          <li>
+            <strong>Pagos:</strong> los procesa Mercado Pago. vita no recibe ni guarda los datos de tu tarjeta.
+          </li>
+        </Lista>
+        <p>
+          Por ahora vita+ no habilita funciones exclusivas; las que incluya en el futuro se informarán en la
+          aplicación antes de depender de la suscripción. Podemos cambiar los precios para nuevas suscripciones; si
+          cambia el de una vigente, te lo avisamos con anticipación y podés cancelar sin costo.
         </p>
       </Seccion>
 
