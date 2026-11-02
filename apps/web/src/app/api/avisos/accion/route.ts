@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { marcarTomado } from "@/lib/medicamentos/nucleo";
 import { posponerDosis } from "@/lib/notificaciones/avisos";
 import { validarFechaAccion } from "@/lib/notificaciones/fecha-accion";
+import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,8 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Sin sesión." }, { status: 401 });
+    const suspendida = await respuestaSiSuspendida();
+    if (suspendida) return suspendida;
 
     // La RLS de `medicamentos` también deja leer los del elder a su cuidador:
     // acá solo vale la dosis PROPIA.

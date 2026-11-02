@@ -4,6 +4,7 @@ import { after, NextResponse } from "next/server";
 import { limpiarDato } from "@/lib/ai/limpiar";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
 import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
@@ -127,6 +128,9 @@ export async function POST(request: Request) {
   if (!user) {
     return new Response("No autenticado.", { status: 401 });
   }
+
+  const suspendida = await respuestaSiSuspendida();
+  if (suspendida) return suspendida;
 
   let cuerpo: {
     sesionId?: string;

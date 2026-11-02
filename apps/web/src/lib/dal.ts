@@ -2,6 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requireNoSuspendida } from "@/lib/suspensiones/guardia";
 import { listarElders } from "@/lib/cuidadores/nucleo";
 import type { ElderVinculado } from "@/lib/cuidadores/tipos";
 
@@ -19,6 +20,11 @@ export async function requireUser() {
   if (!user) {
     redirect("/login");
   }
+
+  // Los layouts no se re-ejecutan en Server Actions ni en navegaciones del cliente, y el JWT de una cuenta suspendida
+  // vale hasta 1 h: el chequeo vive acá para que toda página y acción que pase por `requireUser` lo herede. Una consulta
+  // indexada por request (cache), fail-open (el ban de Auth cubre login y refresh).
+  await requireNoSuspendida();
 
   return user;
 }

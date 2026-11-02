@@ -1,6 +1,8 @@
 // Tipos y lectores de las respuestas de las funciones admin_* (migración 045). Módulo puro.
 // Las RPC devuelven jsonb sin tipo: cada lector valida y normaliza, nunca confía en la forma.
 
+import { esMotivoSuspension, type MotivoSuspension } from "@/lib/suspensiones/logica";
+
 type Obj = Record<string, unknown>;
 
 export const obj = (v: unknown): Obj => (typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Obj) : {});
@@ -94,6 +96,9 @@ export type FilaUsuario = {
   costo30dUsd: number;
   tokens30d: number;
   onboarding: boolean;
+  /** Cuenta con suspensión activa (migración 047). */
+  suspendido: boolean;
+  suspensionMotivo: MotivoSuspension | null;
 };
 
 export function leerUsuarios(filas: unknown): { total: number; filas: FilaUsuario[] } {
@@ -119,8 +124,38 @@ export function leerUsuarios(filas: unknown): { total: number; filas: FilaUsuari
       costo30dUsd: num(r.o_costo_30d_usd),
       tokens30d: num(r.o_tokens_30d),
       onboarding: bool(r.o_onboarding),
+      suspendido: bool(r.o_suspendido),
+      suspensionMotivo: esMotivoSuspension(r.o_suspension_motivo) ? r.o_suspension_motivo : null,
     })),
   };
+}
+
+export type FilaSuspension = {
+  id: string;
+  motivo: MotivoSuspension;
+  nota: string;
+  suspendidoPor: string;
+  creada: string | null;
+  levantada: string | null;
+  levantadaPor: string | null;
+};
+
+/** Historial de `admin_suspensiones_de` (migración 047), la más nueva primero. Ignora filas con motivo desconocido. */
+export function leerSuspensiones(filas: unknown): FilaSuspension[] {
+  const salida: FilaSuspension[] = [];
+  for (const r of lista(filas)) {
+    if (!esMotivoSuspension(r.o_motivo)) continue;
+    salida.push({
+      id: txt(r.o_id),
+      motivo: r.o_motivo,
+      nota: txt(r.o_nota),
+      suspendidoPor: txt(r.o_suspendido_por),
+      creada: txtONull(r.o_creada),
+      levantada: txtONull(r.o_levantada),
+      levantadaPor: txtONull(r.o_levantada_por),
+    });
+  }
+  return salida;
 }
 
 export type UsoDia = {

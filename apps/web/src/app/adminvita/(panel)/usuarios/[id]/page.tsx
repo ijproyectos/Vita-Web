@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { entrarAlPanel, obtenerUsuario } from "@/lib/admin/datos";
+import { requireAdmin } from "@/lib/admin/acceso";
+import { listarAdministradores } from "@/lib/admin/administradores";
+import { entrarAlPanel, obtenerSuspensiones, obtenerUsuario } from "@/lib/admin/datos";
 import {
   ETIQUETA_TIPO_CUENTA,
   formatoARS,
@@ -11,7 +13,9 @@ import {
   formatoUSD,
   resumenVitaPlus,
 } from "@/lib/admin/formato";
+import { ETIQUETA_MOTIVO } from "@/lib/suspensiones/logica";
 import { FormularioPush } from "./formulario-push";
+import { PanelSuspension } from "./panel-suspension";
 import { BarrasDiarias, ChipInactividad, ErrorDatos, Etiqueta, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../../_componentes/ui";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +40,11 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
   if (resultado.estado === "error") return <ErrorDatos />;
   const d = resultado.datos;
   const c = d.cuenta;
+  const admin = await requireAdmin();
+  const [suspensiones, accesos] = await Promise.all([obtenerSuspensiones(id), listarAdministradores(admin)]);
+  const activa = suspensiones?.find((x) => x.levantada === null) ?? null;
+  const email = c.email.trim().toLowerCase();
+  const protegida = [...accesos.duenos, ...accesos.administradores].some((a) => a.email === email);
   const costo30 = d.usoDiario.reduce((a, x) => a + x.costoUsd, 0);
   const tokens30 = d.usoDiario.reduce((a, x) => a + x.tokensInput + x.tokensOutput, 0);
 
@@ -55,6 +64,7 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
             {resumenVitaPlus(c).detalle ? ` · ${resumenVitaPlus(c).detalle}` : ""}
           </Etiqueta>
         ) : null}
+        {activa ? <Etiqueta tono="alerta">Suspendida · {ETIQUETA_MOTIVO[activa.motivo]}</Etiqueta> : null}
         {!c.onboarding ? <Etiqueta tono="aviso">Sin onboarding</Etiqueta> : null}
         {!c.emailConfirmado ? <Etiqueta tono="alerta">Email sin confirmar</Etiqueta> : null}
         {!c.memoriaActiva ? <Etiqueta>Memoria apagada</Etiqueta> : null}
@@ -75,6 +85,48 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
 
       <Seccion titulo="Enviar notificación">
         <FormularioPush usuarioId={c.id} dispositivos={d.conteos.dispositivos_push ?? 0} />
+      </Seccion>
+
+      <Seccion titulo="Suspensión">
+        {suspensiones === null ? (
+          <p className="rounded-[28px] bg-destructive/10 p-5 text-sm font-semibold text-destructive">
+            No se pudo leer el estado de suspensión. Revisá que la migración 047 esté aplicada.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <PanelSuspension usuarioId={c.id} suspendida={activa !== null} protegida={protegida} />
+            {suspensiones.length > 0 ? (
+              <Tabla>
+                <thead>
+                  <tr>
+                    <th className={TH}>Motivo</th>
+                    <th className={TH}>Nota interna</th>
+                    <th className={TH}>Suspendida</th>
+                    <th className={TH}>Levantada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suspensiones.map((x) => (
+                    <tr key={x.id}>
+                      <td className={TD}>{ETIQUETA_MOTIVO[x.motivo]}</td>
+                      <td className={TD}>
+                        <span className="block max-w-[260px] whitespace-normal text-xs">{x.nota || "—"}</span>
+                      </td>
+                      <td className={TD}>
+                        {formatoFechaHoraAR(x.creada)}
+                        <div className="max-w-[180px] truncate text-xs text-subtle">{x.suspendidoPor}</div>
+                      </td>
+                      <td className={TD}>
+                        {x.levantada ? formatoFechaHoraAR(x.levantada) : <Etiqueta tono="alerta">Activa</Etiqueta>}
+                        {x.levantadaPor ? <div className="max-w-[180px] truncate text-xs text-subtle">{x.levantadaPor}</div> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Tabla>
+            ) : null}
+          </div>
+        )}
       </Seccion>
 
       <Seccion titulo="Uso de IA (30 días)">

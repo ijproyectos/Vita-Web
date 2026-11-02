@@ -62,6 +62,13 @@ import { createClient } from "@supabase/supabase-js";
  * lista) y cada función de datos vuelve a exigirlo. Solo ejecuta las RPC `admin_*` de la migración 045 (service_role, sin texto
  * de usuarios: ni mensajes, ni recuerdos, ni datos de salud) y es de solo lectura salvo la fila de auditoría.
  *
+ * Gestión del panel (migración 047): `lib/admin/administradores.ts` (alta/baja de administradores, solo dueños de ADMIN_EMAILS),
+ * `lib/admin/suspensiones.ts` (Auth Admin API `updateUserById` con `ban_duration` + RPC `admin_suspender_usuario` /
+ * `admin_reactivar_usuario`; nunca a un dueño ni a un administrador), `lib/admin/envios-masivos.ts` (crear/cancelar un envío
+ * masivo) y `lib/notificaciones/masivos.ts` (el cron `dosis-vencidas`, detrás de `x-cron-secret`, procesa el envío por lotes).
+ * `lib/admin/acceso.ts` también consulta `admin_es_administrador` con este cliente, pero solo DESPUÉS de `getUser()` y para
+ * quien no es dueño. Todo recibe el `Admin` de `requireAdmin()` como prueba previa y queda en `admin_acciones`.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,

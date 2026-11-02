@@ -3,6 +3,7 @@ import {
   leerIA,
   leerResumen,
   leerSistema,
+  leerSuspensiones,
   leerUsuarioDetalle,
   leerUsuarios,
   leerVitaPlus,
@@ -132,5 +133,25 @@ describe("origen de vita+ (migración 046)", () => {
   it("panel vita+: conteos por origen", () => {
     const v = leerVitaPlus([{ o_seccion: "resumen", o_datos: { activos: 5, permanentes: 2, activos_pago: 1, activos_codigo_plus: 2, activos_codigo_admin: 2 } }]);
     expect(v).toMatchObject({ activos: 5, permanentes: 2, activosPago: 1, activosCodigoPlus: 2, activosCodigoAdmin: 2 });
+  });
+});
+
+describe("suspensión (migración 047)", () => {
+  it("leerUsuarios lee la marca de suspensión y descarta motivos desconocidos", () => {
+    const { filas } = leerUsuarios([
+      { o_total: 2, o_id: "a", o_suspendido: true, o_suspension_motivo: "falta_de_pago" },
+      { o_total: 2, o_id: "b", o_suspendido: false, o_suspension_motivo: "raro" },
+    ]);
+    expect(filas[0]).toMatchObject({ suspendido: true, suspensionMotivo: "falta_de_pago" });
+    expect(filas[1]).toMatchObject({ suspendido: false, suspensionMotivo: null });
+  });
+  it("leerSuspensiones normaliza el historial", () => {
+    const r = leerSuspensiones([
+      { o_id: "1", o_motivo: "mal_uso", o_nota: "spam", o_suspendido_por: "a@x.com", o_creada: "2026-11-01T00:00:00Z", o_levantada: null, o_levantada_por: null },
+      { o_id: "2", o_motivo: "desconocido" },
+    ]);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ id: "1", motivo: "mal_uso", nota: "spam", levantada: null });
+    expect(leerSuspensiones(null)).toEqual([]);
   });
 });

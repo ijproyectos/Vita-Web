@@ -200,7 +200,16 @@ export default function TerminosPage() {
             Podés eliminar tu cuenta desde Perfil → Eliminar mi cuenta. Se borran de forma permanente todos tus datos,
             incluidas tus conversaciones y recuerdos, y la acción no se puede deshacer.
           </li>
-          <li>Podemos suspender o cerrar cuentas que incumplan estos términos.</li>
+          <li>
+            Podemos suspender una cuenta cuando se usa la aplicación de forma indebida (por ejemplo, para fines ilícitos o
+            para dañar el servicio o a otras personas) o cuando no se paga un plan contratado. Mientras dure la suspensión
+            no se puede ingresar a la aplicación, pero no borramos tus datos.
+          </li>
+          <li>
+            Si tu cuenta se suspende, te lo informamos dentro de la aplicación, con el motivo. Podés escribirnos a{" "}
+            {CORREO_SOPORTE} para revisarlo; si el motivo se resuelve, reactivamos la cuenta.
+          </li>
+          <li>También podemos cerrar definitivamente las cuentas que incumplan estos términos de forma grave o reiterada.</li>
         </Lista>
       </Seccion>
 

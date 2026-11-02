@@ -3,6 +3,7 @@ import { LIMITES_VOZ } from "@/lib/limites/logica";
 import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { createClient } from "@/lib/supabase/server";
 import { generarAudio } from "@/lib/voz/nucleo";
+import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 
 export const runtime = "nodejs";
 // Segundos; literal estático. Alineado con PRESUPUESTO_RESPUESTA_MS (lib/ai/presupuesto.ts): ahí está
@@ -23,6 +24,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 });
   }
+
+  const suspendida = await respuestaSiSuspendida();
+  if (suspendida) return suspendida;
 
   // Límite de pedidos por usuario (migración 035; falla abierto).
   const pedidos = await verificarLimitePedidos({ usuarioId: user.id, headers: request.headers, limites: LIMITES_VOZ });
