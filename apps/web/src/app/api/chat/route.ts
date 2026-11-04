@@ -3,7 +3,7 @@ import "server-only";
 import { after, NextResponse } from "next/server";
 import { limpiarDato } from "@/lib/ai/limpiar";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
+import { createClientConDispositivo } from "@/lib/supabase/dispositivo";
 import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
@@ -85,7 +85,7 @@ const VERSION_PROMPT_SIMPLE = `${calcularVersionPrompt(SYSTEM_PROMPT, TOOLS_SIMP
 // Bloque "Hoy" del contexto: medicamentos (con estado) y turnos de hoy de quien
 // chatea, para no gastar una llamada a tool en "qué me toca hoy". Nombres y
 // lugares los carga el usuario: se limpian como DATO. Si falla, se omite.
-async function construirContextoHoy(supabase: Awaited<ReturnType<typeof createClient>>, usuarioId: string): Promise<string> {
+async function construirContextoHoy(supabase: Awaited<ReturnType<typeof createClientConDispositivo>>, usuarioId: string): Promise<string> {
   try {
     const [meds, turnos] = await Promise.all([listarHoy(supabase, usuarioId), listarDeHoy(supabase, usuarioId)]);
     const textoMeds = meds
@@ -120,7 +120,7 @@ function respuestaErrorSinReintento(mensaje: string, status = 200): Response {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const supabase = await createClientConDispositivo();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -78,6 +78,11 @@ import { createClient } from "@supabase/supabase-js";
  * sesión autenticó al usuario: el `usuario_id` sale de esa sesión, nunca del cliente. La retención de
  * `registros_chat` (90 días) y de `limites_pedidos` (2 días) la hace el cron `dosis-vencidas` (`lib/notificaciones/retencion.ts`).
  *
+ * TEST-ONLY (token fijo de dispositivo; `lib/supabase/dispositivo.ts`): un ESP32 sin navegador llama a `/api/chat` y `/api/voz/*` con
+ * `Authorization: Bearer <DISPOSITIVO_TOKEN>` como UN usuario fijo (`DISPOSITIVO_USUARIO_ID`). Solo si el token coincide (sha256 +
+ * `timingSafeEqual`) se acuña una sesión de ese usuario (getUserById + generateLink + verifyOtp) y se cachea en memoria; luego todo
+ * corre con RLS como ese usuario. Atajo de pruebas a reemplazar por tokens por dispositivo (diseño de la migración 048).
+ *
  * Fuera de esos usos (y de `lib/cuenta/nucleo.ts`, que borra la cuenta
  * del usuario ya autenticado), nunca importar este cliente desde código que
  * atiende una request de un usuario autenticado — para eso están `lib/supabase/{server,client}.ts`,
