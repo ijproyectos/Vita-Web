@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClientConDispositivo } from "@/lib/supabase/dispositivo";
 import { decidirSuspensionApp, leerMiSuspension, type SuspensionActiva } from "./logica";
 
 export const RUTA_SUSPENDIDA = "/suspendida";
@@ -14,7 +14,7 @@ export const RUTA_SUSPENDIDA = "/suspendida";
  */
 export const consultarSuspension = cache(async (): Promise<{ suspension: SuspensionActiva | null; fallo: boolean }> => {
   try {
-    const supabase = await createClient();
+    const supabase = await createClientConDispositivo();
     const { data, error } = await supabase.rpc("mi_suspension");
     if (error) return { suspension: null, fallo: true };
     return { suspension: leerMiSuspension(data), fallo: false };

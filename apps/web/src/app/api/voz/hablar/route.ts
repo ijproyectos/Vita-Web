@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { LIMITES_VOZ } from "@/lib/limites/logica";
 import { verificarLimitePedidos } from "@/lib/limites/nucleo";
-import { createClient } from "@/lib/supabase/server";
+import { createClientConDispositivo } from "@/lib/supabase/dispositivo";
 import { generarAudio } from "@/lib/voz/nucleo";
 import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 
@@ -16,7 +16,7 @@ export const maxDuration = 10;
 const MAX_CARACTERES = 1200;
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const supabase = await createClientConDispositivo();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("react", async (original) => ({ ...(await original<typeof import("react")>()), cache: <T,>(f: T) => f }));
 const rpc = vi.fn();
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc }) }));
+vi.mock("@/lib/supabase/dispositivo", () => ({ createClientConDispositivo: async () => ({ rpc }) }));
 vi.mock("next/navigation", () => ({
   redirect: (destino: string) => {
     throw new Error(`NEXT_REDIRECT:${destino}`);
