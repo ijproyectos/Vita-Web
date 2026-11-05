@@ -4,7 +4,7 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { listarCuidadoresDe, listarFamilia } from "@/lib/familia/nucleo";
-import { alDejarDeCuidar, unicoAdmin } from "@/lib/familia/solo-mirar";
+import { alDejarDeCuidar, nombreEnFrase, unicoAdmin } from "@/lib/familia/solo-mirar";
 import type { OpcionPerfil, PerfilActivo } from "@/lib/familia/tipos";
 import { contadorDeHoy, ETIQUETA_ESTADO_TOMA, filasTomas, type EstadoToma } from "@/lib/medicamentos/estado-toma";
 import { textoDosis } from "@/lib/medicamentos/tipos";
@@ -55,7 +55,7 @@ export async function InicioSoloMirar({
   if (!lecturas) return <RespaldoSoloMirar key={pid} fallo />;
   const [perfil, miPerfil, medsHoy, deAyer, turnos, cuidadores, familia] = lecturas;
 
-  const nombre = activo.nombre.split(" ")[0];
+  const nombre = nombreEnFrase(activo.nombre);
   const admin = unicoAdmin(cuidadores);
   const miembro = (familia ?? []).find((m) => m.id === pid);
   const vinculoId = miembro?.vinculoId ?? null;

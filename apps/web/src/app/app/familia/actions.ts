@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { COOKIE_PERFIL_ACTIVO, esPerfilValido } from "@/lib/familia/perfil-activo";
+import { hayPersonaConNombre } from "@/lib/familia/solo-mirar";
 import { enviarInvitacionPorMail } from "@/lib/cuidadores/correo";
 import { emailValido, origenPublico } from "@/lib/email/origen";
 import { permitirEnvio } from "@/lib/email/limite";
@@ -98,6 +99,10 @@ export async function crearPerfilGestionadoAction(
     const familia = await familiaNucleo.listarFamilia(await createClient());
     if (familia.length >= MAXIMO_PERFILES_A_CARGO) {
       return { status: "error", message: `Ya tenés ${MAXIMO_PERFILES_A_CARGO} perfiles a cargo, el máximo por ahora.` };
+    }
+    // Evita duplicar a la persona si no vio la confirmación y vuelve a intentar.
+    if (hayPersonaConNombre(familia, nombre)) {
+      return { status: "error", message: `${nombre} ya está en tu Familia. Si es otra persona, agregale el apellido.` };
     }
     resultado = await familiaNucleo.crearPerfilGestionado(usuario.id, {
       nombre,

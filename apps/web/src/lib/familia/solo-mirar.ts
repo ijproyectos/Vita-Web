@@ -1,4 +1,4 @@
-import type { CuidadorDePersona } from "./tipos";
+import { SIN_NOMBRE, type CuidadorDePersona } from "./tipos";
 
 // Quién gestiona a la persona que un Lector está mirando. Solo se nombra
 // cuando hay EXACTAMENTE un Admin visible; con cero o varios no se adivina.
@@ -6,9 +6,31 @@ export function unicoAdmin(cuidadores: CuidadorDePersona[] | null): string | nul
   if (!cuidadores) return null;
   const admins = cuidadores.filter((c) => c.estado === "aceptado" && c.rol === "editar" && !c.esYo);
   if (admins.length !== 1) return null;
-  const nombre = admins[0].nombre.trim();
-  if (!nombre || nombre === "Sin nombre") return null;
-  return nombre.split(/\s+/)[0];
+  return primerNombre(admins[0].nombre);
+}
+
+/** Primer nombre de una persona; null si no tiene uno real (nunca "Sin"). */
+function primerNombre(nombre: string): string | null {
+  const limpio = nombre.trim();
+  if (!limpio || limpio === SIN_NOMBRE) return null;
+  return limpio.split(/\s+/)[0];
+}
+
+/** Cómo se nombra en una frase a la persona que se está mirando ("Salud de Jesus"). */
+export function nombreEnFrase(nombre: string): string {
+  return primerNombre(nombre) ?? "esta persona";
+}
+
+/** Ya hay alguien con ese nombre en la familia, sin importar mayúsculas, acentos ni espacios. */
+export function hayPersonaConNombre(familia: { nombre: string }[], nombre: string): boolean {
+  const clave = (texto: string) =>
+    texto
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+  return familia.some((m) => clave(m.nombre) === clave(nombre));
 }
 
 /**

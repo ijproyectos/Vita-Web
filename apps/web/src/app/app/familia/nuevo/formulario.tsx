@@ -33,8 +33,7 @@ export function FormularioNuevoPerfil() {
 
   const [estado, formAction, pendiente] = useActionState(accion, ESTADO_INICIAL);
 
-  // Se muestra con lo que ya se cargó, sin volver a leer: el perfil está creado
-  // aunque una lectura posterior falle, y no hay que invitar a crearlo de nuevo.
+  // Se muestra con lo que ya se cargó, sin volver a leer la familia.
   if (estado.status === "success") {
     return <PerfilCreado id={estado.id} nombre={nombreConMayuscula(nombre.trim())} color={color} />;
   }

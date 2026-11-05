@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alDejarDeCuidar, contenidoDeRespaldo, esVistaSoloMirar, rutaPermitidaSoloMirar, unicoAdmin } from "./solo-mirar";
+import { alDejarDeCuidar, contenidoDeRespaldo, esVistaSoloMirar, hayPersonaConNombre, nombreEnFrase, rutaPermitidaSoloMirar, unicoAdmin } from "./solo-mirar";
 import type { CuidadorDePersona } from "./tipos";
 
 const c = (parcial: Partial<CuidadorDePersona>): CuidadorDePersona => ({
@@ -141,5 +141,29 @@ describe("alDejarDeCuidar", () => {
 
   it("si no se pudieron leer los cuidadores, no promete nada", () => {
     expect(alDejarDeCuidar(null, false)).toBe("sin-certeza");
+  });
+});
+
+describe("nombreEnFrase", () => {
+  it("usa el primer nombre", () => {
+    expect(nombreEnFrase("  Jesus   Ruiz ")).toBe("Jesus");
+  });
+
+  it("sin nombre real no inventa uno", () => {
+    expect(nombreEnFrase("Sin nombre")).toBe("esta persona");
+    expect(nombreEnFrase("   ")).toBe("esta persona");
+  });
+});
+
+describe("hayPersonaConNombre", () => {
+  const familia = [{ nombre: "Jesús Ruiz" }];
+
+  it("reconoce el mismo nombre aunque cambien mayúsculas, acentos o espacios", () => {
+    expect(hayPersonaConNombre(familia, " jesus  ruiz ")).toBe(true);
+  });
+
+  it("un apellido distinto es otra persona", () => {
+    expect(hayPersonaConNombre(familia, "Jesús")).toBe(false);
+    expect(hayPersonaConNombre(familia, "Jesús Pérez")).toBe(false);
   });
 });
