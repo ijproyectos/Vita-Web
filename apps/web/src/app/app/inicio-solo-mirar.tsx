@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { VitaIcon } from "@/lib/vita-icons";
 import { EncabezadoPerfil } from "@/components/vita/encabezado-perfil";
 import { InstalarVita } from "@/components/vita/instalar-vita";
+import { RefrescoPeriodico } from "@/components/vita/refresco-periodico";
 import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
 import { AjustesSoloMirar } from "./ajustes-solo-mirar";
 
@@ -83,6 +84,7 @@ export async function InicioSoloMirar({
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-6 pt-1.5">
+      <RefrescoPeriodico />
       <InstalarVita />
 
       <EncabezadoPerfil
