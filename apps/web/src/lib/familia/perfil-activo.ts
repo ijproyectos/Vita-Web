@@ -101,7 +101,7 @@ const calcularOpciones = cache(async (): Promise<OpcionPerfil[]> => {
 });
 
 // Lo usan las Server Actions, que nunca lanzan: si no se sabe a quién cuida el usuario,
-// se niega la operación. Otro error (la redirección de sesión) sigue su curso.
+// se niega la operación sobre otras personas; lo propio no depende de esa lectura. Otro error (la redirección de sesión) sigue su curso.
 function sinLecturaDeFamilia<T>(valor: T) {
   return (error: unknown): T => {
     if (error instanceof ErrorLecturaFamilia) return valor;
@@ -116,7 +116,7 @@ export async function obtenerOpcionesPerfil(): Promise<OpcionPerfil[]> {
 /** True si `id` es el propio usuario o alguien con vínculo aceptado hacia él. */
 export async function esPerfilValido(id: string): Promise<boolean> {
   const contexto = await resolverContexto().catch(sinLecturaDeFamilia(null));
-  if (!contexto) return false;
+  if (!contexto) return id === (await requireUser()).id;
   const { propio, familia } = contexto;
   return id === propio.id || familia.some((m) => m.id === id);
 }
@@ -129,7 +129,7 @@ export async function esPerfilValido(id: string): Promise<boolean> {
  */
 export async function rolSobre(id: string): Promise<RolVinculo | null> {
   const contexto = await resolverContexto().catch(sinLecturaDeFamilia(null));
-  if (!contexto) return null;
+  if (!contexto) return id === (await requireUser()).id ? "editar" : null;
   const { propio, familia } = contexto;
   if (id === propio.id) return "editar";
   return familia.find((m) => m.id === id)?.rol ?? null;

@@ -53,6 +53,20 @@ export async function cambiarPerfilActivoAction(id: string): Promise<ResultadoFa
   return { status: "success" };
 }
 
+/**
+ * Salida de la pantalla de error: deja de tener a otra persona elegida. No lee la
+ * familia, porque se usa justamente cuando esa lectura falla.
+ */
+export async function volverAMiPerfilAction(): Promise<ResultadoFamilia> {
+  await requireUser();
+  try {
+    (await cookies()).set(COOKIE_PERFIL_ACTIVO, "", { path: "/app", maxAge: 0 });
+  } catch {
+    return { status: "error", message: "No pudimos volver a tu perfil." };
+  }
+  return { status: "success" };
+}
+
 export type EstadoCrearPerfil = { status: "idle" } | ResultadoCrearPerfil;
 
 const MAXIMO_PERFILES_A_CARGO = 20;

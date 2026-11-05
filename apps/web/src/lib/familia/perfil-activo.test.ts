@@ -62,10 +62,15 @@ describe("obtenerPerfilActivo", () => {
       lecturaFamilia = { data: null, error: { message: "caído" } };
     });
 
-    it("niega la operación sin lanzar", async () => {
+    it("niega la operación sobre otra persona sin lanzar", async () => {
       await expect(perfilActivoEditable()).resolves.toMatchObject({ ok: false });
       await expect(rolSobre("jesus")).resolves.toBeNull();
       await expect(esPerfilValido("jesus")).resolves.toBe(false);
+    });
+
+    it("lo propio sigue permitido: no depende de esa lectura", async () => {
+      await expect(rolSobre("yo")).resolves.toBe("editar");
+      await expect(esPerfilValido("yo")).resolves.toBe(true);
     });
 
     it("deja pasar la redirección de sesión", async () => {
