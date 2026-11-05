@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { VitaAvatar } from "@/components/vita/vita-avatar";
-import { accionPermiso, ESPERA_PERMISO_MS, NOTA_AVISOS_NO_ACTIVADOS } from "./vista";
+import { accionPermiso, ESPERA_INTENTO_MS, ESPERA_PERMISO_MS, NOTA_AVISOS_NO_ACTIVADOS } from "./vista";
 import { TEXTO_IOS, useNotificacionesPush } from "@/components/vita/activar-notificaciones";
 import { VitaIcon } from "@/lib/vita-icons";
 
@@ -22,29 +22,32 @@ export function PantallaPermiso({
 
   // Ya tocó "Permitir avisos" y el intento terminó (se cerró el diálogo del navegador).
   const [intentado, setIntentado] = useState(false);
-  // Con invitación no hay "Ahora no": si pasan unos segundos sin poder avanzar
-  // (estado que no resuelve o intento sin terminar) se deja continuar. El
-  // estado solo cambia desde el callback del temporizador.
+  // Con invitación no hay "Ahora no": si vence la espera con el estado sin
+  // resolver o un intento sin terminar, se deja continuar (ver accionPermiso).
+  // El estado solo cambia desde el callback del temporizador o del botón.
   const [trabado, setTrabado] = useState(false);
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const armarEspera = () => {
+  const armarEspera = (ms: number) => {
     if (!sinAhoraNo) return;
     if (temporizador.current) clearTimeout(temporizador.current);
-    temporizador.current = setTimeout(() => setTrabado(true), ESPERA_PERMISO_MS);
+    temporizador.current = setTimeout(() => setTrabado(true), ms);
   };
   useEffect(() => {
-    armarEspera();
+    armarEspera(ESPERA_PERMISO_MS);
     return () => {
       if (temporizador.current) clearTimeout(temporizador.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const accion = accionPermiso(estado, intentado, !!sinAhoraNo, trabado);
+  const accion = accionPermiso(estado, intentado, !!sinAhoraNo, trabado, pendiente);
 
   async function permitir() {
-    armarEspera();
+    // La espera de la carga inicial no cuenta para el intento que empieza ahora.
+    setTrabado(false);
+    armarEspera(ESPERA_INTENTO_MS);
     await activar();
+    if (temporizador.current) clearTimeout(temporizador.current);
     setIntentado(true);
   }
 
