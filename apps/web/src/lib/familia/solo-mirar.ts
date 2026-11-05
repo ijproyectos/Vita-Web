@@ -44,3 +44,15 @@ export function rutaPermitidaSoloMirar(pathname: string): boolean {
   if (RUTAS_EXACTAS_SOLO_MIRAR.includes(ruta)) return true;
   return RUTAS_CON_SUBRUTAS_SOLO_MIRAR.some((base) => ruta === base || ruta.startsWith(`${base}/`));
 }
+
+/**
+ * Qué muestra el inicio "solo mirar" según cómo salió la última lectura. Si falla,
+ * deja lo último que se vio y lo avisa, para no mostrar datos viejos como si fueran
+ * de ahora. Sin nada para mostrar (falló la primera carga) lanza: un "no hay tomas"
+ * sería falso.
+ */
+export function contenidoDeRespaldo<T>(fallo: boolean, ultimo: T | null | undefined, actual: T): { contenido: T; aviso: boolean } {
+  if (!fallo) return { contenido: actual, aviso: false };
+  if (!ultimo) throw new Error("No se pudieron leer los datos del inicio solo mirar.");
+  return { contenido: ultimo, aviso: true };
+}

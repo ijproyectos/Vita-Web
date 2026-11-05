@@ -44,9 +44,17 @@ type FilaFamilia = {
 
 /** Personas que el usuario logueado cuida (vínculo aceptado). Nunca lanza: [] ante error. */
 export async function listarFamilia(supabase: Cliente): Promise<MiembroFamilia[]> {
+  return leerFamilia(supabase).catch(() => []);
+}
+
+/** No se pudo saber a quién cuida el usuario (distinto de "no cuida a nadie"). */
+export class ErrorLecturaFamilia extends Error {}
+
+/** Como `listarFamilia`, pero lanza `ErrorLecturaFamilia` si la lectura falla. */
+export async function leerFamilia(supabase: Cliente): Promise<MiembroFamilia[]> {
   const { data, error } = await supabase.rpc("listar_familia");
-  if (error || !data) return [];
-  return (data as FilaFamilia[]).map((f) => ({
+  if (error) throw new ErrorLecturaFamilia(`No se pudo leer la familia: ${error.message}`);
+  return ((data ?? []) as FilaFamilia[]).map((f) => ({
     vinculoId: f.vinculo_id,
     id: f.elder_id,
     nombre: f.nombre?.trim() ? nombreConMayuscula(f.nombre) : "Sin nombre",

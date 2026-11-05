@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esVistaSoloMirar, rutaPermitidaSoloMirar, unicoAdmin } from "./solo-mirar";
+import { contenidoDeRespaldo, esVistaSoloMirar, rutaPermitidaSoloMirar, unicoAdmin } from "./solo-mirar";
 import type { CuidadorDePersona } from "./tipos";
 
 const c = (parcial: Partial<CuidadorDePersona>): CuidadorDePersona => ({
@@ -105,5 +105,19 @@ describe("rutaPermitidaSoloMirar", () => {
     expect(rutaPermitidaSoloMirar("/app/perfil/ayudante")).toBe(false);
     expect(rutaPermitidaSoloMirar("/app/vita-plus-x")).toBe(false);
     expect(rutaPermitidaSoloMirar("/application")).toBe(false);
+  });
+});
+
+describe("contenidoDeRespaldo", () => {
+  it("con lectura correcta muestra lo nuevo, sin aviso", () => {
+    expect(contenidoDeRespaldo(false, "viejo", "nuevo")).toEqual({ contenido: "nuevo", aviso: false });
+  });
+
+  it("si falla una actualización deja lo último y lo avisa", () => {
+    expect(contenidoDeRespaldo(true, "viejo", undefined)).toEqual({ contenido: "viejo", aviso: true });
+  });
+
+  it("si falla la primera carga lanza en vez de mostrar una pantalla vacía", () => {
+    expect(() => contenidoDeRespaldo(true, null, undefined)).toThrow("No se pudieron leer");
   });
 });
