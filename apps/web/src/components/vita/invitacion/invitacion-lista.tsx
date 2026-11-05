@@ -1,96 +1,65 @@
-import { VitaIcon } from "@/lib/vita-icons";
+import { BotonCta, BotonVolver } from "@/components/vita/auth-ui";
+import { PanelCodigoAcceso } from "@/components/vita/panel-codigo-acceso";
+import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
 import type { RolVinculo } from "@/lib/familia/tipos";
-import { CajasCodigo, etiquetaRol } from "./piezas";
+import { etiquetaRol } from "./piezas";
 
 // A2 · "Invitación lista": lo que ve quien invita después de crear la
-// invitación. Código de 6 dígitos + resumen + WhatsApp / Copiar. Los avisos
-// no se muestran (la invitación no los guarda todavía).
+// invitación. Reusa el panel del código de acceso (código, WhatsApp, Copiar y
+// cuenta regresiva) + el resumen de la invitación. Los avisos no se muestran
+// (la invitación no los guarda todavía).
 export function InvitacionLista({
   codigo,
+  expiraAt,
   persona,
   invitado,
   rol,
   email,
-  diasVigencia = 7,
   onVolver,
-  onWhatsApp,
-  onCopiar,
+  onGenerarOtro,
+  generando,
   onListo,
 }: {
   codigo: string;
+  /** Vencimiento del código (ISO). */
+  expiraAt: string;
   /** La persona que va a cuidar (Jesus). */
   persona: string;
   /** Quien recibe la invitación (Martina), si se lo nombró. */
   invitado?: string | null;
   rol: RolVinculo;
   email?: string | null;
-  diasVigencia?: number;
   onVolver?: () => void;
-  onWhatsApp?: () => void;
-  onCopiar?: () => void;
+  onGenerarOtro?: () => void;
+  generando?: boolean;
   onListo?: () => void;
 }) {
-  const quien = invitado?.trim();
+  const quien = invitado?.trim() || "quien invitás";
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pb-10 pt-1.5">
       <div className="mt-1.5 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onVolver}
-          aria-label="Volver"
-          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card shadow-card transition-transform active:scale-[0.94]"
-        >
-          <VitaIcon name="chevron-left" size={18} strokeWidth={2.2} />
-        </button>
+        <BotonVolver onClick={onVolver} />
         <div>
           <div className="eyebrow text-primary">Familia</div>
           <h1 className="mt-0.5 font-heading text-[22px] font-extrabold tracking-[-0.02em]">Invitación lista</h1>
         </div>
       </div>
 
-      <div className="rounded-[20px] bg-card p-4 shadow-card">
-        <div className="eyebrow text-subtle">{quien ? `Código para ${quien}` : "Código de la invitación"}</div>
-        <div className="mt-3 rounded-[16px] bg-secondary p-3.5">
-          <CajasCodigo valor={codigo} />
-        </div>
-        <dl className="mt-3 flex flex-col text-[14.5px]">
-          <Fila etiqueta="Cuida a" valor={persona} />
-          <Fila etiqueta="Permiso" valor={etiquetaRol(rol)} />
-          {email && <Fila etiqueta="Entra con" valor={email} />}
-        </dl>
-      </div>
+      <PanelCodigoAcceso codigo={codigo} expiraAt={expiraAt} nombre={quien} onGenerarOtro={onGenerarOtro} generando={generando} />
 
-      <div className="flex gap-2.5">
-        <button
-          type="button"
-          onClick={onWhatsApp}
-          className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-full bg-primary font-heading text-[15px] font-extrabold text-primary-foreground shadow-cta"
-        >
-          <VitaIcon name="share" size={17} />
-          Enviar por WhatsApp
-        </button>
-        <button
-          type="button"
-          onClick={onCopiar}
-          className="flex h-[52px] items-center justify-center gap-2 rounded-full border border-line bg-card px-5 font-heading text-[15px] font-extrabold"
-        >
-          <VitaIcon name="copy" size={17} />
-          Copiar
-        </button>
-      </div>
+      <dl className="flex flex-col rounded-[20px] bg-card px-4 py-1 text-[14.5px] shadow-card">
+        <Fila etiqueta="Cuida a" valor={persona} />
+        <Fila etiqueta="Permiso" valor={etiquetaRol(rol)} />
+        {email && <Fila etiqueta="Entra con" valor={email} />}
+      </dl>
 
-      <p className="px-1 text-pretty text-[12.5px] font-medium leading-[1.5] text-subtle">
-        El mensaje lleva un link que abre vita con el código ya cargado. Vence en {diasVigencia} días.
-        {quien ? ` Te avisamos cuando ${quien} entre.` : " Te avisamos cuando entre."}
+      <p className="px-1 text-pretty text-[12px] font-medium leading-[1.45] text-subtle">
+        El código vence en {MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos y sirve una sola vez.
       </p>
 
-      <button
-        type="button"
-        onClick={onListo}
-        className="h-14 rounded-full bg-secondary font-heading text-base font-extrabold text-foreground"
-      >
+      <BotonCta type="button" onClick={onListo}>
         Listo
-      </button>
+      </BotonCta>
     </div>
   );
 }

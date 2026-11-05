@@ -1,6 +1,7 @@
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { colorPorDefecto } from "@/lib/familia/colores";
-import { BotonPrincipal } from "./piezas";
+import { BotonCta, TituloAuth } from "@/components/vita/auth-ui";
+import { PantallaInvitada } from "./piezas";
 
 // C3 · Ya tenía cuenta: la persona nueva se suma a su lista de perfiles.
 export function YaUsaVita({
@@ -16,14 +17,12 @@ export function YaUsaVita({
   onContinuar?: () => void;
 }) {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-cream px-6 pb-10 pt-16">
+    <PantallaInvitada>
       <div className="flex flex-1 flex-col">
-        <h1 className="text-balance font-heading text-[28px] font-extrabold leading-[1.15] tracking-[-0.04em]">
-          {nueva} se suma a tu lista
-        </h1>
-        <p className="mt-3 text-pretty text-[16px] font-medium leading-[1.45] text-slate-brand">
-          Ya tenías cuenta. La vas a encontrar arriba, donde cambiás de perfil.
-        </p>
+        <TituloAuth
+          titulo={`${nueva} se suma a tu lista`}
+          sub="Ya tenías cuenta. La vas a encontrar arriba, donde cambiás de perfil."
+        />
         <ul className="mt-7 overflow-hidden rounded-[20px] bg-card shadow-card">
           <Fila nombre={yo} color={colorPorDefecto(0)} detalle="vos" />
           {actuales.map((n, i) => (
@@ -32,8 +31,10 @@ export function YaUsaVita({
           <Fila nombre={nueva} color={colorPorDefecto(actuales.length + 1)} nuevo />
         </ul>
       </div>
-      <BotonPrincipal onClick={onContinuar}>Continuar</BotonPrincipal>
-    </div>
+      <BotonCta type="button" grande onClick={onContinuar}>
+        Continuar
+      </BotonCta>
+    </PantallaInvitada>
   );
 }
 

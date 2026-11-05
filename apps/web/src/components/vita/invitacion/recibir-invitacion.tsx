@@ -1,11 +1,12 @@
 import { AvatarPersona } from "@/components/vita/avatar-persona";
-import { VitaIcon } from "@/lib/vita-icons";
+import { GoogleLogo } from "@/components/vita/auth-ui";
 import { enmascararEmail } from "@/lib/email/enmascarar";
 import type { RolVinculo } from "@/lib/familia/tipos";
-import { BotonAro, etiquetaRol } from "./piezas";
+import { PantallaInvitada, etiquetaRol } from "./piezas";
 
 // B3 · Quién te invita y con qué cuenta entrás. Primero se ve a quién va a
-// cuidar y quién la invitó; recién después se pide la cuenta. Sin Apple.
+// cuidar y quién la invitó; recién después se pide la cuenta. El bloque de
+// cuenta es el de la bienvenida del login. Sin Apple.
 export function RecibirInvitacion({
   invitador,
   persona,
@@ -14,6 +15,7 @@ export function RecibirInvitacion({
   email,
   onGoogle,
   onEmail,
+  onEntrar,
 }: {
   invitador: string;
   persona: string;
@@ -24,13 +26,14 @@ export function RecibirInvitacion({
   email?: string | null;
   onGoogle?: () => void;
   onEmail?: () => void;
+  onEntrar?: () => void;
 }) {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-cream px-6 pb-10 pt-16">
+    <PantallaInvitada>
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         <div className="flex items-center" aria-hidden>
-          <AvatarPersona nombre={invitador} color="teal" size={64} className="ring-4 ring-cream" />
-          <AvatarPersona nombre={persona} color="violeta" size={64} className="-ml-3 ring-4 ring-cream" />
+          <AvatarPersona nombre={invitador} color="teal" size={64} className="ring-4 ring-background" />
+          <AvatarPersona nombre={persona} color="violeta" size={64} className="-ml-3 ring-4 ring-background" />
         </div>
         <h1 className="mt-6 text-balance font-heading text-[28px] font-extrabold leading-[1.15] tracking-[-0.04em]">
           {invitador} te invitó a cuidar a {persona}
@@ -47,22 +50,25 @@ export function RecibirInvitacion({
       </div>
 
       <div className="flex flex-col gap-2.5">
-        <BotonAro onClick={onGoogle} icono={<GoogleLogo />}>
+        <button
+          type="button"
+          onClick={onGoogle}
+          className="flex h-[54px] items-center justify-center gap-2.5 rounded-full border border-line bg-card font-heading text-[15.5px] font-bold transition-transform active:scale-[0.98] disabled:opacity-60"
+        >
+          <GoogleLogo />
           Continuar con Google
-        </BotonAro>
-        <BotonAro onClick={onEmail} icono={<VitaIcon name="mail" size={18} />}>
-          Entrar con mi mail y contraseña
-        </BotonAro>
+        </button>
+        <button type="button" onClick={onEmail} className="h-11 text-[14.5px] font-bold text-slate-brand">
+          Continuar con email
+        </button>
       </div>
-      <p className="mt-4 text-center text-[12.5px] font-medium text-subtle">
-        Primero ves a quién vas a cuidar; recién después te pedimos la cuenta.
-      </p>
-    </div>
+      <div className="mb-4 mt-1.5 h-px bg-line-cream" />
+      <div className="text-center text-sm font-medium text-slate-brand">
+        ¿Ya tenés cuenta?{" "}
+        <button type="button" onClick={onEntrar} className="font-extrabold text-teal-deep">
+          Entrar
+        </button>
+      </div>
+    </PantallaInvitada>
   );
-}
-
-// Logo de marca de Google: colores fijos, por eso vive como SVG estático.
-function GoogleLogo() {
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src="/google-g.svg" alt="" width={19} height={19} aria-hidden="true" />;
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { PantallaAuth } from "@/components/vita/auth-ui";
 import { VitaIcon } from "@/lib/vita-icons";
 import { ETIQUETA_ROL, type RolVinculo } from "@/lib/familia/tipos";
 
@@ -10,26 +11,6 @@ import { ETIQUETA_ROL, type RolVinculo } from "@/lib/familia/tipos";
 /** Texto del permiso tal como lo ve quien invita y quien recibe. */
 export function etiquetaRol(rol: RolVinculo): string {
   return ETIQUETA_ROL[rol].titulo;
-}
-
-/** Seis cajas de solo lectura (A2 muestra el código; C1 lo que se escribió). */
-export function CajasCodigo({ valor, error }: { valor: string; error?: boolean }) {
-  const caracteres = Array.from(valor);
-  return (
-    <div className="grid grid-cols-6 gap-2" role="img" aria-label={`Código ${caracteres.join(" ")}`}>
-      {Array.from({ length: 6 }, (_, i) => (
-        <div
-          key={i}
-          className={cn(
-            "flex h-14 items-center justify-center rounded-[var(--radius-item)] bg-card font-heading text-[26px] font-extrabold tabular-nums",
-            error ? "shadow-[0_0_0_1.5px_var(--destructive)]" : "shadow-[0_0_0_1px_var(--line)]"
-          )}
-        >
-          {caracteres[i] ?? ""}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /** Fila ✓ / ✗ de lo que se puede (o no) hacer con un rol. */
@@ -51,41 +32,15 @@ export function FilaPermiso({ permitido, children }: { permitido: boolean; child
   );
 }
 
-/** Botón de texto secundario ("Ahora no", "Usar otra cuenta"). */
-export function BotonTexto({ children, onClick, peligro }: { children: ReactNode; onClick?: () => void; peligro?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn("h-[52px] text-base font-bold", peligro ? "text-destructive" : "text-slate-brand")}
-    >
-      {children}
-    </button>
-  );
+/** Pantalla de la persona invitada: el layout de acceso con el fondo de la app. */
+export function PantallaInvitada({ children }: { children: ReactNode }) {
+  return <PantallaAuth className="bg-background">{children}</PantallaAuth>;
 }
 
-/** Botón blanco con aro (Google, mail). */
-export function BotonAro({ children, onClick, icono }: { children: ReactNode; onClick?: () => void; icono?: ReactNode }) {
+/** Botón de texto secundario, igual al del login ("Ahora no", "Usar otra cuenta"). */
+export function BotonTexto({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-[54px] w-full items-center justify-center gap-2.5 rounded-full border border-line bg-card font-heading text-[15.5px] font-bold transition-transform active:scale-[0.98]"
-    >
-      {icono}
-      {children}
-    </button>
-  );
-}
-
-/** Botón principal teal de las pantallas de la invitación. */
-export function BotonPrincipal({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="h-[60px] w-full rounded-full bg-primary font-heading text-lg font-extrabold text-primary-foreground shadow-cta transition-transform active:scale-[0.98]"
-    >
+    <button type="button" onClick={onClick} className="h-[52px] text-base font-bold text-slate-brand">
       {children}
     </button>
   );

@@ -4,8 +4,6 @@ import type { ReactNode } from "react";
 import { InvitacionLista } from "@/components/vita/invitacion/invitacion-lista";
 import { RecibirInvitacion } from "@/components/vita/invitacion/recibir-invitacion";
 import { AceptarInvitacion } from "@/components/vita/invitacion/aceptar-invitacion";
-import { InvitacionPendiente } from "@/components/vita/invitacion/invitacion-pendiente";
-import { CodigoInvalido } from "@/components/vita/invitacion/codigo-invalido";
 import { OtraCuenta } from "@/components/vita/invitacion/otra-cuenta";
 import { YaUsaVita } from "@/components/vita/invitacion/ya-usa-vita";
 import { ArmarPerfil } from "@/components/vita/invitacion/armar-perfil";
@@ -20,7 +18,7 @@ const PANTALLAS: Record<string, { titulo: string; vista: () => ReactNode }> = {
     titulo: "A2 · Invitación lista",
     vista: () => (
       <div className="mx-auto min-h-dvh w-full max-w-md bg-background">
-        <InvitacionLista codigo="482915" persona="Jesus" invitado="Martina" rol="ver" email="martina@gmail.com" />
+        <InvitacionLista codigo="482915" expiraAt={new Date(new Date().getTime() + 30 * 60_000).toISOString()} persona="Jesus" invitado="Martina" rol="ver" email="martina@gmail.com" />
       </div>
     ),
   },
@@ -39,18 +37,6 @@ const PANTALLAS: Record<string, { titulo: string; vista: () => ReactNode }> = {
   "b4-admin-propio": {
     titulo: "B4 · Vas a cuidar (Admin, sin nombre)",
     vista: () => <AceptarInvitacion persona="Jesus" rol="editar" />,
-  },
-  "ahora-no": {
-    titulo: "Ahora no · invitación abierta",
-    vista: () => <InvitacionPendiente fechaVence="12 de noviembre" persona="Jesus" />,
-  },
-  "c1-no-existe": {
-    titulo: "C1 · Código inexistente",
-    vista: () => <CodigoInvalido variante="no-existe" codigo="482917" />,
-  },
-  "c1-vencido": {
-    titulo: "C1 · Código vencido",
-    vista: () => <CodigoInvalido variante="vencido" codigo="482915" invitador="Micaela" />,
   },
   c2: {
     titulo: "C2 · Otro mail",

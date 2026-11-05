@@ -1,5 +1,6 @@
+import { BotonCta, TituloAuth } from "@/components/vita/auth-ui";
 import { VitaIcon } from "@/lib/vita-icons";
-import { BotonPrincipal, BotonAro, BotonTexto } from "./piezas";
+import { BotonTexto, PantallaInvitada } from "./piezas";
 
 // D1 · "Tu perfil": pantalla completa que explica qué es y lo deja armar el
 // suyo con vita o a mano. Aclara que es privado.
@@ -27,12 +28,9 @@ export function ArmarPerfil({
     { icono: "sparkle", texto: "Hablar con vita sobre tu salud" },
   ];
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-cream px-6 pb-10 pt-16">
+    <PantallaInvitada>
       <div className="flex flex-1 flex-col">
-        <div className="eyebrow text-primary">Tu perfil</div>
-        <h1 className="mt-2 text-balance font-heading text-[30px] font-extrabold leading-[1.12] tracking-[-0.04em]">
-          {primero ? `Llevá tu salud en vita, ${primero}` : "Llevá tu salud en vita"}
-        </h1>
+        <TituloAuth titulo={primero ? `Llevá tu salud en vita, ${primero}` : "Llevá tu salud en vita"} />
         <ul className="mt-7 flex flex-col gap-3.5">
           {beneficios.map((b) => (
             <li key={b.icono} className="flex items-center gap-3 text-[15.5px] font-semibold">
@@ -49,11 +47,13 @@ export function ArmarPerfil({
           {persona ? `, y vos seguís viendo a ${persona} como hasta ahora.` : "."}
         </p>
       </div>
-      <div className="flex flex-col gap-2.5">
-        <BotonPrincipal onClick={onConVita}>Armarlo con vita</BotonPrincipal>
-        <BotonAro onClick={onYo}>Armarlo yo</BotonAro>
+      <div className="flex flex-col gap-2">
+        <BotonCta type="button" grande onClick={onConVita}>
+          Armarlo con vita
+        </BotonCta>
+        <BotonTexto onClick={onYo}>Armarlo yo</BotonTexto>
         <BotonTexto onClick={onAhoraNo}>Ahora no</BotonTexto>
       </div>
-    </div>
+    </PantallaInvitada>
   );
 }
