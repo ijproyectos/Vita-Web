@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { VitaAvatar } from "@/components/vita/vita-avatar";
-import { accionPermiso, ESPERA_INTENTO_MS, ESPERA_PERMISO_MS, NOTA_AVISOS_NO_ACTIVADOS } from "./vista";
+import { accionPermiso, ESPERA_PERMISO_MS, pedirPermisoYSeguir } from "./vista";
 import { TEXTO_IOS, useNotificacionesPush } from "@/components/vita/activar-notificaciones";
 import { VitaIcon } from "@/lib/vita-icons";
 
@@ -20,38 +20,29 @@ export function PantallaPermiso({
   const router = useRouter();
   const { estado, pendiente, activar } = useNotificacionesPush();
 
-  // Ya tocó "Permitir avisos" y el intento terminó (se cerró el diálogo del navegador).
-  const [intentado, setIntentado] = useState(false);
-  // Con invitación no hay "Ahora no": si vence la espera con el estado sin
-  // resolver o un intento sin terminar, se deja continuar (ver accionPermiso).
-  // El estado solo cambia desde el callback del temporizador o del botón.
-  const [trabado, setTrabado] = useState(false);
-  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const armarEspera = (ms: number) => {
-    if (!sinAhoraNo) return;
-    if (temporizador.current) clearTimeout(temporizador.current);
-    temporizador.current = setTimeout(() => setTrabado(true), ms);
-  };
+  // Con invitación: tocó "Permitir avisos" y va a seguir sola, responda lo que responda.
+  const [siguiendo, setSiguiendo] = useState(false);
+  // Con invitación: la carga inicial no resolvió a tiempo y el botón seguiría deshabilitado.
+  const [cargaTrabada, setCargaTrabada] = useState(false);
   useEffect(() => {
-    armarEspera(ESPERA_PERMISO_MS);
-    return () => {
-      if (temporizador.current) clearTimeout(temporizador.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const accion = accionPermiso(estado, intentado, !!sinAhoraNo, trabado, pendiente);
-
-  async function permitir() {
-    // La espera de la carga inicial no cuenta para el intento que empieza ahora.
-    setTrabado(false);
-    armarEspera(ESPERA_INTENTO_MS);
-    await activar();
-    if (temporizador.current) clearTimeout(temporizador.current);
-    setIntentado(true);
-  }
+    if (!sinAhoraNo) return;
+    const temporizador = setTimeout(() => setCargaTrabada(true), ESPERA_PERMISO_MS);
+    return () => clearTimeout(temporizador);
+  }, [sinAhoraNo]);
 
   const continuar = () => router.push(destino);
+
+  // Mientras sigue, se mantiene este botón para que no aparezca "Continuar" antes de navegar.
+  const accion = siguiendo ? "permitir" : accionPermiso(estado, !!sinAhoraNo, cargaTrabada);
+
+  function permitir() {
+    if (!sinAhoraNo) {
+      void activar();
+      return;
+    }
+    setSiguiendo(true);
+    void pedirPermisoYSeguir(activar, continuar);
+  }
 
   const sub = cuida
     ? "Te aviso a la hora de cada remedio y turno. Si la persona que cuidás no confirma, te enterás."
@@ -64,9 +55,7 @@ export function PantallaPermiso({
         ? "Los avisos están bloqueados en este navegador. Podés habilitarlos desde los ajustes del sitio."
         : estado === "no-soportado"
           ? "Este navegador no permite avisos."
-          : accion === "continuar-sin-avisos"
-            ? NOTA_AVISOS_NO_ACTIVADOS
-            : null;
+          : null;
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-cream px-6 pb-10 pt-16">
@@ -94,10 +83,10 @@ export function PantallaPermiso({
             <button
               type="button"
               onClick={permitir}
-              disabled={pendiente || estado === "cargando"}
+              disabled={pendiente || siguiendo || estado === "cargando"}
               className="h-[60px] rounded-full bg-primary font-heading text-lg font-extrabold text-primary-foreground shadow-cta transition-transform active:scale-[0.98] disabled:opacity-60"
             >
-              {pendiente ? "Activando…" : "Permitir avisos"}
+              {pendiente || siguiendo ? "Activando…" : "Permitir avisos"}
             </button>
             {!sinAhoraNo && (
               <button type="button" onClick={continuar} className="h-[52px] text-base font-bold text-slate-brand">

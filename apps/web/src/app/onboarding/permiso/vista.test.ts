@@ -1,36 +1,58 @@
-import { describe, expect, it } from "vitest";
-import { accionPermiso } from "./vista";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { accionPermiso, ESPERA_INTENTO_MS, pedirPermisoYSeguir } from "./vista";
 
 describe("accionPermiso", () => {
-  it("sin invitación nunca cambia el botón", () => {
-    expect(accionPermiso("inactivo", true, false)).toBe("permitir");
-    expect(accionPermiso("inactivo", false, false)).toBe("permitir");
+  it("ofrece permitir mientras el sistema pueda preguntar", () => {
+    expect(accionPermiso("inactivo", true)).toBe("permitir");
+    expect(accionPermiso("inactivo", false)).toBe("permitir");
+    expect(accionPermiso("cargando", true)).toBe("permitir");
   });
-  it("invitado: antes de intentar ofrece permitir", () => {
-    expect(accionPermiso("inactivo", false, true)).toBe("permitir");
+  it("ofrece continuar si el sistema no puede preguntar", () => {
+    for (const e of ["activo", "bloqueado", "no-soportado", "ios-instalar"] as const) {
+      expect(accionPermiso(e, true)).toBe("continuar");
+      expect(accionPermiso(e, false)).toBe("continuar");
+    }
   });
-  it("invitado: tras intentar y seguir inactivo, deja continuar", () => {
-    expect(accionPermiso("inactivo", true, true)).toBe("continuar-sin-avisos");
+  it("con invitación, una carga trabada deja continuar", () => {
+    expect(accionPermiso("cargando", true, true)).toBe("continuar");
   });
-  it("estados finales siempre continúan", () => {
-    for (const e of ["activo", "bloqueado", "no-soportado", "ios-instalar"] as const) expect(accionPermiso(e, true, true)).toBe("continuar");
+  it("leer la pantalla no quita el botón de permitir", () => {
+    expect(accionPermiso("inactivo", true, true)).toBe("permitir");
   });
-  it("invitado trabado: deja continuar si el estado no resuelve o el intento no termina", () => {
-    expect(accionPermiso("cargando", false, true, true)).toBe("continuar-sin-avisos");
-    expect(accionPermiso("inactivo", false, true, true, true)).toBe("continuar-sin-avisos");
+  it("sin invitación, la carga trabada no cambia nada", () => {
+    expect(accionPermiso("cargando", false, true)).toBe("permitir");
   });
-  it("invitado leyendo la pantalla: vencida la espera sigue ofreciendo permitir", () => {
-    expect(accionPermiso("inactivo", false, true, true)).toBe("permitir");
+});
+
+describe("pedirPermisoYSeguir", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("llama a activar de forma síncrona, dentro del toque", () => {
+    const activar = vi.fn(() => new Promise<void>(() => undefined));
+    void pedirPermisoYSeguir(activar, () => undefined);
+    expect(activar).toHaveBeenCalledTimes(1);
   });
-  it("invitado con el intento en curso: antes de vencer la espera no muestra la salida", () => {
-    expect(accionPermiso("inactivo", false, true, false, true)).toBe("permitir");
+
+  it("sigue cuando el sistema responde o se cierra el diálogo", async () => {
+    const seguir = vi.fn();
+    await pedirPermisoYSeguir(() => Promise.resolve(), seguir);
+    expect(seguir).toHaveBeenCalledTimes(1);
   });
-  it("trabado sin invitación no cambia nada", () => {
-    expect(accionPermiso("cargando", false, false, true)).toBe("permitir");
-    expect(accionPermiso("inactivo", true, false, true)).toBe("permitir");
+
+  it("sigue aunque activar falle", async () => {
+    const seguir = vi.fn();
+    await pedirPermisoYSeguir(() => Promise.reject(new Error("falló")), seguir);
+    expect(seguir).toHaveBeenCalledTimes(1);
   });
-  it("si el estado se resuelve, gana el estado final", () => {
-    expect(accionPermiso("activo", false, true, true)).toBe("continuar");
-    expect(accionPermiso("bloqueado", false, true, true)).toBe("continuar");
+
+  it("si el sistema nunca responde, espera y sigue una sola vez", async () => {
+    const seguir = vi.fn();
+    const promesa = pedirPermisoYSeguir(() => new Promise<void>(() => undefined), seguir);
+    await vi.advanceTimersByTimeAsync(ESPERA_INTENTO_MS - 1);
+    expect(seguir).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await promesa;
+    expect(seguir).toHaveBeenCalledTimes(1);
   });
 });

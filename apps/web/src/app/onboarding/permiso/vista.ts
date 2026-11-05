@@ -1,25 +1,36 @@
 import type { EstadoPush } from "@/components/vita/activar-notificaciones";
 
-export const NOTA_AVISOS_NO_ACTIVADOS = "No se activaron los avisos. Podés hacerlo después desde tu inicio.";
-
 /** Con invitación, espera máxima a que se resuelva el estado inicial. */
 export const ESPERA_PERMISO_MS = 8000;
-/** Con invitación, espera máxima de un intento: incluye el diálogo del navegador abierto, que lleva su tiempo leer. */
+/** Con invitación, espera máxima de la pregunta del sistema antes de seguir igual. */
 export const ESPERA_INTENTO_MS = 20000;
 
-export type AccionPermiso = "permitir" | "continuar" | "continuar-sin-avisos";
+export type AccionPermiso = "permitir" | "continuar";
 
 /**
- * Qué se ofrece en el paso de permiso. Quien llega desde una invitación no
- * tiene "Ahora no": si ya intentó activar y los avisos siguen apagados, en vez
- * de repetir el botón se le deja seguir con una nota. Lo mismo si venció la
- * espera (`trabado`) con el estado sin resolver o un intento sin terminar
- * (`enCurso`). Quien solo está leyendo la pantalla sigue viendo "Permitir avisos".
+ * Qué botón se ofrece. "Permitir avisos" mientras el sistema pueda preguntar;
+ * "Continuar" si no puede (iPhone sin instalar, navegador sin avisos, ya
+ * bloqueados o ya activos). Con invitación, también si la carga inicial no
+ * resuelve (`cargaTrabada`), porque el botón de permitir sigue deshabilitado.
  */
-export function accionPermiso(estado: EstadoPush, intentado: boolean, sinAhoraNo: boolean, trabado = false, enCurso = false): AccionPermiso {
-  if (estado !== "inactivo" && estado !== "cargando") return "continuar";
-  // Sin respuesta por demasiado tiempo: no se queda sin salida.
-  if (sinAhoraNo && trabado && (estado === "cargando" || enCurso)) return "continuar-sin-avisos";
-  if (sinAhoraNo && intentado && estado === "inactivo") return "continuar-sin-avisos";
-  return "permitir";
+export function accionPermiso(estado: EstadoPush, sinAhoraNo: boolean, cargaTrabada = false): AccionPermiso {
+  if (estado === "inactivo") return "permitir";
+  if (estado === "cargando") return sinAhoraNo && cargaTrabada ? "continuar" : "permitir";
+  return "continuar";
+}
+
+/**
+ * Pide el permiso y sigue el flujo, responda lo que responda la persona. Si el
+ * sistema no contesta en `esperaMs`, sigue igual. `activar` se llama de forma
+ * síncrona: el pedido de permiso tiene que correr dentro del toque.
+ */
+export async function pedirPermisoYSeguir(activar: () => Promise<void>, seguir: () => void, esperaMs = ESPERA_INTENTO_MS): Promise<void> {
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  const espera = new Promise<void>((resolver) => {
+    temporizador = setTimeout(resolver, esperaMs);
+  });
+  const intento = activar().catch(() => undefined);
+  await Promise.race([intento, espera]);
+  clearTimeout(temporizador);
+  seguir();
 }
