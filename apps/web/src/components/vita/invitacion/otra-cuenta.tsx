@@ -1,9 +1,8 @@
 import { BotonCta, TituloAuth } from "@/components/vita/auth-ui";
-import { enmascararEmail } from "@/lib/email/enmascarar";
 import { BotonTexto, IconoEstado, PantallaInvitada } from "./piezas";
 
-// C2 · Entró con un mail distinto del invitado. Los dos mails se muestran
-// siempre enmascarados.
+// C2 · Entró con un mail distinto del invitado. La invitación solo vale con ese
+// mail, así que los dos se muestran completos para que sepa con cuál entrar.
 export function OtraCuenta({
   emailActual,
   emailInvitado,
@@ -25,8 +24,8 @@ export function OtraCuenta({
           titulo="Esta invitación es para otro mail"
           sub={
             <>
-              Entraste con <span className="font-extrabold text-foreground">{enmascararEmail(emailActual)}</span>. {invitador} te invitó con{" "}
-              <span className="font-extrabold text-foreground">{enmascararEmail(emailInvitado)}</span>.
+              Entraste con <span className="break-all font-extrabold text-foreground">{emailActual}</span>. {invitador} te invitó con{" "}
+              <span className="break-all font-extrabold text-foreground">{emailInvitado}</span>.
             </>
           }
         />

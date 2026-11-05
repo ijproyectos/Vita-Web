@@ -27,8 +27,7 @@ export function FormularioNuevoPerfil() {
   async function accion(prev: EstadoCrearPerfil, formData: FormData): Promise<EstadoCrearPerfil> {
     const resultado = await crearPerfilGestionadoAction(prev, formData);
     if (resultado.status === "success") {
-      toast.success(`Listo. Ya podés cargar los remedios de ${nombre.trim()}`);
-      router.replace("/app/rutina");
+      router.replace(`/app/familia/nuevo/creado?persona=${resultado.id}`);
     } else if (resultado.status === "error") {
       toast.error(resultado.message);
     }

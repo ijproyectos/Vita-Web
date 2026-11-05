@@ -7,6 +7,7 @@ import { AceptarInvitacion } from "@/components/vita/invitacion/aceptar-invitaci
 import { OtraCuenta } from "@/components/vita/invitacion/otra-cuenta";
 import { YaUsaVita } from "@/components/vita/invitacion/ya-usa-vita";
 import { ArmarPerfil } from "@/components/vita/invitacion/armar-perfil";
+import { PerfilCreado } from "@/app/app/familia/nuevo/creado/perfil-creado";
 
 // Vista previa de las pantallas de la persona invitada SIN login, con datos de
 // ejemplo y botones inertes. Solo dev/test: 404 en producción salvo
@@ -35,7 +36,7 @@ const PANTALLAS: Record<string, { titulo: string; vista: () => ReactNode }> = {
     vista: () => <AceptarInvitacion nombre="Martina" persona="Jesus" rol="editar" esPerfilGestionado />,
   },
   "b4-admin-propio": {
-    titulo: "B4 · Vas a cuidar (Admin, sin nombre)",
+    titulo: "B4 · Vas a cuidar (Admin, la persona tiene cuenta propia)",
     vista: () => <AceptarInvitacion persona="Jesus" rol="editar" />,
   },
   c2: {
@@ -49,6 +50,14 @@ const PANTALLAS: Record<string, { titulo: string; vista: () => ReactNode }> = {
   d1: {
     titulo: "D1 · Tu perfil",
     vista: () => <ArmarPerfil nombre="Martina Álvarez" persona="Jesus" invitador="Micaela" />,
+  },
+  "perfil-creado": {
+    titulo: "Perfil creado (quien lo crea desde Familia)",
+    vista: () => (
+      <div className="mx-auto min-h-dvh w-full max-w-md bg-background">
+        <PerfilCreado id="ejemplo" nombre="Jesus" color="violeta" />
+      </div>
+    ),
   },
 };
 

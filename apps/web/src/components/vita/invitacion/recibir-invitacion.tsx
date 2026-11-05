@@ -1,6 +1,5 @@
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { GoogleLogo } from "@/components/vita/auth-ui";
-import { enmascararEmail } from "@/lib/email/enmascarar";
 import type { RolVinculo } from "@/lib/familia/tipos";
 import { PantallaInvitada, etiquetaRol } from "./piezas";
 
@@ -22,7 +21,7 @@ export function RecibirInvitacion({
   /** Cómo se relaciona la persona con quien recibe ("Tu papá"). */
   relacion?: string | null;
   rol: RolVinculo;
-  /** Mail con el que invitaron; se muestra siempre enmascarado. */
+  /** Mail con el que invitaron: el único con el que vale la invitación. */
   email?: string | null;
   onGoogle?: () => void;
   onEmail?: () => void;
@@ -44,7 +43,7 @@ export function RecibirInvitacion({
         </p>
         {email && (
           <p className="mt-4 text-pretty text-[14.5px] font-medium leading-[1.45] text-subtle">
-            Entrá con <span className="font-extrabold text-foreground">{enmascararEmail(email)}</span>, el mail que puso {invitador}.
+            Entrá con <span className="break-all font-extrabold text-foreground">{email}</span>, el mail que puso {invitador}.
           </p>
         )}
       </div>
