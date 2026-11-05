@@ -127,6 +127,13 @@ export default async function ResumenSaludPage() {
 
       {activo.esPropio && <BotonPedirAVita />}
 
+      {!activo.esPropio && activo.rol === "ver" && (
+        <div className="flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-subtle">
+          <VitaIcon name="eye" size={13} strokeWidth={2.2} />
+          Solo mirás
+        </div>
+      )}
+
       {adherencia && (
         <div className="grid grid-cols-2 rounded-[20px] bg-card py-3.5 shadow-card">
           <Stat label="Racha" valor={`${adherencia.rachaDias} d`} />

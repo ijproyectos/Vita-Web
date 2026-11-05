@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         <BarraSinConexion />
         {children}
       </div>
-      <BottomNav opciones={opciones.length > 1 ? opciones : null} activoId={activo.id} />
+      <BottomNav opciones={opciones.length > 1 ? opciones : null} activoId={activo.id} oculto={!activo.esPropio && activo.rol === "ver"} />
       <VitaChatOverlay esPropio={activo.esPropio} nombreActivo={activo.nombre} perfilActivoId={activo.id} />
       <BloqueoPin uid={usuario.id} nombre={perfil.nombre?.trim().split(/\s+/)[0] || "vita"} />
     </ChatOverlayProvider>

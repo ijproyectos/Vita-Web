@@ -36,12 +36,21 @@ const SIN_NAV = [
 // Pulsación larga en "Perfil" (V7): abre el selector de perfiles sin entrar a la pantalla.
 const MS_PULSACION_LARGA = 480;
 
-export function BottomNav({ opciones, activoId }: { opciones: OpcionPerfil[] | null; activoId: string }) {
+export function BottomNav({
+  opciones,
+  activoId,
+  oculto,
+}: {
+  opciones: OpcionPerfil[] | null;
+  activoId: string;
+  /** Vista "solo mirar" de un Lector: sin menú ni botón de chat. */
+  oculto?: boolean;
+}) {
   const pathname = usePathname();
   const { abrir } = useChatOverlay();
   const [selectorAbierto, setSelectorAbierto] = useState(false);
 
-  if (SIN_NAV.some((p) => pathname.startsWith(p))) return null;
+  if (oculto || SIN_NAV.some((p) => pathname.startsWith(p))) return null;
 
   const izquierda = ITEMS.slice(0, 2);
   const derecha = ITEMS.slice(2);

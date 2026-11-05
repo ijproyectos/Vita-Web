@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
@@ -29,6 +30,8 @@ export default async function PerfilPage() {
   // "Mi salud"; los ajustes de cuenta (avisos, sesión, uso de vita) son siempre
   // de la cuenta logueada.
   const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
+  // Un Lector no tiene Perfil: sus ajustes viven en el engranaje de "solo mirar".
+  if (!activo.esPropio && activo.rol === "ver") redirect("/app");
   const [perfil, uso, todos, estudios, cuidadores] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, activo.id),
     obtenerUsoHoy(usuario.id),
