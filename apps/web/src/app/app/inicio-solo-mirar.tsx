@@ -4,7 +4,7 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { listarCuidadoresDe, listarFamilia } from "@/lib/familia/nucleo";
-import { unicoAdmin } from "@/lib/familia/solo-mirar";
+import { alDejarDeCuidar, unicoAdmin } from "@/lib/familia/solo-mirar";
 import type { OpcionPerfil, PerfilActivo } from "@/lib/familia/tipos";
 import { contadorDeHoy, ETIQUETA_ESTADO_TOMA, filasTomas, type EstadoToma } from "@/lib/medicamentos/estado-toma";
 import { textoDosis } from "@/lib/medicamentos/tipos";
@@ -57,7 +57,8 @@ export async function InicioSoloMirar({
 
   const nombre = activo.nombre.split(" ")[0];
   const admin = unicoAdmin(cuidadores);
-  const vinculoId = (familia ?? []).find((m) => m.id === pid)?.vinculoId ?? null;
+  const miembro = (familia ?? []).find((m) => m.id === pid);
+  const vinculoId = miembro?.vinculoId ?? null;
 
   const aTomas = (m: { id: string; nombre: string; hora_programada: string }, tomado: boolean) => ({
     id: m.id,
@@ -202,6 +203,7 @@ export async function InicioSoloMirar({
           key={activo.id}
           nombre={nombre}
           vinculoId={vinculoId}
+          alDejar={alDejarDeCuidar(cuidadores, miembro?.conectado ?? null)}
           sub={esEmailDeCuentaPorCodigo(usuario.email) ? "Volvés a entrar con el código de tu familiar" : "Volvés a entrar con Google o con tu mail"}
         />
       </div>

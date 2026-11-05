@@ -8,11 +8,22 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { dejarDeCuidarAction } from "./familia/actions";
 import { CerrarSesion } from "./perfil/cerrar-sesion";
 import { FilaNav, Grupo, Tile } from "./perfil/filas";
+import type { alDejarDeCuidar } from "@/lib/familia/solo-mirar";
 
 // Engranaje fijo abajo a la derecha de la vista "solo mirar" (B6) y la hoja
 // de ajustes que abre. Alineado a la columna max-w-md, respetando el área
 // segura; mismo lenguaje que "Ajustes" del modo simple.
-export function AjustesSoloMirar({ nombre, vinculoId, sub }: { nombre: string; vinculoId: string | null; sub: string }) {
+export function AjustesSoloMirar({
+  nombre,
+  vinculoId,
+  alDejar,
+  sub,
+}: {
+  nombre: string;
+  vinculoId: string | null;
+  alDejar: ReturnType<typeof alDejarDeCuidar>;
+  sub: string;
+}) {
   const [abierto, setAbierto] = useState(false);
 
   return (
@@ -41,7 +52,7 @@ export function AjustesSoloMirar({ nombre, vinculoId, sub }: { nombre: string; v
             <Grupo>
               <FilaNav icon="bell" label="Avisos" sub="Lo que te avisó vita" href="/app/avisos" />
               <FilaNav icon="clock" label="Recordatorios" sub="Qué avisos recibir, esperas y silencio de noche" href="/app/avisos/configuracion" />
-              {vinculoId && <DejarDeCuidar nombre={nombre} vinculoId={vinculoId} />}
+              {vinculoId && <DejarDeCuidar nombre={nombre} vinculoId={vinculoId} alDejar={alDejar} />}
             </Grupo>
             <Grupo>
               <FilaNav icon="shield" label="Seguridad" sub="PIN al volver y tu sesión" href="/app/perfil/seguridad" />
@@ -59,7 +70,7 @@ export function AjustesSoloMirar({ nombre, vinculoId, sub }: { nombre: string; v
 
 // Fila "Dejar de cuidar a X" con confirmación inline; revoca el vínculo propio
 // con la misma acción que usa Familia.
-function DejarDeCuidar({ nombre, vinculoId }: { nombre: string; vinculoId: string }) {
+function DejarDeCuidar({ nombre, vinculoId, alDejar }: { nombre: string; vinculoId: string; alDejar: ReturnType<typeof alDejarDeCuidar> }) {
   const router = useRouter();
   const [confirmando, setConfirmando] = useState(false);
   const [pendiente, startTransition] = useTransition();
@@ -100,7 +111,10 @@ function DejarDeCuidar({ nombre, vinculoId }: { nombre: string; vinculoId: strin
     <div className="border-t border-foreground/[0.06] p-4">
       <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">¿Dejar de cuidar a {nombre}?</div>
       <p className="mt-1 text-[12.5px] font-medium leading-[1.45] text-subtle">
-        Sale de tu lista y dejás de recibir sus avisos. Los otros cuidadores la siguen viendo.
+        Sale de tu lista y dejás de recibir sus avisos.
+        {alDejar === "quedan-otros" && " Los otros cuidadores la siguen viendo."}
+        {alDejar === "ultimo" &&
+          " Hoy sos la única persona que la cuida y todavía no usa su celular: si te vas, nadie va a poder volver a abrir ese perfil."}
       </p>
       <div className="mt-3 flex gap-2">
         <button

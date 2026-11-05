@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contenidoDeRespaldo, esVistaSoloMirar, rutaPermitidaSoloMirar, unicoAdmin } from "./solo-mirar";
+import { alDejarDeCuidar, contenidoDeRespaldo, esVistaSoloMirar, rutaPermitidaSoloMirar, unicoAdmin } from "./solo-mirar";
 import type { CuidadorDePersona } from "./tipos";
 
 const c = (parcial: Partial<CuidadorDePersona>): CuidadorDePersona => ({
@@ -119,5 +119,27 @@ describe("contenidoDeRespaldo", () => {
 
   it("si falla la primera carga lanza en vez de mostrar una pantalla vacía", () => {
     expect(() => contenidoDeRespaldo(true, null, undefined)).toThrow("No se pudieron leer");
+  });
+});
+
+describe("alDejarDeCuidar", () => {
+  const yo = c({ estado: "aceptado", esYo: true });
+  const otro = c({ estado: "aceptado", esYo: false });
+  const invitado = c({ estado: "pendiente", esYo: false });
+
+  it("con otro cuidador aceptado, quedan otros", () => {
+    expect(alDejarDeCuidar([yo, otro], false)).toBe("quedan-otros");
+  });
+
+  it("si nadie más la cuida y no usa su celular, es el último; una invitación pendiente no cuenta", () => {
+    expect(alDejarDeCuidar([yo, invitado], false)).toBe("ultimo");
+  });
+
+  it("si nadie más la cuida pero usa su celular, no promete otros cuidadores ni avisa de más", () => {
+    expect(alDejarDeCuidar([yo], true)).toBe("sin-certeza");
+  });
+
+  it("si no se pudieron leer los cuidadores, no promete nada", () => {
+    expect(alDejarDeCuidar(null, false)).toBe("sin-certeza");
   });
 });

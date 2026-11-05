@@ -11,6 +11,17 @@ export function unicoAdmin(cuidadores: CuidadorDePersona[] | null): string | nul
   return nombre.split(/\s+/)[0];
 }
 
+/**
+ * Qué pasa con la persona si el usuario deja de cuidarla. "sin-certeza" cubre no
+ * haber podido leer los cuidadores y que nadie más la cuide pero ella use su
+ * celular: ahí no se puede prometer que otros la siguen viendo.
+ */
+export function alDejarDeCuidar(cuidadores: CuidadorDePersona[] | null, usaSuCelular: boolean | null): "quedan-otros" | "ultimo" | "sin-certeza" {
+  if (!cuidadores) return "sin-certeza";
+  if (cuidadores.some((c) => c.estado === "aceptado" && !c.esYo)) return "quedan-otros";
+  return usaSuCelular === false ? "ultimo" : "sin-certeza";
+}
+
 /** Lector mirando el perfil de otra persona: vista "solo mirar" (sin menú ni acciones). */
 export function esVistaSoloMirar(activo: { esPropio: boolean; rol: string }): boolean {
   return !activo.esPropio && activo.rol === "ver";
