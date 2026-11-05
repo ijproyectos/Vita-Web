@@ -5,7 +5,16 @@ import { VitaAvatar } from "@/components/vita/vita-avatar";
 import { TEXTO_IOS, useNotificacionesPush } from "@/components/vita/activar-notificaciones";
 import { VitaIcon } from "@/lib/vita-icons";
 
-export function PantallaPermiso({ destino, cuida }: { destino: string; cuida: boolean }) {
+export function PantallaPermiso({
+  destino,
+  cuida,
+  sinAhoraNo,
+}: {
+  destino: string;
+  cuida: boolean;
+  /** Llegó desde una invitación: los avisos son parte de cuidar, no se ofrece saltearlos. */
+  sinAhoraNo?: boolean;
+}) {
   const router = useRouter();
   const { estado, pendiente, activar } = useNotificacionesPush();
 
@@ -55,9 +64,11 @@ export function PantallaPermiso({ destino, cuida }: { destino: string; cuida: bo
             >
               {pendiente ? "Activando…" : "Permitir avisos"}
             </button>
-            <button type="button" onClick={continuar} className="h-[52px] text-base font-bold text-slate-brand">
-              Ahora no
-            </button>
+            {!sinAhoraNo && (
+              <button type="button" onClick={continuar} className="h-[52px] text-base font-bold text-slate-brand">
+                Ahora no
+              </button>
+            )}
           </>
         ) : (
           <button
