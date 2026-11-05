@@ -10,6 +10,8 @@ import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { listarAvisos } from "@/lib/notificaciones/avisos";
 import { listarFamilia } from "@/lib/familia/nucleo";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
 import { colorPorDefecto } from "@/lib/familia/colores";
 import { VitaIcon } from "@/lib/vita-icons";
 import { fechaDeHoyISO, formatoFechaCorta } from "@/lib/rutina/formato";
@@ -40,6 +42,8 @@ export default async function AvisosPage() {
   ]);
   const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy);
   const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
+  // Un Lector no tiene "Mis pastillas" (actúa sobre otro perfil): el banner solo informa.
+  const soloMirar = esVistaSoloMirar(await obtenerPerfilActivo());
 
   const hoy = fechaAR(new Date());
   const items: ItemAviso[] = avisos.map((a) => {
@@ -81,7 +85,7 @@ export default async function AvisosPage() {
       />
       <TarjetaAvisosApagados />
       <AvisoRecordatorio items={recordatorios} href="/app/modo-simple" />
-      <AvisoStockBajo items={stockBajo} href="/app/pastillas" />
+      <AvisoStockBajo items={stockBajo} href={soloMirar ? undefined : "/app/pastillas"} />
       <ListaAvisos
         items={items}
         personas={personas}

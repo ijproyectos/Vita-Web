@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { VitaAvatar } from "@/components/vita/vita-avatar";
-import { accionPermiso, NOTA_AVISOS_NO_ACTIVADOS } from "./vista";
+import { accionPermiso, ESPERA_PERMISO_MS, NOTA_AVISOS_NO_ACTIVADOS } from "./vista";
 import { TEXTO_IOS, useNotificacionesPush } from "@/components/vita/activar-notificaciones";
 import { VitaIcon } from "@/lib/vita-icons";
 
@@ -22,9 +22,28 @@ export function PantallaPermiso({
 
   // Ya tocó "Permitir avisos" y el intento terminó (se cerró el diálogo del navegador).
   const [intentado, setIntentado] = useState(false);
-  const accion = accionPermiso(estado, intentado, !!sinAhoraNo);
+  // Con invitación no hay "Ahora no": si pasan unos segundos sin poder avanzar
+  // (estado que no resuelve o intento sin terminar) se deja continuar. El
+  // estado solo cambia desde el callback del temporizador.
+  const [trabado, setTrabado] = useState(false);
+  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armarEspera = () => {
+    if (!sinAhoraNo) return;
+    if (temporizador.current) clearTimeout(temporizador.current);
+    temporizador.current = setTimeout(() => setTrabado(true), ESPERA_PERMISO_MS);
+  };
+  useEffect(() => {
+    armarEspera();
+    return () => {
+      if (temporizador.current) clearTimeout(temporizador.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const accion = accionPermiso(estado, intentado, !!sinAhoraNo, trabado);
 
   async function permitir() {
+    armarEspera();
     await activar();
     setIntentado(true);
   }

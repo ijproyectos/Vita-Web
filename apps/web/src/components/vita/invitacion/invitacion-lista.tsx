@@ -1,5 +1,4 @@
 import { VitaIcon } from "@/lib/vita-icons";
-import { enmascararEmail } from "@/lib/email/enmascarar";
 import type { RolVinculo } from "@/lib/familia/tipos";
 import { CajasCodigo, etiquetaRol } from "./piezas";
 
@@ -57,7 +56,7 @@ export function InvitacionLista({
         <dl className="mt-3 flex flex-col text-[14.5px]">
           <Fila etiqueta="Cuida a" valor={persona} />
           <Fila etiqueta="Permiso" valor={etiquetaRol(rol)} />
-          {email && <Fila etiqueta="Entra con" valor={enmascararEmail(email)} />}
+          {email && <Fila etiqueta="Entra con" valor={email} />}
         </dl>
       </div>
 

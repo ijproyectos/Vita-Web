@@ -10,6 +10,7 @@ import { BarraSinConexion } from "@/components/vita/barra-sin-conexion";
 import { BloqueoPin } from "@/components/vita/bloqueo-pin";
 import { RastreadorNavegacion } from "@/lib/navegacion/rastreador";
 import { BottomNav } from "./bottom-nav";
+import { GuardiaSoloMirar } from "./guardia-solo-mirar";
 import { VitaChatOverlay } from "./_chat/vita-chat-overlay";
 
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
     <ChatOverlayProvider>
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background pb-[140px]">
         <RastreadorNavegacion />
+        <GuardiaSoloMirar activa={esVistaSoloMirar(activo)} />
         <BarraSinConexion />
         {children}
       </div>

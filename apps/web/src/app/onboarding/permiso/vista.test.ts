@@ -15,4 +15,16 @@ describe("accionPermiso", () => {
   it("estados finales siempre continúan", () => {
     for (const e of ["activo", "bloqueado", "no-soportado", "ios-instalar"] as const) expect(accionPermiso(e, true, true)).toBe("continuar");
   });
+  it("invitado trabado: deja continuar aunque siga cargando o sin resolver", () => {
+    expect(accionPermiso("cargando", false, true, true)).toBe("continuar-sin-avisos");
+    expect(accionPermiso("inactivo", false, true, true)).toBe("continuar-sin-avisos");
+  });
+  it("trabado sin invitación no cambia nada", () => {
+    expect(accionPermiso("cargando", false, false, true)).toBe("permitir");
+    expect(accionPermiso("inactivo", true, false, true)).toBe("permitir");
+  });
+  it("si el estado se resuelve, gana el estado final", () => {
+    expect(accionPermiso("activo", false, true, true)).toBe("continuar");
+    expect(accionPermiso("bloqueado", false, true, true)).toBe("continuar");
+  });
 });

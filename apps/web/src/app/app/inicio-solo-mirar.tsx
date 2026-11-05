@@ -44,13 +44,14 @@ export async function InicioSoloMirar({
     medicamentos.listarHoy(supabase, pid),
     medicamentos.listarVencidasDeAyer(supabase, pid),
     turnosNucleo.listarProximos(supabase, pid, 5),
-    listarCuidadoresDe(supabase, pid),
-    listarFamilia(supabase),
+    // Lecturas secundarias: si fallan, la página sigue sin el nombre del Admin ni "Dejar de cuidar".
+    listarCuidadoresDe(supabase, pid).catch(() => null),
+    listarFamilia(supabase).catch(() => null),
   ]);
 
   const nombre = activo.nombre.split(" ")[0];
   const admin = unicoAdmin(cuidadores);
-  const vinculoId = familia.find((m) => m.id === pid)?.vinculoId ?? null;
+  const vinculoId = (familia ?? []).find((m) => m.id === pid)?.vinculoId ?? null;
 
   const aTomas = (m: { id: string; nombre: string; hora_programada: string }, tomado: boolean) => ({
     id: m.id,

@@ -15,3 +15,32 @@ export function unicoAdmin(cuidadores: CuidadorDePersona[] | null): string | nul
 export function esVistaSoloMirar(activo: { esPropio: boolean; rol: string }): boolean {
   return !activo.esPropio && activo.rol === "ver";
 }
+
+// Rutas que un Lector puede abrir mientras mira a otra persona. Son las del
+// inicio "solo mirar", su hoja de ajustes y lo que cuelga de ellas: actúan
+// sobre la cuenta propia o son de solo lectura. Todo lo demás (rutina, mi
+// salud, edición de perfil, medicamentos, turnos, pastillas, altas) vuelve al
+// inicio. Es solo navegación: los datos los protegen la RLS y las acciones.
+const RUTAS_EXACTAS_SOLO_MIRAR = ["/app", "/app/resumen-salud"];
+const RUTAS_CON_SUBRUTAS_SOLO_MIRAR = [
+  "/app/avisos",
+  "/app/perfil/seguridad",
+  "/app/perfil/privacidad",
+  "/app/perfil/ayuda",
+  // Colgadas de Privacidad y de la hoja de ajustes (cuenta propia).
+  "/app/perfil/historial",
+  "/app/perfil/compartir",
+  "/app/perfil/eliminar-cuenta",
+  // El inicio redirige ahí si el modo simple propio está activo (si no, bucle).
+  "/app/modo-simple",
+  // "Agregar a alguien" del selector de perfiles.
+  "/app/familia",
+  "/app/vita-plus",
+];
+
+/** ¿Puede un Lector abrir esta ruta? Compara por segmentos: `/app/avisos-x` no es `/app/avisos`. */
+export function rutaPermitidaSoloMirar(pathname: string): boolean {
+  const ruta = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (RUTAS_EXACTAS_SOLO_MIRAR.includes(ruta)) return true;
+  return RUTAS_CON_SUBRUTAS_SOLO_MIRAR.some((base) => ruta === base || ruta.startsWith(`${base}/`));
+}
