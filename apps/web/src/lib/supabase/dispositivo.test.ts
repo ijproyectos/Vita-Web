@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MARGEN_RENOVACION_SEG, tokenVigente, usuarioDeDispositivo } from "./dispositivo-logica";
+import { MARGEN_RENOVACION_SEG, motivoRechazoDispositivo, tokenVigente, usuarioDeDispositivo } from "./dispositivo-logica";
 
 const TOKEN = "a".repeat(40);
 const ID = "11111111-2222-3333-4444-555555555555";
@@ -18,6 +18,19 @@ describe("usuarioDeDispositivo", () => {
     expect(usuarioDeDispositivo("Bearer short", { ...env, DISPOSITIVO_TOKEN: "short" })).toBeNull();
     expect(usuarioDeDispositivo(`Bearer ${TOKEN}`, { ...env, DISPOSITIVO_USUARIO_ID: "nope" })).toBeNull();
   });
+});
+
+describe("motivoRechazoDispositivo", () => {
+  it("is null for browsers (no bearer header)", () => expect(motivoRechazoDispositivo(null, env)).toBeNull());
+  it("is null when the device is accepted", () => expect(motivoRechazoDispositivo(`Bearer ${TOKEN}`, env)).toBeNull());
+  it("reports missing or short token env", () => {
+    expect(motivoRechazoDispositivo(`Bearer ${TOKEN}`, {})).toBe("token_env_ausente_o_corto");
+    expect(motivoRechazoDispositivo(`Bearer ${TOKEN}`, { ...env, DISPOSITIVO_TOKEN: "short" })).toBe("token_env_ausente_o_corto");
+  });
+  it("reports missing or invalid user id env", () => {
+    expect(motivoRechazoDispositivo(`Bearer ${TOKEN}`, { ...env, DISPOSITIVO_USUARIO_ID: "nope" })).toBe("usuario_env_ausente_o_invalido");
+  });
+  it("reports a different token", () => expect(motivoRechazoDispositivo(`Bearer ${"b".repeat(40)}`, env)).toBe("token_distinto"));
 });
 
 describe("tokenVigente", () => {

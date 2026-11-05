@@ -26,6 +26,26 @@ export function usuarioDeDispositivo(
   return timingSafeEqual(sha256(m[1]), sha256(token)) ? usuario : null;
 }
 
+export type MotivoDispositivo =
+  | "token_env_ausente_o_corto"
+  | "usuario_env_ausente_o_invalido"
+  | "token_distinto";
+
+/**
+ * Why a request that carries a Bearer header is NOT accepted as the device (null when it is
+ * accepted or when there is no Bearer header, i.e. a browser). Diagnostic only: no secrets.
+ */
+export function motivoRechazoDispositivo(
+  authorization: string | null | undefined,
+  env: { DISPOSITIVO_TOKEN?: string; DISPOSITIVO_USUARIO_ID?: string },
+): MotivoDispositivo | null {
+  if (!/^Bearer .+/.test(authorization ?? "")) return null;
+  const token = env.DISPOSITIVO_TOKEN;
+  if (!token || token.length < TOKEN_DISPOSITIVO_MIN) return "token_env_ausente_o_corto";
+  if (!env.DISPOSITIVO_USUARIO_ID || !UUID.test(env.DISPOSITIVO_USUARIO_ID)) return "usuario_env_ausente_o_invalido";
+  return usuarioDeDispositivo(authorization, env) ? null : "token_distinto";
+}
+
 /** Is a cached access token (expires_at in epoch seconds) still usable at `ahoraSeg`? */
 export function tokenVigente(expiraSeg: number | null | undefined, ahoraSeg: number): boolean {
   return typeof expiraSeg === "number" && expiraSeg - MARGEN_RENOVACION_SEG > ahoraSeg;
