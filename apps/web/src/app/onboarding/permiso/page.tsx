@@ -24,8 +24,5 @@ export default async function OnboardingPermisoPage(props: { searchParams: Promi
       ? `/onboarding/vincular-cuidado?perfilPendienteId=${pp}`
       : "/app";
 
-  const desdeParam = searchParams?.desde;
-  const desdeInvitacion = (Array.isArray(desdeParam) ? desdeParam[0] : desdeParam) === "invitacion";
-
-  return <PantallaPermiso destino={destino} cuida={cuida} sinAhoraNo={desdeInvitacion} />;
+  return <PantallaPermiso destino={destino} cuida={cuida} />;
 }

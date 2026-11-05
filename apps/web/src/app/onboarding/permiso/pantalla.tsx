@@ -1,48 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { VitaAvatar } from "@/components/vita/vita-avatar";
-import { accionPermiso, ESPERA_PERMISO_MS, pedirPermisoYSeguir } from "./vista";
 import { TEXTO_IOS, useNotificacionesPush } from "@/components/vita/activar-notificaciones";
 import { VitaIcon } from "@/lib/vita-icons";
 
-export function PantallaPermiso({
-  destino,
-  cuida,
-  sinAhoraNo,
-}: {
-  destino: string;
-  cuida: boolean;
-  /** Llegó desde una invitación: los avisos son parte de cuidar, no se ofrece saltearlos. */
-  sinAhoraNo?: boolean;
-}) {
+export function PantallaPermiso({ destino, cuida }: { destino: string; cuida: boolean }) {
   const router = useRouter();
   const { estado, pendiente, activar } = useNotificacionesPush();
 
-  // Con invitación: tocó "Permitir avisos" y va a seguir sola, responda lo que responda.
-  const [siguiendo, setSiguiendo] = useState(false);
-  // Con invitación: la carga inicial no resolvió a tiempo y el botón seguiría deshabilitado.
-  const [cargaTrabada, setCargaTrabada] = useState(false);
-  useEffect(() => {
-    if (!sinAhoraNo) return;
-    const temporizador = setTimeout(() => setCargaTrabada(true), ESPERA_PERMISO_MS);
-    return () => clearTimeout(temporizador);
-  }, [sinAhoraNo]);
-
   const continuar = () => router.push(destino);
-
-  // Mientras sigue, se mantiene este botón para que no aparezca "Continuar" antes de navegar.
-  const accion = siguiendo ? "permitir" : accionPermiso(estado, !!sinAhoraNo, cargaTrabada);
-
-  function permitir() {
-    if (!sinAhoraNo) {
-      void activar();
-      return;
-    }
-    setSiguiendo(true);
-    void pedirPermisoYSeguir(activar, continuar);
-  }
 
   const sub = cuida
     ? "Te aviso a la hora de cada remedio y turno. Si la persona que cuidás no confirma, te enterás."
@@ -78,21 +45,19 @@ export function PantallaPermiso({
       </div>
 
       <div className="flex flex-col gap-2">
-        {accion === "permitir" ? (
+        {estado === "inactivo" || estado === "cargando" ? (
           <>
             <button
               type="button"
-              onClick={permitir}
-              disabled={pendiente || siguiendo || estado === "cargando"}
+              onClick={activar}
+              disabled={pendiente || estado === "cargando"}
               className="h-[60px] rounded-full bg-primary font-heading text-lg font-extrabold text-primary-foreground shadow-cta transition-transform active:scale-[0.98] disabled:opacity-60"
             >
-              {pendiente || siguiendo ? "Activando…" : "Permitir avisos"}
+              {pendiente ? "Activando…" : "Permitir avisos"}
             </button>
-            {!sinAhoraNo && (
-              <button type="button" onClick={continuar} className="h-[52px] text-base font-bold text-slate-brand">
-                Ahora no
-              </button>
-            )}
+            <button type="button" onClick={continuar} className="h-[52px] text-base font-bold text-slate-brand">
+              Ahora no
+            </button>
           </>
         ) : (
           <button
