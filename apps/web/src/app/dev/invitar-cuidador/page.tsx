@@ -71,7 +71,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   if (!habilitado) notFound();
 
   const { pantalla } = await searchParams;
-  const elegida = pantalla ? PANTALLAS[pantalla] : undefined;
+  const elegida = pantalla && Object.hasOwn(PANTALLAS, pantalla) ? PANTALLAS[pantalla] : undefined;
   if (elegida) return elegida.vista();
 
   return (

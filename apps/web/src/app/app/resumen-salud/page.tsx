@@ -5,6 +5,7 @@ import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { edadTexto } from "@/lib/perfil/formato";
 import { metaDeCondicion } from "@/lib/perfil/tipos";
+import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -127,7 +128,7 @@ export default async function ResumenSaludPage() {
 
       {activo.esPropio && <BotonPedirAVita />}
 
-      {!activo.esPropio && activo.rol === "ver" && (
+      {esVistaSoloMirar(activo) && (
         <div className="flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-subtle">
           <VitaIcon name="eye" size={13} strokeWidth={2.2} />
           Solo mirás

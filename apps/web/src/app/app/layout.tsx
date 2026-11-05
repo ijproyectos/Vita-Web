@@ -4,6 +4,7 @@ import { requireNoSuspendida } from "@/lib/suspensiones/guardia";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { ChatOverlayProvider } from "@/lib/chat/overlay-context";
+import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
 import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BarraSinConexion } from "@/components/vita/barra-sin-conexion";
 import { BloqueoPin } from "@/components/vita/bloqueo-pin";
@@ -35,7 +36,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         <BarraSinConexion />
         {children}
       </div>
-      <BottomNav opciones={opciones.length > 1 ? opciones : null} activoId={activo.id} oculto={!activo.esPropio && activo.rol === "ver"} />
+      <BottomNav opciones={opciones.length > 1 ? opciones : null} activoId={activo.id} oculto={esVistaSoloMirar(activo)} />
       <VitaChatOverlay esPropio={activo.esPropio} nombreActivo={activo.nombre} perfilActivoId={activo.id} />
       <BloqueoPin uid={usuario.id} nombre={perfil.nombre?.trim().split(/\s+/)[0] || "vita"} />
     </ChatOverlayProvider>

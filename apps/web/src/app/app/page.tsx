@@ -15,6 +15,7 @@ import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorio
 import { contarNoLeidos } from "@/lib/notificaciones/avisos";
 import { fechaConOffset, fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
+import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
 import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { EncabezadoPerfil, PastillaLector } from "@/components/vita/encabezado-perfil";
 import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
@@ -40,7 +41,7 @@ export default async function HomePage() {
   const puedeEditar = activo.rol === "editar";
 
   // Lector de otra persona: vista "solo mirar" (sin acciones ni menú).
-  if (!activo.esPropio && activo.rol === "ver") {
+  if (esVistaSoloMirar(activo)) {
     return <InicioSoloMirar usuario={usuario} activo={activo} opciones={opciones} />;
   }
 

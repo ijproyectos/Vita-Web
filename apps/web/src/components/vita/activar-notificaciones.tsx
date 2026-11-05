@@ -88,35 +88,46 @@ export function useNotificacionesPush() {
     };
   }, []);
 
-  function activar() {
-    startTransition(async () => {
-      try {
-        // requestPermission va primero: tiene que correr dentro del tap.
-        const permiso = await Notification.requestPermission();
-        if (permiso !== "granted") {
-          setEstado(permiso === "denied" ? "bloqueado" : "inactivo");
-          return;
+  /** Resuelve cuando termina el intento (después de cerrarse el diálogo del navegador). */
+  function activar(): Promise<void> {
+    return new Promise<void>((resolver) => {
+      startTransition(async () => {
+        try {
+          await intentarActivar();
+        } finally {
+          resolver();
         }
-        const registro = await obtenerRegistro();
-        await navigator.serviceWorker.ready;
-        const suscripcion =
-          (await registro.pushManager.getSubscription()) ??
-          (await registro.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: claveAUint8(CLAVE_VAPID!),
-          }));
-        const r = await guardarSuscripcionAction(aPayload(suscripcion));
-        if (r.status === "error") {
-          toast.error(r.message);
-          return;
-        }
-        setEstado("activo");
-        toast.success("Listo, vas a recibir los avisos en este celular");
-      } catch {
-        toast.error("No pudimos activar los avisos en este dispositivo.");
-      }
+      });
     });
   }
+
+  async function intentarActivar() {
+    try {
+      // requestPermission va primero: tiene que correr dentro del tap.
+      const permiso = await Notification.requestPermission();
+      if (permiso !== "granted") {
+        setEstado(permiso === "denied" ? "bloqueado" : "inactivo");
+        return;
+      }
+      const registro = await obtenerRegistro();
+      await navigator.serviceWorker.ready;
+      const suscripcion =
+        (await registro.pushManager.getSubscription()) ??
+        (await registro.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: claveAUint8(CLAVE_VAPID!),
+        }));
+      const r = await guardarSuscripcionAction(aPayload(suscripcion));
+      if (r.status === "error") {
+        toast.error(r.message);
+        return;
+      }
+      setEstado("activo");
+      toast.success("Listo, vas a recibir los avisos en este celular");
+    } catch {
+      toast.error("No pudimos activar los avisos en este dispositivo.");
+    }
+}
 
   function desactivar() {
     startTransition(async () => {

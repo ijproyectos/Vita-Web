@@ -6,7 +6,7 @@ import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { listarCuidadoresDe, listarFamilia } from "@/lib/familia/nucleo";
 import { unicoAdmin } from "@/lib/familia/solo-mirar";
 import type { OpcionPerfil, PerfilActivo } from "@/lib/familia/tipos";
-import { ETIQUETA_ESTADO_TOMA, filasTomas, type EstadoToma } from "@/lib/medicamentos/estado-toma";
+import { contadorDeHoy, ETIQUETA_ESTADO_TOMA, filasTomas, type EstadoToma } from "@/lib/medicamentos/estado-toma";
 import { textoDosis } from "@/lib/medicamentos/tipos";
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { etiquetaDia } from "@/lib/rutina/formato";
@@ -40,7 +40,7 @@ export async function InicioSoloMirar({
   const pid = activo.id;
   const [perfil, miPerfil, medsHoy, deAyer, turnos, cuidadores, familia] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, pid).catch(() => null),
-    perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null),
+    perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => undefined),
     medicamentos.listarHoy(supabase, pid),
     medicamentos.listarVencidasDeAyer(supabase, pid),
     turnosNucleo.listarProximos(supabase, pid, 5),
@@ -64,7 +64,7 @@ export async function InicioSoloMirar({
     deAyer.map((m) => ({ ...aTomas(m, false), dosis: textoDosis(m) })),
     medicamentos.horaEnAR()
   );
-  const tomadas = filas.filter((f) => f.estado === "tomada").length;
+  const contador = contadorDeHoy(filas);
 
   const condiciones = perfil?.condiciones.length ?? 0;
   const alergias = perfil?.alergias.length ?? 0;
@@ -77,7 +77,8 @@ export async function InicioSoloMirar({
     .filter(Boolean)
     .join(" · ");
 
-  const sinPerfilPropio = !miPerfil?.onboarding_completado_at;
+  // undefined = la lectura falló: ante la duda no se ofrece armar el perfil.
+  const sinPerfilPropio = miPerfil !== undefined && !miPerfil?.onboarding_completado_at;
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-6 pt-1.5">
@@ -115,14 +116,14 @@ export async function InicioSoloMirar({
       <section>
         <div className="flex items-baseline justify-between px-0.5 pb-[11px]">
           <h2 className="font-heading text-base font-extrabold tracking-[-0.02em]">Tomas de hoy</h2>
-          {filas.length > 0 && (
+          {contador && (
             <span className="text-[12.5px] font-bold text-subtle">
-              {tomadas} de {filas.length} {tomadas === 1 ? "tomada" : "tomadas"}
+              {contador.tomadas} de {contador.total} {contador.tomadas === 1 ? "tomada" : "tomadas"}
             </span>
           )}
         </div>
         {filas.length === 0 ? (
-          <Vacio texto="Todavía no hay remedios cargados." />
+          <Vacio texto="Hoy no tiene tomas programadas." />
         ) : (
           <ul className="overflow-hidden rounded-[20px] bg-card shadow-card">
             {filas.map((f) => (
@@ -190,6 +191,7 @@ export async function InicioSoloMirar({
       )}
 
       <AjustesSoloMirar
+        key={activo.id}
         nombre={nombre}
         vinculoId={vinculoId}
         sub={esEmailDeCuentaPorCodigo(usuario.email) ? "Volvés a entrar con el código de tu familiar" : "Volvés a entrar con Google o con tu mail"}

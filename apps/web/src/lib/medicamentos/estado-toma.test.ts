@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 // `nucleo.ts` importa `server-only`; la lógica bajo prueba es pura.
 vi.mock("server-only", () => ({}));
 
-import { estadoDeToma, filasTomas, type TomaEntrada } from "./estado-toma";
+import { contadorDeHoy, estadoDeToma, filasTomas, type TomaEntrada } from "./estado-toma";
 
 const t = (id: string, hora: string, tomado = false): TomaEntrada => ({ id, nombre: id, dosis: "50 mg", hora, tomado });
 
@@ -32,5 +32,15 @@ describe("filasTomas", () => {
   });
   it("sin tomas devuelve vacío", () => {
     expect(filasTomas([], [], "10:00")).toEqual([]);
+  });
+});
+
+describe("contadorDeHoy", () => {
+  it("cuenta solo hoy: 2 de 2 más una de ayer da 2 de 2", () => {
+    const filas = filasTomas([t("a", "08:00", true), t("b", "09:00", true)], [t("z", "22:00")], "17:00");
+    expect(contadorDeHoy(filas)).toEqual({ tomadas: 2, total: 2 });
+  });
+  it("solo ayer: sin contador", () => {
+    expect(contadorDeHoy(filasTomas([], [t("z", "22:00")], "00:10"))).toBeNull();
   });
 });

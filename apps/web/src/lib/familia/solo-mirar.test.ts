@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { unicoAdmin } from "./solo-mirar";
+import { esVistaSoloMirar, unicoAdmin } from "./solo-mirar";
 import type { CuidadorDePersona } from "./tipos";
 
 const c = (parcial: Partial<CuidadorDePersona>): CuidadorDePersona => ({
@@ -36,5 +36,14 @@ describe("unicoAdmin", () => {
   });
   it("no muestra un nombre inventado", () => {
     expect(unicoAdmin([c({ nombre: "Sin nombre" })])).toBeNull();
+  });
+});
+
+describe("esVistaSoloMirar", () => {
+  it("solo es true para Lector de otra persona", () => {
+    expect(esVistaSoloMirar({ esPropio: true, rol: "editar" })).toBe(false);
+    expect(esVistaSoloMirar({ esPropio: true, rol: "ver" })).toBe(false);
+    expect(esVistaSoloMirar({ esPropio: false, rol: "editar" })).toBe(false);
+    expect(esVistaSoloMirar({ esPropio: false, rol: "ver" })).toBe(true);
   });
 });

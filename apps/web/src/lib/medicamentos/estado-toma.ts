@@ -32,3 +32,13 @@ export function filasTomas(hoy: TomaEntrada[], deAyer: TomaEntrada[], ahoraHHMM:
     ...[...hoy].sort(porHora).map((t) => ({ ...t, estado: estadoDeToma(t.tomado, t.hora, ahoraHHMM), deAyer: false })),
   ];
 }
+
+/**
+ * Contador de "Tomas de hoy": igual que el inicio normal, cuenta solo las de
+ * hoy (las de ayer se listan pero no suman). Sin tomas de hoy, no hay contador.
+ */
+export function contadorDeHoy(filas: FilaToma[]): { tomadas: number; total: number } | null {
+  const deHoy = filas.filter((f) => !f.deAyer);
+  if (deHoy.length === 0) return null;
+  return { tomadas: deHoy.filter((f) => f.estado === "tomada").length, total: deHoy.length };
+}

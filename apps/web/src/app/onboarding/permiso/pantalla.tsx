@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { VitaAvatar } from "@/components/vita/vita-avatar";
+import { accionPermiso, NOTA_AVISOS_NO_ACTIVADOS } from "./vista";
 import { TEXTO_IOS, useNotificacionesPush } from "@/components/vita/activar-notificaciones";
 import { VitaIcon } from "@/lib/vita-icons";
 
@@ -18,6 +20,15 @@ export function PantallaPermiso({
   const router = useRouter();
   const { estado, pendiente, activar } = useNotificacionesPush();
 
+  // Ya tocó "Permitir avisos" y el intento terminó (se cerró el diálogo del navegador).
+  const [intentado, setIntentado] = useState(false);
+  const accion = accionPermiso(estado, intentado, !!sinAhoraNo);
+
+  async function permitir() {
+    await activar();
+    setIntentado(true);
+  }
+
   const continuar = () => router.push(destino);
 
   const sub = cuida
@@ -31,7 +42,9 @@ export function PantallaPermiso({
         ? "Los avisos están bloqueados en este navegador. Podés habilitarlos desde los ajustes del sitio."
         : estado === "no-soportado"
           ? "Este navegador no permite avisos."
-          : null;
+          : accion === "continuar-sin-avisos"
+            ? NOTA_AVISOS_NO_ACTIVADOS
+            : null;
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-cream px-6 pb-10 pt-16">
@@ -54,11 +67,11 @@ export function PantallaPermiso({
       </div>
 
       <div className="flex flex-col gap-2">
-        {estado === "inactivo" || estado === "cargando" ? (
+        {accion === "permitir" ? (
           <>
             <button
               type="button"
-              onClick={activar}
+              onClick={permitir}
               disabled={pendiente || estado === "cargando"}
               className="h-[60px] rounded-full bg-primary font-heading text-lg font-extrabold text-primary-foreground shadow-cta transition-transform active:scale-[0.98] disabled:opacity-60"
             >

@@ -10,3 +10,8 @@ export function unicoAdmin(cuidadores: CuidadorDePersona[] | null): string | nul
   if (!nombre || nombre === "Sin nombre") return null;
   return nombre.split(/\s+/)[0];
 }
+
+/** Lector mirando el perfil de otra persona: vista "solo mirar" (sin menú ni acciones). */
+export function esVistaSoloMirar(activo: { esPropio: boolean; rol: string }): boolean {
+  return !activo.esPropio && activo.rol === "ver";
+}
