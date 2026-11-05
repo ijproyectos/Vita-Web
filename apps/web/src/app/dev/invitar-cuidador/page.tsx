@@ -7,7 +7,7 @@ import { AceptarInvitacion } from "@/components/vita/invitacion/aceptar-invitaci
 import { OtraCuenta } from "@/components/vita/invitacion/otra-cuenta";
 import { YaUsaVita } from "@/components/vita/invitacion/ya-usa-vita";
 import { ArmarPerfil } from "@/components/vita/invitacion/armar-perfil";
-import { PerfilCreado } from "@/app/app/familia/nuevo/creado/perfil-creado";
+import { PerfilCreado } from "@/app/app/familia/nuevo/perfil-creado";
 
 // Vista previa de las pantallas de la persona invitada SIN login, con datos de
 // ejemplo y botones inertes. Solo dev/test: 404 en producción salvo

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import type { ColorPerfil } from "@/lib/familia/tipos";
-import { cambiarPerfilActivoAction } from "../../actions";
+import { cambiarPerfilActivoAction } from "../actions";
 
 // Confirmación después de "Crear un perfil": quien lo creó ya es Admin, así que
 // no se le explican permisos. Solo se le ofrece lo que sigue.
