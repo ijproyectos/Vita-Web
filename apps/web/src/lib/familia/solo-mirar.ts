@@ -49,6 +49,15 @@ export function esVistaSoloMirar(activo: { esPropio: boolean; rol: string }): bo
   return !activo.esPropio && activo.rol === "ver";
 }
 
+/**
+ * Destino de "Volver" en las pantallas que cuelgan de Perfil. Un Lector en
+ * vista de solo mirar no puede abrir /app/perfil (la guia lo devuelve al
+ * inicio), asi que su "Volver" de respaldo es el inicio.
+ */
+export function rutaVolverAPerfil(activo: { esPropio: boolean; rol: string }): string {
+  return esVistaSoloMirar(activo) ? "/app" : "/app/perfil";
+}
+
 // Rutas que un Lector puede abrir mientras mira a otra persona. Son las del
 // inicio "solo mirar", su hoja de ajustes y lo que cuelga de ellas: actúan
 // sobre la cuenta propia o son de solo lectura. Todo lo demás (rutina, mi

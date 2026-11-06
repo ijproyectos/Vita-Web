@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE_MODO_SIMPLE, modoSimpleActivoPara } from "@/lib/modo-simple/recordar";
 import { requireUser } from "@/lib/dal";
+import { destinoDeInicio } from "@/lib/modo-simple/inicio";
 import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
@@ -32,9 +33,6 @@ import { InicioSoloMirar } from "./inicio-solo-mirar";
 
 export default async function HomePage() {
   const usuario = await requireUser();
-  // Abrir la app con el modo simple activo en este dispositivo vuelve ahí,
-  // no al Inicio normal (se apaga con "Salir del modo simple").
-  if (modoSimpleActivoPara((await cookies()).get(COOKIE_MODO_SIMPLE)?.value, usuario.id)) redirect("/app/modo-simple");
   const supabase = await createClient();
   // Familia: los datos son del perfil activo (propio o de alguien que cuido);
   // los avisos y el nudge a vita son siempre de la cuenta logueada.
@@ -42,10 +40,19 @@ export default async function HomePage() {
   const pid = activo.id;
   const puedeEditar = activo.rol === "editar";
 
-  // Lector de otra persona: vista "solo mirar" (sin acciones ni menú).
-  if (esVistaSoloMirar(activo)) {
+  // Abrir la app con el modo simple activo en este dispositivo vuelve ahí,
+  // no al Inicio normal (se apaga con "Salir del modo simple"). El modo simple
+  // es de la cuenta propia: un Lector mirando a otra persona ve su vista de
+  // solo mirar (sin acciones ni menú) en vez de caer en un modo simple que no
+  // es de esa persona.
+  const destino = destinoDeInicio({
+    soloMirar: esVistaSoloMirar(activo),
+    modoSimpleActivo: modoSimpleActivoPara((await cookies()).get(COOKIE_MODO_SIMPLE)?.value, usuario.id),
+  });
+  if (destino === "solo-mirar") {
     return <InicioSoloMirar usuario={usuario} activo={activo} opciones={opciones} />;
   }
+  if (destino === "modo-simple") redirect("/app/modo-simple");
 
   const [perfil, medsHoy, todosLosMeds, adherencia, turnosProximos, grupos, noLeidos] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, pid),
