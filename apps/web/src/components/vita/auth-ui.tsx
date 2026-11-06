@@ -44,6 +44,13 @@ export function IconoPegar() {
   );
 }
 
+// Logo de marca de Google: sus colores son fijos (no son tokens), por eso
+// vive como SVG estático en /public, igual que icon.svg.
+export function GoogleLogo() {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/google-g.svg" alt="" width={19} height={19} aria-hidden="true" />;
+}
+
 /** Pantalla de acceso sobre crema, con padding de la maqueta (62/24/40). */
 export function PantallaAuth({ children, className }: { children: ReactNode; className?: string }) {
   return (

@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { colorPorDefecto } from "./colores";
-import { estadoHoyPorPerfil, listarFamilia } from "./nucleo";
+import { ErrorLecturaFamilia, estadoHoyPorPerfil, leerFamilia, listarFamilia } from "./nucleo";
 import { esColorPerfil, type MiembroFamilia, type OpcionPerfil, type PerfilActivo, type RolVinculo } from "./tipos";
 
 // Perfil activo de /app/*: de quién son los remedios/turnos/salud que se ven
@@ -30,10 +30,15 @@ const resolverContexto = cache(async (): Promise<Contexto> => {
   const usuario = await requireUser();
   const supabase = await createClient();
 
-  const [{ data: perfilPropio }, familia, almacen] = await Promise.all([
+  const almacen = await cookies();
+  const elegido = almacen.get(COOKIE_PERFIL_ACTIVO)?.value;
+
+  // Con una persona elegida, una lectura fallida no puede caer al perfil propio:
+  // se verían o cargarían datos en la persona equivocada. Sin elegida, el activo
+  // es el propio igual, así que solo se pierde el selector.
+  const [{ data: perfilPropio }, familia] = await Promise.all([
     supabase.from("perfiles").select("nombre, color").eq("id", usuario.id).maybeSingle(),
-    listarFamilia(supabase),
-    cookies(),
+    elegido ? leerFamilia(supabase) : listarFamilia(supabase),
   ]);
 
   // Without a name in `perfiles`, fall back to the one Google gave us.
@@ -51,7 +56,6 @@ const resolverContexto = cache(async (): Promise<Contexto> => {
     rol: "editar",
   };
 
-  const elegido = almacen.get(COOKIE_PERFIL_ACTIVO)?.value;
   const indice = elegido ? familia.findIndex((m) => m.id === elegido) : -1;
   const miembro = indice >= 0 ? familia[indice] : null;
 
@@ -96,13 +100,24 @@ const calcularOpciones = cache(async (): Promise<OpcionPerfil[]> => {
   ];
 });
 
+// Lo usan las Server Actions, que nunca lanzan: si no se sabe a quién cuida el usuario,
+// se niega la operación sobre otras personas; lo propio no depende de esa lectura. Otro error (la redirección de sesión) sigue su curso.
+function sinLecturaDeFamilia<T>(valor: T) {
+  return (error: unknown): T => {
+    if (error instanceof ErrorLecturaFamilia) return valor;
+    throw error;
+  };
+}
+
 export async function obtenerOpcionesPerfil(): Promise<OpcionPerfil[]> {
   return calcularOpciones();
 }
 
 /** True si `id` es el propio usuario o alguien con vínculo aceptado hacia él. */
 export async function esPerfilValido(id: string): Promise<boolean> {
-  const { propio, familia } = await resolverContexto();
+  const contexto = await resolverContexto().catch(sinLecturaDeFamilia(null));
+  if (!contexto) return id === (await requireUser()).id;
+  const { propio, familia } = contexto;
   return id === propio.id || familia.some((m) => m.id === id);
 }
 
@@ -113,7 +128,9 @@ export async function esPerfilValido(id: string): Promise<boolean> {
  * toma, borrar un medicamento) cuyo dueño se resuelve desde la propia fila.
  */
 export async function rolSobre(id: string): Promise<RolVinculo | null> {
-  const { propio, familia } = await resolverContexto();
+  const contexto = await resolverContexto().catch(sinLecturaDeFamilia(null));
+  if (!contexto) return id === (await requireUser()).id ? "editar" : null;
+  const { propio, familia } = contexto;
   if (id === propio.id) return "editar";
   return familia.find((m) => m.id === id)?.rol ?? null;
 }
@@ -129,7 +146,8 @@ export const MENSAJE_SOLO_LECTURA = "Tenés permiso de solo ver este perfil. Ped
 export async function perfilActivoEditable(): Promise<
   { ok: true; perfil: PerfilActivo } | { ok: false; message: string }
 > {
-  const perfil = await obtenerPerfilActivo();
+  const perfil = await obtenerPerfilActivo().catch(sinLecturaDeFamilia(null));
+  if (!perfil) return { ok: false, message: "No pudimos abrir este perfil. Probá de nuevo." };
   if (perfil.rol !== "editar") return { ok: false, message: MENSAJE_SOLO_LECTURA };
   return { ok: true, perfil };
 }

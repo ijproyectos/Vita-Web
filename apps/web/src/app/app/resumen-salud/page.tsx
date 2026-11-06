@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { edadTexto } from "@/lib/perfil/formato";
 import { metaDeCondicion } from "@/lib/perfil/tipos";
+import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -25,8 +27,14 @@ export default async function ResumenSaludPage() {
     activo.esPropio ? medicamentos.calcularAdherencia(supabase, activo.id).catch(() => null) : Promise.resolve(null),
   ]);
 
-  if (!perfil) return null; // requireUser ya garantiza sesión; perfiles se crea en el callback de auth
+  // El perfil propio siempre existe (se crea en el callback de auth). Si no llega el de otra persona (un Lector
+  // mirando a alguien cuya fila no se pudo leer), en vez de una página en blanco sin salida se le ofrece llevar
+  // su propia salud en vita.
+  if (!perfil) redirect("/app/tu-salud");
 
+  // Un Lector mirando a otra persona no tiene las pantallas de edición ni de
+  // listas: el resumen ya muestra todo, así que no se ofrecen esos enlaces.
+  const soloMirar = esVistaSoloMirar(activo);
   const edad = edadTexto(perfil);
   const edadNum = perfil.fecha_nacimiento ? edad?.replace(" años", "") : null;
   const alturaM = perfil.altura_cm ? (perfil.altura_cm / 100).toFixed(2).replace(".", ",") : null;
@@ -58,16 +66,18 @@ export default async function ResumenSaludPage() {
             </div>
           ))}
         </div>
-        <Link href="/app/perfil/editar" className="mt-3 flex items-center justify-end gap-0.5 text-[12.5px] font-bold text-teal-deep">
-          {activo.rol === "editar" ? "Editar datos personales" : "Ver datos personales"}
-          <VitaIcon name="chevron-right" size={14} />
-        </Link>
+        {!soloMirar && (
+          <Link href="/app/perfil/editar" className="mt-3 flex items-center justify-end gap-0.5 text-[12.5px] font-bold text-teal-deep">
+            {activo.rol === "editar" ? "Editar datos personales" : "Ver datos personales"}
+            <VitaIcon name="chevron-right" size={14} />
+          </Link>
+        )}
       </div>
 
-      <Link href="/app/condiciones" className="rounded-[20px] bg-card p-[18px] shadow-card">
+      <ContenedorEnlace href={soloMirar ? null : "/app/condiciones"} className="rounded-[20px] bg-card p-[18px] shadow-card">
         <div className="flex items-center justify-between">
           <div className="font-heading text-base font-extrabold tracking-[-0.02em]">Condiciones y alergias</div>
-          <div className="text-[12.5px] font-bold text-teal-deep">{activo.rol === "editar" ? "Editar" : "Ver"}</div>
+          {!soloMirar && <div className="text-[12.5px] font-bold text-teal-deep">{activo.rol === "editar" ? "Editar" : "Ver"}</div>}
         </div>
         <div className="mt-4 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-3.5 border-t border-dashed border-foreground/15 pt-3.5">
           <div className="pt-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-brand">Diagnóstico</div>
@@ -95,14 +105,16 @@ export default async function ResumenSaludPage() {
             )}
           </div>
         </div>
-      </Link>
+      </ContenedorEnlace>
 
       <div className="rounded-[20px] bg-card p-[18px] shadow-card">
         <div className="flex items-center justify-between">
           <div className="font-heading text-base font-extrabold tracking-[-0.02em]">Medicación activa</div>
-          <Link href="/app/medicamentos" className="text-[12.5px] font-bold text-teal-deep">
-            {activo.rol === "editar" ? "Editar" : "Ver"}
-          </Link>
+          {!soloMirar && (
+            <Link href="/app/medicamentos" className="text-[12.5px] font-bold text-teal-deep">
+              {activo.rol === "editar" ? "Editar" : "Ver"}
+            </Link>
+          )}
         </div>
         {todos.length === 0 ? (
           <p className="mt-2 text-[13px] font-medium text-subtle">Sin medicamentos cargados.</p>
@@ -127,6 +139,13 @@ export default async function ResumenSaludPage() {
 
       {activo.esPropio && <BotonPedirAVita />}
 
+      {esVistaSoloMirar(activo) && (
+        <div className="flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-subtle">
+          <VitaIcon name="eye" size={13} strokeWidth={2.2} />
+          Solo mirás
+        </div>
+      )}
+
       {adherencia && (
         <div className="grid grid-cols-2 rounded-[20px] bg-card py-3.5 shadow-card">
           <Stat label="Racha" valor={`${adherencia.rachaDias} d`} />
@@ -143,5 +162,16 @@ function Stat({ label, valor, divisor }: { label: string; valor: string; divisor
       <div className="font-heading text-[20px] font-extrabold tracking-[-0.03em]">{valor}</div>
       <div className="eyebrow mt-0.5 text-subtle">{label}</div>
     </div>
+  );
+}
+
+// Tarjeta que enlaza salvo que no haya a dónde ir (Lector): ahí es un bloque simple.
+function ContenedorEnlace({ href, className, children }: { href: string | null; className: string; children: React.ReactNode }) {
+  return href ? (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  ) : (
+    <div className={className}>{children}</div>
   );
 }

@@ -15,6 +15,7 @@ import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorio
 import { contarNoLeidos } from "@/lib/notificaciones/avisos";
 import { fechaConOffset, fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
+import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
 import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { EncabezadoPerfil, PastillaLector } from "@/components/vita/encabezado-perfil";
 import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
@@ -27,6 +28,7 @@ import { indicacionDeComida, textoDosis } from "@/lib/medicamentos/tipos";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { TurnosHome } from "./turnos-home";
+import { InicioSoloMirar } from "./inicio-solo-mirar";
 
 export default async function HomePage() {
   const usuario = await requireUser();
@@ -39,6 +41,11 @@ export default async function HomePage() {
   const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
   const pid = activo.id;
   const puedeEditar = activo.rol === "editar";
+
+  // Lector de otra persona: vista "solo mirar" (sin acciones ni menú).
+  if (esVistaSoloMirar(activo)) {
+    return <InicioSoloMirar usuario={usuario} activo={activo} opciones={opciones} />;
+  }
 
   const [perfil, medsHoy, todosLosMeds, adherencia, turnosProximos, grupos, noLeidos] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, pid),

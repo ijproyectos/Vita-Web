@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { COOKIE_PERFIL_ACTIVO, esPerfilValido } from "@/lib/familia/perfil-activo";
+import { hayPersonaConNombre } from "@/lib/familia/solo-mirar";
 import { enviarInvitacionPorMail } from "@/lib/cuidadores/correo";
 import { emailValido, origenPublico } from "@/lib/email/origen";
 import { permitirEnvio } from "@/lib/email/limite";
@@ -53,6 +54,20 @@ export async function cambiarPerfilActivoAction(id: string): Promise<ResultadoFa
   return { status: "success" };
 }
 
+/**
+ * Salida de la pantalla de error: deja de tener a otra persona elegida. No lee la
+ * familia, porque se usa justamente cuando esa lectura falla.
+ */
+export async function volverAMiPerfilAction(): Promise<ResultadoFamilia> {
+  await requireUser();
+  try {
+    (await cookies()).set(COOKIE_PERFIL_ACTIVO, "", { path: "/app", maxAge: 0 });
+  } catch {
+    return { status: "error", message: "No pudimos volver a tu perfil." };
+  }
+  return { status: "success" };
+}
+
 export type EstadoCrearPerfil = { status: "idle" } | ResultadoCrearPerfil;
 
 const MAXIMO_PERFILES_A_CARGO = 20;
@@ -81,9 +96,20 @@ export async function crearPerfilGestionadoAction(
   let resultado: ResultadoCrearPerfil;
   try {
     // Tope simple: cada perfil es una cuenta de auth nueva (no hay rate-limit en el proyecto).
-    const familia = await familiaNucleo.listarFamilia(await createClient());
+    // Con `leerFamilia` (y no `listarFamilia`, que devuelve [] si la lectura falla): sin la familia no se puede
+    // controlar el tope ni el nombre repetido, así que no se crea nada y se pide reintentar.
+    let familia: Awaited<ReturnType<typeof familiaNucleo.leerFamilia>>;
+    try {
+      familia = await familiaNucleo.leerFamilia(await createClient());
+    } catch {
+      return { status: "error", message: "No pudimos revisar tu Familia. Probá de nuevo." };
+    }
     if (familia.length >= MAXIMO_PERFILES_A_CARGO) {
       return { status: "error", message: `Ya tenés ${MAXIMO_PERFILES_A_CARGO} perfiles a cargo, el máximo por ahora.` };
+    }
+    // Evita duplicar a la persona si no vio la confirmación y vuelve a intentar.
+    if (hayPersonaConNombre(familia, nombre)) {
+      return { status: "error", message: `${nombre} ya está en tu Familia. Si es otra persona, agregale el apellido.` };
     }
     resultado = await familiaNucleo.crearPerfilGestionado(usuario.id, {
       nombre,
@@ -187,19 +213,27 @@ export async function invitarCuidadorAction(datos: {
   const relacion = typeof datos?.relacion === "string" && datos.relacion.trim() ? datos.relacion.trim().slice(0, 30) : null;
   if (!nombre) return { status: "error", message: "Escribí su nombre." };
   if (!emailValido(email)) return { status: "error", message: "Ingresá un email válido." };
-  if (!esRolVinculo(datos.rol)) return { status: "error", message: "Elegí un permiso." };
-  if (typeof datos.personaId !== "string" || !(await esPerfilValido(datos.personaId))) {
-    return { status: "error", message: "No tenés acceso a esa persona." };
+  const rol = datos?.rol;
+  if (!esRolVinculo(rol)) return { status: "error", message: "Elegí un permiso." };
+  const personaId = datos?.personaId;
+  if (typeof personaId !== "string") return { status: "error", message: "No tenés acceso a esa persona." };
+  // `esPerfilValido` lee la familia y puede fallar: una Server Action nunca lanza.
+  let accesoValido: boolean;
+  try {
+    accesoValido = await esPerfilValido(personaId);
+  } catch {
+    return { status: "error", message: "No pudimos revisar tu Familia. Probá de nuevo." };
   }
+  if (!accesoValido) return { status: "error", message: "No tenés acceso a esa persona." };
 
   try {
     const supabase = await createClient();
     const r = await familiaNucleo.invitarCuidador(supabase, usuario.id, {
-      elderId: datos.personaId,
+      elderId: personaId,
       email,
       nombre,
       relacion,
-      rol: datos.rol,
+      rol,
     });
     if (r.status === "error") return r;
 
@@ -207,7 +241,7 @@ export async function invitarCuidadorAction(datos: {
     const envio = permitirEnvio(r.vinculoId)
       ? await enviarInvitacionPorMail(
           supabase,
-          datos.personaId,
+          personaId,
           { email_invitado: email, token: r.token, expira_at: r.expiraAt },
           origen,
           usuario.id

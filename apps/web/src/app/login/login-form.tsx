@@ -12,6 +12,7 @@ import {
   CampoAuth,
   CampoPassword,
   CodigoSeisCajas,
+  GoogleLogo,
   IconoPegar,
   IconoReenviar,
   PantallaAuth,
@@ -68,13 +69,6 @@ const NEXT_CODIGO = "/onboarding/inicio?modo=codigo";
 // NEXT_PUBLIC_ENABLE_TEST_LOGIN=true en .env.local; Netlify no la define,
 // así que en producción este bloque ni se renderiza.
 const LOGIN_DE_PRUEBA = process.env.NEXT_PUBLIC_ENABLE_TEST_LOGIN === "true";
-
-// Logo de marca de Google: sus colores son fijos (no son tokens), por eso
-// vive como SVG estático en /public, igual que icon.svg.
-function GoogleLogo() {
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src="/google-g.svg" alt="" width={19} height={19} aria-hidden="true" />;
-}
 
 function LoginDePrueba({ next }: { next?: string }) {
   const [email, setEmail] = useState("");

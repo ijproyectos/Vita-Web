@@ -5,6 +5,9 @@
 export const COLORES_PERFIL = ["teal", "violeta", "ambar", "rosa", "azul"] as const;
 export type ColorPerfil = (typeof COLORES_PERFIL)[number];
 
+/** Lo que muestra la familia cuando una persona no tiene nombre cargado. */
+export const SIN_NOMBRE = "Sin nombre";
+
 export function esColorPerfil(valor: unknown): valor is ColorPerfil {
   return typeof valor === "string" && (COLORES_PERFIL as readonly string[]).includes(valor);
 }

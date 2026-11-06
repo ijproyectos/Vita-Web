@@ -10,6 +10,7 @@ import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { aplicaHoy, esDosisVencida, fechaAyerEnAR, fechaEnAR, filtrarDosisDeAyerVencidas, FIN_VENTANA_MEDIANOCHE, horaEnAR } from "@/lib/medicamentos/nucleo";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
 import {
+  SIN_NOMBRE,
   esColorPerfil,
   type EstadoHoyPerfil,
   esRolVinculo,
@@ -44,12 +45,20 @@ type FilaFamilia = {
 
 /** Personas que el usuario logueado cuida (vínculo aceptado). Nunca lanza: [] ante error. */
 export async function listarFamilia(supabase: Cliente): Promise<MiembroFamilia[]> {
+  return leerFamilia(supabase).catch(() => []);
+}
+
+/** No se pudo saber a quién cuida el usuario (distinto de "no cuida a nadie"). */
+export class ErrorLecturaFamilia extends Error {}
+
+/** Como `listarFamilia`, pero lanza `ErrorLecturaFamilia` si la lectura falla. */
+export async function leerFamilia(supabase: Cliente): Promise<MiembroFamilia[]> {
   const { data, error } = await supabase.rpc("listar_familia");
-  if (error || !data) return [];
-  return (data as FilaFamilia[]).map((f) => ({
+  if (error) throw new ErrorLecturaFamilia(`No se pudo leer la familia: ${error.message}`);
+  return ((data ?? []) as FilaFamilia[]).map((f) => ({
     vinculoId: f.vinculo_id,
     id: f.elder_id,
-    nombre: f.nombre?.trim() ? nombreConMayuscula(f.nombre) : "Sin nombre",
+    nombre: f.nombre?.trim() ? nombreConMayuscula(f.nombre) : SIN_NOMBRE,
     color: esColorPerfil(f.color) ? f.color : null,
     rol: esRolVinculo(f.rol) ? f.rol : "ver",
     relacion: f.relacion,
@@ -129,7 +138,7 @@ export async function listarMisCuidadores(supabase: Cliente): Promise<MiCuidador
   return (data as FilaCuidador[]).map((f) => ({
     vinculoId: f.vinculo_id,
     cuidadorId: f.cuidador_id,
-    nombre: f.nombre?.trim() || "Sin nombre",
+    nombre: f.nombre?.trim() || SIN_NOMBRE,
     rol: esRolVinculo(f.rol) ? f.rol : "ver",
     relacion: f.relacion,
   }));
@@ -304,7 +313,7 @@ export async function listarCuidadoresDe(supabase: Cliente, elderId: string): Pr
     return (data as FilaCuidadorDe[]).map((f) => ({
       vinculoId: f.vinculo_id,
       cuidadorId: f.cuidador_id,
-      nombre: f.nombre?.trim() ? nombreConMayuscula(f.nombre) : f.estado === "pendiente" ? "Invitado" : "Sin nombre",
+      nombre: f.nombre?.trim() ? nombreConMayuscula(f.nombre) : f.estado === "pendiente" ? "Invitado" : SIN_NOMBRE,
       rol: esRolVinculo(f.rol) ? f.rol : "ver",
       relacion: f.relacion,
       estado: f.estado === "pendiente" ? "pendiente" : "aceptado",

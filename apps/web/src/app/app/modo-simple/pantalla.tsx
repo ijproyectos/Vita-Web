@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
+import { useRefrescoPeriodico } from "@/components/vita/refresco-periodico";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -53,11 +54,6 @@ const CONFIRMACION_POR_VOZ = /\b(s[ií]|tom[eé]|listo|ya est[aá])\b/i;
 // server component, que recalcula el próximo grupo pendiente (u ninguno).
 type Fase = "esperando" | "alertado" | "confirmado" | "descanso";
 
-// Cada cuánto se pide un refresh del server component mientras la
-// pantalla sigue abierta — así "esperando" pasa solo a "alertado" cuando
-// vence el margen de gracia real (recalculado en el servidor con
-// esDosisVencida/horaEnAR), sin reimplementar esa cuenta acá.
-const INTERVALO_REFRESCO_MS = 45_000;
 
 export function Pantalla({
   usuarioId,
@@ -133,10 +129,9 @@ export function Pantalla({
   // ventana como estado visible.
   const [reproduciendoAudio, setReproduciendoAudio] = useState(false);
 
-  useEffect(() => {
-    const id = setInterval(() => router.refresh(), INTERVALO_REFRESCO_MS);
-    return () => clearInterval(id);
-  }, [router]);
+  // Así "esperando" pasa solo a "alertado" cuando vence el margen de gracia
+  // real, recalculado en el servidor (esDosisVencida/horaEnAR).
+  useRefrescoPeriodico();
 
   // Entrar al modo simple lo deja activo en este dispositivo: si la app se
   // cierra, al abrirla de nuevo vuelve acá y no al Inicio normal.
