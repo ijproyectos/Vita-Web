@@ -2,7 +2,11 @@
 // para que el cliente (overlay del chat, Perfil) pueda importar el tipo y la
 // barra sin arrastrar el cliente `service_role`.
 
+import type { Consultas } from "./interacciones-logica";
+
 export type UsoDiario = {
+  /** Consultas con vita de hoy (límite por interacciones). Ausente = no se pudo leer. */
+  consultas?: Consultas;
   usados: number;
   limite: number;
   restantes: number;

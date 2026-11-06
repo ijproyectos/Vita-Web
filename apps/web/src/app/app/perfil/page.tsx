@@ -149,6 +149,11 @@ export default async function PerfilPage() {
             <div className="text-[11.5px] font-medium text-subtle">
               {uso.porcentajeUsado}% de tu cupo de hoy usado
             </div>
+            {uso.consultas && (
+              <div className="text-[11.5px] font-medium text-subtle">
+                {uso.consultas.usadas} de {uso.consultas.limite} consultas de hoy
+              </div>
+            )}
           </div>
         )}
         <FilaNav icon="help" label="Ayuda y soporte" sub="Preguntas frecuentes y contacto" href="/app/perfil/ayuda" />

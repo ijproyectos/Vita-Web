@@ -11,7 +11,7 @@ import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { VitaIcon } from "@/lib/vita-icons";
 import { HistorialDrawer } from "./historial-drawer";
 import { listarSesionesAction, listarMensajesAction, obtenerUsoHoyAction } from "./chat-actions";
-import { BarraUso, barraUsoTono, textoRestante } from "@/components/uso-ia/barra-uso";
+import { BarraUso, barraUsoTono, sinCupo, textoConsultas, textoRestante } from "@/components/uso-ia/barra-uso";
 import type { UsoDiario } from "@/lib/uso-ia/tipos";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
 import type { SesionChat } from "@/lib/chat/tipos";
@@ -304,7 +304,7 @@ export function VitaChatOverlay({
 
   async function enviar(texto: string, pedidoReintentado?: string, confirmacionId?: string) {
     const limpio = texto.trim();
-    if (!limpio || enviando || (uso && uso.restantes <= 0)) return;
+    if (!limpio || enviando || sinCupo(uso)) return;
 
     const ahora = new Date().toISOString();
     const pedidoId = pedidoReintentado ?? crypto.randomUUID();
@@ -572,7 +572,7 @@ export function VitaChatOverlay({
           ? "typing"
           : moodAvatar;
 
-  const agotado = !!uso && uso.restantes <= 0;
+  const agotado = sinCupo(uso);
   const vacio = mensajes.length <= 1 && !enviando;
 
   return (
@@ -687,7 +687,7 @@ export function VitaChatOverlay({
                     : "text-muted-foreground")
               }
             >
-              {textoRestante(uso)}
+              {uso.consultas && uso.restantes > 0 ? textoConsultas(uso) : textoRestante(uso)}
             </p>
           </div>
         )}

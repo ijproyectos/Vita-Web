@@ -118,7 +118,8 @@ export default function TerminosPage() {
             inteligencia artificial y de voz, como se detalla en la Política de Privacidad.
           </li>
           <li>
-            Hay un límite diario de uso de la inteligencia artificial por persona. Cuando se alcanza, esas funciones
+            Hay un límite diario de uso de la inteligencia artificial por persona, que incluye una cantidad máxima de consultas
+            por día a vita (15, salvo que te asignemos otro número; también rige con vita+). Cuando se alcanza, esas funciones
             quedan pausadas hasta la medianoche (hora de Argentina); el resto de la aplicación sigue funcionando.
           </li>
         </Lista>
