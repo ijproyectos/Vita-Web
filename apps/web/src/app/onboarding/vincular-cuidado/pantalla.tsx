@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { VMark } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
+import { mensajeInvitacionVinculo } from "@/lib/acceso-codigo/enlace";
 import { enviarCodigoPorMailAction, generarVinculoAction, type EstadoVinculoGenerado } from "./actions";
 
 // Mismo dominio de producción que el resto de la app (ver CLAUDE.md /
@@ -112,7 +113,6 @@ function ContenidoListo({
   onRegenerar: () => void;
   onCodigoNuevo: (codigo: string, expiraAt: string, aviso: string) => void;
 }) {
-  const url = `${URL_BASE}/onboarding/inicio?codigo=${codigo}`;
   // `ahora` se refresca cada 30 s desde un intervalo (setState dentro del
   // callback del intervalo, no en el cuerpo del efecto).
   const [ahora, setAhora] = useState(() => new Date().getTime());
@@ -126,7 +126,7 @@ function ContenidoListo({
   const minutosRestantes = Math.max(1, Math.ceil(msRestantes / 60000));
 
   function compartirWhatsApp() {
-    const texto = `Te invito a usar vita para ayudarme con tu salud. Ingresá este código cuando te pida "¿tenés un código?": ${codigo}\n\n${url}`;
+    const texto = mensajeInvitacionVinculo({ codigo, origen: URL_BASE });
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
   }
 

@@ -1,3 +1,4 @@
+import { urlCodigo } from "@/lib/acceso-codigo/enlace";
 import { codigoVinculacion } from "@/lib/email/plantillas/codigo-vinculacion";
 import { invitacionCuidador } from "@/lib/email/plantillas/invitacion-cuidador";
 
@@ -24,7 +25,7 @@ export async function GET(request: Request, ctx: RouteContext<"/dev/emails/[plan
             nombreCuidador: "Lucía",
             codigo: "482916",
             minutosVigencia: 30,
-            urlIngreso: `${origen}/login?next=${encodeURIComponent("/onboarding/inicio?codigo=482916")}`,
+            urlIngreso: urlCodigo(origen, "482916"),
             origen,
           })
         : null;

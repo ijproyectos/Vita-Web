@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { enviarEmail, type ResultadoEnvio } from "@/lib/email/smtp";
 import { invitacionCuidador } from "@/lib/email/plantillas/invitacion-cuidador";
 import { codigoVinculacion } from "@/lib/email/plantillas/codigo-vinculacion";
+import { urlCodigo } from "@/lib/acceso-codigo/enlace";
 import { obtenerPerfil } from "@/lib/perfil/nucleo";
 import type { VinculoCuidador } from "./tipos";
 
@@ -43,8 +44,8 @@ export async function enviarInvitacionPorMail(
 
 /**
  * Manda el código de 6 dígitos (dirección b) a la persona cuidada. El link
- * lleva a /login con `next` apuntando a /onboarding/inicio?codigo=XXXXXX,
- * el mismo deep link del mensaje de WhatsApp (ahí el código ya llega pre-cargado).
+ * lleva al link corto /c/XXXXXX, el mismo del mensaje de WhatsApp: abre directo
+ * la pantalla de ingreso de código con el código ya escrito (sin loguearse antes).
  */
 export async function enviarCodigoPorMail(
   supabase: SupabaseClient,
@@ -57,12 +58,11 @@ export async function enviarCodigoPorMail(
   const nombreCuidador = await nombreDe(supabase, cuidadorId);
   const msRestantes = new Date(expiraAt).getTime() - new Date().getTime();
   const minutosVigencia = Math.max(1, Math.round(msRestantes / 60000));
-  const destino = `/onboarding/inicio?codigo=${codigo}`;
   const plantilla = codigoVinculacion({
     nombreCuidador,
     codigo,
     minutosVigencia,
-    urlIngreso: `${origen}/login?next=${encodeURIComponent(destino)}`,
+    urlIngreso: urlCodigo(origen, codigo),
     origen,
   });
   return enviarEmail({ para, ...plantilla });

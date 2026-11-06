@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
+import { mensajeCodigoAcceso } from "@/lib/acceso-codigo/enlace";
 
 // Tarjeta "Código para X" de V7 (Conectar su celular): seis cajas con el
 // código, "Enviar por WhatsApp", "Copiar" y "Se lo leo por teléfono". El código
@@ -34,7 +34,7 @@ export function PanelCodigoAcceso({
   const minutos = Math.max(1, Math.ceil(restanteMs / 60000));
 
   function mensaje() {
-    return `Tu código para entrar a vita: ${codigo}. Abrí ${window.location.origin}/login, tocá «Tengo un código» y escribilo. Vence en ${MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos y sirve una sola vez.`;
+    return mensajeCodigoAcceso({ codigo, origen: window.location.origin });
   }
 
   function whatsapp() {

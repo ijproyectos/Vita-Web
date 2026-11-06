@@ -121,8 +121,17 @@ function LoginDePrueba({ next }: { next?: string }) {
   );
 }
 
-export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaEliminada?: boolean }) {
-  const [vista, setVista] = useState<Vista>("bienvenida");
+export function LoginForm({
+  next,
+  cuentaEliminada,
+  codigoInicial,
+}: {
+  next?: string;
+  cuentaEliminada?: boolean;
+  /** Código ya validado (6 dígitos) que vino del link corto /c/[codigo]: abre la vista de código con las cajas llenas. */
+  codigoInicial?: string;
+}) {
+  const [vista, setVista] = useState<Vista>(codigoInicial ? "codigo" : "bienvenida");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nombre, setNombre] = useState("");
@@ -132,7 +141,7 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
   const [motivoEnviado, setMotivoEnviado] = useState<"crear" | "olvide">("crear");
   const [puedeReenviar, setPuedeReenviar] = useState(false);
   // Código de 6 dígitos (login de quien no tiene Google).
-  const [codigo, setCodigo] = useState("");
+  const [codigo, setCodigo] = useState(codigoInicial ?? "");
   const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
   const [enviandoCodigo, startCodigo] = useTransition();
   const [vistaPrevia, setVistaPrevia] = useState<VistaPreviaCodigo | null>(null);
@@ -359,6 +368,10 @@ export function LoginForm({ next, cuentaEliminada }: { next?: string; cuentaElim
           <CodigoSeisCajas valor={codigo} onChange={cambiarCodigo} autoFocus disabled={enviandoCodigo} />
         </form>
         {errorCodigo && <AvisoAuth>{errorCodigo}</AvisoAuth>}
+        {/* Con el código precargado del link no hubo tipeo que dispare el envío: nunca se manda solo. */}
+        {codigo.length === 6 && !enviandoCodigo && (
+          <BotonCta type="button" onClick={() => cambiarCodigo(codigo)}>Continuar</BotonCta>
+        )}
         <BotonPildora onClick={pegarCodigo} disabled={enviandoCodigo}>
           <IconoPegar />
           {enviandoCodigo ? "Entrando…" : "Pegar código"}
