@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
@@ -26,7 +27,10 @@ export default async function ResumenSaludPage() {
     activo.esPropio ? medicamentos.calcularAdherencia(supabase, activo.id).catch(() => null) : Promise.resolve(null),
   ]);
 
-  if (!perfil) return null; // requireUser ya garantiza sesión; perfiles se crea en el callback de auth
+  // El perfil propio siempre existe (se crea en el callback de auth). Si no llega el de otra persona (un Lector
+  // mirando a alguien cuya fila no se pudo leer), en vez de una página en blanco sin salida se le ofrece llevar
+  // su propia salud en vita.
+  if (!perfil) redirect("/app/tu-salud");
 
   // Un Lector mirando a otra persona no tiene las pantallas de edición ni de
   // listas: el resumen ya muestra todo, así que no se ofrecen esos enlaces.

@@ -54,7 +54,9 @@ export function esVistaSoloMirar(activo: { esPropio: boolean; rol: string }): bo
 // sobre la cuenta propia o son de solo lectura. Todo lo demás (rutina, mi
 // salud, edición de perfil, medicamentos, turnos, pastillas, altas) vuelve al
 // inicio. Es solo navegación: los datos los protegen la RLS y las acciones.
-const RUTAS_EXACTAS_SOLO_MIRAR = ["/app", "/app/resumen-salud"];
+// Familia: solo la lista ("Agregar a alguien") y crear un perfil propio; las fichas de cada persona
+// (/app/familia/<id>/...) son de gestión del Admin y no se abren desde la vista de solo mirar.
+const RUTAS_EXACTAS_SOLO_MIRAR = ["/app", "/app/resumen-salud", "/app/tu-salud", "/app/familia", "/app/familia/nuevo"];
 const RUTAS_CON_SUBRUTAS_SOLO_MIRAR = [
   "/app/avisos",
   "/app/perfil/seguridad",
@@ -66,8 +68,6 @@ const RUTAS_CON_SUBRUTAS_SOLO_MIRAR = [
   "/app/perfil/eliminar-cuenta",
   // El inicio redirige ahí si el modo simple propio está activo (si no, bucle).
   "/app/modo-simple",
-  // "Agregar a alguien" del selector de perfiles.
-  "/app/familia",
   "/app/vita-plus",
 ];
 

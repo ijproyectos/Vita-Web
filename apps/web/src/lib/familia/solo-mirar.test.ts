@@ -69,7 +69,7 @@ describe("rutaPermitidaSoloMirar", () => {
     "/app/modo-simple/charla",
     "/app/familia",
     "/app/familia/nuevo",
-    "/app/familia/abc/cuidadores/xyz",
+    "/app/tu-salud",
     "/app/vita-plus",
     "/app/vita-plus/gracias",
   ])("permite %s", (ruta) => {
@@ -92,6 +92,9 @@ describe("rutaPermitidaSoloMirar", () => {
     "/app/resumen-salud/otra",
     "/app/perfil/contacto-emergencia",
     "/app/perfil/cuidadores",
+    "/app/familia/abc",
+    "/app/familia/abc/cuidadores/xyz",
+    "/app/familia/abc/modo-simple",
     "/",
     "/cuidar",
   ])("bloquea %s", (ruta) => {

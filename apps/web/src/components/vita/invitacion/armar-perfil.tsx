@@ -8,10 +8,13 @@ export function ArmarPerfil({
   nombre,
   persona,
   invitador,
+  titulo,
   onConVita,
   onYo,
   onAhoraNo,
 }: {
+  /** Título propio (por defecto: "Llevá tu salud en vita, <nombre>"). */
+  titulo?: string;
   nombre?: string | null;
   /** A quien ya cuida (para aclarar que sigue viéndola). */
   persona?: string | null;
@@ -30,7 +33,7 @@ export function ArmarPerfil({
   return (
     <PantallaInvitada>
       <div className="flex flex-1 flex-col">
-        <TituloAuth titulo={primero ? `Llevá tu salud en vita, ${primero}` : "Llevá tu salud en vita"} />
+        <TituloAuth titulo={titulo ?? (primero ? `Llevá tu salud en vita, ${primero}` : "Llevá tu salud en vita")} />
         <ul className="mt-7 flex flex-col gap-3.5">
           {beneficios.map((b) => (
             <li key={b.icono} className="flex items-center gap-3 text-[15.5px] font-semibold">
