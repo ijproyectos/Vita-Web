@@ -20,6 +20,8 @@ import { EncabezadoPerfil, PastillaLector } from "@/components/vita/encabezado-p
 import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
 import { TarjetaDosisVencida, type DosisVencida } from "@/components/vita/tarjeta-dosis-vencida";
 import { TarjetaEmpecemos } from "@/components/vita/tarjeta-empecemos";
+import { TarjetaCumpleanos } from "@/components/vita/tarjeta-cumpleanos";
+import { edadQueCumple } from "@/lib/onboarding/nacimiento";
 import { TiraStock, type ItemStockBajo } from "@/components/vita/tira-stock";
 import { indicacionDeComida, textoDosis } from "@/lib/medicamentos/tipos";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
@@ -87,6 +89,8 @@ export default async function HomePage() {
   const nombre = nombreCompleto.split(" ")[0];
   // El punto de la campana es la cuenta de avisos sin leer del centro (/app/avisos).
   const hayAvisos = noLeidos > 0;
+  // Cumpleaños (fecha AR; solo con fecha de nacimiento completa): propio o de la persona a cargo que se está viendo.
+  const edadCumple = edadQueCumple(perfil?.fecha_nacimiento, fechaDeHoyISO());
 
   // Adherencia de hoy: un segmento por toma, en orden horario. "Sigue" es la
   // primera toma sin marcar.
@@ -123,6 +127,8 @@ export default async function HomePage() {
           </Link>
         }
       />
+
+      {edadCumple !== null && <TarjetaCumpleanos nombre={nombre} edad={edadCumple} esPropio={activo.esPropio} />}
 
       {activo.esPropio && <TarjetaAvisosApagados />}
 

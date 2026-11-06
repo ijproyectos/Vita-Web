@@ -25,7 +25,7 @@ import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicion
 import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { leerPersona } from "@/lib/ai/persona-jarvis";
 import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
-import { SYSTEM_PROMPT, armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
+import { SYSTEM_PROMPT, armarSystemChat, bloqueCumpleanos, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
 import {
   ejecutarToolIdempotente,
   normalizarPedidoId,
@@ -50,6 +50,7 @@ import { LIMITE_MICRO_USD_DIARIO } from "@/lib/uso-ia/limite";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { descripcionAhoraEnAR, fechaDeHoyISO } from "@/lib/rutina/formato";
+import { cumpleanerosDeHoy } from "@/lib/notificaciones/cumpleanos-logica";
 import { listarHoy } from "@/lib/medicamentos/nucleo";
 import { textoDosis } from "@/lib/medicamentos/tipos";
 import { listarDeHoy } from "@/lib/turnos/nucleo";
@@ -106,6 +107,28 @@ async function construirContextoHoy(supabase: Awaited<ReturnType<typeof createCl
       return `${limpiarDato(t.especialidad)} ${t.hora.slice(0, 5)}${lugar}`;
     });
     return bloqueHoy(textoMeds, textoTurnos);
+  } catch {
+    return "";
+  }
+}
+
+// Cumpleaños de hoy (fecha AR) de quien chatea y de las personas que cuida, al bloque DINÁMICO del
+// prompt. Con RLS (el cuidador lee el perfil de quien cuida); si falla, se omite.
+async function construirContextoCumple(
+  supabase: Awaited<ReturnType<typeof createClientConDispositivo>>,
+  usuarioId: string,
+  familia: { id: string; nombre: string }[]
+): Promise<string> {
+  try {
+    const hoy = fechaDeHoyISO();
+    const ids = [usuarioId, ...familia.map((f) => f.id)];
+    const { data } = await supabase.from("perfiles").select("id, nombre, fecha_nacimiento").in("id", ids).not("fecha_nacimiento", "is", null);
+    const cumplen = cumpleanerosDeHoy((data ?? []) as { id: string; nombre: string | null; fecha_nacimiento: string | null }[], hoy).map((p) => ({
+      nombre: limpiarDato(p.nombre?.trim().split(/\s+/)[0] || "esa persona", 40),
+      edad: p.cumple,
+      propio: p.id === usuarioId,
+    }));
+    return bloqueCumpleanos(cumplen);
   } catch {
     return "";
   }
@@ -414,6 +437,7 @@ export async function POST(request: Request) {
         if (respuestaUsuario === "no") await purgarPendientes(supabase, user.id);
 
         const contextoHoy = await construirContextoHoy(supabase, user.id);
+        const contextoCumple = await construirContextoCumple(supabase, user.id, familia);
 
         // Prompt caching: el bloque estático (reglas + tools, que se renderizan antes) lleva el breakpoint; todo
         // lo volátil (Personas, Hoy, fecha) va en un segundo bloque SIN cache_control, después del breakpoint.
@@ -451,6 +475,7 @@ export async function POST(request: Request) {
         const contextoDinamico = contextoDinamicoChat({
           contextoPerfil,
           contextoHoy,
+          contextoCumple,
           contextoMemoria: textoMemoria,
           ahora: descripcionAhoraEnAR(),
           hoyISO: fechaDeHoyISO(),

@@ -53,8 +53,11 @@ type Respuestas = {
 // diferencia del chat real con vita). Al terminar, siembra
 // condiciones/alergias/medicamentos reales y marca el onboarding como
 // completo.
-export function EncuestaOnboarding() {
-  const [guion, setGuion] = useState<PasoScript[]>(GUION_BASE);
+export function EncuestaOnboarding({ edadConocida = false }: { edadConocida?: boolean }) {
+  // Si la edad ya se dijo (en la charla de /onboarding/conversar, que guarda la
+  // fecha o el año de nacimiento), este guion no la vuelve a preguntar.
+  const [pasosIniciales] = useState<PasoScript[]>(() => (edadConocida ? GUION_BASE.filter((p) => p.id !== "edad") : GUION_BASE));
+  const [guion, setGuion] = useState<PasoScript[]>(pasosIniciales);
   const [paso, setPaso] = useState(0);
   const [mensajes, setMensajes] = useState<MensajeEncuesta[]>([]);
   // Arranca en true (el paso 0 siempre tiene un mensaje viniendo) — así el
@@ -76,7 +79,7 @@ export function EncuestaOnboarding() {
   // veces para el mismo paso — una por el cambio de `guion`, otra por el
   // de `paso` — duplicando la burbuja de vita. Solo se escribe desde
   // `insertarPasos` (event handler), nunca en el cuerpo de render.
-  const guionRef = useRef<PasoScript[]>(GUION_BASE);
+  const guionRef = useRef<PasoScript[]>(pasosIniciales);
 
   useEffect(() => {
     const actual = guionRef.current[paso];

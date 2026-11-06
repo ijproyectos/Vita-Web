@@ -59,6 +59,8 @@ const ESTILO_POR_TIPO: Record<string, Estilo> = {
   persona_en_vita: OK,
   pedido_ayuda: { icon: "alert-triangle", clases: "bg-destructive/10 text-destructive" },
   resumen_dia_persona: OK,
+  cumpleanos: { icon: "sparkle", clases: OK.clases },
+  cumpleanos_persona: { icon: "sparkle", clases: OK.clases },
   admin_mensaje: { icon: "sparkle", clases: OK.clases },
 };
 
