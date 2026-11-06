@@ -5,31 +5,35 @@ import { requireUser } from "@/lib/dal";
 import * as chat from "@/lib/chat/nucleo";
 import { obtenerUsoHoy } from "@/lib/uso-ia/nucleo";
 import type { UsoDiarioConEstado } from "@/lib/uso-ia/tipos";
-import type { MensajeChat, SesionChat } from "@/lib/chat/tipos";
+import type { MensajeChat } from "@/lib/chat/tipos";
 import { deshacerMemoria } from "@/lib/memoria/nucleo";
 
 // Server Actions consumidas por el overlay de chat (componente cliente,
 // no una página) — reemplazan el fetch en el server component que hacía
 // el viejo /app/chat/page.tsx.
 
-export async function listarSesionesAction(): Promise<SesionChat[]> {
-  const usuario = await requireUser();
-  const supabase = await createClient();
-  return chat.listarSesiones(supabase, usuario.id);
-}
+export type PaginaHilo =
+  | { status: "success"; mensajes: MensajeChat[]; hayMas: boolean }
+  | { status: "error" };
 
-export async function listarMensajesAction(sesionId: string): Promise<MensajeChat[]> {
-  const usuario = await requireUser();
-  const supabase = await createClient();
-  return chat.listarMensajes(supabase, usuario.id, sesionId);
-}
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:\d{2})$/;
 
-// Ya no redirige (no hay a dónde — el chat es un overlay, no una ruta) —
-// el cliente resetea su propio estado local después de llamar a esto.
-export async function eliminarHistorialAction(): Promise<void> {
-  const usuario = await requireUser();
-  const supabase = await createClient();
-  await chat.eliminarHistorial(supabase, usuario.id);
+/**
+ * Página del hilo continuo (últimos 7 días, todas las sesiones). Sin `antesDe` trae lo más reciente; con
+ * `antesDe` (created_at del más viejo que ya se ve) trae la página anterior. Nunca lanza.
+ */
+export async function cargarHiloAction(antesDe?: string): Promise<PaginaHilo> {
+  try {
+    if (antesDe !== undefined && (typeof antesDe !== "string" || !FECHA_RE.test(antesDe) || Number.isNaN(Date.parse(antesDe)))) {
+      return { status: "error" };
+    }
+    const usuario = await requireUser();
+    const supabase = await createClient();
+    const { mensajes, hayMas } = await chat.listarHilo(supabase, usuario.id, { antesDe });
+    return { status: "success", mensajes, hayMas };
+  } catch {
+    return { status: "error" };
+  }
 }
 
 // Uso diario de IA para el indicador del chat. Nunca lanza: null = ocultar.

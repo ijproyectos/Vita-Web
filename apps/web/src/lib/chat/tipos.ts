@@ -7,10 +7,3 @@ export type MensajeChat = {
   contenido: string;
   created_at: string;
 };
-
-export type SesionChat = {
-  id: string;
-  created_at: string;
-  updated_at: string;
-  ultimoMensaje: string | null;
-};

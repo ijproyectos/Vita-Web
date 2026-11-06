@@ -108,7 +108,8 @@ export default function TerminosPage() {
           </li>
           <li>
             <strong>Memoria:</strong> vita puede recordar lo que le contás para tenerlo presente en otras
-            conversaciones, y arma un resumen de lo que hablaron. Durante la noche revisa esos recuerdos para unir los
+            conversaciones, y arma un resumen de lo que hablaron. Los mensajes del chat se guardan 7 días y después se borran solos; lo que vita recuerda
+            y el resumen se conservan hasta que los borres. Durante la noche revisa esos recuerdos para unir los
             repetidos y, si dos se contradicen, te pregunta cuál vale. La memoria viene activada: podés verla, borrar
             un recuerdo, olvidar todo o apagarla desde Perfil → Privacidad y datos → Lo que vita recuerda de vos. En el modo
             simple vita no usa memoria.

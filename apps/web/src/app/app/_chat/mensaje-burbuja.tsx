@@ -8,6 +8,8 @@ export type MensajeChatUI = {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  /** Saludo inicial local (no es parte del hilo guardado). */
+  bienvenida?: boolean;
   accion?: { type: string; [clave: string]: unknown };
   // Botones de respuesta rápida (confirmaciones de familia), armados por el servidor.
   opciones?: string[];

@@ -1,8 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { borrarRecuerdosDeSesionesHasta, invalidarResumen } from "@/lib/memoria/privacidad";
-import type { MensajeChat, RolMensaje, SesionChat } from "./tipos";
+import { armarPagina, elegirSesionActiva, inicioVentanaChat, TAMANO_PAGINA_CHAT } from "./hilo";
+import type { MensajeChat, RolMensaje } from "./tipos";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts: funciones puras
 // (supabase, usuarioId, ...) => resultado, sin acoplarse a la ruta de API
@@ -10,96 +10,55 @@ import type { MensajeChat, RolMensaje, SesionChat } from "./tipos";
 // desincronizarse entre la UI y /api/chat.
 type Cliente = SupabaseClient;
 
-export async function listarSesiones(
-  supabase: Cliente,
-  usuarioId: string
-): Promise<SesionChat[]> {
-  const { data: sesiones, error } = await supabase
-    .from("sesiones_chat")
-    .select("id, created_at, updated_at")
-    .eq("usuario_id", usuarioId)
-    .order("updated_at", { ascending: false });
-
-  if (error) throw new Error(`No se pudieron leer las sesiones de chat: ${error.message}`);
-  if (!sesiones || sesiones.length === 0) return [];
-
-  // Último mensaje de cada sesión, para el preview del drawer (replica
-  // `session.history.last.text` del ChatProvider original). Una sola
-  // query ordenada desc + quedarse con la primera ocurrencia por sesión,
-  // en vez de N queries.
-  const { data: mensajes, error: errorMensajes } = await supabase
-    .from("mensajes_chat")
-    .select("sesion_id, contenido, created_at")
-    .eq("usuario_id", usuarioId)
-    .order("created_at", { ascending: false });
-
-  if (errorMensajes) throw new Error(`No se pudo leer el preview de las sesiones: ${errorMensajes.message}`);
-
-  const ultimoPorSesion = new Map<string, string>();
-  for (const m of mensajes ?? []) {
-    if (!ultimoPorSesion.has(m.sesion_id as string)) {
-      ultimoPorSesion.set(m.sesion_id as string, m.contenido as string);
-    }
-  }
-
-  return sesiones.map((s) => ({
-    ...s,
-    ultimoMensaje: ultimoPorSesion.get(s.id) ?? null,
-  }));
-}
-
 /**
- * Confirma que `sesionId` existe y pertenece a `usuarioId` antes de
- * escribir en ella. Necesario porque el insert de mensajes_chat solo
- * valida `usuario_id = auth.uid()` en su policy RLS — nada impide, a
- * nivel de base, insertar un mensaje propio con un sesion_id ajeno si el
- * llamador no lo verifica antes (ej. un ?sesion=<uuid-ajeno> manipulado
- * a mano en la URL). Sin este chequeo, el insert "funcionaría" pero
- * quedaría huérfano: el update de updated_at de esa sesión no matchearía
- * ninguna fila (0 rows, sin error) y el mensaje nunca aparecería en
- * ningún listado real de nadie.
+ * Sesión donde se escribe: una conversación continua por persona. Se reutiliza la de actividad más reciente (las
+ * viejas de antes del hilo único siguen existiendo y se leen juntas por `usuario_id`) y solo se crea una si no hay.
  */
-export async function sesionPerteneceAUsuario(
-  supabase: Cliente,
-  usuarioId: string,
-  sesionId: string
-): Promise<boolean> {
+export async function obtenerSesionActiva(supabase: Cliente, usuarioId: string): Promise<string> {
   const { data, error } = await supabase
     .from("sesiones_chat")
-    .select("id")
-    .eq("id", sesionId)
+    .select("id, updated_at")
     .eq("usuario_id", usuarioId)
-    .maybeSingle();
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`No se pudo leer la sesión de chat: ${error.message}`);
+  const activa = elegirSesionActiva((data ?? []) as { id: string; updated_at: string }[]);
+  if (activa) return activa.id;
 
-  if (error) throw new Error(`No se pudo verificar la sesión: ${error.message}`);
-  return data !== null;
-}
-
-export async function crearSesion(supabase: Cliente, usuarioId: string): Promise<string> {
-  const { data, error } = await supabase
+  const { data: creada, error: errorCrear } = await supabase
     .from("sesiones_chat")
     .insert({ usuario_id: usuarioId })
     .select("id")
     .single();
-
-  if (error) throw new Error(`No se pudo crear la sesión de chat: ${error.message}`);
-  return data.id as string;
+  if (errorCrear) throw new Error(`No se pudo crear la sesión de chat: ${errorCrear.message}`);
+  return creada.id as string;
 }
 
-export async function listarMensajes(
+/**
+ * Una página del hilo: mensajes de los últimos 7 días de TODAS las sesiones de la persona, cronológicos.
+ * `antesDe` (created_at del más viejo ya cargado) sube a páginas anteriores; `hayMas` dice si queda algo más viejo.
+ */
+export async function listarHilo(
   supabase: Cliente,
   usuarioId: string,
-  sesionId: string
-): Promise<MensajeChat[]> {
-  const { data, error } = await supabase
+  opciones: { antesDe?: string; limite?: number; ahoraMs?: number } = {}
+): Promise<{ mensajes: MensajeChat[]; hayMas: boolean }> {
+  const limite = Math.max(1, Math.min(opciones.limite ?? TAMANO_PAGINA_CHAT, 100));
+  let q = supabase
     .from("mensajes_chat")
-    .select("*")
+    .select("id, sesion_id, role, contenido, created_at")
     .eq("usuario_id", usuarioId)
-    .eq("sesion_id", sesionId)
-    .order("created_at", { ascending: true });
-
+    .gte("created_at", inicioVentanaChat(opciones.ahoraMs ?? Date.now()));
+  if (opciones.antesDe) q = q.lt("created_at", opciones.antesDe);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(limite + 1);
   if (error) throw new Error(`No se pudieron leer los mensajes: ${error.message}`);
-  return data as MensajeChat[];
+  return armarPagina((data ?? []) as MensajeChat[], limite);
+}
+
+/** Cola del hilo que se le manda al modelo: los últimos `limite` mensajes (7 días) de la persona, cronológicos. */
+export async function listarCola(supabase: Cliente, usuarioId: string, limite: number): Promise<MensajeChat[]> {
+  const { mensajes } = await listarHilo(supabase, usuarioId, { limite });
+  return mensajes;
 }
 
 export async function guardarMensaje(
@@ -129,18 +88,4 @@ export async function guardarMensaje(
 
   // Id del mensaje guardado: los recuerdos que vita saque de él lo apuntan como origen.
   return typeof fila?.id === "string" ? fila.id : null;
-}
-
-/**
- * Borra todas las sesiones (y por cascade sus mensajes) del usuario —
- * replica clearHistory() del ChatProvider original.
- */
-export async function eliminarHistorial(supabase: Cliente, usuarioId: string): Promise<void> {
-  // Lo que vita recordó de estas conversaciones se borra con ellas (antes: después ya no se encuentran sus mensajes).
-  const recuerdos = await borrarRecuerdosDeSesionesHasta(supabase, usuarioId, new Date(Date.now() + 60_000).toISOString());
-  if (!recuerdos.ok) throw new Error("No se pudo borrar lo que vita recordaba de estas conversaciones.");
-  const { error } = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId);
-  if (error) throw new Error(`No se pudo borrar el historial: ${error.message}`);
-  // Un resumen armado entre la invalidación de arriba y el borrado podría traer texto de lo que se acaba de borrar.
-  await invalidarResumen(supabase);
 }

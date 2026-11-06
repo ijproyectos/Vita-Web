@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { clasificarFinDeStream } from "@/lib/chat/fin-stream";
@@ -9,12 +9,12 @@ import { useChatOverlay } from "@/lib/chat/overlay-context";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { VitaIcon } from "@/lib/vita-icons";
-import { HistorialDrawer } from "./historial-drawer";
-import { listarSesionesAction, listarMensajesAction, obtenerUsoHoyAction } from "./chat-actions";
+import { cargarHiloAction, obtenerUsoHoyAction } from "./chat-actions";
 import { BarraUso, barraUsoTono, sinCupo, textoConsultas, textoRestante } from "@/components/uso-ia/barra-uso";
 import type { UsoDiario } from "@/lib/uso-ia/tipos";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
-import type { SesionChat } from "@/lib/chat/tipos";
+import { separadorAntes } from "@/lib/chat/hilo";
+import type { MensajeChat } from "@/lib/chat/tipos";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob, extraerFrasesListas } from "@/lib/voz/hablar-cliente";
@@ -45,8 +45,13 @@ function moodValido(mood: unknown): EstadoAvatar {
   return MOOD_A_ESTADO[typeof mood === "string" ? mood : "neutral"] ?? "idle";
 }
 
+function aMensajeUI(m: MensajeChat): MensajeChatUI {
+  return { role: m.role, content: m.contenido, timestamp: m.created_at };
+}
+
 function mensajeBienvenida(): MensajeChatUI {
   return {
+    bienvenida: true,
     role: "assistant",
     content: "Hola 👋 Soy vita. ¿Cómo puedo ayudarte hoy?",
     timestamp: new Date().toISOString(),
@@ -84,13 +89,15 @@ export function VitaChatOverlay({
 }) {
   const router = useRouter();
   const { abierto, mensajeInicial, cerrar } = useChatOverlay();
-  const cargadoRef = useRef(false); // no es estado reactivo — solo evita re-pedir sesiones
-  const [sesionId, setSesionId] = useState<string | null>(null);
-  const [sesiones, setSesiones] = useState<SesionChat[]>([]);
+  const cargadoRef = useRef(false); // no es estado reactivo — solo evita re-pedir el hilo
+  const [hayMas, setHayMas] = useState(false); // quedan mensajes más viejos (dentro de los 7 días) para subir a buscar
+  const [cargandoMas, setCargandoMas] = useState(false);
+  // Cuántos mensajes se sumaron ARRIBA: las keys cuentan desde el primero cargado, así los de abajo no se remontan.
+  const [prefijo, setPrefijo] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [mensajes, setMensajes] = useState<MensajeChatUI[]>([mensajeBienvenida()]);
   const [entrada, setEntrada] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [historialAbierto, setHistorialAbierto] = useState(false);
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
   const [modoVoz, setModoVoz] = useState(false);
   const [hablando, setHablando] = useState(false);
@@ -186,20 +193,19 @@ export function VitaChatOverlay({
 
   // Escape cierra el chat. Se lee cerrarChat vía ref (actualizada en un
   // efecto, nunca durante el render) para no re-suscribir el listener en
-  // cada render. Con el drawer de historial abierto, Escape lo cierra a él
-  // (lo maneja el propio Sheet) y no al chat entero.
+  // cada render.
   const cerrarChatRef = useRef(cerrarChat);
   useEffect(() => {
     cerrarChatRef.current = cerrarChat;
   });
   useEffect(() => {
-    if (!abierto || historialAbierto) return;
+    if (!abierto) return;
     function alPresionar(e: KeyboardEvent) {
       if (e.key === "Escape") cerrarChatRef.current();
     }
     window.addEventListener("keydown", alPresionar);
     return () => window.removeEventListener("keydown", alPresionar);
-  }, [abierto, historialAbierto]);
+  }, [abierto]);
 
   // Silenciar corta todo en el mismo click (nada de efectos): habla en
   // curso, cola pendiente, modo voz y micrófono. Desilenciar NO reactiva la
@@ -242,17 +248,22 @@ export function VitaChatOverlay({
     setModoVoz(true);
   }
 
-  // Carga el historial de sesiones recién la primera vez que se abre, no
-  // en cada carga de página (el overlay está siempre montado). `cargadoRef`
-  // es un ref (no estado) a propósito: marcarlo no debe disparar un
-  // re-render, así que no cae en la regla de "no setState síncrono en un
-  // efecto" — la única actualización de estado real acá es setSesiones,
-  // dentro del .then() (async), no en el cuerpo síncrono del efecto.
+  // Carga el hilo (últimos 7 días) y el uso recién la primera vez que se abre, no en cada carga de página (el
+  // overlay está siempre montado). `cargadoRef` es un ref (no estado) a propósito: marcarlo no debe disparar un
+  // re-render, así que no cae en la regla de "no setState síncrono en un efecto": el estado se actualiza dentro
+  // del .then() (async), nunca en el cuerpo del efecto.
   useEffect(() => {
     if (!abierto || cargadoRef.current) return;
     cargadoRef.current = true;
-    listarSesionesAction()
-      .then(setSesiones)
+    cargarHiloAction()
+      .then((r) => {
+        if (r.status !== "success" || r.mensajes.length === 0) return;
+        const guardados = r.mensajes.map(aMensajeUI);
+        // Si la persona ya escribió mientras cargaba, lo nuevo queda debajo; la bienvenida sobra con historia.
+        setMensajes((prev) => [...guardados, ...prev.filter((m) => !m.bienvenida)]);
+        setHayMas(r.hayMas);
+        requestAnimationFrame(() => finRef.current?.scrollIntoView({ behavior: "instant" }));
+      })
       .catch(() => {});
     obtenerUsoHoyAction()
       .then(setUso)
@@ -274,26 +285,30 @@ export function VitaChatOverlay({
     requestAnimationFrame(() => finRef.current?.scrollIntoView({ behavior: "smooth" }));
   }
 
-  async function abrirSesion(id: string) {
-    setHistorialAbierto(false);
-    const guardados = await listarMensajesAction(id);
-    setSesionId(id);
-    setMensajes(
-      guardados.length > 0
-        ? guardados.map((m) => ({ role: m.role, content: m.contenido, timestamp: m.created_at }))
-        : [mensajeBienvenida()]
-    );
-  }
-
-  function nuevoChat() {
-    setHistorialAbierto(false);
-    setSesionId(null);
-    setMensajes([mensajeBienvenida()]);
-  }
-
-  function alBorrarHistorial() {
-    setSesiones([]);
-    nuevoChat();
+  // Sube a buscar la página anterior del hilo (dentro de los 7 días) y conserva la posición de lectura.
+  async function cargarMasViejos() {
+    if (cargandoMas || !hayMas) return;
+    const primero = mensajes.find((m) => !m.bienvenida);
+    if (!primero) return;
+    setCargandoMas(true);
+    try {
+      const r = await cargarHiloAction(primero.timestamp);
+      if (r.status !== "success") {
+        toast.error("No pude traer los mensajes anteriores.");
+        return;
+      }
+      const contenedor = scrollRef.current;
+      const alturaAntes = contenedor?.scrollHeight ?? 0;
+      const topeAntes = contenedor?.scrollTop ?? 0;
+      setMensajes((prev) => [...r.mensajes.map(aMensajeUI), ...prev]);
+      setPrefijo((p) => p + r.mensajes.length);
+      setHayMas(r.hayMas);
+      requestAnimationFrame(() => {
+        if (contenedor) contenedor.scrollTop = topeAntes + (contenedor.scrollHeight - alturaAntes);
+      });
+    } finally {
+      setCargandoMas(false);
+    }
   }
 
   // Reintentar = mismo texto y MISMO pedidoId, sin burbuja de usuario nueva: el
@@ -330,7 +345,6 @@ export function VitaChatOverlay({
     setEnviando(true);
     scrollAlFinal();
 
-    let sesionAsignada: string | null = null;
     let textoAcumulado = "";
     let huboEscritura = false; // refresca las pantallas UNA vez al terminar la respuesta
     if (modoVozRef.current) fraseHabladaIndiceRef.current = 0;
@@ -339,7 +353,7 @@ export function VitaChatOverlay({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesionId, mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId, confirmacionId }),
+        body: JSON.stringify({ mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId, confirmacionId }),
       });
 
       // 429 (demasiados pedidos) u otro error HTTP con mensaje: se muestra tal cual y el mensaje queda
@@ -377,8 +391,7 @@ export function VitaChatOverlay({
             | { uso: UsoDiario };
 
           if ("session" in evento) {
-            sesionAsignada = evento.session;
-            setSesionId(evento.session);
+            // El servidor siempre escribe en la conversación continua: el cliente no necesita el id de sesión.
           } else if ("uso" in evento) {
             setUso(evento.uso);
           } else if ("chunk" in evento) {
@@ -533,17 +546,6 @@ export function VitaChatOverlay({
       // al final del try: si el stream se corta después de una escritura, el
       // dato ya quedó guardado y la pantalla igual tiene que mostrarlo.
       if (huboEscritura) router.refresh();
-      // Siempre actualiza la entrada de la sesión activa en el drawer —
-      // antes solo se agregaba cuando el servidor asignaba una sesión
-      // NUEVA; seguir mandando mensajes en una sesión ya existente dejaba
-      // su preview/orden desactualizados en el historial.
-      const idEfectivo = sesionAsignada ?? sesionId;
-      if (idEfectivo) {
-        setSesiones((prev) => [
-          { id: idEfectivo, created_at: ahora, updated_at: ahora, ultimoMensaje: limpio },
-          ...prev.filter((s) => s.id !== idEfectivo),
-        ]);
-      }
     }
   }
 
@@ -574,6 +576,12 @@ export function VitaChatOverlay({
 
   const agotado = sinCupo(uso);
   const vacio = mensajes.length <= 1 && !enviando;
+  const ahoraMs = new Date().getTime();
+
+  // Subir hasta el borde de arriba trae la página anterior sin tocar un botón (el botón queda de respaldo).
+  function alScrollear(e: React.UIEvent<HTMLDivElement>) {
+    if (e.currentTarget.scrollTop < 60 && hayMas && !cargandoMas) void cargarMasViejos();
+  }
 
   return (
     <>
@@ -622,14 +630,6 @@ export function VitaChatOverlay({
           </button>
           <button
             type="button"
-            onClick={() => setHistorialAbierto(true)}
-            className="flex size-9 items-center justify-center rounded-full bg-secondary text-slate-brand"
-            aria-label="Historial de chats"
-          >
-            <VitaIcon name="clock" size={18} />
-          </button>
-          <button
-            type="button"
             onClick={cerrarChat}
             className="flex size-9 items-center justify-center rounded-full bg-secondary text-slate-brand"
             aria-label="Cerrar chat"
@@ -644,17 +644,41 @@ export function VitaChatOverlay({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div ref={scrollRef} onScroll={alScrollear} className="flex-1 overflow-y-auto px-4 py-4">
           {vacio && (
             <div className="flex justify-center pb-2 pt-2">
               <VitaAvatar size={170} estado={estadoAvatarHeader} activo={abierto} />
             </div>
           )}
-          <div className="eyebrow pb-3.5 text-center text-subtle" suppressHydrationWarning>
-            Hoy · {formatoFechaCorta(fechaDeHoyISO())}
-          </div>
+          {vacio && (
+            <div className="eyebrow pb-3.5 text-center text-subtle" suppressHydrationWarning>
+              Hoy · {formatoFechaCorta(fechaDeHoyISO())}
+            </div>
+          )}
+          {hayMas && (
+            <div className="flex justify-center pb-3">
+              <button
+                type="button"
+                onClick={cargarMasViejos}
+                disabled={cargandoMas}
+                className="rounded-full bg-card px-3.5 py-1.5 text-[12.5px] font-bold text-teal-deep shadow-item disabled:opacity-60"
+              >
+                {cargandoMas ? "Cargando…" : "Ver mensajes anteriores"}
+              </button>
+            </div>
+          )}
           {mensajes.map((m, i) => (
-            <MensajeBurbuja key={i} m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t, id) => enviar(t, undefined, id) : undefined} />
+            <Fragment key={i - prefijo}>
+              {(() => {
+                const etiqueta = m.bienvenida ? null : separadorAntes(i > 0 ? mensajes[i - 1].timestamp : null, m.timestamp, ahoraMs);
+                return etiqueta ? (
+                  <div className="eyebrow pb-3 pt-1 text-center text-subtle" suppressHydrationWarning>
+                    {etiqueta}
+                  </div>
+                ) : null;
+              })()}
+            <MensajeBurbuja m={m} cargando={enviando && i === mensajes.length - 1 && !m.content} alCerrar={cerrarChat} esPropio={esPropio} alReintentar={enviando ? undefined : reintentar} alElegirOpcion={i === mensajes.length - 1 && !enviando && !agotado ? (t, id) => enviar(t, undefined, id) : undefined} />
+            </Fragment>
           ))}
           {vacio && (
             <div className="flex flex-wrap gap-1.5 pl-9 pt-1">
@@ -741,16 +765,6 @@ export function VitaChatOverlay({
           </div>
         </form>
       </div>
-
-      <HistorialDrawer
-        open={historialAbierto}
-        onOpenChange={setHistorialAbierto}
-        sesiones={sesiones}
-        sesionActivaId={sesionId}
-        onAbrirSesion={abrirSesion}
-        onNuevoChat={nuevoChat}
-        onHistorialBorrado={alBorrarHistorial}
-      />
     </>
   );
 }
