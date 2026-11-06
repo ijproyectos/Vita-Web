@@ -63,6 +63,6 @@ export const config = {
   matcher: [
     // Skip static assets, image optimization, vita avatar frames and the
     // cron and Mercado Pago webhook endpoints (authenticated by x-cron-secret / x-signature, not by session).
-    "/((?!_next/static|_next/image|favicon.ico|vita/|api/cron/|api/mercadopago/|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp3)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|vita/|api/cron/|api/version|api/mercadopago/|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp3)$).*)",
   ],
 };

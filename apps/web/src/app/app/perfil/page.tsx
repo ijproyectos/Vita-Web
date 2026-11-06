@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
+import { TEXTO_BUILD, TEXTO_VERSION } from "@/lib/version";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
@@ -167,7 +168,8 @@ export default async function PerfilPage() {
 
       <div className="flex flex-col items-center gap-2 pb-2 pt-1 text-center">
         <VitaWordmark size={26} />
-        <div className="text-[11px] font-medium text-subtle">versión 1.0</div>
+        <div className="text-[11px] font-medium text-subtle">vita · {TEXTO_VERSION}</div>
+        <div className="text-[10px] font-medium text-faint">{TEXTO_BUILD}</div>
       </div>
     </div>
   );

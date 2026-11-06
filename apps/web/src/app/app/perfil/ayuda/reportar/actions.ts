@@ -2,6 +2,7 @@
 
 import { requireUser } from "@/lib/dal";
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
+import { APP_VERSION, TEXTO_BUILD } from "@/lib/version";
 import { enviarEmail } from "@/lib/email/smtp";
 import { permitirEnvio } from "@/lib/email/limite";
 import { CORREO_SOPORTE } from "@/lib/legal/datos";
@@ -41,7 +42,7 @@ export async function enviarReporteAction(_prev: EstadoReporte, formData: FormDa
     }
 
     const email = usuario.email && !esEmailDeCuentaPorCodigo(usuario.email) ? usuario.email : null;
-    const datos = incluirDispositivo ? `Dispositivo: ${agente || "no disponible"}\nVersión de vita: 1.0` : "Datos del teléfono: no incluidos";
+    const datos = incluirDispositivo ? `Dispositivo: ${agente || "no disponible"}\nVersión de vita: ${APP_VERSION} (${TEXTO_BUILD})` : "Datos del teléfono: no incluidos";
     const cuerpo = [
       `Tema: ${categoria}`,
       `Cuenta: ${email ?? `cuenta vinculada (${usuario.id})`}`,
