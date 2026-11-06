@@ -5,7 +5,7 @@ export type VentanaLimite = "min" | "dia";
 
 export type Limite = {
   /** Prefijo de la clave: qué endpoint se cuenta. */
-  endpoint: "chat" | "voz";
+  endpoint: "chat" | "voz" | "vitals";
   /** A quién se cuenta. */
   sujeto: "u" | "ip";
   ventana: VentanaLimite;
@@ -19,6 +19,9 @@ export const LIMITES_CHAT: Limite[] = [
   { endpoint: "chat", sujeto: "u", ventana: "dia", maximo: 300 },
 ];
 export const LIMITES_VOZ: Limite[] = [{ endpoint: "voz", sujeto: "u", ventana: "min", maximo: 30 }];
+
+/** Telemetria anonima de velocidad: solo por IP hasheada (sin usuario). */
+export const LIMITES_VITALS: Limite[] = [{ endpoint: "vitals", sujeto: "ip", ventana: "min", maximo: 40 }];
 
 export const MENSAJE_LIMITE_PEDIDOS = "Mandaste muchos mensajes seguidos, esperá un minuto.";
 export const MENSAJE_LIMITE_PEDIDOS_DIA = "Llegaste al máximo de mensajes por hoy. Probá de nuevo mañana.";

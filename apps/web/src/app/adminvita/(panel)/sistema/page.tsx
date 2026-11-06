@@ -1,13 +1,19 @@
 import { APP_VERSION, TEXTO_BUILD } from "@/lib/version";
-import { entrarAlPanel, obtenerSistema } from "@/lib/admin/datos";
+import { entrarAlPanel, obtenerSistema, obtenerVitals } from "@/lib/admin/datos";
 import { formatoBytes, formatoFechaHoraAR, formatoNumero } from "@/lib/admin/formato";
 import { Encabezado, ErrorDatos, Etiqueta, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../_componentes/ui";
 
 export const dynamic = "force-dynamic";
 
+// CLS no tiene unidad; el resto son milisegundos (se muestran en segundos desde 1000 ms).
+function textoMetrica(metrica: string, valor: number): string {
+  if (metrica === "CLS") return valor.toFixed(3).replace(".", ",");
+  return valor >= 1000 ? `${(valor / 1000).toFixed(1).replace(".", ",")} s` : `${Math.round(valor)} ms`;
+}
+
 export default async function SistemaPage() {
   await entrarAlPanel("/adminvita/sistema");
-  const s = await obtenerSistema();
+  const [s, vitals] = await Promise.all([obtenerSistema(), obtenerVitals(7)]);
   if (!s) return <ErrorDatos />;
   const storageBytes = s.storage.reduce((a, x) => a + x.bytes, 0);
   const storageObjetos = s.storage.reduce((a, x) => a + x.objetos, 0);
@@ -23,6 +29,47 @@ export default async function SistemaPage() {
         <Kpi titulo="Storage" valor={formatoBytes(storageBytes)} detalle={`${formatoNumero(storageObjetos)} archivos`} />
         <Kpi titulo="Push" valor={formatoNumero(s.push.suscripciones)} detalle={`dispositivos de ${formatoNumero(s.push.usuarios)} cuentas`} />
       </div>
+
+      <Seccion titulo="Velocidad real (últimos 7 días)">
+        {!vitals || vitals.metricas.length === 0 ? (
+          <Vacio>Todavía no hay mediciones (o falta aplicar la migración 050).</Vacio>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+              {vitals.metricas.map((m) => (
+                <Kpi
+                  key={m.metrica}
+                  titulo={`${m.metrica} p75`}
+                  valor={textoMetrica(m.metrica, m.p75)}
+                  detalle={`${formatoNumero(m.n)} mediciones${m.buenosPct === null ? "" : ` · ${Math.round(m.buenosPct)}% buenas`}`}
+                />
+              ))}
+            </div>
+            {vitals.rutasLentas.length > 0 ? (
+              <Tabla>
+                <thead>
+                  <tr>
+                    <th className={TH}>Ruta más lenta (LCP p75)</th>
+                    <th className={TH}>LCP p75</th>
+                    <th className={TH}>Mediciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vitals.rutasLentas.map((r) => (
+                    <tr key={r.ruta}>
+                      <td className={TD}>
+                        <code className="text-xs">{r.ruta}</code>
+                      </td>
+                      <td className={TD}>{textoMetrica("LCP", r.p75Lcp)}</td>
+                      <td className={TD}>{formatoNumero(r.n)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Tabla>
+            ) : null}
+          </div>
+        )}
+      </Seccion>
 
       <Seccion titulo="Jobs de cron">
         {s.cron.length === 0 ? (

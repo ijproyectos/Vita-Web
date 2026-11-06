@@ -11,11 +11,13 @@ import {
   leerResumen,
   leerSuspensiones,
   leerSistema,
+  leerVitals,
   leerUsuarioDetalle,
   leerUsuarios,
   leerVitaPlus,
   type PanelIA,
   type PanelSistema,
+  type PanelVitals,
   type PanelVitaPlus,
   type FilaSuspension,
   type Resumen,
@@ -107,6 +109,12 @@ export async function obtenerVitaPlus(): Promise<PanelVitaPlus | null> {
 export async function obtenerSistema(): Promise<PanelSistema | null> {
   const data = await rpc("admin_sistema");
   return data === null ? null : leerSistema(data);
+}
+
+/** Velocidad real de los últimos `dias` días (migración 050). null = no se pudo leer (p. ej. 050 sin aplicar). */
+export async function obtenerVitals(dias = 7): Promise<PanelVitals | null> {
+  const data = await rpc("admin_web_vitals", { p_dias: dias });
+  return data === null ? null : leerVitals(data);
 }
 
 /** Historial de suspensiones de una cuenta (migración 047). null = no se pudo leer. */
