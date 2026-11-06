@@ -23,6 +23,7 @@ import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { LIMITES_CHAT } from "@/lib/limites/logica";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
+import { leerPersona } from "@/lib/ai/persona-jarvis";
 import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
 import { SYSTEM_PROMPT, armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
 import {
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
     perfilActivoId?: string;
     confirmacionId?: unknown;
     modo?: unknown;
+    persona?: unknown;
   };
   try {
     cuerpo = await request.json();
@@ -161,6 +163,8 @@ export async function POST(request: Request) {
   // cuenta logueada: sin familia ni perfil abierto, así ninguna tool puede apuntar a otra persona.
   const modo = leerModoChat(cuerpo.modo);
   const modoSimple = modo === "simple";
+  // Persona del dispositivo de escritorio (solo cambia el estilo del modo simple; no da acceso a nada nuevo).
+  const persona = leerPersona(cuerpo.persona);
   const toolsDelModo = modoSimple ? TOOLS_SIMPLE : TOOLS;
   // Id de la acción pendiente cuyo botón tocó el usuario: solo un uuid; el servidor lo valida contra su fila.
   const confirmacionId =
@@ -412,7 +416,7 @@ export async function POST(request: Request) {
           ahora: descripcionAhoraEnAR(),
           hoyISO: fechaDeHoyISO(),
         });
-        const system = armarSystemChat(contextoDinamicoParaModo(modo, contextoDinamico));
+        const system = armarSystemChat(contextoDinamicoParaModo(modo, contextoDinamico, persona));
 
         for (let turno = 0; turno < MAX_TURNOS_TOOL_USE; turno++) {
           // Antes de otra vuelta del modelo: si el presupuesto ya no alcanza, se corta acá.

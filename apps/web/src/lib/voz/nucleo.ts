@@ -61,7 +61,14 @@ export async function transcribirAudio(audio: Buffer | Blob, mimeType: string): 
 // Deepgram (no contra la doc genérica): de las 17 voces en español del
 // catálogo Aura-2, aura-2-antonia-es es la única con accent="Argentine".
 const MODELO_VOZ_VITA = "aura-2-antonia-es";
-const ENDPOINT_VOZ = `https://api.deepgram.com/v1/speak?model=${MODELO_VOZ_VITA}`;
+// Voz del dispositivo de escritorio (persona jarvis): masculina, calma, profesional y clara (catálogo
+// Aura-2 verificado con GET /v1/models: aura-2-alvaro-es, peninsular). Lista cerrada: el cliente elige una clave.
+const VOCES = { vita: MODELO_VOZ_VITA, jarvis: "aura-2-alvaro-es" } as const;
+export type VozTTS = keyof typeof VOCES;
+export function leerVoz(valor: unknown): VozTTS {
+  return valor === "jarvis" ? "jarvis" : "vita";
+}
+const endpointVoz = (voz: VozTTS) => `https://api.deepgram.com/v1/speak?model=${VOCES[voz]}`;
 
 // El chat de vita usa emojis en el texto (ej. el saludo inicial "Hola 👋").
 // Sin filtrarlos, el motor de TTS los pronuncia como palabras ("emoji de
@@ -81,7 +88,7 @@ function quitarEmojis(texto: string): string {
  * la API falla, devuelve {error} y quien llama simplemente no reproduce
  * nada — el chat de texto ya mostró la respuesta, no hay nada que romper.
  */
-export async function generarAudio(texto: string): Promise<ResultadoAudio> {
+export async function generarAudio(texto: string, voz: VozTTS = "vita"): Promise<ResultadoAudio> {
   const apiKey = process.env.DEEPGRAM_API_KEY;
   if (!apiKey) {
     return { error: "La voz de vita no está disponible en este momento." };
@@ -93,7 +100,7 @@ export async function generarAudio(texto: string): Promise<ResultadoAudio> {
   }
 
   try {
-    const respuesta = await fetch(ENDPOINT_VOZ, {
+    const respuesta = await fetch(endpointVoz(voz), {
       method: "POST",
       headers: {
         Authorization: `Token ${apiKey}`,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { LIMITES_VOZ } from "@/lib/limites/logica";
 import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { createClient } from "@/lib/supabase/server";
-import { generarAudio } from "@/lib/voz/nucleo";
+import { generarAudio, leerVoz } from "@/lib/voz/nucleo";
 import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 
 export const runtime = "nodejs";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { texto } = (await request.json().catch(() => ({}))) as { texto?: string };
+  const { texto, voz } = (await request.json().catch(() => ({}))) as { texto?: string; voz?: unknown };
 
   if (!texto?.trim()) {
     return NextResponse.json({ error: "Falta el texto a sintetizar." }, { status: 400 });
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const resultado = await generarAudio(texto);
+  const resultado = await generarAudio(texto, leerVoz(voz));
 
   if ("error" in resultado) {
     return NextResponse.json({ error: resultado.error }, { status: 502 });

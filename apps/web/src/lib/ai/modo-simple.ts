@@ -2,6 +2,7 @@
 // lo usa /api/chat y lo prueban los tests. El prompt estático (SYSTEM_PROMPT, cacheado) NO se toca:
 // el estilo simple va en el bloque DINÁMICO.
 import type Anthropic from "@anthropic-ai/sdk";
+import { INSTRUCCIONES_ESTILO_JARVIS, type PersonaChat } from "./persona-jarvis";
 import { TOOL_PROPONER_MEDICION, TOOL_PEDIR_AYUDA_FAMILIA, TOOLS } from "./tools-definiciones";
 
 const PEDIR_AYUDA = TOOL_PEDIR_AYUDA_FAMILIA.name;
@@ -60,6 +61,7 @@ MODO SIMPLE (tiene prioridad sobre el estilo habitual): te habla una persona may
 - Seguí llamando a set_avatar_mood en cada respuesta.`;
 
 /** Bloque dinámico del system prompt según el modo: el simple suma su estilo al final, el normal queda igual. */
-export function contextoDinamicoParaModo(modo: ModoChat, contextoDinamico: string): string {
-  return modo === "simple" ? `${contextoDinamico}${INSTRUCCIONES_ESTILO_SIMPLE}` : contextoDinamico;
+export function contextoDinamicoParaModo(modo: ModoChat, contextoDinamico: string, persona: PersonaChat = "vita"): string {
+  if (modo !== "simple") return contextoDinamico;
+  return `${contextoDinamico}${persona === "jarvis" ? INSTRUCCIONES_ESTILO_JARVIS : INSTRUCCIONES_ESTILO_SIMPLE}`;
 }
