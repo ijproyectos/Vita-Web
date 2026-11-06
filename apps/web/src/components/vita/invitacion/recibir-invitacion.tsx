@@ -2,6 +2,7 @@ import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { GoogleLogo } from "@/components/vita/auth-ui";
 import type { RolVinculo } from "@/lib/familia/tipos";
 import { PantallaInvitada, etiquetaRol } from "./piezas";
+import { enmascararEmail } from "@/lib/familia/enmascarar";
 
 // B3 · Quién te invita y con qué cuenta entrás. Primero se ve a quién va a
 // cuidar y quién la invitó; recién después se pide la cuenta. El bloque de
@@ -43,7 +44,7 @@ export function RecibirInvitacion({
         </p>
         {email && (
           <p className="mt-4 text-pretty text-[14.5px] font-medium leading-[1.45] text-subtle">
-            Entrá con <span className="break-all font-extrabold text-foreground">{email}</span>, el mail que puso {invitador}.
+            Entrá con <span className="break-all font-extrabold text-foreground">{enmascararEmail(email)}</span>, el mail que puso {invitador}.
           </p>
         )}
       </div>

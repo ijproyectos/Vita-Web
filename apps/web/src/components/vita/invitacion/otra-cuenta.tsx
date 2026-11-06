@@ -1,5 +1,6 @@
 import { BotonCta, TituloAuth } from "@/components/vita/auth-ui";
 import { BotonTexto, IconoEstado, PantallaInvitada } from "./piezas";
+import { enmascararEmail } from "@/lib/familia/enmascarar";
 
 // C2 · Entró con un mail distinto del invitado. La invitación solo vale con ese
 // mail, así que los dos se muestran completos para que sepa con cuál entrar.
@@ -25,7 +26,7 @@ export function OtraCuenta({
           sub={
             <>
               Entraste con <span className="break-all font-extrabold text-foreground">{emailActual}</span>. {invitador} te invitó con{" "}
-              <span className="break-all font-extrabold text-foreground">{emailInvitado}</span>.
+              <span className="break-all font-extrabold text-foreground">{enmascararEmail(emailInvitado)}</span>.
             </>
           }
         />
