@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { entrarAlPanel, obtenerResumen } from "@/lib/admin/datos";
+import { entrarAlPanel, obtenerResumen, obtenerUsuariosEnLimite } from "@/lib/admin/datos";
 import { formatoNumero, formatoPorcentaje, formatoUSD } from "@/lib/admin/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { Card, Encabezado, ErrorDatos, Hero, Kpi, Pill, Seccion, fechaPill, nombreDeEmail } from "./_componentes/ui";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ResumenPage() {
   const admin = await entrarAlPanel("/adminvita");
-  const r = await obtenerResumen();
+  const [r, enLimite] = await Promise.all([obtenerResumen(), obtenerUsuariosEnLimite()]);
   if (!r) return <ErrorDatos />;
 
   const alertas = [
@@ -71,6 +71,12 @@ export default async function ResumenPage() {
           <Kpi titulo="Costo hoy" valor={formatoUSD(r.costoHoyUsd)} href="/adminvita/ia" />
           <Kpi titulo="Costo del mes" valor={formatoUSD(r.costoMesUsd)} />
           <Kpi titulo="Respuestas de vita hoy" valor={formatoNumero(r.mensajesHoy)} />
+          <Kpi
+            titulo="Usuarios que llegaron al límite hoy"
+            valor={enLimite === null ? "—" : formatoNumero(enLimite)}
+            detalle="de consultas con vita"
+            tono={enLimite !== null && enLimite > 0 ? "alerta" : "neutro"}
+          />
         </div>
       </Seccion>
     </>

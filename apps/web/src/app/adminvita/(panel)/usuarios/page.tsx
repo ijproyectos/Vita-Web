@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { entrarAlPanel, FILTROS_USUARIOS, obtenerUsuarios, TAMANO_PAGINA, type FiltroUsuarios } from "@/lib/admin/datos";
+import { entrarAlPanel, FILTROS_USUARIOS, obtenerInteracciones, obtenerUsuarios, TAMANO_PAGINA, type FiltroUsuarios } from "@/lib/admin/datos";
 import { ETIQUETA_TIPO_CUENTA, formatoNumero, formatoFechaAR, formatoUSD, resumenVitaPlus } from "@/lib/admin/formato";
 import { ETIQUETA_MOTIVO } from "@/lib/suspensiones/logica";
 import { Avatar, Encabezado, PillFiltro, ChipInactividad, ErrorDatos, Etiqueta, TD, TH, Tabla, Vacio } from "../_componentes/ui";
@@ -43,6 +43,8 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
   const datos = await obtenerUsuarios({ busqueda: q, filtro, pagina });
   if (!datos) return <ErrorDatos />;
   const paginas = Math.max(1, Math.ceil(datos.total / TAMANO_PAGINA));
+  // Consultas de hoy de las cuentas de esta página; si no se pueden leer, la columna muestra un guion.
+  const interacciones = await obtenerInteracciones(datos.filas.map((u) => u.id));
 
   return (
     <>
@@ -85,6 +87,7 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
                 <th className={TH}>Días sin usar</th>
                 <th className={TH}>Plan</th>
                 <th className={TH}>Vínculos</th>
+                <th className={TH}>Consultas hoy</th>
                 <th className={TH}>IA 30 días</th>
                 <th className={TH}>Alta</th>
               </tr>
@@ -121,6 +124,21 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
                     <span className="text-xs text-slate-brand">
                       cuida a {u.personasCuida} · {u.cuidadores} {u.cuidadores === 1 ? "cuidador" : "cuidadores"}
                     </span>
+                  </td>
+                  <td className={TD}>
+                    {(() => {
+                      const i = interacciones?.get(u.id);
+                      if (!i) return <span className="text-subtle">—</span>;
+                      return i.usadas >= i.limite ? (
+                        <Etiqueta tono="alerta">
+                          {i.usadas} de {i.limite} · límite
+                        </Etiqueta>
+                      ) : (
+                        <span className="text-xs text-slate-brand">
+                          {i.usadas} de {i.limite}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className={TD}>
                     {formatoUSD(u.costo30dUsd)}

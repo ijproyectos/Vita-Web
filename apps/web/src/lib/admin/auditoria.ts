@@ -14,6 +14,7 @@ export type AccionAdmin =
   | "admin_revocado"
   | "cuenta_suspendida"
   | "cuenta_reactivada"
+  | "limite_interacciones_definido"
   | "envio_masivo_creado"
   | "envio_masivo_cancelado";
 

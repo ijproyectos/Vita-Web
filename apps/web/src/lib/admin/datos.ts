@@ -1,9 +1,13 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fechaISOEnAR } from "@/lib/rutina/formato";
+import { LIMITE_INTERACCIONES_DIARIO_DEFAULT } from "@/lib/uso-ia/interacciones-logica";
 import { requireAdmin, type Admin } from "./acceso";
 import {
   leerIA,
+  leerInteracciones,
+  type InteraccionesAdmin,
   leerResumen,
   leerSuspensiones,
   leerSistema,
@@ -113,4 +117,21 @@ export async function obtenerSuspensiones(id: string): Promise<FilaSuspension[] 
   }
   const data = await rpc("admin_suspensiones_de", { p_usuario: id });
   return data === null ? null : leerSuspensiones(data);
+}
+
+/** Interacciones de hoy y límite efectivo de varias cuentas (migración 049). null = no se pudo leer (se oculta). */
+export async function obtenerInteracciones(ids: string[]): Promise<Map<string, InteraccionesAdmin> | null> {
+  const validos = ids.filter((i) => UUID.test(i)).slice(0, 200);
+  const data = await rpc("admin_interacciones", {
+    p_ids: validos,
+    p_fecha: fechaISOEnAR(),
+    p_limite: LIMITE_INTERACCIONES_DIARIO_DEFAULT,
+  });
+  return data === null ? null : leerInteracciones(data);
+}
+
+/** Personas que hoy llegaron a su límite de consultas con vita. null = no se pudo leer. */
+export async function obtenerUsuariosEnLimite(): Promise<number | null> {
+  const data = await rpc("admin_usuarios_en_limite", { p_fecha: fechaISOEnAR(), p_limite: LIMITE_INTERACCIONES_DIARIO_DEFAULT });
+  return typeof data === "number" && Number.isFinite(data) ? data : null;
 }

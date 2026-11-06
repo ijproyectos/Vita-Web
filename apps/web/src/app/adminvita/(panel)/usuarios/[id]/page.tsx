@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin/acceso";
 import { listarAdministradores } from "@/lib/admin/administradores";
-import { entrarAlPanel, obtenerSuspensiones, obtenerUsuario } from "@/lib/admin/datos";
+import { entrarAlPanel, obtenerInteracciones, obtenerSuspensiones, obtenerUsuario } from "@/lib/admin/datos";
 import {
   ETIQUETA_TIPO_CUENTA,
   formatoARS,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin/formato";
 import { ETIQUETA_MOTIVO } from "@/lib/suspensiones/logica";
 import { FormularioPush } from "./formulario-push";
+import { PanelLimite } from "./panel-limite";
 import { PanelSuspension } from "./panel-suspension";
 import { BarrasDiarias, ChipInactividad, ErrorDatos, Etiqueta, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../../_componentes/ui";
 
@@ -41,7 +42,8 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
   const d = resultado.datos;
   const c = d.cuenta;
   const admin = await requireAdmin();
-  const [suspensiones, accesos] = await Promise.all([obtenerSuspensiones(id), listarAdministradores(admin)]);
+  const [suspensiones, accesos, interacciones] = await Promise.all([obtenerSuspensiones(id), listarAdministradores(admin), obtenerInteracciones([id])]);
+  const consultasHoy = interacciones?.get(id) ?? null;
   const activa = suspensiones?.find((x) => x.levantada === null) ?? null;
   const email = c.email.trim().toLowerCase();
   const protegida = [...accesos.duenos, ...accesos.administradores].some((a) => a.email === email);
@@ -125,6 +127,27 @@ export default async function UsuarioPage({ params }: PageProps<"/adminvita/usua
                 </tbody>
               </Tabla>
             ) : null}
+          </div>
+        )}
+      </Seccion>
+
+      <Seccion titulo="Consultas con vita">
+        {consultasHoy === null ? (
+          <p className="rounded-[28px] bg-destructive/10 p-5 text-sm font-semibold text-destructive">
+            No se pudo leer el uso de hoy. Revisá que la migración 049 esté aplicada.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:max-w-xl">
+              <Kpi
+                titulo="Consultas hoy"
+                valor={`${formatoNumero(consultasHoy.usadas)} de ${formatoNumero(consultasHoy.limite)}`}
+                detalle={consultasHoy.usadas >= consultasHoy.limite ? "Llegó al límite" : undefined}
+                tono={consultasHoy.usadas >= consultasHoy.limite ? "alerta" : undefined}
+              />
+              <Kpi titulo="Límite diario" valor={formatoNumero(consultasHoy.limite)} detalle={consultasHoy.personalizado ? "Definido para esta persona" : "Límite general"} />
+            </div>
+            <PanelLimite usuarioId={c.id} limiteActual={consultasHoy.limite} personalizado={consultasHoy.personalizado} />
           </div>
         )}
       </Seccion>

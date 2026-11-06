@@ -414,3 +414,16 @@ export function leerSistema(filas: unknown): PanelSistema {
     push: { suscripciones: num(push.suscripciones), usuarios: num(push.usuarios) },
   };
 }
+
+// Interacciones con vita de hoy (migración 049): uso y límite efectivo por persona.
+export type InteraccionesAdmin = { usuarioId: string; usadas: number; limite: number; personalizado: boolean };
+
+export function leerInteracciones(filas: unknown): Map<string, InteraccionesAdmin> {
+  const mapa = new Map<string, InteraccionesAdmin>();
+  for (const fila of lista(filas)) {
+    const usuarioId = txt(fila.a_usuario_id);
+    if (!usuarioId) continue;
+    mapa.set(usuarioId, { usuarioId, usadas: num(fila.a_usadas), limite: num(fila.a_limite), personalizado: bool(fila.a_personalizado) });
+  }
+  return mapa;
+}
