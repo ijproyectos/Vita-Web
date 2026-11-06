@@ -1,4 +1,4 @@
-export const INTERVALO_REFRESCO_MS = 45_000;
+export const INTERVALO_REFRESCO_MS = 90_000;
 
 /**
  * Llama a `refrescar` cada cierto tiempo mientras la pantalla está abierta. No lo

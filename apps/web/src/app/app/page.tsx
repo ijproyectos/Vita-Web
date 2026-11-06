@@ -7,7 +7,7 @@ import { destinoDeInicio } from "@/lib/modo-simple/inicio";
 import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import { InstalarVita } from "@/components/vita/instalar-vita";
@@ -55,7 +55,7 @@ export default async function HomePage() {
   if (destino === "modo-simple") redirect("/app/modo-simple");
 
   const [perfil, medsHoy, todosLosMeds, adherencia, turnosProximos, grupos, noLeidos] = await Promise.all([
-    perfilNucleo.obtenerPerfil(supabase, pid),
+    obtenerPerfilCacheado(pid),
     medicamentos.listarHoy(supabase, pid),
     medicamentos.listarTodos(supabase, pid),
     medicamentos.calcularAdherencia(supabase, pid),

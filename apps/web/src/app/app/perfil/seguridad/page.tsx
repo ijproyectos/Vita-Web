@@ -1,8 +1,7 @@
 import { requireUser } from "@/lib/dal";
 import { rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
-import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { TopBar } from "../../top-bar";
 import { FilaAccion, Grupo, Tile } from "../filas";
@@ -15,8 +14,7 @@ import { FormCerrarSesion } from "@/components/vita/form-cerrar-sesion";
 export default async function SeguridadPage() {
   const usuario = await requireUser();
   const activo = await obtenerPerfilActivo();
-  const supabase = await createClient();
-  const perfil = await perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null);
+  const perfil = await obtenerPerfilCacheado(usuario.id).catch(() => null);
   const porCodigo = esEmailDeCuentaPorCodigo(usuario.email);
   const ultimoIngreso = usuario.last_sign_in_at
     ? new Intl.DateTimeFormat("es-AR", {

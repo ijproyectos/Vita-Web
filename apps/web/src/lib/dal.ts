@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireNoSuspendida } from "@/lib/suspensiones/guardia";
@@ -11,7 +12,7 @@ import type { ElderVinculado } from "@/lib/cuidadores/tipos";
  * profesional/paciente split). Any authenticated user is a full user of
  * the app, so the only guard needed is "is there a session at all".
  */
-export async function requireUser() {
+async function resolverUsuario() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,6 +29,14 @@ export async function requireUser() {
 
   return user;
 }
+
+/**
+ * Memoizado por request (`cache` de React): layout, página y helpers que piden
+ * el usuario en el mismo render comparten UNA llamada a Auth y una a la
+ * suspensión. `getUser()` valida el token contra Auth (el JWT es HS256 legacy;
+ * no se cambia a `getClaims`). Un request nuevo vuelve a validar todo.
+ */
+export const requireUser = cache(resolverUsuario);
 
 /**
  * Guarda para el árbol `/cuidar/*` (Modo Cuidador, Fase 3): requiere

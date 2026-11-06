@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaLargaEnAR, saludoEnAR } from "@/lib/rutina/formato";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
@@ -25,7 +25,7 @@ export default async function ModoSimplePage() {
 
   const [hoy, perfil, config] = await Promise.all([
     medicamentos.listarHoy(supabase, usuario.id),
-    perfilNucleo.obtenerPerfil(supabase, usuario.id),
+    obtenerPerfilCacheado(usuario.id),
     obtenerPrefs(supabase, usuario.id),
   ]);
   const ahoraHHMM = medicamentos.horaEnAR();

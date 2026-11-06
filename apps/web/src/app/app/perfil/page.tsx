@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { TEXTO_BUILD, TEXTO_VERSION } from "@/lib/version";
 import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { edadTexto } from "@/lib/perfil/formato";
 import { nombreCompleto } from "@/lib/perfil/tipos";
@@ -35,7 +35,7 @@ export default async function PerfilPage() {
   // Un Lector no tiene Perfil: sus ajustes viven en el engranaje de "solo mirar".
   if (esVistaSoloMirar(activo)) redirect("/app");
   const [perfil, uso, todos, estudios, cuidadores] = await Promise.all([
-    perfilNucleo.obtenerPerfil(supabase, activo.id),
+    obtenerPerfilCacheado(activo.id),
     obtenerUsoHoy(usuario.id),
     medicamentos.listarTodos(supabase, activo.id).catch(() => []),
     supabase.from("estudios").select("id", { count: "exact", head: true }).eq("usuario_id", activo.id),

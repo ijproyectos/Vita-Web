@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { edadTexto } from "@/lib/perfil/formato";
 import { metaDeCondicion } from "@/lib/perfil/tipos";
@@ -22,7 +22,7 @@ export default async function ResumenSaludPage() {
   // Familia: el resumen es del perfil activo.
   const activo = await obtenerPerfilActivo();
   const [perfil, todos, adherencia] = await Promise.all([
-    perfilNucleo.obtenerPerfil(supabase, activo.id),
+    obtenerPerfilCacheado(activo.id),
     medicamentos.listarTodos(supabase, activo.id).catch(() => []),
     activo.esPropio ? medicamentos.calcularAdherencia(supabase, activo.id).catch(() => null) : Promise.resolve(null),
   ]);

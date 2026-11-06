@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { requireNoSuspendida } from "@/lib/suspensiones/guardia";
-import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import { ChatOverlayProvider } from "@/lib/chat/overlay-context";
 import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
 import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
@@ -11,14 +10,13 @@ import { BloqueoPin } from "@/components/vita/bloqueo-pin";
 import { RastreadorNavegacion } from "@/lib/navegacion/rastreador";
 import { BottomNav } from "./bottom-nav";
 import { GuardiaSoloMirar } from "./guardia-solo-mirar";
-import { VitaChatOverlay } from "./_chat/vita-chat-overlay";
+import { VitaChatOverlayLazy } from "./_chat/vita-chat-overlay-lazy";
 
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const usuario = await requireUser();
   // Cuenta suspendida (mal uso / falta de pago): no ve la app, ve /suspendida. Una consulta indexada por request.
   await requireNoSuspendida();
-  const supabase = await createClient();
-  const perfil = await perfilNucleo.obtenerPerfil(supabase, usuario.id);
+  const perfil = await obtenerPerfilCacheado(usuario.id);
 
   // Onboarding (nombre + encuesta scripteada) se muestra una sola vez —
   // gatea toda /app/* acá, en el punto de entrada compartido.
@@ -39,7 +37,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         {children}
       </div>
       <BottomNav opciones={opciones.length > 1 ? opciones : null} activoId={activo.id} oculto={esVistaSoloMirar(activo)} />
-      <VitaChatOverlay esPropio={activo.esPropio} nombreActivo={activo.nombre} perfilActivoId={activo.id} />
+      <VitaChatOverlayLazy esPropio={activo.esPropio} nombreActivo={activo.nombre} perfilActivoId={activo.id} />
       <BloqueoPin uid={usuario.id} nombre={perfil.nombre?.trim().split(/\s+/)[0] || "vita"} />
     </ChatOverlayProvider>
   );
