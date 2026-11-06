@@ -1,3 +1,4 @@
+import { APP_VERSION, TEXTO_BUILD } from "@/lib/version";
 import { entrarAlPanel, obtenerSistema } from "@/lib/admin/datos";
 import { formatoBytes, formatoFechaHoraAR, formatoNumero } from "@/lib/admin/formato";
 import { Encabezado, ErrorDatos, Etiqueta, Kpi, Seccion, TD, TH, Tabla, Vacio } from "../_componentes/ui";
@@ -16,6 +17,7 @@ export default async function SistemaPage() {
       <Encabezado titulo="Sistema" />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Kpi titulo="Versión desplegada" valor={APP_VERSION} detalle={TEXTO_BUILD} />
         <Kpi titulo="Base de datos" valor={formatoBytes(s.dbBytes)} />
         <Kpi titulo="Última migración" valor={s.migracion ?? "—"} />
         <Kpi titulo="Storage" valor={formatoBytes(storageBytes)} detalle={`${formatoNumero(storageObjetos)} archivos`} />

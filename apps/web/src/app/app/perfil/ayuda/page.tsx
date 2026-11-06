@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/dal";
+import { TEXTO_BUILD, TEXTO_VERSION } from "@/lib/version";
 import { TopBar } from "@/app/app/top-bar";
 import { FilaNav, Grupo } from "../filas";
 
@@ -29,7 +30,10 @@ export default async function AyudaPage() {
         />
       </Grupo>
 
-      <div className="text-center text-[11px] font-medium text-subtle">vita · versión 1.0</div>
+      <div className="text-center">
+        <div className="text-[11px] font-medium text-subtle">vita · {TEXTO_VERSION}</div>
+        <div className="text-[10px] font-medium text-faint">{TEXTO_BUILD}</div>
+      </div>
     </div>
   );
 }
