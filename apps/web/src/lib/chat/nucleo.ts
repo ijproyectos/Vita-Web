@@ -11,18 +11,19 @@ import type { MensajeChat, RolMensaje } from "./tipos";
 type Cliente = SupabaseClient;
 
 /**
- * Sesión donde se escribe: una conversación continua por persona. Se reutiliza la de actividad más reciente (las
+ * Sesión donde se escribe: una conversación continua por persona. Se reutiliza la creada más recientemente (las
  * viejas de antes del hilo único siguen existiendo y se leen juntas por `usuario_id`) y solo se crea una si no hay.
  */
 export async function obtenerSesionActiva(supabase: Cliente, usuarioId: string): Promise<string> {
   const { data, error } = await supabase
     .from("sesiones_chat")
-    .select("id, updated_at")
+    .select("id, created_at")
     .eq("usuario_id", usuarioId)
-    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(1);
   if (error) throw new Error(`No se pudo leer la sesión de chat: ${error.message}`);
-  const activa = elegirSesionActiva((data ?? []) as { id: string; updated_at: string }[]);
+  const activa = elegirSesionActiva((data ?? []) as { id: string; created_at: string }[]);
   if (activa) return activa.id;
 
   const { data: creada, error: errorCrear } = await supabase

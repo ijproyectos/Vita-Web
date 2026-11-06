@@ -60,10 +60,10 @@ describe("armarPagina", () => {
 });
 
 describe("elegirSesionActiva", () => {
-  it("reutiliza la de actividad más reciente", () => {
+  it("reutiliza la creada más recientemente", () => {
     const s = [
-      { id: "a", updated_at: "2026-11-01T00:00:00Z" },
-      { id: "b", updated_at: "2026-11-05T00:00:00Z" },
+      { id: "a", created_at: "2026-11-01T00:00:00Z" },
+      { id: "b", created_at: "2026-11-05T00:00:00Z" },
     ];
     expect(elegirSesionActiva(s)?.id).toBe("b");
   });

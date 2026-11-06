@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fechaEnAR } from "@/lib/medicamentos/nucleo";
-import { borrarRecuerdosDeSesionesHasta, invalidarResumen } from "@/lib/memoria/privacidad";
+import { borrarRecuerdosHasta, invalidarResumen } from "@/lib/memoria/privacidad";
 import type { CantidadesBorradas, RangoBorrado } from "./tipos";
 
 type Cliente = SupabaseClient;
@@ -69,7 +69,7 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
 
   // Lo que vita recordó de las conversaciones que se van se borra primero (después ya no se encuentran sus mensajes).
   // Si no se puede, no se borran las conversaciones: nunca queda texto derivado sin su origen.
-  const recuerdos = await borrarRecuerdosDeSesionesHasta(supabase, usuarioId, corteChat);
+  const recuerdos = await borrarRecuerdosHasta(supabase, usuarioId, corteChat);
   if (!recuerdos.ok) throw new Error("No se pudo borrar lo que vita recordaba de esas conversaciones.");
 
   const mensajes = await supabase.from("mensajes_chat").delete().eq("usuario_id", usuarioId).lt("created_at", corteChat);

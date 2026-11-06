@@ -6,12 +6,12 @@ vi.mock("server-only", () => ({}));
 
 import { listarHilo, obtenerSesionActiva } from "./nucleo";
 
-function clienteSesiones(existentes: { id: string; updated_at: string }[]) {
+function clienteSesiones(existentes: { id: string; created_at: string }[]) {
   const insertados: unknown[] = [];
   const cliente = {
     from: () => ({
       select: () => ({
-        eq: () => ({ order: () => ({ limit: async () => ({ data: existentes, error: null }) }) }),
+        eq: () => ({ order: () => ({ order: () => ({ limit: async () => ({ data: existentes, error: null }) }) }) }),
       }),
       insert: (fila: unknown) => {
         insertados.push(fila);
@@ -24,7 +24,7 @@ function clienteSesiones(existentes: { id: string; updated_at: string }[]) {
 
 describe("obtenerSesionActiva", () => {
   it("reutiliza la sesión existente y no crea otra", async () => {
-    const { cliente, insertados } = clienteSesiones([{ id: "s1", updated_at: "2026-11-05T00:00:00Z" }]);
+    const { cliente, insertados } = clienteSesiones([{ id: "s1", created_at: "2026-11-05T00:00:00Z" }]);
     expect(await obtenerSesionActiva(cliente, "u1")).toBe("s1");
     expect(insertados).toHaveLength(0);
   });

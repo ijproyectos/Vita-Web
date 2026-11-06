@@ -67,11 +67,14 @@ export function dentroDeVentana(iso: string, ahoraMs: number): boolean {
   return !Number.isNaN(t) && t >= ahoraMs - VENTANA_CHAT_MS;
 }
 
-/** De varias sesiones, la "activa" para escribir: la de actividad más reciente (null si no hay). */
-export function elegirSesionActiva<T extends { id: string; updated_at: string }>(sesiones: T[]): T | null {
+/**
+ * De varias sesiones, la "activa" para escribir: la CREADA más recientemente (desempate por id). Por creación y no por
+ * actividad para que dos sesiones nacidas por pedidos simultáneos no se alternen según quién escribió último.
+ */
+export function elegirSesionActiva<T extends { id: string; created_at: string }>(sesiones: T[]): T | null {
   let mejor: T | null = null;
   for (const s of sesiones) {
-    if (mejor === null || s.updated_at > mejor.updated_at) mejor = s;
+    if (mejor === null || s.created_at > mejor.created_at || (s.created_at === mejor.created_at && s.id > mejor.id)) mejor = s;
   }
   return mejor;
 }

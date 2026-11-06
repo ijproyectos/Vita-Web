@@ -23,10 +23,13 @@ export function FormCerrarSesion({
   children,
   className,
   antesDeSalir,
+  destino = "/login",
 }: {
   children: ReactNode;
   className?: string;
   antesDeSalir?: () => void;
+  /** Ruta a la que se va después de cerrar la sesión (default /login). */
+  destino?: string;
 }) {
   const router = useRouter();
   const enCursoRef = useRef(false);
@@ -53,7 +56,7 @@ export function FormCerrarSesion({
       // The server confirmed: now it is safe to drop the local subscription.
       await suscripcion?.unsubscribe().catch(() => false);
       antesDeSalir?.();
-      router.replace("/login");
+      router.replace(destino);
       router.refresh();
     } catch {
       clearTimeout(corte);

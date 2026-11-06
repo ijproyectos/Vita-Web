@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { borrarPorTandas, DIA_MS, purgarMensajesDeChat, RETENCION_MENSAJES_CHAT_MS, sesionesSinMensajes, TANDA_MENSAJES } from "./retencion";
+import { borrarPorTandas, DIA_MS, purgarMensajesDeChat, RETENCION_MENSAJES_CHAT_MS, TANDA_MENSAJES } from "./retencion";
 
 type Msg = { id: string; sesion_id: string; created_at: string };
 type Ses = { id: string; updated_at: string };
@@ -9,6 +9,16 @@ type Ses = { id: string; updated_at: string };
 function clienteFalso(mensajes: Msg[], sesiones: Ses[]) {
   const tablas: Record<string, (Msg | Ses)[]> = { mensajes_chat: mensajes, sesiones_chat: sesiones };
   const cliente = {
+    rpc: async (nombre: string, args: { p_corte: string; p_max: number }) => {
+      if (nombre !== "purgar_sesiones_vacias") return { data: null, error: { code: "PGRST202", message: "no" } };
+      const msgs = tablas.mensajes_chat as Msg[];
+      const ses = tablas.sesiones_chat as Ses[];
+      const ultima = new Set<string>();
+      if (ses.length > 0) ultima.add([...ses].sort((x, y) => (x.updated_at < y.updated_at ? 1 : -1))[0].id);
+      const vacias = ses.filter((x) => x.updated_at < args.p_corte && !msgs.some((m) => m.sesion_id === x.id) && !ultima.has(x.id)).slice(0, args.p_max);
+      tablas.sesiones_chat = ses.filter((x) => !vacias.includes(x));
+      return { data: vacias.length, error: null };
+    },
     from(nombre: string) {
       const filas = () => tablas[nombre] as Record<string, string>[];
       return {
@@ -71,10 +81,6 @@ describe("retención del chat", () => {
     expect(j).toBe(3);
   });
 
-  it("sesionesSinMensajes deja solo las vacías", () => {
-    expect(sesionesSinMensajes(["a", "b", "c"], new Set(["b"]))).toEqual(["a", "c"]);
-  });
-
   it("borra los mensajes de más de 7 días, conserva el resto y quita las sesiones vacías", async () => {
     const { cliente, tablas } = clienteFalso(
       [
@@ -92,6 +98,12 @@ describe("retención del chat", () => {
     expect(r).toEqual({ mensajes: 2, sesiones: 1 });
     expect((tablas.mensajes_chat as Msg[]).map((m) => m.id)).toEqual(["m3", "m4"]);
     expect((tablas.sesiones_chat as Ses[]).map((s) => s.id)).toEqual(["activa"]);
+  });
+
+  it("nunca borra la sesión más reciente, aunque esté vacía", async () => {
+    const { cliente, tablas } = clienteFalso([], [{ id: "unica", updated_at: iso(20) }]);
+    expect(await purgarMensajesDeChat(cliente, AHORA)).toEqual({ mensajes: 0, sesiones: 0 });
+    expect(tablas.sesiones_chat).toHaveLength(1);
   });
 
   it("drena un atraso grande en varias tandas", async () => {

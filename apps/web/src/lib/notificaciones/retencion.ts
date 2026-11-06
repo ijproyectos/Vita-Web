@@ -70,11 +70,6 @@ export async function borrarPorTandas(borrarTanda: () => Promise<number>, tanda:
   return total;
 }
 
-/** Sesiones candidatas que no tienen ningún mensaje (las únicas que se pueden borrar sin perder nada). */
-export function sesionesSinMensajes(candidatas: string[], conMensajes: ReadonlySet<string>): string[] {
-  return candidatas.filter((id) => !conMensajes.has(id));
-}
-
 /**
  * Borra los mensajes de chat de más de 7 días (por tandas) y después las sesiones que quedaron sin mensajes. Nunca
  * lanza: ante un fallo devuelve `{error}` y el cron informa y sigue. Tabla inexistente -> ceros.
@@ -102,25 +97,17 @@ export async function purgarMensajesDeChat(
       MAX_TANDAS_MENSAJES
     );
 
-    // Sesiones sin actividad en 7 días: si no les queda ningún mensaje, se van. Una sesión con updated_at reciente
-    // (la activa) nunca es candidata.
+    // Sesiones sin actividad en 7 días y sin mensajes: las borra la RPC de la 051 en un solo DELETE (un mensaje
+    // insertado en el medio impide el borrado) y nunca toca la sesión más reciente de cada persona, que es la que
+    // `obtenerSesionActiva` entrega. Sin la 051 se omite: una sesión vacía es inofensiva.
     const sesiones = await borrarPorTandas(
       async () => {
-        const { data: cand, error } = await admin.from("sesiones_chat").select("id").lt("updated_at", corte).limit(TANDA_MENSAJES);
+        const { data, error } = await admin.rpc("purgar_sesiones_vacias", { p_corte: corte, p_max: TANDA_MENSAJES });
         if (error) {
-          if (esErrorTablaInexistente(error)) return 0;
+          if (esErrorTablaInexistente(error) || error.code === "PGRST202" || error.code === "42883") return 0;
           throw new Error(error.message);
         }
-        const ids = (cand ?? []).map((f) => f.id as string);
-        if (ids.length === 0) return 0;
-        const { data: ocupadas, error: errorOcupadas } = await admin.from("mensajes_chat").select("sesion_id").in("sesion_id", ids);
-        if (errorOcupadas) throw new Error(errorOcupadas.message);
-        const vacias = sesionesSinMensajes(ids, new Set((ocupadas ?? []).map((f) => f.sesion_id as string)));
-        if (vacias.length === 0) return 0;
-        const { error: errorBorrar } = await admin.from("sesiones_chat").delete().in("id", vacias);
-        if (errorBorrar) throw new Error(errorBorrar.message);
-        // Si alguna candidata sigue ocupada se corta la repetición: la próxima corrida la reevalúa.
-        return vacias.length === ids.length ? ids.length : 0;
+        return typeof data === "number" ? data : 0;
       },
       TANDA_MENSAJES,
       MAX_TANDAS_MENSAJES
