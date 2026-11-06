@@ -16,6 +16,9 @@ export type TipoAviso =
   | "turno_persona_dia_antes"
   | "stock_bajo_persona"
   | "persona_en_vita"
+  // Saludo de cumpleaños (09:00 AR): a la propia persona y a sus cuidadores.
+  | "cumpleanos"
+  | "cumpleanos_persona"
   // "Voy a ir acompañado" de un turno: a los cuidadores, al guardarlo o cambiar día/hora, y el día anterior.
   | "turno_acompanado"
   | "turno_acompanado_dia_antes"

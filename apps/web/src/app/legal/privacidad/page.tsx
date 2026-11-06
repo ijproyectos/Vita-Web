@@ -72,7 +72,7 @@ export default function PrivacidadPage() {
             cuidador arma para otra persona antes de que ella tenga cuenta, con sus medicamentos.
           </li>
           <li>
-            <strong>Contadores de uso de IA:</strong> por día, cantidad de llamadas y de tokens consumidos, para
+            <strong>Contadores de uso de IA:</strong> por día, cantidad de llamadas, de tokens consumidos y de consultas hechas a vita, para
             aplicar un límite diario de uso por persona.
           </li>
           <li>

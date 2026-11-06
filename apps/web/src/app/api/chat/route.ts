@@ -25,7 +25,7 @@ import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicion
 import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { leerPersona } from "@/lib/ai/persona-jarvis";
 import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
-import { SYSTEM_PROMPT, armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
+import { SYSTEM_PROMPT, armarSystemChat, bloqueCumpleanos, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
 import {
   ejecutarToolIdempotente,
   normalizarPedidoId,
@@ -43,9 +43,14 @@ import { contextoContradicciones, contextoMemoria, debeMostrarContradicciones, M
 import { cargarContextoResumen, pedirResumen } from "@/lib/memoria/resumen";
 import { debePedirResumen } from "@/lib/memoria/resumen-logica";
 import { obtenerUsoHoy, registrarUsoIA, verificarLimiteDiario } from "@/lib/uso-ia/nucleo";
+import { consumirInteraccion } from "@/lib/uso-ia/interacciones";
+import { cargaUsoSSE, eventosPorLimiteInteracciones, turnoCuentaComoInteraccion, type Consultas } from "@/lib/uso-ia/interacciones-logica";
+import { calcularUso } from "@/lib/uso-ia/tipos";
+import { LIMITE_MICRO_USD_DIARIO } from "@/lib/uso-ia/limite";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 import { descripcionAhoraEnAR, fechaDeHoyISO } from "@/lib/rutina/formato";
+import { cumpleanerosDeHoy } from "@/lib/notificaciones/cumpleanos-logica";
 import { listarHoy } from "@/lib/medicamentos/nucleo";
 import { textoDosis } from "@/lib/medicamentos/tipos";
 import { listarDeHoy } from "@/lib/turnos/nucleo";
@@ -102,6 +107,28 @@ async function construirContextoHoy(supabase: Awaited<ReturnType<typeof createCl
       return `${limpiarDato(t.especialidad)} ${t.hora.slice(0, 5)}${lugar}`;
     });
     return bloqueHoy(textoMeds, textoTurnos);
+  } catch {
+    return "";
+  }
+}
+
+// Cumpleaños de hoy (fecha AR) de quien chatea y de las personas que cuida, al bloque DINÁMICO del
+// prompt. Con RLS (el cuidador lee el perfil de quien cuida); si falla, se omite.
+async function construirContextoCumple(
+  supabase: Awaited<ReturnType<typeof createClientConDispositivo>>,
+  usuarioId: string,
+  familia: { id: string; nombre: string }[]
+): Promise<string> {
+  try {
+    const hoy = fechaDeHoyISO();
+    const ids = [usuarioId, ...familia.map((f) => f.id)];
+    const { data } = await supabase.from("perfiles").select("id, nombre, fecha_nacimiento").in("id", ids).not("fecha_nacimiento", "is", null);
+    const cumplen = cumpleanerosDeHoy((data ?? []) as { id: string; nombre: string | null; fecha_nacimiento: string | null }[], hoy).map((p) => ({
+      nombre: limpiarDato(p.nombre?.trim().split(/\s+/)[0] || "esa persona", 40),
+      edad: p.cumple,
+      propio: p.id === usuarioId,
+    }));
+    return bloqueCumpleanos(cumplen);
   } catch {
     return "";
   }
@@ -231,8 +258,11 @@ export async function POST(request: Request) {
       const enviar = (data: unknown) => controller.enqueue(encoder.encode(eventoSSE(data)));
       // "[DONE]" es un sentinel literal, no JSON — mismo contrato que el
       // agente original (`agent/README.md`: "data: [DONE]", sin comillas).
-      const enviarUso = (u: { usados: number; limite: number; restantes: number; porcentajeUsado: number }) =>
-        enviar({ uso: { usados: u.usados, limite: u.limite, restantes: u.restantes, porcentajeUsado: u.porcentajeUsado } });
+      // Consultas de hoy (límite por interacciones): se conocen recién al consumir la de este turno y viajan en
+      // cada evento `{uso}` para que el indicador del cliente se actualice en vivo.
+      let consultasActual: Consultas | null = null;
+      const enviarUso = (u: { usados: number; limite: number; restantes: number; porcentajeUsado: number; consultas?: Consultas }) =>
+        enviar({ uso: cargaUsoSSE(u, consultasActual ?? u.consultas ?? null) });
       const enviarFin = () => controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 
       let textoAcumulado = ""; // se persiste como UN mensaje del asistente al final,
@@ -251,6 +281,27 @@ export async function POST(request: Request) {
       let cortePorTiempo = false;
       let fallaPorTiempo = false;
       let escriturasHechas = 0; // tarjetas de escritura ya emitidas: lo hecho no se pierde si se corta
+
+      // Límite de interacciones por día (migración 049): suma la de este turno ANTES de llamar al modelo. Devuelve
+      // true si ya no hay cupo (y deja la respuesta cerrada). Falla ABIERTO: un error del contador deja pasar.
+      const sinCupoDeInteracciones = async (): Promise<boolean> => {
+        const consumo = await consumirInteraccion(user.id);
+        consultasActual = consumo.consultas;
+        if (consumo.permitido) return false;
+        medicion.resultado = "limite";
+        medicion.errorCodigo = "interacciones";
+        enviarUso((await obtenerUsoHoy(user.id)) ?? calcularUso(0, LIMITE_MICRO_USD_DIARIO));
+        // Emergencia: el límite no puede dejar al usuario sin los teléfonos (sale primero).
+        for (const evento of eventosPorLimiteInteracciones({
+          limite: consumo.consultas.limite,
+          modoSimple,
+          textoEmergencia: emergencia ? textoEmergencia(emergencia) : null,
+        })) {
+          enviar(evento);
+        }
+        enviarFin();
+        return true;
+      };
 
       try {
         const limite = await verificarLimiteDiario(user.id);
@@ -296,6 +347,15 @@ export async function POST(request: Request) {
         // reintento, así que el primer intento probablemente ya lo guardó (mejor no duplicar que perder
         // el contexto); si no estaba, se suma al historial en memoria más abajo.
         // El id del mensaje guardado es el origen de los recuerdos que vita saque de él (para poder olvidarlos).
+        // Interacciones: este turno llama al modelo salvo que lo resuelva el servidor sin él (botón Confirmar, que se
+        // decide más abajo) o sea el reintento de un turno ya contado. Sin botón se cuenta ya, antes de guardar el
+        // mensaje (si no hay cupo, no queda un mensaje sin respuesta en el historial).
+        const cuentaInteraccion = turnoCuentaComoInteraccion({
+          reintento: reintento === true,
+          estadoPrevio: previo.estado,
+          resueltoSinModelo: false,
+        });
+        if (cuentaInteraccion && !confirmacionId && (await sinCupoDeInteracciones())) return;
         let mensajeOrigenId: string | null = null;
         if (previo.estado === "nuevo") mensajeOrigenId = await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
 
@@ -339,6 +399,8 @@ export async function POST(request: Request) {
             enviarFin();
             return;
           }
+          // La confirmación no se resolvió sin modelo: sigue al modelo, así que cuenta.
+          if (cuentaInteraccion && (await sinCupoDeInteracciones())) return;
         }
 
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
@@ -375,6 +437,7 @@ export async function POST(request: Request) {
         if (respuestaUsuario === "no") await purgarPendientes(supabase, user.id);
 
         const contextoHoy = await construirContextoHoy(supabase, user.id);
+        const contextoCumple = await construirContextoCumple(supabase, user.id, familia);
 
         // Prompt caching: el bloque estático (reglas + tools, que se renderizan antes) lleva el breakpoint; todo
         // lo volátil (Personas, Hoy, fecha) va en un segundo bloque SIN cache_control, después del breakpoint.
@@ -412,6 +475,7 @@ export async function POST(request: Request) {
         const contextoDinamico = contextoDinamicoChat({
           contextoPerfil,
           contextoHoy,
+          contextoCumple,
           contextoMemoria: textoMemoria,
           ahora: descripcionAhoraEnAR(),
           hoyISO: fechaDeHoyISO(),

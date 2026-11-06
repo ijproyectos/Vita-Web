@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
+import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
+import * as turnosNucleo from "@/lib/turnos/nucleo";
+import { estadoDesdePerfil } from "@/lib/onboarding/conversacion";
+import { fechaISOEnAR } from "@/lib/rutina/formato";
 import { ConversarOnboarding } from "./conversar";
 
 // Entrada del onboarding conversacional nuevo — alcanzada desde
@@ -9,6 +13,11 @@ import { ConversarOnboarding } from "./conversar";
 // guardado. Si alguien llega acá directo sin haber pasado por
 // /onboarding/para-quien (uso_app todavía null), se lo manda para allá en
 // vez de asumir un valor.
+//
+// Lo que la persona YA respondió (fecha de nacimiento, condiciones, alergias,
+// remedios, turnos, mediciones) se lee de la base y se pasa como estado
+// inicial: recargar la página o volver desde "Prefiero un formulario" no
+// repite preguntas.
 export default async function OnboardingConversarPage() {
   const usuario = await requireUser();
   const supabase = await createClient();
@@ -18,5 +27,11 @@ export default async function OnboardingConversarPage() {
     redirect("/onboarding/para-quien");
   }
 
-  return <ConversarOnboarding usoApp={perfil.uso_app} />;
+  const [remedios, turnos] = await Promise.all([
+    medicamentosNucleo.listarTodos(supabase, usuario.id).catch(() => []),
+    turnosNucleo.listarProximos(supabase, usuario.id, 1).catch(() => []),
+  ]);
+  const estadoInicial = estadoDesdePerfil(perfil, { tieneRemedios: remedios.length > 0, tieneTurnos: turnos.length > 0 }, fechaISOEnAR());
+
+  return <ConversarOnboarding usoApp={perfil.uso_app} estadoInicial={estadoInicial} />;
 }

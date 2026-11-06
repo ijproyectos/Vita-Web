@@ -220,6 +220,27 @@ export function payloadResumenDia(d: {
   };
 }
 
+/** 09:00 del cumpleaños, a la propia persona. */
+export function payloadCumpleanosPropio(d: { personaId: string; nombre: string; edad: number; fechaAR: string }): PayloadPush {
+  return {
+    title: `¡Feliz cumpleaños, ${primerNombre(d.nombre)}!`,
+    body: `Hoy cumplís ${d.edad}. Todo el equipo de vita te manda un abrazo.`,
+    url: "/app",
+    tag: `cumpleanos-${d.personaId}-${d.fechaAR}`,
+  };
+}
+
+/** 09:00 del cumpleaños de la persona cuidada, a sus cuidadores. */
+export function payloadCumpleanosPersona(d: { personaId: string; personaNombre: string; edad: number; fechaAR: string }): PayloadPush {
+  const nombre = primerNombre(d.personaNombre);
+  return {
+    title: `Hoy cumple ${nombre}`,
+    body: `Cumple ${d.edad}. Es un buen día para mandarle un saludo.`,
+    url: `/app/familia/${d.personaId}`,
+    tag: `cumpleanos-persona-${d.personaId}-${d.fechaAR}`,
+  };
+}
+
 /** El día anterior (20:00): "Mañana Elsa tiene Kinesiología". */
 export function payloadTurnoPersonaDiaAntes(t: {
   personaId: string;

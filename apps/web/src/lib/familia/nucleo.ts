@@ -158,6 +158,8 @@ export type DatosPerfilGestionado = {
   relacion: string | null;
   color: ColorPerfil;
   anioNacimiento: number | null;
+  /** "YYYY-MM-DD" ya validada por quien llama (fecha real, no futura). Si está, manda sobre el año. */
+  fechaNacimiento?: string | null;
   condiciones: string[];
 };
 
@@ -192,6 +194,11 @@ export async function crearPerfilGestionado(
     datos.anioNacimiento >= 1900 &&
     datos.anioNacimiento <= anioActual
       ? datos.anioNacimiento
+      : null;
+
+  const fechaNacimiento =
+    typeof datos.fechaNacimiento === "string" && /^\d{4}-\d{2}-\d{2}$/.test(datos.fechaNacimiento) && datos.fechaNacimiento <= fechaEnAR()
+      ? datos.fechaNacimiento
       : null;
 
   const condiciones: Condicion[] = datos.condiciones
@@ -229,6 +236,7 @@ export async function crearPerfilGestionado(
       nombre,
       color: datos.color,
       edad_rango: anio ? `Nació en ${anio}` : null,
+      ...(fechaNacimiento ? { fecha_nacimiento: fechaNacimiento } : {}),
       condiciones,
       // La persona no pasa por el onboarding: si algún día entra con su
       // código de acceso, va directo a /app (o /app/modo-simple).

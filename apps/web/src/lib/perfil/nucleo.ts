@@ -190,6 +190,25 @@ export async function guardarMedicionesEnCasa(supabase: Cliente, usuarioId: stri
 }
 
 /**
+ * Nacimiento declarado en el onboarding. Con fecha completa se guarda
+ * `fecha_nacimiento` (la fuente de verdad de la edad y del saludo de
+ * cumpleaños); si solo se sabe el año (o la edad, ya convertida a año) queda
+ * como "Nació en AAAA" en `edad_rango`, igual que los perfiles gestionados.
+ * `fecha` / `anio` llegan ya validados por `resolverNacimiento`.
+ */
+export async function guardarNacimiento(
+  supabase: Cliente,
+  usuarioId: string,
+  nacimiento: { fecha: string } | { anio: number }
+): Promise<void> {
+  if ("fecha" in nacimiento) {
+    await actualizarPerfilCrudo(supabase, usuarioId, { fecha_nacimiento: nacimiento.fecha });
+    return;
+  }
+  await actualizarPerfilCrudo(supabase, usuarioId, { edad_rango: `Nació en ${nacimiento.anio}` });
+}
+
+/**
  * Guarda la respuesta al paso "¿para quién vas a usar la app?"
  * (app/onboarding/para-quien/) — separada de `completarOnboarding` porque
  * se escribe un paso antes (todavía no hay nombre/edad/condiciones), y no

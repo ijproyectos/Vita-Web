@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fechaISOEnAR } from "@/lib/rutina/formato";
 import { calcularUso, type UsoDiarioConEstado } from "./tipos";
 import { costoMicroUSD, FACTOR_PRECIO_LOTE } from "./precios";
+import { obtenerConsultasHoy } from "./interacciones";
 import { LIMITE_MICRO_USD_DIARIO, LIMITE_USD_DIARIO, microDesdeTokensLegacy, microUsdDeFila, superaLimite } from "./limite";
 
 // Límite diario de uso de IA por usuario, en DÓLARES (US$10 por mes = US$0,33
@@ -48,9 +49,10 @@ async function leerGastoHoy(usuarioId: string): Promise<number | null> {
  */
 export async function obtenerUsoHoy(usuarioId: string): Promise<UsoDiarioConEstado | null> {
   try {
-    const gasto = await leerGastoHoy(usuarioId);
+    const [gasto, consultas] = await Promise.all([leerGastoHoy(usuarioId), obtenerConsultasHoy(usuarioId)]);
     if (gasto === null) return null;
-    return calcularUso(gasto, LIMITE_MICRO_USD_DIARIO);
+    const uso = calcularUso(gasto, LIMITE_MICRO_USD_DIARIO);
+    return consultas ? { ...uso, consultas } : uso;
   } catch {
     return null;
   }

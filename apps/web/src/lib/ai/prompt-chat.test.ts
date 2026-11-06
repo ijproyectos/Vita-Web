@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import { TOOLS } from "./tools";
 import { contextoResumen } from "@/lib/memoria/resumen-logica";
-import { SYSTEM_PROMPT, armarSystemChat, contextoDinamicoChat } from "./prompt-chat";
+import { SYSTEM_PROMPT, armarSystemChat, bloqueCumpleanos, contextoDinamicoChat } from "./prompt-chat";
 
 const ctx = (n: number) =>
   contextoDinamicoChat({
@@ -115,5 +115,26 @@ describe("prompt caching del chat", () => {
     expect(system[0].text).not.toContain("Resumen de charlas anteriores");
     expect(JSON.stringify(TOOLS)).not.toContain("Charlaron sobre el sueño");
     expect(SYSTEM_PROMPT).not.toContain("Resumen de charlas anteriores");
+  });
+  it("el cumpleaños de hoy va solo en el bloque dinámico y sin cumpleaños no agrega nada", () => {
+    const cumple = bloqueCumpleanos([
+      { nombre: "Ana", edad: 76, propio: true },
+      { nombre: "Elsa", edad: 80, propio: false },
+    ]);
+    const dinamico = contextoDinamicoChat({
+      contextoPerfil: "",
+      contextoHoy: "",
+      contextoCumple: cumple,
+      ahora: "viernes 6 de noviembre de 2026, 10:00",
+      hoyISO: "2026-11-06",
+    });
+    const system = armarSystemChat(dinamico);
+    expect(system[1].text).toContain("cumpleaños de quien te habla (cumple 76)");
+    expect(system[1].text).toContain('cumpleaños de "Elsa"');
+    expect(system[0].text).not.toContain("Cumpleaños de hoy");
+    expect(SYSTEM_PROMPT).not.toContain("Cumpleaños de hoy");
+    expect(bloqueCumpleanos([])).toBe("");
+    const sin = contextoDinamicoChat({ contextoPerfil: "", contextoHoy: "", ahora: "x", hoyISO: "2026-11-06" });
+    expect(sin).not.toContain("Cumpleaños");
   });
 });

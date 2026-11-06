@@ -19,8 +19,11 @@ import {
   refDeterminista,
   type RolCuidador,
 } from "./avisos-familia-reglas";
+import { cuidadorRecibeCumple, cumpleanerosDeHoy, enVentanaCumpleanos, personaRecibeCumple } from "./cumpleanos-logica";
 import {
   horaCorta,
+  payloadCumpleanosPersona,
+  payloadCumpleanosPropio,
   payloadResumenDia,
   payloadStockPersona,
   payloadTurnoAcompanadoDiaAntes,
@@ -74,8 +77,11 @@ export type ResumenProgramados = {
   resumenDia: number;
   turnoPersona: number;
   stockPersona: number;
+  cumpleanos: number;
   /** Solo si falló la parte de familia (el resto del tick no se ve afectado). */
   errorFamilia?: string;
+  /** Solo si falló el saludo de cumpleaños (el resto del tick no se ve afectado). */
+  errorCumpleanos?: string;
 };
 
 type FilaMedicamento = {
@@ -144,6 +150,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     resumenDia: 0,
     turnoPersona: 0,
     stockPersona: 0,
+    cumpleanos: 0,
   };
 
   const hoyAR = fechaEnAR(ahora);
@@ -411,7 +418,72 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     }
   }
 
+  // i) Cumpleaños: a la persona y a sus cuidadores, una vez por día. Un fallo acá no tumba lo ya enviado.
+  if (enVentanaCumpleanos(horaAR)) {
+    try {
+      await procesarCumpleanos(admin, hoyAR, horaAR, resumen);
+    } catch (e) {
+      resumen.errorCumpleanos = e instanceof Error ? e.message : "Fallo en el saludo de cumpleaños.";
+    }
+  }
+
   return resumen;
+}
+
+/**
+ * Saludo de cumpleaños de las 09:00 (ventana hasta las 11:59, ver
+ * cumpleanos-logica.ts). Solo perfiles con fecha de nacimiento COMPLETA. Dedupe
+ * claim-before-send: la propia persona por (cumpleanos, su id, fecha AR); cada
+ * cuidador por (cumpleanos_persona, uuid(persona, cuidador), fecha AR).
+ * El filtro por mes/día se hace en código: la columna es `date` y PostgREST no
+ * filtra por mes/día; se leen solo id/nombre/fecha de los perfiles que la
+ * tienen y solo durante las 3 h de la ventana.
+ */
+async function procesarCumpleanos(admin: Cliente, hoyAR: string, horaAR: string, resumen: ResumenProgramados): Promise<void> {
+  const { data, error } = await admin.from("perfiles").select("id, nombre, fecha_nacimiento").not("fecha_nacimiento", "is", null);
+  if (error) throw new Error(`No se pudieron leer los cumpleaños: ${error.message}`);
+  const cumpleaneros = cumpleanerosDeHoy((data ?? []) as { id: string; nombre: string | null; fecha_nacimiento: string | null }[], hoyAR);
+  if (cumpleaneros.length === 0) return;
+
+  const { data: vinculosData, error: errorVinculos } = await admin
+    .from("vinculos_cuidador")
+    .select("elder_id, cuidador_id")
+    .eq("estado", "aceptado")
+    .in("elder_id", cumpleaneros.map((c) => c.id));
+  if (errorVinculos) throw new Error(`No se pudieron leer los vínculos: ${errorVinculos.message}`);
+  const cuidadoresDe = new Map<string, string[]>();
+  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null }[]) {
+    if (!v.cuidador_id) continue;
+    cuidadoresDe.set(v.elder_id, [...(cuidadoresDe.get(v.elder_id) ?? []), v.cuidador_id]);
+  }
+
+  const idsConPrefs = [...new Set([...cumpleaneros.map((c) => c.id), ...[...cuidadoresDe.values()].flat()])];
+  const prefsMapa = await obtenerPreferenciasDe(admin, idsConPrefs);
+  const prefsDe = (id: string): PreferenciasAvisos => prefsMapa.get(id) ?? PREFERENCIAS_POR_DEFECTO;
+  const silenciado = (id: string) => enSilencioNocturno(prefsDe(id), horaAR);
+
+  for (const c of cumpleaneros) {
+    const nombre = c.nombre?.trim() || "";
+    // Las cuentas por código o gestionadas sin nombre no se saludan a sí mismas con un nombre inventado.
+    if (nombre && personaRecibeCumple(silenciado(c.id)) && (await reclamarEnvio(admin, "cumpleanos", c.id, hoyAR, c.id))) {
+      const payload = payloadCumpleanosPropio({ personaId: c.id, nombre, edad: c.cumple, fechaAR: hoyAR });
+      await entregarAviso(admin, c.id, { tipo: "cumpleanos", titulo: payload.title, cuerpo: payload.body, url: payload.url, datos: { edad: c.cumple } }, payload);
+      resumen.cumpleanos++;
+    }
+
+    for (const cuidadorId of cuidadoresDe.get(c.id) ?? []) {
+      if (!cuidadorRecibeCumple(prefsDe(cuidadorId), silenciado(cuidadorId))) continue;
+      if (!(await reclamarEnvio(admin, "cumpleanos_persona", refDeterminista(c.id, cuidadorId), hoyAR, cuidadorId))) continue;
+      const payload = payloadCumpleanosPersona({ personaId: c.id, personaNombre: nombre || "Tu familiar", edad: c.cumple, fechaAR: hoyAR });
+      await entregarAviso(
+        admin,
+        cuidadorId,
+        { tipo: "cumpleanos_persona", titulo: payload.title, cuerpo: payload.body, url: payload.url, personaId: c.id, datos: { personaId: c.id, edad: c.cumple } },
+        payload
+      );
+      resumen.cumpleanos++;
+    }
+  }
 }
 
 type ContextoFamilia = {
