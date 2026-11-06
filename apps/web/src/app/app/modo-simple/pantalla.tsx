@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -16,6 +15,7 @@ import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { usePosponer } from "@/lib/modo-simple/usar-posponer";
 import { olvidarModoSimple, recordarModoSimple } from "@/lib/modo-simple/recordar";
+import { volverAMiPerfilAction } from "@/app/app/familia/actions";
 import { VELOCIDAD_VOZ_LENTA, type PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { BarraSinConexion } from "@/components/vita/barra-sin-conexion";
 import { cancelarPosposicionAction, posponerDosisAction } from "@/lib/notificaciones/actions";
@@ -507,17 +507,48 @@ function SheetAjustes({
           {/* Salida presente siempre: dejar a alguien sin salida mientras hay
               una dosis pendiente (que puede durar todo el día) convertiría
               esto en una pantalla sin retorno real. */}
-          <Link
+          <EnlaceAMiCuenta
             href="/app/perfil"
-            onClick={olvidarModoSimple}
+            alNavegar={olvidarModoSimple}
             className="flex min-h-14 items-center gap-3 rounded-[var(--radius-item)] bg-secondary px-4 text-[16px] font-extrabold text-slate-brand"
           >
             <VitaIcon name="logout" size={24} />
             Salir del modo simple
-          </Link>
+          </EnlaceAMiCuenta>
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// El modo simple es siempre de la cuenta logueada. Si el perfil activo era otra
+// persona (un Lector en vista de solo mirar bloquea /app/perfil/*), antes de ir
+// a Perfil se vuelve al propio, para que el destino sea el de la cuenta correcta.
+function EnlaceAMiCuenta({
+  href,
+  alNavegar,
+  className,
+  children,
+}: {
+  href: string;
+  alNavegar?: () => void;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  return (
+    <a
+      href={href}
+      className={className}
+      onClick={async (e) => {
+        e.preventDefault();
+        alNavegar?.();
+        await volverAMiPerfilAction().catch(() => null);
+        router.push(href);
+      }}
+    >
+      {children}
+    </a>
   );
 }
 
@@ -533,12 +564,12 @@ function SheetAyudaSinContacto({ open, onOpenChange }: { open: boolean; onOpenCh
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-3 px-4">
-          <Link
+          <EnlaceAMiCuenta
             href="/app/perfil/contacto-emergencia"
             className="flex h-14 items-center justify-center rounded-full bg-primary text-[16px] font-extrabold text-primary-foreground"
           >
             Cargar contacto de emergencia
-          </Link>
+          </EnlaceAMiCuenta>
         </div>
       </SheetContent>
     </Sheet>

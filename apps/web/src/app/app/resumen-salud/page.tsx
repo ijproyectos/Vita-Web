@@ -2,11 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { edadTexto } from "@/lib/perfil/formato";
 import { metaDeCondicion } from "@/lib/perfil/tipos";
-import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
+import { esVistaSoloMirar, rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -22,7 +22,7 @@ export default async function ResumenSaludPage() {
   // Familia: el resumen es del perfil activo.
   const activo = await obtenerPerfilActivo();
   const [perfil, todos, adherencia] = await Promise.all([
-    perfilNucleo.obtenerPerfil(supabase, activo.id),
+    obtenerPerfilCacheado(activo.id),
     medicamentos.listarTodos(supabase, activo.id).catch(() => []),
     activo.esPropio ? medicamentos.calcularAdherencia(supabase, activo.id).catch(() => null) : Promise.resolve(null),
   ]);
@@ -51,7 +51,7 @@ export default async function ResumenSaludPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar volverA="/app/perfil" eyebrow="Perfil clínico" title="Resumen de salud" />
+      <TopBar volverA={rutaVolverAPerfil(activo)} eyebrow="Perfil clínico" title="Resumen de salud" />
       <BannerPerfil perfil={activo} />
 
       <div className="rounded-[20px] bg-card p-[18px] shadow-card">
@@ -68,7 +68,7 @@ export default async function ResumenSaludPage() {
         </div>
         {!soloMirar && (
           <Link href="/app/perfil/editar" className="mt-3 flex items-center justify-end gap-0.5 text-[12.5px] font-bold text-teal-deep">
-            {activo.rol === "editar" ? "Editar datos personales" : "Ver datos personales"}
+            Editar datos personales
             <VitaIcon name="chevron-right" size={14} />
           </Link>
         )}
@@ -77,7 +77,7 @@ export default async function ResumenSaludPage() {
       <ContenedorEnlace href={soloMirar ? null : "/app/condiciones"} className="rounded-[20px] bg-card p-[18px] shadow-card">
         <div className="flex items-center justify-between">
           <div className="font-heading text-base font-extrabold tracking-[-0.02em]">Condiciones y alergias</div>
-          {!soloMirar && <div className="text-[12.5px] font-bold text-teal-deep">{activo.rol === "editar" ? "Editar" : "Ver"}</div>}
+          {!soloMirar && <div className="text-[12.5px] font-bold text-teal-deep">Editar</div>}
         </div>
         <div className="mt-4 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-3.5 border-t border-dashed border-foreground/15 pt-3.5">
           <div className="pt-0.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-brand">Diagnóstico</div>
@@ -112,7 +112,7 @@ export default async function ResumenSaludPage() {
           <div className="font-heading text-base font-extrabold tracking-[-0.02em]">Medicación activa</div>
           {!soloMirar && (
             <Link href="/app/medicamentos" className="text-[12.5px] font-bold text-teal-deep">
-              {activo.rol === "editar" ? "Editar" : "Ver"}
+              Editar
             </Link>
           )}
         </div>

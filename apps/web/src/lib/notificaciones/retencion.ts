@@ -11,6 +11,7 @@ export const RETENCIONES = {
   acciones_agente: { columna: "created_at", ms: 48 * HORA_MS },
   registros_chat: { columna: "created_at", ms: 90 * DIA_MS },
   limites_pedidos: { columna: "ventana_inicio", ms: 2 * DIA_MS },
+  web_vitals: { columna: "created_at", ms: 30 * DIA_MS },
 } as const;
 
 /** Instante (ISO) anterior al cual las filas se borran. */

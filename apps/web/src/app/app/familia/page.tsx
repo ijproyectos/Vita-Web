@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/dal";
+import { esVistaSoloMirar, rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
 import { createClient } from "@/lib/supabase/server";
 import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
@@ -29,6 +30,7 @@ export default async function FamiliaPage() {
     esPropio: activo.esPropio,
   });
 
+  const soloMirar = esVistaSoloMirar(activo);
   const primerNombre = activo.nombre.split(" ")[0];
   const soloYo = cuidadores.length === 1 && cuidadores[0].esYo;
   const nadie = cuidadores.length === 0;
@@ -36,7 +38,7 @@ export default async function FamiliaPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar volverA="/app/perfil" eyebrow="Familia" title="Familia y permisos" />
+      <TopBar volverA={rutaVolverAPerfil(activo)} eyebrow="Familia" title="Familia y permisos" />
 
       <TarjetaVitaPlus />
 
@@ -60,9 +62,9 @@ export default async function FamiliaPage() {
           </div>
         ) : (
           <ul className="overflow-hidden rounded-[20px] bg-card shadow-card">
-            {familia.map((m, i) => (
-              <li key={m.vinculoId} className={i > 0 ? "border-t border-foreground/[0.06]" : ""}>
-                <Link href={`/app/familia/${m.id}`} className="flex items-center gap-[13px] px-4 py-3.5 transition-colors hover:bg-foreground/[0.02]">
+            {familia.map((m, i) => {
+              const contenido = (
+                <>
                   <AvatarPersona nombre={m.nombre} color={m.color ?? colorPorDefecto(i)} size={42} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{m.nombre}</div>
@@ -75,10 +77,22 @@ export default async function FamiliaPage() {
                       Lector
                     </span>
                   )}
-                  <VitaIcon name="chevron-right" size={17} className="shrink-0 text-faint" />
-                </Link>
-              </li>
-            ))}
+                  {!soloMirar && <VitaIcon name="chevron-right" size={17} className="shrink-0 text-faint" />}
+                </>
+              );
+              return (
+                <li key={m.vinculoId} className={i > 0 ? "border-t border-foreground/[0.06]" : ""}>
+                  {/* Un Lector en vista de solo mirar no abre las fichas (la guía lo devolvería al inicio sin explicar): filas sin enlace. */}
+                  {soloMirar ? (
+                    <div className="flex items-center gap-[13px] px-4 py-3.5">{contenido}</div>
+                  ) : (
+                    <Link href={`/app/familia/${m.id}`} className="flex items-center gap-[13px] px-4 py-3.5 transition-colors hover:bg-foreground/[0.02]">
+                      {contenido}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
         {familia.length > 0 && (

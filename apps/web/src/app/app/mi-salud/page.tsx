@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import * as estudiosNucleo from "@/lib/estudios/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import * as medicionesNucleo from "@/lib/mediciones/nucleo";
@@ -48,7 +48,7 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
   const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
   const puedeEditar = activo.rol === "editar";
   const [perfil, estudios, inventarios, mediciones, consultas, vacunas] = await Promise.all([
-    perfilNucleo.obtenerPerfil(supabase, activo.id),
+    obtenerPerfilCacheado(activo.id),
     estudiosNucleo.listar(supabase, activo.id),
     inventarioNucleo.listarSeguro(supabase, activo.id),
     medicionesNucleo.listarRecientesSeguro(supabase, activo.id),

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/dal";
-import { obtenerOpcionesPerfil, rolSobre } from "@/lib/familia/perfil-activo";
+import { rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
+import { obtenerOpcionesPerfil, obtenerPerfilActivo, rolSobre } from "@/lib/familia/perfil-activo";
 import { TopBar } from "../../top-bar";
 import { FilaNav, Grupo, Tile } from "../filas";
 import { AccionesDatos, type PersonaDatos } from "./acciones-datos";
@@ -9,6 +10,7 @@ import { AccionesDatos, type PersonaDatos } from "./acciones-datos";
 // completo), borrar historial viejo y los atajos legales y de compartir.
 export default async function PrivacidadPage() {
   const usuario = await requireUser();
+  const activo = await obtenerPerfilActivo();
   const opciones = await obtenerOpcionesPerfil();
 
   // "De quién": uno mismo y las personas que cuidás con permiso Admin (un
@@ -22,7 +24,7 @@ export default async function PrivacidadPage() {
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
-      <TopBar volverA="/app/perfil" eyebrow="Cuenta" title="Privacidad y datos" />
+      <TopBar volverA={rutaVolverAPerfil(activo)} eyebrow="Cuenta" title="Privacidad y datos" />
 
       <section>
         <h2 className="eyebrow px-0.5 pb-[9px] text-subtle">Qué guardamos</h2>

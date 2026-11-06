@@ -50,7 +50,7 @@ export async function avisarTurnoAcompanado(
     const admin = createAdminClient();
     const { data: vinculos, error } = await admin
       .from("vinculos_cuidador")
-      .select("cuidador_id, estado")
+      .select("cuidador_id, estado, rol")
       .eq("elder_id", turno.usuario_id)
       .eq("estado", "aceptado");
     if (error) return;
@@ -59,18 +59,21 @@ export async function avisarTurnoAcompanado(
 
     const { data: perfil } = await admin.from("perfiles").select("nombre").eq("id", turno.usuario_id).maybeSingle();
     const crudo = (perfil?.nombre as string | null | undefined)?.trim().split(/\s+/)[0];
-    const payload = payloadTurnoAcompanado({
-      personaId: turno.usuario_id,
-      personaNombre: crudo ? nombreConMayuscula(crudo) : "Tu familiar",
-      turnoId: turno.id,
-      especialidad: turno.especialidad,
-      fecha: turno.fecha,
-      hora: turno.hora,
-    });
+    const rolDe = new Map<string, "editar" | "ver">();
+    for (const v of (vinculos ?? []) as VinculoCrudo[]) if (v.cuidador_id) rolDe.set(v.cuidador_id, v.rol === "ver" ? "ver" : "editar");
 
     await Promise.all(
       destinatarios.map(async (cuidadorId) => {
         try {
+          const payload = payloadTurnoAcompanado({
+            personaId: turno.usuario_id,
+            personaNombre: crudo ? nombreConMayuscula(crudo) : "Tu familiar",
+            turnoId: turno.id,
+            especialidad: turno.especialidad,
+            fecha: turno.fecha,
+            hora: turno.hora,
+            rolDestino: rolDe.get(cuidadorId),
+          });
           await crearAviso(admin, cuidadorId, {
             tipo: "turno_acompanado",
             titulo: payload.title,

@@ -2,13 +2,9 @@ import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { origenPublico } from "@/lib/email/origen";
+import { destinoSeguro } from "@/lib/navegacion/destino-seguro";
 
 const TIPOS_OTP: EmailOtpType[] = ["signup", "invite", "magiclink", "recovery", "email_change", "email"];
-
-// Solo rutas internas: evita usar el callback como open redirect.
-function destinoSeguro(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/app";
-}
 
 // Vuelta de Google (`code`, PKCE) y de los links de mail de Supabase Auth
 // (`token_hash` + `type`: confirmación de cuenta con email, recuperación de

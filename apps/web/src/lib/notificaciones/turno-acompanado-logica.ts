@@ -18,7 +18,7 @@ export function debeAvisarAcompanado(previo: EstadoTurnoAcompanado | null, nuevo
   return previo.fecha !== nuevo.fecha || horaHHMM(previo.hora) !== horaHHMM(nuevo.hora);
 }
 
-export type VinculoCrudo = { cuidador_id: string | null; estado: string };
+export type VinculoCrudo = { cuidador_id: string | null; estado: string; rol?: string | null };
 
 /**
  * Cuidadores a avisar: vínculos ACEPTADOS con cuenta, sin repetidos, sin quien hizo la acción (un cuidador que

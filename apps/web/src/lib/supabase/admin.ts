@@ -76,7 +76,13 @@ import { createClient } from "@supabase/supabase-js";
  * `/api/chat`) y `verificarLimitePedidos` (`lib/limites/nucleo.ts`, `limites_pedidos` vía la RPC
  * `contar_pedido`: tope de pedidos por usuario / por IP hasheada con HMAC a `/api/chat` y `/api/voz/*`). Todos se llaman DESPUÉS de que la
  * sesión autenticó al usuario: el `usuario_id` sale de esa sesión, nunca del cliente. La retención de
- * `registros_chat` (90 días) y de `limites_pedidos` (2 días) la hace el cron `dosis-vencidas` (`lib/notificaciones/retencion.ts`).
+ * `registros_chat` (90 días), de `limites_pedidos` (2 días) y de `web_vitals` (30 días) la hace el cron `dosis-vencidas` (`lib/notificaciones/retencion.ts`).
+ *
+ * Telemetría ANÓNIMA de velocidad real (`POST /api/vitals`, `web_vitals`, migración 050): la mandan también pantallas sin
+ * sesión (/login), así que no hay usuario que autenticar; por eso la route valida el payload con zod (tamaño y forma), le saca
+ * ids y query a la ruta, frena por IP hasheada con HMAC (`contar_pedido`, la IP nunca se guarda) y solo hace `insert` en una
+ * tabla sin policies. No guarda usuario, IP ni user agent (solo se usa para decidir mobile / desktop). Retención de 30 días en
+ * el cron `dosis-vencidas`. Se lee únicamente con `admin_web_vitals` desde el panel, tras `requireAdmin()`.
  *
  * TEST-ONLY (token fijo de dispositivo; `lib/supabase/dispositivo.ts`): un ESP32 sin navegador llama a `/api/chat` y `/api/voz/*` con
  * `Authorization: Bearer <DISPOSITIVO_TOKEN>` como UN usuario fijo (`DISPOSITIVO_USUARIO_ID`). Solo si el token coincide (sha256 +

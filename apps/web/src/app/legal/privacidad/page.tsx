@@ -79,6 +79,11 @@ export default function PrivacidadPage() {
             <strong>Datos técnicos de sesión:</strong> usamos cookies estrictamente necesarias para mantener tu sesión
             iniciada. No usamos cookies publicitarias ni herramientas de analítica o seguimiento.
           </li>
+          <li>
+            <strong>Mediciones anónimas de velocidad:</strong> para saber si la app anda rápido, medimos cuánto tarda en
+            cargar cada pantalla. Se guarda solo la pantalla (sin identificadores), el tiempo medido y si se usó un celular o una
+            computadora, sin datos personales, sin tu cuenta, sin tu IP y se borran a los 30 días.
+          </li>
         </Lista>
       </Seccion>
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alDejarDeCuidar, contenidoDeRespaldo, esVistaSoloMirar, hayPersonaConNombre, nombreEnFrase, rutaPermitidaSoloMirar, unicoAdmin } from "./solo-mirar";
+import { alDejarDeCuidar, contenidoDeRespaldo, esVistaSoloMirar, hayPersonaConNombre, nombreEnFrase, rutaPermitidaSoloMirar, rutaVolverAPerfil, unicoAdmin } from "./solo-mirar";
 import type { CuidadorDePersona } from "./tipos";
 
 const c = (parcial: Partial<CuidadorDePersona>): CuidadorDePersona => ({
@@ -168,5 +168,21 @@ describe("hayPersonaConNombre", () => {
   it("un apellido distinto es otra persona", () => {
     expect(hayPersonaConNombre(familia, "Jesús")).toBe(false);
     expect(hayPersonaConNombre(familia, "Jesús Pérez")).toBe(false);
+  });
+});
+
+describe("rutaVolverAPerfil", () => {
+  it("Lector mirando a otra persona vuelve al inicio (Perfil esta bloqueado)", () => {
+    const ruta = rutaVolverAPerfil({ esPropio: false, rol: "ver" });
+    expect(ruta).toBe("/app");
+    expect(rutaPermitidaSoloMirar(ruta)).toBe(true);
+  });
+  it("perfil propio o Admin vuelve a Perfil", () => {
+    expect(rutaVolverAPerfil({ esPropio: true, rol: "editar" })).toBe("/app/perfil");
+    expect(rutaVolverAPerfil({ esPropio: false, rol: "editar" })).toBe("/app/perfil");
+  });
+  it("las pantallas de Perfil que un Lector abre tienen un Volver alcanzable", () => {
+    expect(rutaPermitidaSoloMirar("/app/perfil")).toBe(false);
+    expect(rutaPermitidaSoloMirar("/app/perfil/contacto-emergencia")).toBe(false);
   });
 });

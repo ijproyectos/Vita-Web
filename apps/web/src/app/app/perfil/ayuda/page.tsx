@@ -1,4 +1,6 @@
 import { requireUser } from "@/lib/dal";
+import { rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { TEXTO_BUILD, TEXTO_VERSION } from "@/lib/version";
 import { TopBar } from "@/app/app/top-bar";
 import { FilaNav, Grupo } from "../filas";
@@ -8,10 +10,11 @@ import { CORREO_SOPORTE } from "@/lib/legal/datos";
 // Ayuda y soporte (V7): preguntas frecuentes, un mail real y el formulario de reporte.
 export default async function AyudaPage() {
   await requireUser();
+  const activo = await obtenerPerfilActivo();
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
-      <TopBar volverA="/app/perfil" eyebrow="Cuenta" title="Ayuda y soporte" />
+      <TopBar volverA={rutaVolverAPerfil(activo)} eyebrow="Cuenta" title="Ayuda y soporte" />
 
       <Grupo>
         <FilaNav icon="help" label="Preguntas frecuentes" sub="Remedios, avisos, familia y datos" href="/app/perfil/ayuda/faq" />

@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/dal";
-import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import { TopBar } from "../../top-bar";
 import { FilaAccion, Grupo, Tile } from "../filas";
@@ -12,8 +13,8 @@ import { FormCerrarSesion } from "@/components/vita/form-cerrar-sesion";
 // falso), datos reales de la sesión y cierre de sesión.
 export default async function SeguridadPage() {
   const usuario = await requireUser();
-  const supabase = await createClient();
-  const perfil = await perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null);
+  const activo = await obtenerPerfilActivo();
+  const perfil = await obtenerPerfilCacheado(usuario.id).catch(() => null);
   const porCodigo = esEmailDeCuentaPorCodigo(usuario.email);
   const ultimoIngreso = usuario.last_sign_in_at
     ? new Intl.DateTimeFormat("es-AR", {
@@ -27,7 +28,7 @@ export default async function SeguridadPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar volverA="/app/perfil" eyebrow="Preferencias" title="Seguridad" />
+      <TopBar volverA={rutaVolverAPerfil(activo)} eyebrow="Preferencias" title="Seguridad" />
 
       <PinSeguridad uid={usuario.id} nombre={perfil?.nombre?.trim().split(/\s+/)[0] || "vita"} />
 

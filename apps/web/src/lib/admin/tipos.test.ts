@@ -3,6 +3,7 @@ import {
   leerIA,
   leerResumen,
   leerSistema,
+  leerVitals,
   leerSuspensiones,
   leerUsuarioDetalle,
   leerUsuarios,
@@ -82,6 +83,22 @@ describe("leerUsuarioDetalle", () => {
     expect(d?.conteos.medicamentos).toBe(4);
     expect(d?.cuidadores[0]).toMatchObject({ id: "c1", nombre: "Ana", rol: "editar" });
     expect(d?.pagos[0]).toMatchObject({ pagoId: "p1", arsPesos: 100 });
+  });
+});
+
+describe("leerVitals", () => {
+  it("entradas vacías no rompen", () => {
+    expect(leerVitals([])).toEqual({ metricas: [], rutasLentas: [] });
+    expect(leerVitals(null)).toEqual({ metricas: [], rutasLentas: [] });
+  });
+  it("mapea las métricas y las rutas lentas", () => {
+    const v = leerVitals([
+      { o_seccion: "metricas", o_datos: [{ metrica: "LCP", p75: 2400.5, n: 30, buenos_pct: 82.5 }, { metrica: "CLS", p75: 0.04, n: 30, buenos_pct: null }] },
+      { o_seccion: "rutas_lentas", o_datos: [{ ruta: "/app/rutina", p75_lcp: 3100, n: 8 }] },
+    ]);
+    expect(v.metricas[0]).toEqual({ metrica: "LCP", p75: 2400.5, n: 30, buenosPct: 82.5 });
+    expect(v.metricas[1].buenosPct).toBeNull();
+    expect(v.rutasLentas).toEqual([{ ruta: "/app/rutina", p75Lcp: 3100, n: 8 }]);
   });
 });
 

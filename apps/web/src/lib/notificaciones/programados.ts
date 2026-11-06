@@ -447,14 +447,16 @@ async function procesarCumpleanos(admin: Cliente, hoyAR: string, horaAR: string,
 
   const { data: vinculosData, error: errorVinculos } = await admin
     .from("vinculos_cuidador")
-    .select("elder_id, cuidador_id")
+    .select("elder_id, cuidador_id, rol")
     .eq("estado", "aceptado")
     .in("elder_id", cumpleaneros.map((c) => c.id));
   if (errorVinculos) throw new Error(`No se pudieron leer los vínculos: ${errorVinculos.message}`);
   const cuidadoresDe = new Map<string, string[]>();
-  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null }[]) {
+  const rolDe = new Map<string, "editar" | "ver">();
+  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null; rol: string | null }[]) {
     if (!v.cuidador_id) continue;
     cuidadoresDe.set(v.elder_id, [...(cuidadoresDe.get(v.elder_id) ?? []), v.cuidador_id]);
+    rolDe.set(`${v.elder_id}:${v.cuidador_id}`, v.rol === "ver" ? "ver" : "editar");
   }
 
   const idsConPrefs = [...new Set([...cumpleaneros.map((c) => c.id), ...[...cuidadoresDe.values()].flat()])];
@@ -474,7 +476,7 @@ async function procesarCumpleanos(admin: Cliente, hoyAR: string, horaAR: string,
     for (const cuidadorId of cuidadoresDe.get(c.id) ?? []) {
       if (!cuidadorRecibeCumple(prefsDe(cuidadorId), silenciado(cuidadorId))) continue;
       if (!(await reclamarEnvio(admin, "cumpleanos_persona", refDeterminista(c.id, cuidadorId), hoyAR, cuidadorId))) continue;
-      const payload = payloadCumpleanosPersona({ personaId: c.id, personaNombre: nombre || "Tu familiar", edad: c.cumple, fechaAR: hoyAR });
+      const payload = payloadCumpleanosPersona({ personaId: c.id, personaNombre: nombre || "Tu familiar", edad: c.cumple, fechaAR: hoyAR, rolDestino: rolDe.get(`${c.id}:${cuidadorId}`) });
       await entregarAviso(
         admin,
         cuidadorId,
@@ -570,6 +572,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           total: meds.length,
           pendientes,
           fechaAR: hoyAR,
+          rolDestino: cu.rol,
         });
         await entregarAviso(
           admin,
@@ -603,6 +606,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           turnoId: t.id,
           especialidad: t.especialidad,
           hora: t.hora,
+          rolDestino: cu.rol,
         });
         await entregarAviso(
           admin,
@@ -621,6 +625,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         especialidad: t.especialidad,
         profesional: t.profesional,
         hora: t.hora,
+        rolDestino: cu.rol,
       });
       await entregarAviso(
         admin,
@@ -645,6 +650,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         nombre: i.nombre,
         stock: i.stock,
         fechaAR: hoyAR,
+        rolDestino: cu.rol,
       });
       await entregarAviso(
         admin,

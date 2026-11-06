@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { RegistrarServiceWorker } from "@/components/vita/registrar-service-worker";
 import { AvisoVersionNueva } from "@/components/vita/aviso-version-nueva";
+import { ReportarVitals } from "@/components/vita/reportar-vitals";
 import "./globals.css";
 
 // Marca "vita." (Cuidado claro): Plus Jakarta Sans para todo, 500-800.
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Toaster />
         <RegistrarServiceWorker />
         <AvisoVersionNueva />
+        <ReportarVitals />
       </body>
     </html>
   );

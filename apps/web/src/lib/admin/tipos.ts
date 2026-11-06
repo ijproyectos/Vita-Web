@@ -415,6 +415,25 @@ export function leerSistema(filas: unknown): PanelSistema {
   };
 }
 
+// Velocidad real de los últimos días (migración 050, `admin_web_vitals`): p75 por métrica y las rutas más lentas por LCP.
+export type PanelVitals = {
+  metricas: { metrica: string; p75: number; n: number; buenosPct: number | null }[];
+  rutasLentas: { ruta: string; p75Lcp: number; n: number }[];
+};
+
+export function leerVitals(filas: unknown): PanelVitals {
+  const s = porSeccion(filas);
+  return {
+    metricas: lista(s.get("metricas")).map((r) => ({
+      metrica: txt(r.metrica),
+      p75: num(r.p75),
+      n: num(r.n),
+      buenosPct: numONull(r.buenos_pct),
+    })),
+    rutasLentas: lista(s.get("rutas_lentas")).map((r) => ({ ruta: txt(r.ruta), p75Lcp: num(r.p75_lcp), n: num(r.n) })),
+  };
+}
+
 // Interacciones con vita de hoy (migración 049): uso y límite efectivo por persona.
 export type InteraccionesAdmin = { usuarioId: string; usadas: number; limite: number; personalizado: boolean };
 

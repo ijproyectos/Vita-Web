@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import { colorPorDefecto } from "./colores";
 import { ErrorLecturaFamilia, estadoHoyPorPerfil, leerFamilia, listarFamilia } from "./nucleo";
 import { esColorPerfil, type MiembroFamilia, type OpcionPerfil, type PerfilActivo, type RolVinculo } from "./tipos";
@@ -36,8 +37,9 @@ const resolverContexto = cache(async (): Promise<Contexto> => {
   // Con una persona elegida, una lectura fallida no puede caer al perfil propio:
   // se verían o cargarían datos en la persona equivocada. Sin elegida, el activo
   // es el propio igual, así que solo se pierde el selector.
-  const [{ data: perfilPropio }, familia] = await Promise.all([
-    supabase.from("perfiles").select("nombre, color").eq("id", usuario.id).maybeSingle(),
+  // El perfil propio sale de la lectura memoizada por request (la comparte el layout), no de otra consulta.
+  const [perfilPropio, familia] = await Promise.all([
+    obtenerPerfilCacheado(usuario.id).catch(() => null),
     elegido ? leerFamilia(supabase) : listarFamilia(supabase),
   ]);
 

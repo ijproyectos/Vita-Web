@@ -3,6 +3,16 @@
 import type { PayloadPush } from "./push";
 import { fechaHoraTurnoTexto } from "./turno-acompanado-logica";
 
+/**
+ * Destino de un aviso sobre otra persona. La ficha (`/app/familia/<id>`) es de
+ * gestion del Admin: un Lector (rol "ver") no puede abrirla desde la vista de
+ * solo mirar (la guia lo devuelve a /app sin explicar nada), asi que a el se lo
+ * lleva a /app. Con el rol desconocido se mantiene la ficha.
+ */
+export function urlFichaPersona(personaId: string, rolDestino?: "editar" | "ver" | null): string {
+  return rolDestino === "ver" ? "/app" : `/app/familia/${personaId}`;
+}
+
 /** "09:00" -> "9:00" (así se dice en voz alta y se lee más natural). */
 export function horaCorta(hhmm: string): string {
   return hhmm.replace(/^0(\d:)/, "$1");
@@ -204,6 +214,7 @@ export function payloadResumenDia(d: {
   total: number;
   pendientes: { nombre: string; hora: string }[];
   fechaAR: string;
+  rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const nombre = primerNombre(d.personaNombre);
   const falta = d.pendientes.slice(0, 2).map((p) => `${p.nombre} (${horaCorta(p.hora)})`);
@@ -215,7 +226,7 @@ export function payloadResumenDia(d: {
   return {
     title: `${nombre} tomó ${d.tomadas} de ${d.total} hoy`,
     body: cuerpo,
-    url: `/app/familia/${d.personaId}`,
+    url: urlFichaPersona(d.personaId, d.rolDestino),
     tag: `resumen-dia-${d.personaId}-${d.fechaAR}`,
   };
 }
@@ -231,12 +242,12 @@ export function payloadCumpleanosPropio(d: { personaId: string; nombre: string; 
 }
 
 /** 09:00 del cumpleaños de la persona cuidada, a sus cuidadores. */
-export function payloadCumpleanosPersona(d: { personaId: string; personaNombre: string; edad: number; fechaAR: string }): PayloadPush {
+export function payloadCumpleanosPersona(d: { personaId: string; personaNombre: string; edad: number; fechaAR: string; rolDestino?: "editar" | "ver" | null }): PayloadPush {
   const nombre = primerNombre(d.personaNombre);
   return {
     title: `Hoy cumple ${nombre}`,
     body: `Cumple ${d.edad}. Es un buen día para mandarle un saludo.`,
-    url: `/app/familia/${d.personaId}`,
+    url: urlFichaPersona(d.personaId, d.rolDestino),
     tag: `cumpleanos-persona-${d.personaId}-${d.fechaAR}`,
   };
 }
@@ -249,12 +260,13 @@ export function payloadTurnoPersonaDiaAntes(t: {
   especialidad: string;
   profesional: string | null;
   hora: string;
+  rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const detalle = [horaCorta(t.hora), t.profesional?.trim() || null].filter(Boolean).join(" · ");
   return {
     title: `Mañana ${primerNombre(t.personaNombre)} tiene ${t.especialidad}`,
     body: detalle,
-    url: `/app/familia/${t.personaId}`,
+    url: urlFichaPersona(t.personaId, t.rolDestino),
     tag: `turno-persona-${t.turnoId}`,
   };
 }
@@ -267,6 +279,7 @@ export function payloadStockPersona(s: {
   nombre: string;
   stock: number;
   fechaAR: string;
+  rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const quien = primerNombre(s.personaNombre);
   const titulo =
@@ -278,7 +291,7 @@ export function payloadStockPersona(s: {
   return {
     title: titulo,
     body: "Para que lo pida a tiempo.",
-    url: `/app/familia/${s.personaId}`,
+    url: urlFichaPersona(s.personaId, s.rolDestino),
     tag: `stock-persona-${s.inventarioId}-${s.fechaAR}`,
   };
 }
@@ -298,11 +311,11 @@ export function payloadPersonaEnVita(d: { personaId: string; personaNombre: stri
  * con `requireInteraction`: no se cierra sola. No pasa por las preferencias de avisos
  * de familia ni por el silencio nocturno (ninguno de los dos se consulta al entregarlo).
  */
-export function payloadPedidoAyuda(d: { personaId: string; personaNombre: string; motivo: string }): PayloadPush {
+export function payloadPedidoAyuda(d: { personaId: string; personaNombre: string; motivo: string; rolDestino?: "editar" | "ver" | null }): PayloadPush {
   return {
     title: `${d.personaNombre} pidió ayuda`,
     body: d.motivo || "Necesita que te comuniques lo antes posible.",
-    url: `/app/familia/${d.personaId}`,
+    url: urlFichaPersona(d.personaId, d.rolDestino),
     tag: `pedido-ayuda-${d.personaId}`,
     requireInteraction: true,
     renotify: true,
@@ -318,11 +331,12 @@ export function payloadTurnoAcompanado(t: {
   especialidad: string;
   fecha: string;
   hora: string;
+  rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   return {
     title: `${primerNombre(t.personaNombre)} pidió compañía para su turno`,
     body: `${t.especialidad} · ${fechaHoraTurnoTexto(t.fecha, t.hora)}`,
-    url: `/app/familia/${t.personaId}`,
+    url: urlFichaPersona(t.personaId, t.rolDestino),
     tag: `turno-acompanado-${t.turnoId}`,
     datos: { personaId: t.personaId, turnoId: t.turnoId },
   };
@@ -335,11 +349,12 @@ export function payloadTurnoAcompanadoDiaAntes(t: {
   turnoId: string;
   especialidad: string;
   hora: string;
+  rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   return {
     title: `Mañana ${primerNombre(t.personaNombre)} tiene turno de ${t.especialidad}`,
     body: `A las ${horaCorta(t.hora)} · pidió compañía.`,
-    url: `/app/familia/${t.personaId}`,
+    url: urlFichaPersona(t.personaId, t.rolDestino),
     tag: `turno-acompanado-dia-antes-${t.turnoId}`,
   };
 }

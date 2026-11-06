@@ -1,6 +1,5 @@
 import { requireUser } from "@/lib/dal";
-import { createClient } from "@/lib/supabase/server";
-import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import { COLUMNAS_025 } from "@/lib/perfil/tipos";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
@@ -11,9 +10,8 @@ import { FormularioEditarPerfil } from "./formulario";
 // "Guardar cambios". Edita el perfil activo (propio o de alguien a cargo).
 export default async function EditarPerfilPage() {
   await requireUser();
-  const supabase = await createClient();
   const activo = await obtenerPerfilActivo();
-  const perfil = await perfilNucleo.obtenerPerfil(supabase, activo.id).catch(() => null);
+  const perfil = await obtenerPerfilCacheado(activo.id).catch(() => null);
 
   if (!perfil) return null;
 

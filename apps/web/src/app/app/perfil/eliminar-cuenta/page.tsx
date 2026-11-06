@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/dal";
-import { obtenerOpcionesPerfil } from "@/lib/familia/perfil-activo";
+import { rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
+import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../../top-bar";
 import { FormularioEliminar } from "./formulario";
@@ -9,6 +10,7 @@ import { FormularioEliminar } from "./formulario";
 // se usa el cliente admin).
 export default async function EliminarCuentaPage() {
   await requireUser();
+  const activo = await obtenerPerfilActivo();
   const opciones = await obtenerOpcionesPerfil();
   const aCargo = opciones.filter((o) => !o.esPropio);
 
@@ -20,7 +22,7 @@ export default async function EliminarCuentaPage() {
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar volverA="/app/perfil" eyebrow="Cuenta" title="Eliminar mi cuenta" />
+      <TopBar volverA={rutaVolverAPerfil(activo)} eyebrow="Cuenta" title="Eliminar mi cuenta" />
 
       <p className="px-1 text-pretty text-sm font-medium leading-[1.5] text-slate-brand">Es para siempre. No se puede deshacer.</p>
 

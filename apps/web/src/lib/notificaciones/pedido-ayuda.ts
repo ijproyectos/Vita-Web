@@ -88,10 +88,10 @@ export async function pedirAyudaAFamilia(
     }
     if (tope) return { status: "tope" };
 
-    const payload = payloadPedidoAyuda({ personaId: usuarioId, personaNombre: primerNombre, motivo });
     const entregas = await Promise.all(
       cuidadores.map(async (c) => {
         try {
+          const payload = payloadPedidoAyuda({ personaId: usuarioId, personaNombre: primerNombre, motivo, rolDestino: c.rol });
           const feed = await crearAviso(admin, c.cuidadorId, {
             tipo: "pedido_ayuda",
             titulo: payload.title,
