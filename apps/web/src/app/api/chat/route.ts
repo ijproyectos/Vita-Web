@@ -23,7 +23,7 @@ import { verificarLimitePedidos } from "@/lib/limites/nucleo";
 import { LIMITES_CHAT } from "@/lib/limites/logica";
 import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicionInicial } from "@/lib/chat/registros-logica";
 import { registrarRespuestaChat } from "@/lib/chat/registros";
-import { leerPersona } from "@/lib/ai/persona-jarvis";
+import { leerPersona, personaSinAvatar } from "@/lib/ai/persona-jarvis";
 import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
 import { SYSTEM_PROMPT, armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
 import {
@@ -81,6 +81,8 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetr
 const VERSION_PROMPT = calcularVersionPrompt(SYSTEM_PROMPT, TOOLS, MODELO_IA);
 // El modo simple ofrece otras tools (y su estilo va en el bloque dinámico): se distingue en los registros.
 const TOOLS_SIMPLE = toolsParaModo("simple");
+// Sin set_avatar_mood: el dispositivo de escritorio no lo usa y cada tool call cuesta una vuelta más al modelo.
+const TOOLS_SIMPLE_SIN_AVATAR = TOOLS_SIMPLE.filter((t) => t.name !== "set_avatar_mood");
 const VERSION_PROMPT_SIMPLE = `${calcularVersionPrompt(SYSTEM_PROMPT, TOOLS_SIMPLE, MODELO_IA)}:simple`;
 
 // Bloque "Hoy" del contexto: medicamentos (con estado) y turnos de hoy de quien
@@ -165,7 +167,7 @@ export async function POST(request: Request) {
   const modoSimple = modo === "simple";
   // Persona del dispositivo de escritorio (solo cambia el estilo del modo simple; no da acceso a nada nuevo).
   const persona = leerPersona(cuerpo.persona);
-  const toolsDelModo = modoSimple ? TOOLS_SIMPLE : TOOLS;
+  const toolsDelModo = modoSimple ? (personaSinAvatar(persona) ? TOOLS_SIMPLE_SIN_AVATAR : TOOLS_SIMPLE) : TOOLS;
   // Id de la acción pendiente cuyo botón tocó el usuario: solo un uuid; el servidor lo valida contra su fila.
   const confirmacionId =
     typeof cuerpo.confirmacionId === "string" && UUID_RE.test(cuerpo.confirmacionId) ? cuerpo.confirmacionId : undefined;
