@@ -20,9 +20,9 @@ export function codigoVinculacion(args: {
       </tr></table>
       <p style="margin:12px 0 22px;font-size:16px;line-height:24px;text-align:center;font-weight:700;color:${MARCA.tealDeep};">Vence en ${minutosVigencia} minutos</p>
       <p style="margin:0 0 10px;font-size:18px;line-height:27px;font-weight:800;color:${MARCA.ink};">Cómo usarlo</p>
-      <p style="${paso}"><strong>1.</strong> Abrí vita.</p>
-      <p style="${paso}"><strong>2.</strong> Elegí &ldquo;Me invitó un familiar, tengo un código&rdquo;.</p>
-      <p style="${paso}"><strong>3.</strong> Escribí el código.</p>
+      <p style="${paso}"><strong>1.</strong> Tocá &ldquo;Abrir vita&rdquo;.</p>
+      <p style="${paso}"><strong>2.</strong> Tu código ya viene escrito.</p>
+      <p style="${paso}"><strong>3.</strong> Tocá &ldquo;Continuar&rdquo;.</p>
       ${boton("Abrir vita", urlIngreso)}
       <p style="${ESTILO.chico}">Si el botón no funciona, copiá este link: <span style="word-break:break-all;color:${MARCA.tealDeep};">${esc(urlIngreso)}</span></p>`;
 
@@ -33,9 +33,9 @@ export function codigoVinculacion(args: {
     `Vence en ${minutosVigencia} minutos.`,
     "",
     "Cómo usarlo:",
-    "1) Abrí vita.",
-    '2) Elegí "Me invitó un familiar, tengo un código".',
-    "3) Escribí el código.",
+    "1) Tocá el link de abajo.",
+    "2) Tu código ya viene escrito.",
+    '3) Tocá "Continuar".',
     "",
     `Abrir vita: ${urlIngreso}`,
     "",

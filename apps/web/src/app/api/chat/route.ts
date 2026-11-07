@@ -177,7 +177,7 @@ export async function POST(request: Request) {
   } catch {
     return respuestaErrorSinReintento("No pude leer tu mensaje. Probá de nuevo.");
   }
-  const { sesionId: sesionIdEntrante, pedidoId: pedidoIdEntrante, reintento, perfilActivoId } = cuerpo;
+  const { pedidoId: pedidoIdEntrante, reintento, perfilActivoId } = cuerpo;
   // Validación ANTES de llamar a Anthropic (y de gastar el límite diario).
   if (typeof cuerpo.mensaje !== "string" || cuerpo.mensaje.trim() === "") {
     return respuestaErrorSinReintento("Escribí un mensaje para vita.");
@@ -318,22 +318,15 @@ export async function POST(request: Request) {
           return;
         }
 
-        // Un sesionId entrante solo se usa si de verdad es del usuario —
-        // ver el comentario en sesionPerteneceAUsuario(). Si no matchea
-        // (URL manipulada a mano, o la sesión ya no existe), se trata
-        // igual que "sin sesionId": se crea una nueva y se le avisa al
-        // cliente cuál es la real.
-        const sesionValida =
-          !!sesionIdEntrante && (await chat.sesionPerteneceAUsuario(supabase, user.id, sesionIdEntrante));
-        const sesionId = sesionValida
-          ? sesionIdEntrante!
-          : await chat.crearSesion(supabase, user.id);
+        // Una sola conversación continua por persona: siempre se escribe en la sesión activa (la de actividad más
+        // reciente, o una nueva si no hay). El `sesionId` que mande el cliente no se usa: nunca se confía en él.
+        const sesionId = await chat.obtenerSesionActiva(supabase, user.id);
         medicion.sesionId = sesionId;
-        if (!sesionValida) enviar({ session: sesionId });
+        enviar({ session: sesionId });
 
         // En un reintento el primer intento pudo haber llegado más o menos lejos.
         const previo =
-          reintento === true && sesionValida
+          reintento === true
             ? await estadoDelReintento(supabase, user.id, sesionId, mensaje)
             : { estado: "nuevo" as const };
         if (previo.estado === "respondido") {
@@ -406,9 +399,10 @@ export async function POST(request: Request) {
         }
 
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
-        // verdad), nunca se confía en lo que mande el cliente.
-        const mensajesGuardados = await chat.listarMensajes(supabase, user.id, sesionId);
-        // Solo los últimos N, y la lista tiene que arrancar con un turno del
+        // verdad), nunca se confía en lo que mande el cliente. Es la cola del
+        // hilo continuo (últimos 7 días, todas las sesiones), no una sesión suelta.
+        const mensajesGuardados = await chat.listarCola(supabase, user.id, MAX_MENSAJES_HISTORIAL);
+        // Solo los últimos N (ya vienen acotados), y la lista tiene que arrancar con un turno del
         // usuario (la API lo exige): se recorta del principio hasta lograrlo.
         const recientes = mensajesGuardados.slice(-MAX_MENSAJES_HISTORIAL);
         const primerUsuario = recientes.findIndex((m) => m.role === "user");

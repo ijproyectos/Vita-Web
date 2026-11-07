@@ -6,7 +6,7 @@ import { PREFERENCIAS_POR_DEFECTO } from "@/lib/notificaciones/avisos-tipos";
 import { procesarAvisosProgramados, type ResumenProgramados } from "@/lib/notificaciones/programados";
 import { payloadDosisVencida } from "@/lib/notificaciones/mensajes";
 import { procesarEnviosMasivos } from "@/lib/notificaciones/masivos";
-import { purgarAnteriores } from "@/lib/notificaciones/retencion";
+import { purgarAnteriores, purgarMensajesDeChat } from "@/lib/notificaciones/retencion";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -200,7 +200,12 @@ export async function POST(request: Request) {
   // - `web_vitals` (050): mediciones anónimas de velocidad real -> 30 días.
   const vitalsPurgados = await purgarAnteriores(admin, "web_vitals");
 
+  // - `mensajes_chat` (003): el chat es un hilo continuo de 7 días; los mensajes más viejos se borran por tandas y
+  //   las sesiones que quedan vacías también. Lo que vita recuerda (memorias, resumen) NO se toca.
+  const chatPurgado = await purgarMensajesDeChat(admin);
+
   return NextResponse.json({
+    chatPurgado,
     accionesPurgadas,
     registrosPurgados,
     limitesPurgados,

@@ -336,3 +336,53 @@ export async function borrarRecuerdosDeSesionesHasta(supabase: Cliente, usuarioI
     return { ok: false };
   }
 }
+
+/**
+ * "Borrar historial" con el chat continuo: deja borrado sin texto todo recuerdo vigente cuyo mensaje de origen es
+ * anterior al corte, o cuyo mensaje de origen ya no existe (la retención de 7 días lo borró) y que se creó antes del
+ * corte. Los recuerdos sin mensaje de origen (cargados a mano) no salieron de una conversación y no se tocan. Se llama
+ * ANTES de borrar los mensajes. Mismo contrato que `borrarRecuerdosDeSesionesHasta`: `ok: false` = el que llama NO sigue.
+ */
+export async function borrarRecuerdosHasta(supabase: Cliente, usuarioId: string, corteIso: string): Promise<{ ok: true; recuerdos: number } | { ok: false }> {
+  try {
+    const rpc = await supabase.rpc("borrar_recuerdos_hasta", { p_corte: corteIso });
+    if (!rpc.error) return { ok: true, recuerdos: typeof rpc.data === "number" ? rpc.data : 0 };
+    if (!faltaMigracion(rpc.error)) return { ok: false };
+
+    // Sin la 051: mismos pasos desde el cliente.
+    const { data: filas, error: errFilas } = await supabase
+      .from("memorias")
+      .select("id, mensaje_origen_id, created_at")
+      .eq("usuario_id", usuarioId)
+      .neq("estado", "borrado")
+      .not("mensaje_origen_id", "is", null);
+    if (errFilas) return faltaMigracion(errFilas) ? { ok: true, recuerdos: 0 } : { ok: false };
+    const memorias = (filas ?? []) as { id: string; mensaje_origen_id: string; created_at: string }[];
+    if (memorias.length === 0) return { ok: true, recuerdos: 0 };
+
+    const origen = new Map<string, string>(); // id de mensaje -> created_at (solo los que existen)
+    for (let i = 0; i < memorias.length; i += TANDA) {
+      const ids = [...new Set(memorias.slice(i, i + TANDA).map((m) => m.mensaje_origen_id))];
+      const { data, error } = await supabase.from("mensajes_chat").select("id, created_at").eq("usuario_id", usuarioId).in("id", ids);
+      if (error) return { ok: false };
+      for (const m of (data ?? []) as { id: string; created_at: string }[]) origen.set(m.id, m.created_at);
+    }
+    const aBorrar = memorias
+      .filter((m) => {
+        const msg = origen.get(m.mensaje_origen_id);
+        const corte = Date.parse(corteIso);
+        return msg !== undefined ? Date.parse(msg) < corte : Date.parse(m.created_at) < corte;
+      })
+      .map((m) => m.id);
+    if (aBorrar.length > 0 && !((await invalidarResumen(supabase)) && (await descartarConsolidacionPendiente(supabase)))) return { ok: false };
+    let recuerdos = 0;
+    for (let i = 0; i < aBorrar.length; i += TANDA) {
+      const { data, error } = await supabase.from("memorias").update(BORRADO()).eq("usuario_id", usuarioId).neq("estado", "borrado").in("id", aBorrar.slice(i, i + TANDA)).select("id");
+      if (error) return { ok: false };
+      recuerdos += data?.length ?? 0;
+    }
+    return { ok: true, recuerdos };
+  } catch {
+    return { ok: false };
+  }
+}

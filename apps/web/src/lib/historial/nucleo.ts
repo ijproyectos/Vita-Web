@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fechaEnAR } from "@/lib/medicamentos/nucleo";
-import { borrarRecuerdosDeSesionesHasta, invalidarResumen } from "@/lib/memoria/privacidad";
+import { borrarRecuerdosHasta, invalidarResumen } from "@/lib/memoria/privacidad";
 import type { CantidadesBorradas, RangoBorrado } from "./tipos";
 
 type Cliente = SupabaseClient;
@@ -63,12 +63,18 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
     if (rutas.length > 0) await supabase.storage.from(BUCKET_ESTUDIOS).remove(rutas);
   }
 
+  // El chat es un hilo continuo (una sesión larga): se borra por fecha de cada mensaje, no por la actividad de la
+  // sesión. "Todo" limpia también lo de hoy (con un margen por el reloj del servidor); 6 meses / 1 año usan el corte.
+  const corteChat = rango === "all" ? new Date(Date.now() + 60_000).toISOString() : corteTs;
+
   // Lo que vita recordó de las conversaciones que se van se borra primero (después ya no se encuentran sus mensajes).
   // Si no se puede, no se borran las conversaciones: nunca queda texto derivado sin su origen.
-  const recuerdos = await borrarRecuerdosDeSesionesHasta(supabase, usuarioId, corteTs);
+  const recuerdos = await borrarRecuerdosHasta(supabase, usuarioId, corteChat);
   if (!recuerdos.ok) throw new Error("No se pudo borrar lo que vita recordaba de esas conversaciones.");
 
-  const conversaciones = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId).lt("updated_at", corteTs).select("id");
+  const mensajes = await supabase.from("mensajes_chat").delete().eq("usuario_id", usuarioId).lt("created_at", corteChat);
+  if (mensajes.error) throw new Error("No se pudieron borrar las conversaciones.");
+  const conversaciones = await supabase.from("sesiones_chat").delete().eq("usuario_id", usuarioId).lt("updated_at", corteChat).select("id");
   if (conversaciones.error) throw new Error("No se pudieron borrar las conversaciones.");
   // Un resumen armado entre la invalidación de arriba y el borrado podría traer texto de lo que se acaba de borrar.
   if ((conversaciones.data?.length ?? 0) > 0) await invalidarResumen(supabase);

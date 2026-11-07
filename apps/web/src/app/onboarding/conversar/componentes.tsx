@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { CLASES_COLOR } from "@/lib/familia/colores";
 import type { ColorPerfil } from "@/lib/familia/tipos";
 import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
+import { mensajeCodigoAcceso } from "@/lib/acceso-codigo/enlace";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 
 // Piezas de UI compartidas por el onboarding conversacional nuevo
@@ -340,7 +341,7 @@ export function TarjetaCodigoCompartir({ nombre, codigo, venceA }: { nombre: str
   const [copiado, setCopiado] = useState(false);
 
   function mensaje() {
-    return `Tu código para entrar a vita: ${codigo}. Abrí ${window.location.origin}/login, tocá «Tengo un código» y escribilo. Vence en ${MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos y sirve una sola vez.`;
+    return mensajeCodigoAcceso({ codigo, origen: window.location.origin });
   }
 
   async function copiar() {

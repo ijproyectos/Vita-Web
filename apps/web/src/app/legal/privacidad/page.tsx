@@ -57,8 +57,9 @@ export default function PrivacidadPage() {
             cantidad que confirmás.
           </li>
           <li>
-            <strong>Conversaciones con vita:</strong> los mensajes que intercambiás con el asistente se guardan para
-            que puedas retomar tus conversaciones. Podés borrar el historial desde Perfil → Privacidad y datos. Lo que vita recuerda de ellas se describe en la sección 6.
+            <strong>Conversaciones con vita:</strong> tu charla con el asistente es una sola conversación continua, como en
+            un chat de mensajería. Los mensajes se guardan <strong>7 días</strong> y después se borran solos; podés borrar el historial antes desde
+            Perfil → Privacidad y datos. Lo que vita recuerda de ellos se conserva aparte y se describe en la sección 6.
           </li>
           <li>
             <strong>Voz:</strong> si usás el modo voz, el audio de tu micrófono se envía a un servicio externo para
@@ -180,7 +181,7 @@ export default function PrivacidadPage() {
           <li>
             <strong>Es tuyo y lo ves vos:</strong> en Perfil → Privacidad y datos → Lo que vita recuerda de vos ves todo
             lo que recuerda, y podés pedirle que deje de recordar algo puntual o que olvide todo. Al dejar de recordar,
-            los mensajes de donde salió siguen en tu historial del chat pero vita ya no los busca; para borrar los mensajes
+            los mensajes de donde salió siguen en tu chat hasta cumplir 7 días pero vita ya no los busca; para borrarlos antes
             usás “Borrar historial”.
           </li>
           <li>
@@ -197,15 +198,16 @@ export default function PrivacidadPage() {
           </li>
           <li>
             Para recordar y buscar, el texto que vita guarda y el de tus conversaciones se procesa con Anthropic, como el
-            resto del chat. Si borrás tu historial o tu cuenta, se borra también lo que vita recuerda de esas
-            conversaciones. El modo simple no usa la memoria.
+            resto del chat. Los mensajes del chat se borran a los 7 días, pero <strong>lo que vita recuerda se conserva hasta que vos lo borres</strong>
+            (o elimines tu cuenta). Si usás “Borrar historial”, se borra también lo que vita recordó de los mensajes que se borran.
+            El modo simple no usa la memoria.
           </li>
         </Lista>
       </Seccion>
 
       <Seccion titulo="7. Cuánto tiempo conservamos tus datos">
         <p>
-          Conservamos tus datos mientras tengas tu cuenta. Cuando eliminás tu cuenta (Perfil → Privacidad y datos →
+          Conservamos tus datos mientras tengas tu cuenta, salvo los mensajes del chat con vita, que se borran solos a los 7 días. Cuando eliminás tu cuenta (Perfil → Privacidad y datos →
           Eliminar mi cuenta) se borran de forma permanente tu perfil, medicamentos, historial de tomas, turnos,
           estudios y sus fotos, conversaciones, recuerdos de vita, vínculos de cuidado y contadores de uso. Esta acción no se puede
           deshacer. Los proveedores mencionados pueden conservar copias de seguridad o registros por el tiempo que
