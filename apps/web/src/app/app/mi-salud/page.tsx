@@ -3,7 +3,6 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import * as estudiosNucleo from "@/lib/estudios/nucleo";
-import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import * as medicionesNucleo from "@/lib/mediciones/nucleo";
 import { agruparPorTipo, resumirTipo } from "@/lib/mediciones/resumen";
 import { TIPOS_MEDICION } from "@/lib/mediciones/tipos";
@@ -47,10 +46,9 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
   // Familia: Mi Salud muestra la salud del perfil activo.
   const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
   const puedeEditar = activo.rol === "editar";
-  const [perfil, estudios, inventarios, mediciones, consultas, vacunas] = await Promise.all([
+  const [perfil, estudios, mediciones, consultas, vacunas] = await Promise.all([
     obtenerPerfilCacheado(activo.id),
     estudiosNucleo.listar(supabase, activo.id),
-    inventarioNucleo.listarSeguro(supabase, activo.id),
     medicionesNucleo.listarRecientesSeguro(supabase, activo.id),
     registrosNucleo.listarConsultasSeguro(supabase, activo.id),
     registrosNucleo.listarVacunasSeguro(supabase, activo.id),
@@ -63,7 +61,6 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
   const resumenes = TIPOS_MEDICION.filter((t) => medicionesPorTipo.has(t)).map((t) =>
     resumirTipo(t, medicionesPorTipo.get(t)!)
   );
-  const pocoStock = inventarioNucleo.filtrarStockBajo(inventarios).length;
   const condiciones = perfil?.condiciones ?? [];
   const alergias = perfil?.alergias ?? [];
   const nombre = perfil?.nombre?.trim() || activo.nombre;
@@ -134,32 +131,6 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
           </div>
         </div>
       </details>
-
-      {/* Mis pastillas — conteo por foto del blister + control de stock */}
-      <Link
-        href="/app/pastillas"
-        className="flex items-center gap-3 rounded-[20px] bg-card p-[15px] shadow-card transition-transform active:scale-[0.99] motion-reduce:transition-none"
-      >
-        <div
-          className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-tile)]",
-            pocoStock > 0 ? "bg-aviso-tint text-aviso-ink" : "bg-persona-1-tint text-persona-1-deep"
-          )}
-        >
-          <VitaIcon name="pill" size={20} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">
-            {activo.esPropio ? "Mis pastillas" : "Sus pastillas"}
-          </div>
-          <div className="mt-0.5 text-[11.5px] font-medium text-subtle">
-            {pocoStock > 0
-              ? `${pocoStock} ${pocoStock === 1 ? "medicamento con poco stock" : "medicamentos con poco stock"}`
-              : "Sacale una foto al blister y llevá la cuenta de lo que queda"}
-          </div>
-        </div>
-        <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
-      </Link>
 
       {/* Monitoreo activo — mediciones reales (presión, glucemia, peso…) */}
       <section>

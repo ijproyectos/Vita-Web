@@ -42,6 +42,22 @@ export default async function MedicamentosPage(props: PageProps<"/app/medicament
         detalle={detalle}
       />
 
+      <Link
+        href="/app/pastillas"
+        className="flex items-center gap-3 rounded-[20px] bg-card p-[15px] shadow-card transition-transform active:scale-[0.99] motion-reduce:transition-none"
+      >
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-tile)] bg-chip-teal-bg text-chip-teal-ink">
+          <VitaIcon name="camera" size={20} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">
+            {activo.esPropio ? "Mis pastillas" : "Sus pastillas"}
+          </div>
+          <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Cuántas quedan de cada medicamento</div>
+        </div>
+        <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
+      </Link>
+
       {puedeEditar && (
         <Link
           href="/app/agregar-medicamento"

@@ -16,6 +16,7 @@ import {
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { EditorTomas } from "@/components/vita/editor-tomas";
+import { CampoMedicamento } from "@/components/vita/campo-medicamento";
 import { ajustarTomas, cantidadDeTomas, FRECUENCIAS_MEDICAMENTO, type TomaForm } from "@/lib/medicamentos/comidas";
 import { indicacionDeComida, textoDosis, type Medicamento } from "@/lib/medicamentos/tipos";
 import { separarDosis } from "@/lib/inventario/tipos";
@@ -212,6 +213,13 @@ export function ListaMedicamentos({
                   </button>
                   {puedeEditar && (
                     <>
+                      <Link
+                        href={`/app/pastillas/contar?medicamento=${g.filas[0].id}&desde=medicamentos`}
+                        aria-label={`Contar pastillas de ${nombre}`}
+                        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-canvas/60 text-slate-brand transition-colors hover:bg-canvas"
+                      >
+                        <VitaIcon name="camera" size={14} strokeWidth={2.2} />
+                      </Link>
                       <BotonLapiz etiqueta={`Editar ${nombre}`} onClick={() => { setBorrando(null); setEdicion(edicionDe(g)); }} />
                       <BotonPapelera etiqueta={`Eliminar ${nombre}`} onClick={() => { setEdicion(null); setBorrando(g.id); }} />
                     </>
@@ -282,7 +290,7 @@ function FormEdicion({
     >
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2">
         <CampoPill etiqueta="Nombre">
-          <input value={edicion.nombre} onChange={(e) => onCambio({ ...edicion, nombre: e.target.value })} className={CLASE_INPUT_PILL} />
+          <CampoMedicamento variante="pill" value={edicion.nombre} onChange={(nombre) => onCambio({ ...edicion, nombre })} ariaLabel="Nombre del medicamento" />
         </CampoPill>
         <CampoPill etiqueta="Dosis">
           <input value={edicion.dosis} onChange={(e) => onCambio({ ...edicion, dosis: e.target.value })} placeholder="500 mg" className={CLASE_INPUT_PILL} />

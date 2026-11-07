@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { TopBar } from "../../top-bar";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
+import { destinoSeguro } from "@/lib/navegacion/destino-seguro";
 import { FlujoContar, type OpcionMedicamento } from "./flujo-contar";
 
 export default async function ContarPastillasPage(props: PageProps<"/app/pastillas/contar">) {
@@ -16,6 +17,16 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
   const searchParams = await props.searchParams;
   const param = searchParams?.medicamento;
   const preseleccionado = Array.isArray(param) ? param[0] : param;
+
+  const nombreParam = searchParams?.nombre;
+  const nombreInicial = (Array.isArray(nombreParam) ? nombreParam[0] : nombreParam)?.trim().slice(0, 80) ?? "";
+  const desdeParam = searchParams?.desde;
+  const desde = Array.isArray(desdeParam) ? desdeParam[0] : desdeParam;
+  // Solo vuelve a las pantallas de Medicamentos desde las que se abre; cualquier otro valor cae a "Mis pastillas".
+  const volverA = destinoSeguro(
+    desde === "medicamentos" ? "/app/medicamentos" : desde === "agregar" ? "/app/agregar-medicamento" : null,
+    "/app/pastillas"
+  );
 
   const grupos = await inventarioNucleo.listarGrupos(supabase, activo.id);
 
@@ -33,9 +44,12 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
-      <TopBar volverA="/app/pastillas" eyebrow="Mis pastillas" title="Contar pastillas" />
+      <TopBar volverA={volverA} eyebrow="Medicamentos" title="Contar pastillas" />
       <BannerPerfil perfil={activo} accion="cargar" />
-      <FlujoContar opciones={opciones} inicialId={grupoPreseleccionado?.representanteId ?? ""} />
+      <FlujoContar opciones={opciones} inicialId={grupoPreseleccionado?.representanteId ?? ""}
+        nombreInicial={nombreInicial}
+        volverA={volverA === "/app/agregar-medicamento" ? "/app/pastillas" : volverA}
+      />
     </div>
   );
 }

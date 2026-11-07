@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import type { EstadoAccion } from "@/app/app/rutina/actions";
 import { useVolver } from "@/lib/navegacion/rastreador";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EditorTomas } from "@/components/vita/editor-tomas";
+import { CampoMedicamento } from "@/components/vita/campo-medicamento";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { separarDosis } from "@/lib/inventario/tipos";
@@ -37,6 +39,7 @@ export function FormularioMedicamento({
   etiquetaGuardar,
   onExito,
   volverA = "/app/rutina",
+  mostrarContar = false,
 }: {
   accion: (prev: EstadoAccion, formData: FormData) => Promise<EstadoAccion>;
   inicial?: InicialMedicamento;
@@ -44,6 +47,8 @@ export function FormularioMedicamento({
   onExito?: () => void;
   /** Destino de Cancelar/Descartar sin historial dentro de la app. */
   volverA?: string;
+  /** Ofrece "Contar pastillas con foto" (solo para el perfil activo, no para el alta del cuidador). */
+  mostrarContar?: boolean;
 }) {
   const volver = useVolver(volverA);
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
@@ -93,13 +98,12 @@ export function FormularioMedicamento({
         <Etiqueta text="Nombre" />
         <div className="mt-3.5 flex items-center gap-3 rounded-full bg-card py-1 pl-[18px] pr-1.5 shadow-item">
           <VitaIcon name="pill" size={18} className="shrink-0 text-subtle" />
-          <input
+          <CampoMedicamento
             name="nombre"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={setNombre}
             placeholder="Ibupirac, Metformina…"
-            autoComplete="off"
-            className="min-w-0 flex-1 bg-transparent py-3.5 text-[15.5px] font-semibold outline-none placeholder:font-medium placeholder:text-faint"
+            ariaLabel="Nombre del medicamento"
           />
         </div>
         <input
@@ -113,6 +117,22 @@ export function FormularioMedicamento({
         <input type="hidden" name="dosis" value={dosisEnviada} />
         <input type="hidden" name="unidad" value={unidadEnviada} />
       </div>
+
+      {mostrarContar && (
+        <Link
+          href={`/app/pastillas/contar?desde=agregar${nombre.trim() ? `&nombre=${encodeURIComponent(nombre.trim().slice(0, 80))}` : ""}`}
+          className="flex items-center gap-3 rounded-[20px] bg-card p-[13px] shadow-item transition-transform active:scale-[0.99] motion-reduce:transition-none"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-chip-teal-bg text-chip-teal-ink">
+            <VitaIcon name="camera" size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">Contar pastillas con foto</span>
+            <span className="mt-0.5 block text-[11.5px] font-medium text-subtle">Sacale una foto al blister y llevá el stock</span>
+          </span>
+          <VitaIcon name="chevron-right" size={18} className="shrink-0 text-faint" />
+        </Link>
+      )}
 
       <div>
         <Etiqueta text="Frecuencia" />

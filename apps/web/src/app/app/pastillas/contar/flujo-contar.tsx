@@ -35,7 +35,19 @@ const ETIQUETA_CONFIANZA: Record<ConteoPastillas["confianza"], string> = {
 // EDITABLE — nunca se guarda sola. El medicamento puede ser uno existente o
 // "uno nuevo": si el nombre no se leyó, hay que escribirlo para poder guardar.
 // También se puede cargar a mano sin fotos.
-export function FlujoContar({ opciones, inicialId }: { opciones: OpcionMedicamento[]; inicialId: string }) {
+export function FlujoContar({
+  opciones,
+  inicialId,
+  nombreInicial = "",
+  volverA = "/app/pastillas",
+}: {
+  opciones: OpcionMedicamento[];
+  inicialId: string;
+  /** Nombre ya escrito en el alta de medicamento, para el caso "uno nuevo". */
+  nombreInicial?: string;
+  /** Destino tras guardar el stock. */
+  volverA?: string;
+}) {
   const router = useRouter();
 
   const [medicamentoId, setMedicamentoId] = useState(inicialId); // "" = medicamento nuevo
@@ -46,7 +58,7 @@ export function FlujoContar({ opciones, inicialId }: { opciones: OpcionMedicamen
   const actual = opciones.find((o) => o.id === medicamentoId) ?? null;
   const [stock, setStock] = useState(actual?.stockActual != null ? String(actual.stockActual) : "");
   const [porToma, setPorToma] = useState(String(actual?.pastillasPorToma ?? 1));
-  const [nombre, setNombre] = useState("");
+  const [nombre, setNombre] = useState(nombreInicial);
   const [dosis, setDosis] = useState("");
   const [conteo, setConteo] = useState<ConteoPastillas | null>(null);
 
@@ -93,7 +105,7 @@ export function FlujoContar({ opciones, inicialId }: { opciones: OpcionMedicamen
     const resultado = await guardarInventarioAction(prev, formData);
     if (resultado.status === "success") {
       toast.success("Stock guardado");
-      router.push("/app/pastillas");
+      router.push(volverA);
     } else if (resultado.status === "nuevo") {
       toast.message("Medicamento nuevo: completá cuándo lo tomás para terminar de agregarlo");
       router.push(resultado.url);
