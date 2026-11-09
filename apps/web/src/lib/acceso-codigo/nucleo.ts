@@ -36,7 +36,7 @@ const MAX_CODIGOS_CANDIDATOS = 500;
 
 // --- throttling -----------------------------------------------------------
 
-function secretoIp(): string {
+export function secretoIp(): string {
   // CRON_SECRET hoy no está cargado en producción (el cron de email está
   // apagado), así que la clave por defecto es la service role key, que
   // siempre existe y nunca sale del servidor. Se puede fijar una dedicada
@@ -54,7 +54,7 @@ export function hashIp(ip: string): string {
  * ventana. Se inserta ANTES de contar para que ráfagas concurrentes se
  * cuenten entre sí. Falla cerrado: ante cualquier error de la DB, bloquea.
  */
-async function registrarIntentoYVerificarBloqueo(admin: Cliente, ipHash: string): Promise<boolean> {
+export async function registrarIntentoYVerificarBloqueo(admin: Cliente, ipHash: string): Promise<boolean> {
   const { error: errorInsert } = await admin.from("intentos_codigo").insert({ ip_hash: ipHash });
   if (errorInsert) return true;
 
@@ -123,7 +123,7 @@ export async function generarCodigoAcceso(
  * de servidor lo canjea con `verifyOtp({ type: "magiclink", token_hash })`,
  * que setea las cookies de sesión vía el adaptador de @supabase/ssr.
  */
-async function abrirSesion(admin: Cliente, supabase: Cliente, email: string): Promise<string | null> {
+export async function abrirSesion(admin: Cliente, supabase: Cliente, email: string): Promise<string | null> {
   const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email });
   const tokenHash = data?.properties?.hashed_token;
   if (error || !tokenHash) return null;
@@ -334,6 +334,19 @@ export async function entrarConCodigo(
   }
 }
 
+/** Invitación de cuidador vigente (`elder_id` presente): tiene su propio flujo en /c/. */
+async function esInvitacionVigente(admin: Cliente, codigo: string): Promise<boolean> {
+  const { data } = await admin
+    .from("vinculos_cuidador")
+    .select("id")
+    .eq("codigo", codigo)
+    .eq("estado", "pendiente")
+    .not("elder_id", "is", null)
+    .gt("expira_at", new Date().toISOString())
+    .maybeSingle();
+  return !!data;
+}
+
 // --- vista previa ("¿Sos vos?") ---------------------------------------------
 
 function primerNombre(nombre: string | null | undefined): string | null {
@@ -388,7 +401,7 @@ export async function verCodigo(codigo: string, ip: string): Promise<ResultadoVe
 
     // 2) Código de acceso (re-ingreso), sin consumirlo.
     const match = await buscarCodigoAcceso(admin, codigo);
-    if (!match) return { ok: false, motivo: "invalido" };
+    if (!match) return (await esInvitacionVigente(admin, codigo)) ? { ok: false, motivo: "invitacion" } : { ok: false, motivo: "invalido" };
 
     // Igual que el login: el cuidador emisor tiene que seguir vinculado.
     if (!(await vinculoAceptado(admin, match.elder_id, match.cuidador_id))) return { ok: false, motivo: "invalido" };

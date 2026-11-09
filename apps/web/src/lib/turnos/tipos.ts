@@ -23,6 +23,17 @@ export type ItemLlevar = { t: string; ok: boolean };
 export const MAX_ITEMS_LLEVAR = 30;
 
 /** Normaliza lo que venga del jsonb (o de un cliente) a una lista válida de ítems. */
+/** "Llevá: DNI y Credencial" para el aviso de la noche anterior; lo ya tildado no se repite. */
+export function textoLlevarAviso(crudo: unknown): string | null {
+  const items = normalizarLlevar(crudo).filter((i) => !i.ok).map((i) => i.t);
+  if (items.length === 0) return null;
+  const mostrar = items.slice(0, 3);
+  const resto = items.length - mostrar.length;
+  if (resto > 0) return `Llevá: ${mostrar.join(", ")} y ${resto} más`;
+  if (mostrar.length === 1) return `Llevá: ${mostrar[0]}`;
+  return `Llevá: ${mostrar.slice(0, -1).join(", ")} y ${mostrar[mostrar.length - 1]}`;
+}
+
 export function normalizarLlevar(crudo: unknown): ItemLlevar[] {
   if (!Array.isArray(crudo)) return [];
   const items: ItemLlevar[] = [];
@@ -86,10 +97,3 @@ export const SUGERENCIAS_LLEVAR: Record<string, string[]> = {
   "Odontología": ["Radiografías anteriores"],
   "Kinesiología": ["La orden de kinesiología", "Ropa cómoda"],
 };
-
-/** Ítems base del checklist: [texto, etiqueta, activo por defecto]. */
-export const BASE_LLEVAR: [string, string, boolean][] = [
-  ["DNI", "Siempre", true],
-  ["Credencial de PAMI", "Opcional", true],
-  ["Credencial de obra social", "Opcional", false],
-];

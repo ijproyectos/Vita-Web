@@ -11,7 +11,7 @@ import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import type { EstadoAccion } from "@/app/app/rutina/actions";
 import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, mensajeSeguroMedicamento } from "@/lib/medicamentos/duplicados";
-import { leerTomas } from "@/lib/medicamentos/formulario";
+import { leerTomas, leerPlanMedicamento } from "@/lib/medicamentos/formulario";
 
 // Único punto de escritura real del cuidador sobre datos del elder (fuera
 // de marcar tomas, que este dashboard tampoco expone) — se apoya
@@ -55,6 +55,7 @@ export async function crearMedicamentoParaElderAction(
 
   try {
     await medicamentosNucleo.agregarMultiMomento(supabase, elderId, {
+      ...leerPlanMedicamento(formData),
       nombre,
       dosis: dosis || null,
       unidad,

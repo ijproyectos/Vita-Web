@@ -59,6 +59,7 @@ export type ResumenProfesional = {
     duracion: string | null;
     condicion: string | null;
     notas: string | null;
+    forma?: string | null;
     pastillas_restantes: number | null;
   }[];
   adherencia: {

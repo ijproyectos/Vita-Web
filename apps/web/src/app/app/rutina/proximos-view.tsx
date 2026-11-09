@@ -5,6 +5,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { diaYMes, etiquetaDia, formatoFechaCorta } from "@/lib/rutina/formato";
 import { iconoDeEspecialidad } from "@/lib/turnos/icono";
 import type { Turno } from "@/lib/turnos/tipos";
+import { fechaHoyAR, vigenteEnFecha } from "@/lib/medicamentos/cuando";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
 import type { Receta } from "@/lib/recetas/nucleo";
 
@@ -68,7 +69,7 @@ export function ProximosView({
 }) {
   // Meds con dias_recurrentes puntuales (no todos los días) son invisibles en
   // "Hoy" cualquier día que no les toque; esta lista los muestra siempre.
-  const medsConDiasLimitados = todosLosMeds.filter((m) => m.dias_recurrentes.length > 0);
+  const medsConDiasLimitados = todosLosMeds.filter((m) => m.dias_recurrentes.length > 0 && vigenteEnFecha(m, fechaHoyAR()));
 
   const porFecha = new Map<string, { turnos: Turno[]; recetas: Receta[] }>();
   const dia = (f: string) => {

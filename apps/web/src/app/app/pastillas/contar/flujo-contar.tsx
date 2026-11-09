@@ -19,6 +19,8 @@ export type OpcionMedicamento = {
   etiqueta: string;
   stockActual: number | null;
   pastillasPorToma: number;
+  /** Cada toma ya guarda su cantidad: no se vuelve a preguntar acá. */
+  usaCantidadPorToma: boolean;
 };
 
 const CONTEO_INICIAL: EstadoConteo = { status: "idle" };
@@ -268,6 +270,9 @@ export function FlujoContar({
               className="rounded-full bg-secondary px-4 py-3 text-center font-heading text-[18px] font-extrabold outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </label>
+          {actual?.usaCantidadPorToma ? (
+            <input type="hidden" name="pastillasPorToma" value={porToma} />
+          ) : (
           <label className="flex flex-col gap-1.5">
             <span className="text-[12px] font-semibold text-muted-foreground">Pastillas por toma</span>
             <input
@@ -281,6 +286,7 @@ export function FlujoContar({
               className="rounded-full bg-secondary px-4 py-3 text-center font-heading text-[18px] font-extrabold outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </label>
+          )}
         </div>
 
         {estadoGuardado.status === "error" && (

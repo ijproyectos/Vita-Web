@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -157,15 +156,15 @@ type ColorTab = ColorPerfil;
 
 export function EncabezadoConversar({
   tabs,
-  linkFormulario,
   escribiendo,
+  hayAvance,
   onTerminar,
 }: {
   tabs: { label: string; estado: EstadoTab; color: ColorTab }[];
-  linkFormulario: string;
   escribiendo: boolean;
-  // "Terminar después" (V7 `showSkip`): solo se pasa cuando ya hay algo guardado.
-  onTerminar?: () => void;
+  /** Ya hay algo guardado: el botón dice "Terminar después" en vez de "Saltar". */
+  hayAvance: boolean;
+  onTerminar: () => void;
 }) {
   return (
     <header className="shrink-0 bg-card px-[18px] pb-3.5 pt-14 shadow-header">
@@ -179,15 +178,9 @@ export function EncabezadoConversar({
           </div>
           <div className="mt-[5px] text-xs font-semibold text-subtle">{escribiendo ? "Escribiendo…" : "Armando tu perfil"}</div>
         </div>
-        {onTerminar && (
-          <button
-            type="button"
-            onClick={onTerminar}
-            className="rounded-full bg-canvas px-3.5 py-[9px] text-[13px] font-bold text-slate-brand"
-          >
-            Terminar después
-          </button>
-        )}
+        <button type="button" onClick={onTerminar} className="shrink-0 rounded-full bg-canvas px-3.5 py-[9px] text-[13px] font-bold text-slate-brand">
+          {hayAvance ? "Terminar después" : "Saltar"}
+        </button>
       </div>
 
       {tabs.length > 1 && (
@@ -208,9 +201,6 @@ export function EncabezadoConversar({
         </div>
       )}
 
-      <Link href={linkFormulario} className="mt-2.5 block text-right text-[12.5px] font-semibold text-teal-deep underline">
-        Prefiero un formulario
-      </Link>
     </header>
   );
 }

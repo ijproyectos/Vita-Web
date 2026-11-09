@@ -9,6 +9,12 @@ export type TipoAviso =
   | "dosis_vencida_cuidador"
   | "dosis_resuelta_cuidador"
   | "recordatorio_familiar"
+  // "Hora de medir…" de un plan de "Nuevo monitoreo".
+  | "medicion"
+  // Quien invitó se entera de que aceptaron.
+  | "invitacion_aceptada"
+  // La persona no tiene avisos activos: a sus cuidadores Admin.
+  | "medicion_persona"
   | "turno_dia_antes"
   | "turno_2h"
   | "stock_bajo"

@@ -1,5 +1,8 @@
 import "server-only";
 
+import { textoDosis } from "@/lib/medicamentos/tipos";
+import { itemsDeHoy, itemsDeRemedios } from "@/lib/chat/tarjeta-rutina";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { ErrorMedicamentoAmbiguo } from "@/lib/medicamentos/resolucion";
@@ -184,7 +187,7 @@ async function ejecutarEnDestino(
           type: "medication_added",
           id: creado.id,
           name: creado.nombre,
-          dose: creado.dosis,
+          dose: textoDosis(creado) || null,
           time: creado.hora_programada,
         },
       };
@@ -217,7 +220,7 @@ async function ejecutarEnDestino(
       await medicamentos.marcarTomado(supabase, usuarioId, medicamento.id, true);
       return {
         contenido: `Marcado "${limpiarDato(medicamento.nombre)}" como tomado.`,
-        accionUI: { type: "medication_taken", medication_name: medicamento.nombre },
+        accionUI: { type: "medication_taken", medication_name: medicamento.nombre, time: medicamento.hora_programada.slice(0, 5) },
       };
     }
 
@@ -225,7 +228,7 @@ async function ejecutarEnDestino(
       const cantidad = await medicamentos.marcarTodosTomados(supabase, usuarioId);
       return {
         contenido: `Marcados ${cantidad} medicamentos como tomados.`,
-        accionUI: { type: "all_medications_taken" },
+        accionUI: { type: "all_medications_taken", count: cantidad },
       };
     }
 
@@ -311,11 +314,16 @@ async function ejecutarEnDestino(
       return { contenido: `Alergia "${limpiarDato(nombre)}" agregada.`, accionUI: { type: "allergy_added", name: nombre } };
     }
 
-    case "show_today_medications":
-      return { contenido: "Mostrado.", accionUI: { type: "show_today_medications" } };
+    // Si la lectura falla, la tarjeta sale sin lista (solo con "Ver rutina").
+    case "show_today_medications": {
+      const hoy = await medicamentos.listarHoy(supabase, usuarioId).catch(() => null);
+      return { contenido: "La tarjeta con la lista ya está en pantalla: no la repitas.", accionUI: { type: "show_today_medications", ...(hoy ? { items: itemsDeHoy(hoy) } : {}) } };
+    }
 
-    case "show_all_medications":
-      return { contenido: "Mostrado.", accionUI: { type: "show_all_medications" } };
+    case "show_all_medications": {
+      const todos = await medicamentos.listarTodos(supabase, usuarioId).catch(() => null);
+      return { contenido: "La tarjeta con la lista ya está en pantalla: no la repitas.", accionUI: { type: "show_all_medications", ...(todos ? { items: itemsDeRemedios(todos, medicamentos.fechaEnAR()) } : {}) } };
+    }
 
     case "open_screen": {
       // Solo claves del catálogo: nunca una ruta que arme el modelo.
@@ -366,6 +374,7 @@ function paraModelo(m: Medicamento | MedicamentoConToma) {
     time_of_day: momentoDiaAIngles(m.momento_dia),
     condition: m.condicion ? limpiarDato(m.condicion) : m.condicion,
     recurring_days: diasAIngles(m.dias_recurrentes),
+    end_date: m.fecha_fin ?? null,
     meal_indication: indicacionDeComida(m),
     ...("tomado" in m ? { taken: m.tomado } : {}),
   };

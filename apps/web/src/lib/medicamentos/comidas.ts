@@ -82,7 +82,7 @@ export function conComidaDeIndicacion(clave: IndicacionComida | null | undefined
 export type ComidaToma = { conComida: ConComida; indicacion: IndicacionComida | null };
 
 /** Una toma del formulario de medicamento: hora "HH:MM" + comida (ver `ComidaToma`). */
-export type TomaForm = { id?: string } & { hora: string } & ComidaToma;
+export type TomaForm = { id?: string; cantidad?: number | null } & { hora: string } & ComidaToma;
 
 const COMIDA_POR_MOMENTO: Record<MomentoDia, { con: string; antes: string; despues: string }> = {
   "mañana": { con: "Con el desayuno", antes: "Antes del desayuno", despues: "Después del desayuno" },

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import { seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { TAMANO_MAXIMO_BYTES, contarPastillasEnFoto, type ConteoPastillas } from "@/lib/inventario/contar";
 import {
   PASTILLAS_POR_TOMA_MAXIMO,
@@ -91,8 +92,8 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
     const stock = Number(stockCrudo);
     const porToma = Number(porTomaCrudo);
 
-    if (stockCrudo === "" || !Number.isInteger(stock) || stock < 0 || stock > STOCK_MAXIMO) {
-      return { status: "error", message: "Indicá cuántas pastillas quedan (un número entero, 0 o más)." };
+    if (stockCrudo === "" || !Number.isFinite(stock) || stock < 0 || stock > STOCK_MAXIMO) {
+      return { status: "error", message: "Indicá cuántas pastillas quedan (un número, 0 o más)." };
     }
     if (porTomaCrudo === "" || !Number.isInteger(porToma) || porToma < 1 || porToma > PASTILLAS_POR_TOMA_MAXIMO) {
       return { status: "error", message: "Indicá cuántas pastillas tomás cada vez (entre 1 y 20)." };
@@ -103,7 +104,8 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
     if (!medicamentoId) {
       if (!nombre) return { status: "error", message: "Escribí el nombre del medicamento." };
 
-      const grupos = await inventarioNucleo.listarGrupos(supabase, pid);
+      // Un blíster nunca pisa el stock en ml de un jarabe o gotas con el mismo nombre.
+      const grupos = (await inventarioNucleo.listarGrupos(supabase, pid)).filter((g) => seCuentaConFoto(g.forma));
       const clave = claveMedicamento(nombre, dosisValor);
       let coincidencia = grupos.find((g) => g.clave === clave);
       if (!coincidencia && !dosisValor) {

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { sinTratamientoTerminado, vigenteEnFecha } from "@/lib/medicamentos/cuando";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { diaSemanaDe, fechaEnAR, horaEnAR } from "@/lib/medicamentos/nucleo";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
@@ -10,6 +12,7 @@ import {
   minutosDesde,
   type PreferenciasAvisos,
 } from "./avisos-tipos";
+import { procesarMonitoreos } from "./medir";
 import { entregarAviso, existeEnvio, familiaAvisosDisponible, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
 import {
   cuidadorRecibe,
@@ -78,6 +81,8 @@ export type ResumenProgramados = {
   turnoPersona: number;
   stockPersona: number;
   cumpleanos: number;
+  medir: number;
+  errorMedir?: string;
   /** Solo si falló la parte de familia (el resto del tick no se ve afectado). */
   errorFamilia?: string;
   /** Solo si falló el saludo de cumpleaños (el resto del tick no se ve afectado). */
@@ -86,12 +91,15 @@ export type ResumenProgramados = {
 
 type FilaMedicamento = {
   id: string;
+  forma?: string;
   usuario_id: string;
   nombre: string;
   dosis: string | null;
   unidad: string;
   hora_programada: string;
   dias_recurrentes: DiaSemana[] | null;
+  fecha_fin?: string | null;
+  inventario_id?: string | null;
   con_comida: string | null;
   notas: string | null;
 };
@@ -151,6 +159,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     turnoPersona: 0,
     stockPersona: 0,
     cumpleanos: 0,
+    medir: 0,
   };
 
   const hoyAR = fechaEnAR(ahora);
@@ -164,11 +173,11 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
 
   const { data: medsData, error: errorMeds } = await admin
     .from("medicamentos")
-    .select("id, usuario_id, nombre, dosis, unidad, hora_programada, dias_recurrentes, con_comida, notas");
+    .select("*"); // "*": `fecha_fin` (052) puede no existir todavía y una columna pedida a mano tiraría el cron.
   if (errorMeds) throw new Error(`No se pudieron leer los medicamentos: ${errorMeds.message}`);
   const medicamentos = (medsData ?? []) as FilaMedicamento[];
   const medPorId = new Map(medicamentos.map((m) => [m.id, m]));
-  const deHoy = medicamentos.filter((m) => aplicaHoy(m, diaHoy));
+  const deHoy = medicamentos.filter((m) => aplicaHoy(m, diaHoy) && vigenteEnFecha(m, hoyAR));
 
   const { data: posData } = await admin.from("posposiciones").select("id, medicamento_id, usuario_id, fecha, hasta").eq("fecha", hoyAR);
   const posposiciones = (posData ?? []) as FilaPosposicion[];
@@ -220,7 +229,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   // Turnos de hoy y mañana + stock.
   const { data: turnosData } = await admin
     .from("turnos")
-    .select("id, usuario_id, especialidad, profesional, lugar, fecha, hora, acompanado")
+    .select("id, usuario_id, especialidad, profesional, lugar, fecha, hora, acompanado, llevar")
     .in("fecha", [hoyAR, mananaAR]);
   const turnos = (turnosData ?? []) as {
     id: string;
@@ -231,12 +240,16 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     fecha: string;
     hora: string;
     acompanado: boolean | null;
+    llevar: unknown;
   }[];
 
   const { data: invData } = await admin.from("inventario_pastillas").select("id, usuario_id, nombre, stock, umbral_alerta");
-  const stockBajo = ((invData ?? []) as { id: string; usuario_id: string; nombre: string; stock: number; umbral_alerta: number }[]).filter(
+  const stockBajoTodos = ((invData ?? []) as { id: string; usuario_id: string; nombre: string; stock: number; umbral_alerta: number }[]).filter(
     (i) => esStockBajo(i.stock, i.umbral_alerta)
   );
+  // La forma vive en cada fila del medicamento: el aviso habla en su unidad (ml, pastillas…).
+  const formaDeStock = new Map(medicamentos.flatMap((m) => (m.inventario_id ? [[m.inventario_id, m.forma] as const] : [])));
+  const stockBajo = sinTratamientoTerminado(stockBajoTodos, medicamentos, hoyAR).map((i) => ({ ...i, forma: formaDeStock.get(i.id) }));
 
   // Preferencias de todos los usuarios involucrados (una sola lectura).
   const usuarios = new Set<string>();
@@ -302,7 +315,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   for (const t of turnos) {
     const prefs = prefsDe(t.usuario_id);
     if (!prefs.aviso_turnos || silenciado(t.usuario_id) || !TURNO_HORA.test(t.hora)) continue;
-    const datosTurno = { turnoId: t.id, especialidad: t.especialidad, profesional: t.profesional, lugar: t.lugar, hora: t.hora };
+    const datosTurno = { turnoId: t.id, especialidad: t.especialidad, profesional: t.profesional, lugar: t.lugar, hora: t.hora, llevar: t.llevar };
 
     if (t.fecha === mananaAR && horaAR >= "20:00" && horaAR < "23:00") {
       if (await reclamarEnvio(admin, "turno_dia_antes", t.id, t.fecha, t.usuario_id)) {
@@ -340,7 +353,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
       const prefs = prefsDe(i.usuario_id);
       if (!prefs.stock_bajo || silenciado(i.usuario_id)) continue;
       if (!(await reclamarEnvio(admin, "stock_bajo", i.id, hoyAR, i.usuario_id))) continue;
-      const payload = payloadStockBajo({ inventarioId: i.id, nombre: i.nombre, stock: i.stock, fechaAR: hoyAR });
+      const payload = payloadStockBajo({ inventarioId: i.id, nombre: i.nombre, stock: i.stock, fechaAR: hoyAR, forma: i.forma });
       await entregarAviso(
         admin,
         i.usuario_id,
@@ -427,6 +440,12 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     }
   }
 
+  try {
+    resumen.medir = await procesarMonitoreos(admin, hoyAR, horaAR, diaHoy);
+  } catch (e) {
+    resumen.errorMedir = e instanceof Error ? e.message : "Fallo en los avisos de medición.";
+  }
+
   return resumen;
 }
 
@@ -494,8 +513,8 @@ type ContextoFamilia = {
   horaAR: string;
   mananaAR: string;
   deHoy: FilaMedicamento[];
-  turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string; acompanado: boolean | null }[];
-  stockBajo: { id: string; usuario_id: string; nombre: string; stock: number }[];
+  turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string; llevar: unknown; acompanado: boolean | null }[];
+  stockBajo: { id: string; usuario_id: string; nombre: string; stock: number; forma?: string }[];
   resumen: ResumenProgramados;
 };
 
@@ -606,6 +625,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           turnoId: t.id,
           especialidad: t.especialidad,
           hora: t.hora,
+          llevar: t.llevar,
           rolDestino: cu.rol,
         });
         await entregarAviso(
@@ -625,6 +645,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         especialidad: t.especialidad,
         profesional: t.profesional,
         hora: t.hora,
+        llevar: t.llevar,
         rolDestino: cu.rol,
       });
       await entregarAviso(
@@ -650,6 +671,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         nombre: i.nombre,
         stock: i.stock,
         fechaAR: hoyAR,
+        forma: i.forma,
         rolDestino: cu.rol,
       });
       await entregarAviso(

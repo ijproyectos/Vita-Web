@@ -26,9 +26,11 @@ export function boton(texto: string, url: string): string {
 </table>`;
 }
 
-const ISOTIPO = `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-  <td width="40" height="40" align="center" valign="middle" bgcolor="${MARCA.teal}" style="width:40px;height:40px;border-radius:12px;background:${MARCA.teal};font-family:${FUENTE_EMAIL};font-size:26px;font-weight:800;line-height:40px;color:${MARCA.cream};">v<span style="color:${MARCA.amber};font-size:10px;vertical-align:top;line-height:20px;">&#9679;</span></td>
-</tr></table>`;
+// El isotipo de la app, como imagen pública: Gmail y Outlook no muestran SVG.
+// Con las imágenes bloqueadas queda el texto "vita." de al lado.
+function isotipo(origen: string): string {
+  return `<img src="${esc(origen)}/icon-192.png" width="40" height="40" alt="" style="display:block;width:40px;height:40px;border:0;">`;
+}
 
 /** Pie por defecto (invitaciones y vinculación). */
 const PIE_INVITACION = "Este correo lo envió vita porque alguien te invitó a acompañar su cuidado. Si no esperabas este mensaje, podés ignorarlo.";
@@ -54,7 +56,7 @@ export function layout(args: { preheader: string; contenido: string; origen: str
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
     <tr><td style="padding:0 8px 20px;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td valign="middle">${ISOTIPO}</td>
+        <td valign="middle">${isotipo(origen)}</td>
         <td valign="middle" style="padding-left:10px;font-family:${FUENTE_EMAIL};font-size:30px;font-weight:800;letter-spacing:-0.06em;color:${MARCA.ink};">vita<span style="color:${MARCA.amber};">.</span></td>
       </tr></table>
     </td></tr>

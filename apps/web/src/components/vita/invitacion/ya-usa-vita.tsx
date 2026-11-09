@@ -21,12 +21,12 @@ export function YaUsaVita({
       <div className="flex flex-1 flex-col">
         <TituloAuth
           titulo={`${nueva} se suma a tu lista`}
-          sub="Ya tenías cuenta. La vas a encontrar arriba, donde cambiás de perfil."
+          sub="Ya tenías cuenta. Aparece arriba, donde cambiás de perfil."
         />
         <ul className="mt-7 overflow-hidden rounded-[20px] bg-card shadow-card">
           <Fila nombre={yo} color={colorPorDefecto(0)} detalle="vos" />
           {actuales.map((n, i) => (
-            <Fila key={`${n}-${i}`} nombre={n} color={colorPorDefecto(i + 1)} detalle="ya la cuidabas" />
+            <Fila key={`${n}-${i}`} nombre={n} color={colorPorDefecto(i + 1)} detalle="ya en tu lista" />
           ))}
           <Fila nombre={nueva} color={colorPorDefecto(actuales.length + 1)} nuevo />
         </ul>

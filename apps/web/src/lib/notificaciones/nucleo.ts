@@ -1,5 +1,7 @@
 import "server-only";
 
+import { vigenteEnFecha } from "@/lib/medicamentos/cuando";
+
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -29,6 +31,7 @@ type FilaMedicamento = {
   unidad: string;
   hora_programada: string;
   dias_recurrentes: DiaSemana[] | null;
+  fecha_fin?: string | null;
 };
 
 /**
@@ -62,7 +65,7 @@ export async function detectarDosisVencidas(
 
   const { data: medicamentos, error } = await admin
     .from("medicamentos")
-    .select("id, usuario_id, nombre, dosis, unidad, hora_programada, dias_recurrentes");
+    .select("*"); // "*": `fecha_fin` (052) puede no existir todavía y una columna pedida a mano tiraría el cron.
 
   if (error) throw new Error(`No se pudieron leer los medicamentos: ${error.message}`);
 
@@ -94,10 +97,10 @@ export async function detectarDosisVencidas(
   for (const m of (medicamentos ?? []) as FilaMedicamento[]) {
     const gracia = graciaPorElder.get(m.usuario_id) ?? graciaMin;
     const fila = { dias_recurrentes: m.dias_recurrentes ?? [] };
-    if (aplicaEnDia(fila, diaHoy) && esDosisVencida(m.hora_programada, horaAR, gracia)) {
+    if (aplicaEnDia(fila, diaHoy) && vigenteEnFecha(m, hoyAR) && esDosisVencida(m.hora_programada, horaAR, gracia)) {
       candidatos.push({ ...m, fechaAR: hoyAR });
     }
-    if (aplicaEnDia(fila, diaAyer) && esDosisDeAyerVencida(m.hora_programada, horaAR, gracia)) {
+    if (aplicaEnDia(fila, diaAyer) && vigenteEnFecha(m, ayerAR) && esDosisDeAyerVencida(m.hora_programada, horaAR, gracia)) {
       candidatos.push({ ...m, fechaAR: ayerAR });
     }
   }

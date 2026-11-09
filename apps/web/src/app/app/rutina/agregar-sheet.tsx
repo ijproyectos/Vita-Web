@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { hrefNuevaMedicion } from "@/lib/mediciones/tipos";
+import { hrefNuevoMonitoreo } from "@/lib/mediciones/tipos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VMark } from "@/components/vita/v-mark";
@@ -57,8 +57,8 @@ export function AgregarSheet({
                 icon="chart"
                 tinte="bg-chip-violet-bg text-chip-violet-ink"
                 titulo="Medición"
-                sub="Presión, glucemia o peso"
-                href={hrefNuevaMedicion({ volver: pathname })}
+                sub="Qué medir, horarios y días"
+                href={hrefNuevoMonitoreo({ volver: pathname })}
               />
               <Opcion
                 icon="camera"

@@ -1,6 +1,6 @@
 import { diaYMes, fechaISOEnAR } from "@/lib/rutina/formato";
 import { TIPO_PDF, type EstudioConUrl } from "@/lib/estudios/tipos";
-import { META_MEDICION, formatearValor, type Medicion } from "@/lib/mediciones/tipos";
+import { formatearValor, hrefDetalleMetrica, metaDe, type Medicion } from "@/lib/mediciones/tipos";
 import type { Consulta, RegistroSalud, Vacuna } from "./tipos";
 
 // Arma el feed de "Registros" (D:470). Mapeo de la etiqueta MANUAL / VITA:
@@ -42,17 +42,17 @@ export function armarFeed(datos: {
   }
 
   for (const m of datos.mediciones.slice(0, 30)) {
-    const meta = META_MEDICION[m.tipo];
+    const meta = metaDe(m);
     const fecha = fechaISOEnAR(new Date(m.medido_at));
     items.push({
       clave: `medicion-${m.id}`,
       cat: "medicion",
       titulo: meta.nombre,
-      sub: `${formatearValor(m)} ${meta.unidad}`,
+      sub: `${formatearValor(m)} ${meta.unidad}`.trim(),
       cuando: cuando(fecha),
       orden: `${fecha}|${m.medido_at}`,
       origen: "vita",
-      href: `/app/mi-salud/monitoreo/${m.tipo}`,
+      href: hrefDetalleMetrica(m),
     });
   }
 

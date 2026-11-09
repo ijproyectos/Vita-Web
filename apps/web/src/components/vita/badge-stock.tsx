@@ -1,5 +1,6 @@
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
+import { numeroConComa } from "@/lib/medicamentos/forma";
 import { esStockBajo, type ResumenStock } from "@/lib/inventario/tipos";
 
 // Badge "Quedan N" de un medicamento con control de pastillas. Con poco
@@ -16,7 +17,7 @@ export function BadgeStock({ stock, className }: { stock: ResumenStock; classNam
       )}
     >
       {bajo && <VitaIcon name="alert-triangle" size={10} />}
-      {stock.stock <= 0 ? "Sin pastillas" : `Quedan ${stock.stock}`}
+      {stock.stock <= 0 ? "Sin stock" : `Quedan ${numeroConComa(stock.stock)}`}
     </span>
   );
 }

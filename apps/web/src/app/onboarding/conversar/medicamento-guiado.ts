@@ -1,5 +1,4 @@
-import { indicacionesDelMomento, opcionDeIndicacion, type ComidaToma, type OpcionComida } from "@/lib/medicamentos/comidas";
-import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
+import { opcionDeIndicacion, type ComidaToma } from "@/lib/medicamentos/comidas";
 import { separarDosis, UNIDADES_DOSIS } from "@/lib/inventario/tipos";
 
 // Piezas puras del paso guiado de remedios del onboarding (una pregunta por
@@ -46,21 +45,47 @@ export function leerDosis(texto: string): LecturaDosis {
   return unidad ? { tipo: "completa", valor, unidad } : { tipo: "sin-unidad", numero: valor };
 }
 
-/** Opciones de comida que se ofrecen para un momento del día (las del catálogo, como en el selector de hora). */
-export function comidasDelMomento(momento: MomentoDia): OpcionComida[] {
-  return indicacionesDelMomento(momento);
+// --- Elegir remedio y horas --------------------------------------------------
+
+export const REMEDIOS_RAPIDOS = ["Metformina", "Losartán", "Levotiroxina"] as const;
+
+export const MAX_HORAS_MED = 4;
+
+function aMinutos(hora: string): number {
+  return Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5));
 }
 
-/** Hora sugerida de "No importa" para un momento: la misma que usa el alta por momento. */
-export function horaSugeridaSinComida(momento: MomentoDia): string {
-  return HORA_POR_MOMENTO[momento];
+/** Suma o resta minutos, dando la vuelta al día. */
+export function moverHora(hora: string, delta: number): string {
+  const n = (((aMinutos(hora) + delta) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
 }
 
-const ORDINALES = ["1.ª", "2.ª", "3.ª", "4.ª", "5.ª", "6.ª"];
+/** Hora que propone "Agregar otro horario": 12 h después de la primera, o 6 después de la última, sin repetir. */
+export function siguienteHoraMed(horas: string[]): string {
+  let hora = moverHora(horas[horas.length - 1], horas.length === 1 ? 720 : 360);
+  while (horas.includes(hora)) hora = moverHora(hora, 30);
+  return hora;
+}
 
-/** "1.ª toma" si hay varias; null si es una sola. */
-export function etiquetaDeToma(indice: number, total: number): string | null {
-  return total > 1 ? `${ORDINALES[indice] ?? `${indice + 1}.ª`} toma` : null;
+/** "08:00", "08:00 y 20:00", "08:00, 14:00 y 21:00" */
+export function textoHoras(horas: string[]): string {
+  if (horas.length < 2) return horas[0] ?? "";
+  return `${horas.slice(0, -1).join(", ")} y ${horas[horas.length - 1]}`;
+}
+
+export function textoVeces(n: number): string {
+  return n === 1 ? "1 vez por día" : `${n} veces por día`;
+}
+
+/** Texto descriptivo de `frecuencia`: las tomas reales son las horas elegidas. */
+export function frecuenciaDeHoras(horas: string[]): string {
+  return `${horas.length}x día`;
+}
+
+/** La comida se completa después, en la ficha del medicamento. */
+export function tomasDesdeHoras(horas: string[]): TomaGuiada[] {
+  return horas.map((hora) => ({ hora, conComida: "no-importa", indicacion: null }));
 }
 
 /** "Losartán 50 mg" */
@@ -71,4 +96,20 @@ export function tituloMed(b: Pick<BorradorMed, "nombre" | "dosis" | "unidad">): 
 /** "08:00 · Con el desayuno" (sin indicación si no importa). */
 export function lineaDeToma(t: TomaGuiada): string {
   return [t.hora, opcionDeIndicacion(t.indicacion)?.etiqueta].filter(Boolean).join(" · ");
+}
+
+// --- Resumen final de la charla --------------------------------------------
+
+/** Cuántos remedios se ven antes de "Ver N más". */
+export const REMEDIOS_RESUMEN_VISIBLES = 4;
+
+/** De ["08:00 · Con el desayuno", "20:00"] a "08:00 · 20:00": en el resumen va solo la hora. */
+export function horasDeRemedio(tomas: string[]): string {
+  return tomas.map((t) => t.split(" · ")[0]).join(" · ");
+}
+
+/** Los primeros, salvo que esté abierto o sobre uno solo: "Ver 1 más" no ahorra nada. */
+export function remediosVisibles<T>(meds: T[], abierto: boolean): { visibles: T[]; ocultos: number } {
+  if (abierto || meds.length <= REMEDIOS_RESUMEN_VISIBLES + 1) return { visibles: meds, ocultos: 0 };
+  return { visibles: meds.slice(0, REMEDIOS_RESUMEN_VISIBLES), ocultos: meds.length - REMEDIOS_RESUMEN_VISIBLES };
 }

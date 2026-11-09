@@ -35,7 +35,7 @@ export function OtraCuenta({
         <BotonCta type="button" grande onClick={onUsarOtra}>
           Usar otra cuenta
         </BotonCta>
-        <BotonTexto onClick={onPedirCambio}>Pedirle que cambie el mail</BotonTexto>
+        {onPedirCambio && <BotonTexto onClick={onPedirCambio}>Pedirle que cambie el mail</BotonTexto>}
       </div>
     </PantallaInvitada>
   );

@@ -31,4 +31,4 @@ export type VistaPreviaCodigo = {
 
 export type ResultadoVerCodigo =
   | { ok: true; vista: VistaPreviaCodigo }
-  | { ok: false; motivo: "invalido" | "bloqueado" | "error" };
+  | { ok: false; motivo: "invalido" | "bloqueado" | "error" | "invitacion" };

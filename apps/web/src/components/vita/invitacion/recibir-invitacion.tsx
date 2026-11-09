@@ -13,6 +13,7 @@ export function RecibirInvitacion({
   relacion,
   rol,
   email,
+  invitoLaPersona,
   onGoogle,
   onEmail,
   onEntrar,
@@ -24,6 +25,8 @@ export function RecibirInvitacion({
   rol: RolVinculo;
   /** Mail con el que invitaron: el único con el que vale la invitación. */
   email?: string | null;
+  /** Invitó la propia persona: no se dice "te invitó a cuidar a" su mismo nombre. */
+  invitoLaPersona?: boolean;
   onGoogle?: () => void;
   onEmail?: () => void;
   onEntrar?: () => void;
@@ -36,7 +39,7 @@ export function RecibirInvitacion({
           <AvatarPersona nombre={persona} color="violeta" size={64} className="-ml-3 ring-4 ring-background" />
         </div>
         <h1 className="mt-6 text-balance font-heading text-[28px] font-extrabold leading-[1.15] tracking-[-0.04em]">
-          {invitador} te invitó a cuidar a {persona}
+          {invitoLaPersona ? `${invitador} te invitó a acompañar su cuidado` : `${invitador} te invitó a cuidar a ${persona}`}
         </h1>
         <p className="mt-3 text-[16px] font-semibold text-slate-brand">
           {relacion ? `${relacion} · entrás como ` : "Entrás como "}
@@ -62,13 +65,17 @@ export function RecibirInvitacion({
           Continuar con email
         </button>
       </div>
-      <div className="mb-4 mt-1.5 h-px bg-line-cream" />
-      <div className="text-center text-sm font-medium text-slate-brand">
-        ¿Ya tenés cuenta?{" "}
-        <button type="button" onClick={onEntrar} className="font-extrabold text-teal-deep">
-          Entrar
-        </button>
-      </div>
+      {onEntrar && (
+        <>
+          <div className="mb-4 mt-1.5 h-px bg-line-cream" />
+          <div className="text-center text-sm font-medium text-slate-brand">
+            ¿Ya tenés cuenta?{" "}
+            <button type="button" onClick={onEntrar} className="font-extrabold text-teal-deep">
+              Entrar
+            </button>
+          </div>
+        </>
+      )}
     </PantallaInvitada>
   );
 }

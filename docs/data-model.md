@@ -117,6 +117,27 @@ Momento del día (para agrupar en la Rutina) se deriva de `hora` con `momentoDel
 
 Columnas agregadas por la migración 023 (aplicada 2026-10-22): `direccion text null` (+ "Cómo llegar"), `telefono text null` (+ "Llamar al consultorio") y `llevar jsonb not null default '[]'` — checklist "Qué llevar" como `[{"t": "DNI", "ok": false}]` (máx. 30 ítems, `ok` = ya lo preparó). `lib/turnos/nucleo.ts` degrada (reintenta sin estas columnas) si la migración falta.
 
+## `monitoreos`
+
+Planes de "Nuevo monitoreo" (`053_monitoreos.sql`, escrita, NO aplicada). Una fila por métrica y persona (guardarla de nuevo la reemplaza; índice único `idx_monitoreos_unico`). Lo medido sigue en `mediciones`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| tipo | text | los seis de `mediciones` o `otra` |
+| nombre_otra / unidad_otra | text | solo `otra`; nombre obligatorio (<= 40), unidad opcional (<= 12) |
+| horarios | jsonb | 1 a 4 `{hora, conComida, indicacion}` |
+| dias_recurrentes | text[] | vacío = todos los días |
+| fecha_fin | date | inclusive; null = sin fin |
+| created_at / updated_at | timestamptz | |
+
+RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`lib/notificaciones/medir.ts`, dedupe `medicion_hora`) salvo silencio nocturno o si ya se midió. Si la persona no tiene avisos activos en ningún celular (`push_suscripciones`), también avisa a sus cuidadores Admin (`medicion_persona`). Una medición cuenta para un horario desde 60 min antes de él hasta 60 min antes del siguiente, o el punto medio si están a menos de 2 h (`tramosDeHoy`).
+
+## `codigos_mail_invitacion`
+
+Código de un solo uso a la casilla invitada (`054_invitacion_codigo.sql`, escrita, NO aplicada). Una fila por invitación; solo `service_role`, RLS sin policies. Guarda el HMAC, nunca el código. 10 min, 5 intentos por código y 1 envío por minuto por invitación (`guardar_codigo_mail_invitacion`, `verificar_codigo_mail_invitacion`, `consumir_codigo_mail_invitacion`). Los topes por MAIL, sumando todas sus invitaciones, viven en `limites_mail_invitacion` (solo `service_role`, eventos `envio`/`fallo`, retención 1 día): máx. 5 envíos y 10 verificaciones fallidas por hora; reenviar no los reinicia y, pasado el tope de fallos, se rechaza con el mismo error genérico hasta que corra la ventana. El código se consume recién con la sesión abierta (si otro pedido lo consumió antes, se cierra la sesión). La 054 también agrega `vinculos_cuidador.invitado_por` y usa `codigo` en las invitaciones por mail (con `elder_id` presente).
+
 ## `mediciones`
 
 "Monitoreo activo" de Mi Salud (`022_mediciones.sql`, aplicada 2026-10-22). Una fila = una medición puntual.
@@ -133,6 +154,7 @@ Columnas agregadas por la migración 023 (aplicada 2026-10-22): `direccion text 
 | medido_at | timestamptz | default `now()`; el momento del día se deriva de la hora AR, sin columna |
 | notas | text | opcional, máx. 500 caracteres |
 | created_at | timestamptz | |
+| nombre_otra / unidad_otra | text | 053: solo tipo `otra`, que no tiene rango de plausibilidad propio (`abs(valor) <= 1000000`) |
 
 Los CHECK por tipo (`mediciones_valor_rango`, etc.) son de **plausibilidad** (descartan errores de tipeo), no rangos clínicos. Índice `(usuario_id, tipo, medido_at desc)`. Los rangos de referencia que muestra la UI (`lib/mediciones/tipos.ts`) viven en código, son orientativos y no se guardan.
 
@@ -455,6 +477,7 @@ Migración 036 (escrita, NO aplicada; aditiva sobre 013). Agrega a `uso_ia_diari
 ## Memoria de vita (migraciones 038-040, fase 2)
 
 - `memorias` (038): un recuerdo por fila. `usuario_id` dueño (cascade con la cuenta), `sobre_tipo` (`yo`/`familiar`/`otro`) + `sobre_perfil_id`/`sobre_nombre`, `clave` (tema estable), `texto` (null si borrado), `tipo` (`estable`/`pasajero`, el pasajero vence a los 3 días), `estado` (`vigente`/`reemplazado`/`borrado`), `corrige_id`, `origen` (`chat`/`usuario`), `mensaje_origen_id` (sin FK). Un solo vigente por (dueño, sobre quién, clave). RLS owner-only: ningún cuidador la ve.
+- `mensajes_chat.tarjetas` jsonb (055, escrita, NO aplicada): las tarjetas de vita de ese mensaje, para seguir viéndolas al reabrir el chat. Null si no tiene. Sin la columna el chat anda igual y las tarjetas se ven solo en el momento.
 - `mensajes_chat.excluido_memoria` + `busqueda` (tsvector GIN) (038): un mensaje excluido sigue visible en el chat pero `buscar_memoria` nunca lo encuentra.
 - `perfiles.memoria_activa` (default true) / `memoria_aviso_visto_at` (038).
 - RPC `guardar_memoria`, `deshacer_memoria`, `buscar_memoria`, `sumar_uso_memorias` (039) y `olvidar_memoria`, `olvidar_todo_memoria`, `borrar_recuerdos_de_sesiones_hasta` (040): todas SECURITY INVOKER, `authenticated`. `olvidar_todo_memoria` deja todos los recuerdos borrados sin texto Y marca todos los mensajes del usuario como `excluido_memoria`. "Borrar historial" llama a `borrar_recuerdos_de_sesiones_hasta` antes de borrar las sesiones.
@@ -467,3 +490,7 @@ Migración 036 (escrita, NO aplicada; aditiva sobre 013). Agrega a `uso_ia_diari
 - `contradicciones_memoria`: pares (`memoria_a < memoria_b`, único) marcados por la consolidación. RLS owner-only de SOLO LECTURA; todo cambio por RPC `security definer` con `auth.uid()` (`resolver_contradiccion`, `marcar_contradicciones_preguntadas`, `descartar_consolidacion_pendiente`). Al cerrarse pierde el texto de la pregunta.
 - RPC del trabajador (solo `service_role`): `candidatos_consolidacion`, `recuerdos_para_consolidar`, `reservar_lote_consolidacion`, `aplicar_consolidacion`, `reclamar_lote_consolidacion`, `cerrar_lote_consolidacion`, `intento_fallido_lote_usuario`, `marcar_error_lote_usuario`, `marcar_uso_lote_usuario`, `limpiar_lotes_consolidacion`. `olvidar_memoria`, `olvidar_todo_memoria` y `borrar_recuerdos_de_sesiones_hasta` se reemplazan (como en la 041) para seguir `reemplazada_por_id` y descartar lo pendiente.
 - Jobs `memoria-consolidacion-enviar` (`0 6 * * *`) y `memoria-consolidacion-procesar` (`*/30 * * * *`) derivados del job `dosis-vencidas`. Tests: `supabase/tests/memoria-consolidacion.sql`.
+
+## Medicamentos: forma, cantidad y fin (052)
+
+`medicamentos.forma` (`pastilla`, `jarabe`, `gotas`, `inyeccion`, `otro`), `cantidad_por_toma` (por fila; null = usa `inventario_pastillas.pastillas_por_toma`) y `fecha_fin` (inclusive, fecha AR; null = sin fin). `inventario_pastillas.stock` es decimal. La RPC `ajustar_stock_por_toma` mueve el stock con la cantidad de la toma (gotas en ml, 20 = 1 ml). Todo lector de la agenda usa `vigenteEnFecha` (`lib/medicamentos/cuando.ts`).
