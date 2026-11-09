@@ -56,8 +56,16 @@ export function adivinarForma(nombre: string): FormaMedicamento | null {
   return null;
 }
 
-function numeroConComa(n: number): string {
+export function numeroConComa(n: number): string {
   return String(n).replace(".", ",");
+}
+
+/** Stock con su unidad: "1 pastilla", "12,5 pastillas", "30 ml", "2 unidades". */
+export function cantidadStock(forma: unknown, n: number): string {
+  const unidad = CONFIG_FORMA[esForma(forma) ? forma : "pastilla"].unidadStock;
+  if (!unidad) return numeroConComa(n);
+  const singular: Record<string, string> = { pastillas: "pastilla", unidades: "unidad" };
+  return `${numeroConComa(n)} ${n === 1 ? (singular[unidad] ?? unidad) : unidad}`;
 }
 
 function pastillas(n: number): string {

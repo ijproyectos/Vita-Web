@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
+import { numeroConComa } from "@/lib/medicamentos/forma";
 
 // Tira de poco stock bajo la tarjeta de hoy (V7, Home): "Losacor · quedan unas
 // 5, alcanzan hasta el jueves" + "Ya compré". En vita "Ya compré" lleva a
@@ -17,7 +18,7 @@ export type ItemStockBajo = {
 export function TiraStock({ items, deQuien, puedeEditar }: { items: ItemStockBajo[]; deQuien?: string | null; puedeEditar: boolean }) {
   if (items.length === 0) return null;
   const [primero, ...resto] = items;
-  const cantidad = primero.stock <= 0 ? "no quedan" : primero.stock === 1 ? "queda 1" : `quedan unas ${primero.stock}`;
+  const cantidad = primero.stock <= 0 ? "no quedan" : primero.stock === 1 ? "queda 1" : `quedan unas ${numeroConComa(primero.stock)}`;
 
   return (
     <div className="-mt-2.5 flex items-center gap-2.5 rounded-[16px] border border-foreground/[0.06] bg-card/60 py-2.5 pl-3.5 pr-2">

@@ -26,7 +26,7 @@ export default async function ContactoEmergenciaPage(props: PageProps<"/app/perf
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
-      <TopBar volverA={volverFicha ?? rutaVolverAPerfil(activo)} eyebrow="Preferencias" title="Contacto de emergencia" />
+      <TopBar volverA={volverFicha ?? rutaVolverAPerfil(activo)} eyebrow={ficha ? ficha.nombre.split(" ")[0] : "Preferencias"} title="Contacto de emergencia" />
       {!ficha && <BannerPerfil perfil={activo} />}
       <p className="px-0.5 text-pretty text-[13.5px] font-medium leading-[1.5] text-slate-brand">
         {ficha

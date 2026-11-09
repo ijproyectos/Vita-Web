@@ -22,7 +22,7 @@ import {
 const FILAS_PROPIAS: { clave: ClaveBooleana; label: string; sub: string }[] = [
   { clave: "recordatorio_dosis", label: "Tus medicamentos", sub: "A horario, con botones para confirmar." },
   { clave: "aviso_turnos", label: "Tus turnos", sub: "El día anterior y 2 horas antes." },
-  { clave: "stock_bajo", label: "Remedio por terminarse", sub: "Cuando te quedan pocas pastillas." },
+  { clave: "stock_bajo", label: "Remedio por terminarse", sub: "Cuando te queda poco de un remedio." },
 ];
 
 type PersonaCfg = { id: string; nombre: string; relacion: string | null };

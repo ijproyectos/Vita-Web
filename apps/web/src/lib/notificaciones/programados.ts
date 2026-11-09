@@ -90,6 +90,7 @@ export type ResumenProgramados = {
 
 type FilaMedicamento = {
   id: string;
+  forma?: string;
   usuario_id: string;
   nombre: string;
   dosis: string | null;
@@ -245,7 +246,9 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   const stockBajoTodos = ((invData ?? []) as { id: string; usuario_id: string; nombre: string; stock: number; umbral_alerta: number }[]).filter(
     (i) => esStockBajo(i.stock, i.umbral_alerta)
   );
-  const stockBajo = sinTratamientoTerminado(stockBajoTodos, medicamentos, hoyAR);
+  // La forma vive en cada fila del medicamento: el aviso habla en su unidad (ml, pastillas…).
+  const formaDeStock = new Map(medicamentos.flatMap((m) => (m.inventario_id ? [[m.inventario_id, m.forma] as const] : [])));
+  const stockBajo = sinTratamientoTerminado(stockBajoTodos, medicamentos, hoyAR).map((i) => ({ ...i, forma: formaDeStock.get(i.id) }));
 
   // Preferencias de todos los usuarios involucrados (una sola lectura).
   const usuarios = new Set<string>();
@@ -349,7 +352,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
       const prefs = prefsDe(i.usuario_id);
       if (!prefs.stock_bajo || silenciado(i.usuario_id)) continue;
       if (!(await reclamarEnvio(admin, "stock_bajo", i.id, hoyAR, i.usuario_id))) continue;
-      const payload = payloadStockBajo({ inventarioId: i.id, nombre: i.nombre, stock: i.stock, fechaAR: hoyAR });
+      const payload = payloadStockBajo({ inventarioId: i.id, nombre: i.nombre, stock: i.stock, fechaAR: hoyAR, forma: i.forma });
       await entregarAviso(
         admin,
         i.usuario_id,
@@ -510,7 +513,7 @@ type ContextoFamilia = {
   mananaAR: string;
   deHoy: FilaMedicamento[];
   turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string; llevar: unknown; acompanado: boolean | null }[];
-  stockBajo: { id: string; usuario_id: string; nombre: string; stock: number }[];
+  stockBajo: { id: string; usuario_id: string; nombre: string; stock: number; forma?: string }[];
   resumen: ResumenProgramados;
 };
 
@@ -667,6 +670,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         nombre: i.nombre,
         stock: i.stock,
         fechaAR: hoyAR,
+        forma: i.forma,
         rolDestino: cu.rol,
       });
       await entregarAviso(

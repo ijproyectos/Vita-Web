@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
-import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, esTipoMedicion, volverSeguro } from "@/lib/mediciones/tipos";
+import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, esTipoMedicion, formatearValor, metaDe, volverSeguro, type TipoRegistrable } from "@/lib/mediciones/tipos";
+import { esDeLaMetrica } from "@/lib/mediciones/plan";
+import * as medicionesNucleo from "@/lib/mediciones/nucleo";
+import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "../../../top-bar";
 import { FormularioMedicion } from "./formulario";
 
@@ -25,11 +28,23 @@ export default async function AgregarMedicionPage(props: PageProps<"/app/mi-salu
   const nombreOtra = texto(params?.tipo) === "otra" ? texto(params?.nombre).slice(0, MAX_NOMBRE_OTRA) : "";
   const unidadOtra = nombreOtra ? texto(params?.unidad).slice(0, MAX_UNIDAD_OTRA) : "";
 
+  // Si ya se sabe qué se mide (tarjeta, Rutina, aviso) no se elige: va en el título.
+  const crudo = texto(params?.tipo);
+  const metricaFija = esTipoMedicion(crudo) || !!nombreOtra;
+  const tipo: TipoRegistrable = nombreOtra ? "otra" : esTipoMedicion(crudo) ? crudo : "presion";
+  const horaPedida = texto(params?.hora);
+  const consulta = { tipo, nombre_otra: nombreOtra || null };
+  const supabase = await createClient();
+  const historial = metricaFija ? await medicionesNucleo.listarPorTipoSeguro(supabase, activo.id, tipo) : [];
+  const ultima = historial.find((m) => esDeLaMetrica(m, consulta));
+  const eyebrow = metricaFija ? `Medición · ${/^\d{2}:\d{2}$/.test(horaPedida) ? horaPedida : "ahora"}` : "Monitoreo";
+  const titulo = metricaFija ? metaDe({ tipo, nombre_otra: nombreOtra, unidad_otra: unidadOtra }).nombre : "Nueva medición";
+
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
-      <TopBar eyebrow="Monitoreo" title={nombreOtra || "Nueva medición"} volverA={volver} />
+      <TopBar eyebrow={eyebrow} title={titulo} volverA={volver} />
       <BannerPerfil perfil={activo} accion="cargar" />
-      <FormularioMedicion tipoInicial={tipoInicial} volver={volver} otra={nombreOtra ? { nombre: nombreOtra, unidad: unidadOtra } : null} />
+      <FormularioMedicion tipoInicial={tipoInicial} volver={volver} otra={nombreOtra ? { nombre: nombreOtra, unidad: unidadOtra } : null} metricaFija={metricaFija} ultimoValor={ultima ? formatearValor(ultima) : null} />
     </div>
   );
 }

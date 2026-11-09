@@ -356,12 +356,13 @@ export function hrefDetalleMetrica(m: ConMetrica): string {
 }
 
 export function hrefNuevaMedicion(
-  opciones: { tipo?: TipoRegistrable; nombre?: string | null; unidad?: string | null; volver?: string } = {}
+  opciones: { tipo?: TipoRegistrable; nombre?: string | null; unidad?: string | null; hora?: string; volver?: string } = {}
 ): string {
   const q = new URLSearchParams();
   if (opciones.tipo) q.set("tipo", opciones.tipo);
   if (opciones.nombre) q.set("nombre", opciones.nombre);
   if (opciones.unidad) q.set("unidad", opciones.unidad);
+  if (opciones.hora) q.set("hora", opciones.hora);
   if (opciones.volver) q.set("volver", opciones.volver);
   const s = q.toString();
   return `${RUTA_MONITOREO}/agregar${s ? `?${s}` : ""}`;

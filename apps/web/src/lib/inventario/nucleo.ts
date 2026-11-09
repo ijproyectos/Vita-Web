@@ -136,6 +136,13 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
 }
 
 /** Como `listarGrupos` pero ante cualquier fallo (migración 014 sin aplicar) devuelve []. */
+/** Forma de cada stock, para hablar en su unidad. Sin la migración 052 queda vacío (son pastillas). */
+export async function formasDeInventarios(supabase: Cliente, usuarioId: string): Promise<Map<string, FormaMedicamento>> {
+  const { data, error } = await supabase.from("medicamentos").select("inventario_id, forma").eq("usuario_id", usuarioId).not("inventario_id", "is", null);
+  if (error) return new Map();
+  return new Map((data as { inventario_id: string; forma: FormaMedicamento }[]).map((f) => [f.inventario_id, f.forma]));
+}
+
 export async function listarGruposSeguro(supabase: Cliente, usuarioId: string): Promise<GrupoMedicamento[]> {
   try {
     return await listarGrupos(supabase, usuarioId);

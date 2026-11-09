@@ -3,6 +3,7 @@
 import type { PayloadPush } from "./push";
 import { fechaHoraTurnoTexto } from "./turno-acompanado-logica";
 import { textoLlevarAviso } from "@/lib/turnos/tipos";
+import { cantidadStock, seCuentaConFoto } from "@/lib/medicamentos/forma";
 
 /**
  * Destino de un aviso sobre otra persona. La ficha (`/app/familia/<id>`) es de
@@ -204,17 +205,15 @@ export function payloadMedirPersona(d: { personaId: string; personaNombre: strin
 }
 
 /** Stock por debajo del umbral (una vez por día por medicamento). */
-export function payloadStockBajo(s: { inventarioId: string; nombre: string; stock: number; fechaAR: string }): PayloadPush {
+export function payloadStockBajo(s: { inventarioId: string; nombre: string; stock: number; fechaAR: string; forma?: unknown }): PayloadPush {
   const titulo =
     s.stock <= 0
       ? `Se terminó tu ${s.nombre}`
-      : s.stock === 1
-        ? `Te queda 1 pastilla de ${s.nombre}`
-        : `Te quedan ${s.stock} pastillas de ${s.nombre}`;
+      : `Te ${s.stock === 1 ? "queda" : "quedan"} ${cantidadStock(s.forma, s.stock)} de ${s.nombre}`;
   return {
     title: titulo,
     body: "Para que lo pidas a tiempo.",
-    url: "/app/pastillas",
+    url: seCuentaConFoto(s.forma) ? "/app/pastillas" : "/app/medicamentos",
     tag: `stock-${s.inventarioId}-${s.fechaAR}`,
   };
 }
@@ -299,15 +298,14 @@ export function payloadStockPersona(s: {
   nombre: string;
   stock: number;
   fechaAR: string;
+  forma?: unknown;
   rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const quien = primerNombre(s.personaNombre);
   const titulo =
     s.stock <= 0
       ? `A ${quien} se le terminó el ${s.nombre}`
-      : s.stock === 1
-        ? `A ${quien} le queda 1 pastilla de ${s.nombre}`
-        : `A ${quien} le quedan ${s.stock} pastillas de ${s.nombre}`;
+      : `A ${quien} le ${s.stock === 1 ? "queda" : "quedan"} ${cantidadStock(s.forma, s.stock)} de ${s.nombre}`;
   return {
     title: titulo,
     body: "Para que lo pida a tiempo.",

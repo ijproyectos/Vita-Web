@@ -131,6 +131,7 @@ begin
       'condicion', m.condicion,
       'notas', m.notas,
       -- Pastillas que quedan, solo si el medicamento tiene stock cargado.
+      'forma', m.forma,
       'pastillas_restantes', ip.stock
     )
     order by m.hora_programada, m.nombre

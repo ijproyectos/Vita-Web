@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { esStockBajo, textoQuedan } from "@/lib/inventario/tipos";
-import { seCuentaConFoto } from "@/lib/medicamentos/forma";
+import { numeroConComa, seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { TopBar } from "../top-bar";
@@ -80,7 +80,7 @@ export default async function PastillasPage() {
                           bajo && "text-chip-amber-ink"
                         )}
                       >
-                        {inv.stock}
+                        {numeroConComa(inv.stock)}
                       </div>
                       <div className="mt-0.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
                         pastillas

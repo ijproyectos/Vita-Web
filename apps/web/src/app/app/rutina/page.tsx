@@ -78,7 +78,7 @@ export default async function RutinaPage() {
         hora: t.hora,
         titulo: `Medir ${fraseMedir(p)}`,
         valor: t.medicion ? `${formatearValor(t.medicion)} ${meta.unidad}`.trim() : null,
-        href: hrefNuevaMedicion({ tipo: p.tipo, nombre: p.nombre_otra, unidad: p.unidad_otra, volver: "/app/rutina" }),
+        href: hrefNuevaMedicion({ tipo: p.tipo, nombre: p.nombre_otra, unidad: p.unidad_otra, hora: t.hora, volver: "/app/rutina" }),
       }));
     });
 

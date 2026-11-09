@@ -61,7 +61,7 @@ export async function procesarMonitoreos(
     const que = fraseMedir(plan);
     const titulo = `Hora de medir ${que}`;
     const cuerpo = "Tocá para cargar el valor.";
-    const url = hrefNuevaMedicion({ tipo: plan.tipo, nombre: plan.nombre_otra, unidad: plan.unidad_otra, volver: "/app/avisos" });
+    const url = hrefNuevaMedicion({ tipo: plan.tipo, nombre: plan.nombre_otra, unidad: plan.unidad_otra, hora, volver: "/app/avisos" });
     await entregarAviso(
       admin,
       plan.usuario_id,

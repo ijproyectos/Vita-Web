@@ -13,7 +13,6 @@ import {
   AVISO_REFERENCIA,
   CONTEXTOS_GLUCEMIA,
   ETIQUETA_CONTEXTO,
-  TIPOS_MEDICION,
   TIPOS_PLAN,
   dentroDeRango,
   esTipoMedicion,
@@ -32,11 +31,17 @@ export function FormularioMedicion({
   tipoInicial,
   volver,
   otra,
+  metricaFija = false,
+  ultimoValor,
 }: {
   tipoInicial: string;
   volver: string;
   /** Métrica "Otra" ya elegida: solo se carga el valor. */
   otra?: { nombre: string; unidad: string } | null;
+  /** Ya se sabe qué se mide: no se ofrecen los chips. */
+  metricaFija?: boolean;
+  /** Último valor cargado, como referencia en el campo ("120/80"). */
+  ultimoValor?: string | null;
 }) {
   const router = useRouter();
   const volverAtras = useVolver(volver);
@@ -59,6 +64,7 @@ export function FormularioMedicion({
   }
   const [estado, formAction, pendiente] = useActionState(accion, ESTADO_INICIAL);
 
+  const [phValor, phSecundario] = (ultimoValor ?? "").split("/");
   const meta = metaDe({ tipo, nombre_otra: otra?.nombre, unidad_otra: otra?.unidad });
   const esPresion = tipo === "presion";
   const num = parsearNumero(valor);
@@ -92,12 +98,13 @@ export function FormularioMedicion({
           <input type="hidden" name="nombreOtra" value={otra.nombre} />
           <input type="hidden" name="unidadOtra" value={otra.unidad} />
         </>
+      ) : metricaFija ? (
+        <input type="hidden" name="tipo" value={tipo} />
       ) : (
       <div>
         <Etiqueta text="Métrica" />
-        {/* Una métrica fuera de la lista solo aparece si se viene a cargar justo esa. */}
         <ChipsMetrica
-          tipos={TIPOS_MEDICION.filter((t) => TIPOS_PLAN.includes(t) || t === tipoInicial)}
+          tipos={TIPOS_PLAN}
           valor={tipo}
           onElegir={(t) => {
             setTipo(t);
@@ -121,7 +128,7 @@ export function FormularioMedicion({
             inputMode="decimal"
             autoComplete="off"
             aria-label={esPresion ? "Presión máxima (sistólica)" : meta.nombre}
-            placeholder="—"
+            placeholder={phValor || "—"}
             className={CLASE_INPUT_VALOR}
           />
           {esPresion && (
@@ -134,7 +141,7 @@ export function FormularioMedicion({
                 inputMode="decimal"
                 autoComplete="off"
                 aria-label="Presión mínima (diastólica)"
-                placeholder="—"
+                placeholder={phSecundario || "—"}
                 className={CLASE_INPUT_VALOR}
               />
             </>

@@ -7,10 +7,10 @@ import { textoQuedan, type Inventario } from "@/lib/inventario/tipos";
 // se muestra solo informativo.
 export function AvisoStockBajo({
   items,
-  titulo = "Te quedan pocas pastillas",
+  titulo = "Te queda poco de estos remedios",
   href,
 }: {
-  items: Pick<Inventario, "id" | "nombre" | "stock">[];
+  items: (Pick<Inventario, "id" | "nombre" | "stock"> & { forma?: unknown })[];
   titulo?: string;
   href?: string;
 }) {
@@ -24,11 +24,11 @@ export function AvisoStockBajo({
         <ul className="mt-1 flex flex-col gap-0.5 text-[13px]">
           {items.map((i) => (
             <li key={i.id} className="truncate">
-              <span className="font-semibold">{i.nombre}</span> — {textoQuedan(i.stock).toLowerCase()}
+              <span className="font-semibold">{i.nombre}</span> — {textoQuedan(i.stock, i.forma).toLowerCase()}
             </li>
           ))}
         </ul>
-        {href && <div className="mt-1.5 text-[12.5px] font-semibold">Ver mis pastillas →</div>}
+        {href && <div className="mt-1.5 text-[12.5px] font-semibold">Ver mis medicamentos →</div>}
       </div>
     </div>
   );
