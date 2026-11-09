@@ -1,5 +1,6 @@
-import { sinTratamientoTerminado, vigenteEnFecha } from "@/lib/medicamentos/cuando";
 import "server-only";
+
+import { sinTratamientoTerminado, vigenteEnFecha } from "@/lib/medicamentos/cuando";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { diaSemanaDe, fechaEnAR, horaEnAR } from "@/lib/medicamentos/nucleo";
