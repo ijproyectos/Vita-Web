@@ -43,8 +43,8 @@ export async function guardarNombreAction(nombre: string): Promise<ErrorAccion> 
 // que rama internamente según el valor guardado (tabs "persona"+"vos" para
 // cuido/ambos, un único tab "vos" para "yo"). El guion viejo
 // (/onboarding/nombre → /onboarding/chat, catálogo sin IA) sigue existiendo
-// como fallback manual — ver el link "Prefiero un formulario" dentro del
-// flujo conversacional.
+// como fallback manual, pero la charla ya no lo enlaza (en su lugar hay un
+// botón para saltear la pregunta): hoy solo se llega por su URL.
 export async function guardarUsoAppAction(usoApp: UsoApp): Promise<ErrorAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();

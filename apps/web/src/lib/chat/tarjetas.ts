@@ -59,6 +59,8 @@ export function agruparTarjetas(tarjetas: Tarjeta[]): TarjetaAgrupada[] {
  */
 export function contenidoSinTarjetas(texto: string, tarjetas: Tarjeta[]): string {
   const hayLista = tarjetas.some((t) => UNA_SOLA.has(t.type));
+  // Una respuesta que era solo tarjetas no puede quedar como un mensaje vacío.
+  if (texto.trim() === "") return hayLista ? "Te mostré tu rutina." : "Listo.";
   return hayLista && texto.trim().endsWith(":") ? "Te mostré tu rutina." : texto;
 }
 

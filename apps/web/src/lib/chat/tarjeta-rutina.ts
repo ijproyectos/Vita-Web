@@ -1,5 +1,6 @@
 // Datos de las tarjetas "Hoy" y "Tus remedios" del chat. Lógica pura.
-// Las tarjetas viajan por el stream y no se guardan: siempre son del momento.
+// Las tarjetas viajan por el stream y además se guardan en `mensajes_chat.tarjetas` (migración 055) para
+// verlas al reabrir el chat; las listas se muestran como lo que eran en ese momento (ver `tituloHoyGuardado`).
 
 import { textoDosis } from "@/lib/medicamentos/tipos";
 

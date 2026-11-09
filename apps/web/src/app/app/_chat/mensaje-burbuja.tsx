@@ -57,15 +57,17 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, 
 
   return (
     <div className="mb-2.5 flex flex-col gap-2">
-      <div className="flex items-end gap-2">
-        <VitaAvatar size={26} />
-        <div className="max-w-[78%] rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] font-medium leading-snug text-foreground shadow-item">
-          {cargando ? <PuntosEscribiendo /> : m.content}
-          {m.interrumpido && (
-            <p className="mt-1.5 text-[12px] font-semibold text-destructive">Respuesta interrumpida</p>
-          )}
+      {(cargando || m.content.trim() !== "" || m.interrumpido) && (
+        <div className="flex items-end gap-2">
+          <VitaAvatar size={26} />
+          <div className="max-w-[78%] rounded-[20px] rounded-bl-[6px] bg-card px-3.5 py-2.5 text-[14.5px] font-medium leading-snug text-foreground shadow-item">
+            {cargando ? <PuntosEscribiendo /> : m.content}
+            {m.interrumpido && (
+              <p className="mt-1.5 text-[12px] font-semibold text-destructive">Respuesta interrumpida</p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       {agruparTarjetas(m.tarjetas ?? []).map((t, i) => (
         <TarjetaAccion key={`${t.type}-${i}`} accion={t} alCerrar={alCerrar} esPropio={esPropio} guardadoEn={m.guardado ? m.timestamp : undefined} />
       ))}

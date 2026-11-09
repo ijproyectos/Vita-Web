@@ -32,6 +32,8 @@ describe("tarjetas del chat", () => {
     const hoy = [{ type: "show_today_medications" }];
     expect(contenidoSinTarjetas("Esto te toca hoy:", hoy)).toBe("Te mostré tu rutina.");
     expect(contenidoSinTarjetas("Hoy tenés turno a las 10.", hoy)).toBe("Hoy tenés turno a las 10.");
+    expect(contenidoSinTarjetas("", hoy)).toBe("Te mostré tu rutina.");
+    expect(contenidoSinTarjetas("  ", [{ type: "medication_taken" }])).toBe("Listo.");
     expect(contenidoSinTarjetas("Mirá:", [med("A")])).toBe("Mirá:");
   });
   it("una tarjeta guardada dice de cuándo es", () => {

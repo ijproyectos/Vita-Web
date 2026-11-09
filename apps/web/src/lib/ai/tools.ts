@@ -1,6 +1,7 @@
+import "server-only";
+
 import { textoDosis } from "@/lib/medicamentos/tipos";
 import { itemsDeHoy, itemsDeRemedios } from "@/lib/chat/tarjeta-rutina";
-import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
