@@ -91,8 +91,8 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
     const stock = Number(stockCrudo);
     const porToma = Number(porTomaCrudo);
 
-    if (stockCrudo === "" || !Number.isInteger(stock) || stock < 0 || stock > STOCK_MAXIMO) {
-      return { status: "error", message: "Indicá cuántas pastillas quedan (un número entero, 0 o más)." };
+    if (stockCrudo === "" || !Number.isFinite(stock) || stock < 0 || stock > STOCK_MAXIMO) {
+      return { status: "error", message: "Indicá cuántas pastillas quedan (un número, 0 o más)." };
     }
     if (porTomaCrudo === "" || !Number.isInteger(porToma) || porToma < 1 || porToma > PASTILLAS_POR_TOMA_MAXIMO) {
       return { status: "error", message: "Indicá cuántas pastillas tomás cada vez (entre 1 y 20)." };

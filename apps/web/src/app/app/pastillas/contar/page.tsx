@@ -36,6 +36,7 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
     etiqueta: g.dosis ? `${g.nombre} · ${g.dosis}` : g.nombre,
     stockActual: g.inventario?.stock ?? null,
     pastillasPorToma: g.inventario?.pastillas_por_toma ?? 1,
+    usaCantidadPorToma: g.usaCantidadPorToma ?? false,
   }));
 
   // `?medicamento=` puede ser el id de cualquier fila del medicamento (no

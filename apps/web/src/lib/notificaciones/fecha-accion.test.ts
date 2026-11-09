@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 // `nucleo.ts` imports `server-only` and the inventory core; only pure date helpers are used.
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/inventario/nucleo", () => ({ ajustarStock: vi.fn(), buscarInventarioId: vi.fn() }));
+vi.mock("@/lib/inventario/nucleo", () => ({ ajustarStock: vi.fn(), ajustarStockDeToma: vi.fn(), buscarInventarioId: vi.fn() }));
 
 const { validarFechaAccion } = await import("./fecha-accion");
 

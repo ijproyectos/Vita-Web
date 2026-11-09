@@ -8,7 +8,7 @@ import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { PASTILLAS_POR_TOMA_MAXIMO, STOCK_MAXIMO } from "@/lib/inventario/tipos";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import { normalizarLlevar, validarTelefono, type ItemLlevar } from "@/lib/turnos/tipos";
-import { leerTomas } from "@/lib/medicamentos/formulario";
+import { leerTomas, leerPlanMedicamento } from "@/lib/medicamentos/formulario";
 import { mensajeSeguroMedicamento } from "@/lib/medicamentos/duplicados";
 import { MENSAJE_SOLO_LECTURA, perfilActivoEditable, rolSobre } from "@/lib/familia/perfil-activo";
 
@@ -128,7 +128,7 @@ export async function crearMedicamentoAction(
   const porToma = Number(porTomaCrudo || "1");
   const hayStock =
     stockCrudo !== "" &&
-    Number.isInteger(stockInicial) &&
+    Number.isFinite(stockInicial) &&
     stockInicial >= 0 &&
     stockInicial <= STOCK_MAXIMO &&
     Number.isInteger(porToma) &&
@@ -141,6 +141,7 @@ export async function crearMedicamentoAction(
       dosis: dosis || null,
       unidad,
       tomas,
+      ...leerPlanMedicamento(formData),
       frecuencia: frecuencia || null,
       duracion: duracion || null,
       notas: notas || null,

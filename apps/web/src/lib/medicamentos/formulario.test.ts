@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { ErrorEntradaMedicamento } from "./duplicados";
-import { MAX_TOMAS, leerTomas } from "./formulario";
+import {
+  MAX_TOMAS,
+  leerPlanMedicamento,
+  leerTomas,
+  normalizarCantidad,
+  normalizarDias,
+  normalizarFechaFin,
+  normalizarForma,
+} from "./formulario";
+import { DIAS_SEMANA } from "./tipos";
 
 function form(horas: string[], comidas: string[]): FormData {
   const fd = new FormData();
@@ -45,5 +54,46 @@ describe("leerTomas", () => {
   it("acepta exactamente MAX_TOMAS tomas", () => {
     const horas = Array.from({ length: MAX_TOMAS }, (_, i) => `${String(i + 6).padStart(2, "0")}:00`);
     expect(leerTomas(form(horas, []))).toHaveLength(MAX_TOMAS);
+  });
+});
+
+describe("plan del medicamento", () => {
+  const HOY = "2026-11-09";
+
+  it("lee cantidades y campos de Cuándo", () => {
+    const fd = form(["08:00", "20:00"], ["con", "con"]);
+    fd.append("tomaCantidad", "0.5");
+    fd.append("tomaCantidad", "1");
+    fd.append("forma", "pastilla");
+    fd.append("dia", "lunes");
+    fd.append("fechaFin", "2026-11-15");
+    expect(leerTomas(fd).map((t) => t.cantidad)).toEqual([0.5, 1]);
+    expect(leerPlanMedicamento(fd)).toEqual({ forma: "pastilla", diasRecurrentes: ["lunes"], fechaFin: "2026-11-15" });
+  });
+
+  it("normalizarForma rechaza lo desconocido", () => {
+    expect(normalizarForma(undefined)).toBe("pastilla");
+    expect(normalizarForma("gotas")).toBe("gotas");
+    expect(() => normalizarForma("polvo")).toThrow(ErrorEntradaMedicamento);
+  });
+
+  it("normalizarDias valida y trata los 7 como todos", () => {
+    expect(normalizarDias(["lunes", "lunes"])).toEqual(["lunes"]);
+    expect(normalizarDias(DIAS_SEMANA)).toEqual([]);
+    expect(() => normalizarDias(["feriado"])).toThrow(ErrorEntradaMedicamento);
+  });
+
+  it("normalizarFechaFin rechaza una fecha pasada salvo la ya guardada", () => {
+    expect(normalizarFechaFin("", HOY)).toBeNull();
+    expect(normalizarFechaFin(HOY, HOY)).toBe(HOY);
+    expect(() => normalizarFechaFin("2026-11-08", HOY)).toThrow("ya pasó");
+    expect(normalizarFechaFin("2026-11-08", HOY, "2026-11-08")).toBe("2026-11-08");
+    expect(() => normalizarFechaFin("2026-13-01", HOY)).toThrow("Revisá");
+  });
+
+  it("normalizarCantidad acepta decimales y rechaza lo inválido", () => {
+    expect(normalizarCantidad(undefined)).toBeNull();
+    expect(normalizarCantidad(0.5)).toBe(0.5);
+    for (const malo of [0, -1, 61, Number.NaN]) expect(() => normalizarCantidad(malo)).toThrow(ErrorEntradaMedicamento);
   });
 });

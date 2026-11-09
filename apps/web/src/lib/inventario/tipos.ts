@@ -45,6 +45,13 @@ export function textoQuedan(stock: number): string {
 }
 
 /** Entero acotado a [min, max]; cualquier cosa no numérica devuelve `min`. */
+/** Stock válido: admite medias pastillas y ml, con dos decimales. */
+export function acotarStock(valor: unknown): number {
+  const n = typeof valor === "number" ? valor : Number(valor);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(STOCK_MAXIMO, Math.max(0, Math.round(n * 100) / 100));
+}
+
 export function acotarEntero(valor: unknown, min: number, max: number): number {
   const n = typeof valor === "number" ? valor : Number(valor);
   if (!Number.isFinite(n)) return min;

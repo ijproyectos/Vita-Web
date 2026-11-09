@@ -27,7 +27,10 @@ import {
   traducirErrorDuplicado,
   type HorarioMedicamento,
 } from "./duplicados";
-import { ajustarStock, buscarInventarioId } from "@/lib/inventario/nucleo";
+import { ajustarStockDeToma, buscarInventarioId } from "@/lib/inventario/nucleo";
+import { vigenteEnFecha } from "./cuando";
+import type { FormaMedicamento } from "./forma";
+import { normalizarCantidad, normalizarDias, normalizarFechaFin, normalizarForma } from "./formulario";
 import { claveMedicamento, separarDosis } from "@/lib/inventario/tipos";
 import { momentoDelDia } from "@/lib/rutina/momento";
 
@@ -186,7 +189,7 @@ export function aplicaEnDia(medicamento: Pick<Medicamento, "dias_recurrentes">, 
  * medianoche sin indicar la fecha de la dosis): `marcarTomado` graba la fecha
  * AR de la dosis.
  */
-export function filtrarDosisDeAyerVencidas<T extends Pick<Medicamento, "hora_programada" | "dias_recurrentes"> & { id: string }>(
+export function filtrarDosisDeAyerVencidas<T extends Pick<Medicamento, "hora_programada" | "dias_recurrentes" | "fecha_fin"> & { id: string }>(
   meds: T[],
   tomadas: Set<string>,
   ahora: Date,
@@ -195,9 +198,11 @@ export function filtrarDosisDeAyerVencidas<T extends Pick<Medicamento, "hora_pro
   const horaAhora = horaEnAR(ahora);
   if (horaAhora >= FIN_VENTANA_MEDIANOCHE) return [];
   const diaAyer = diaSemanaDe(new Date(ahora.getTime() - 24 * 60 * 60 * 1000));
+  const fechaAyer = fechaAyerEnAR(ahora);
   return meds.filter(
     (m) =>
       aplicaEnDia(m, diaAyer) &&
+      vigenteEnFecha(m, fechaAyer) &&
       !tomadas.has(m.id) &&
       esDosisDeAyerVencida(m.hora_programada, horaAhora, minutosGracia)
   );
@@ -237,8 +242,8 @@ export async function listarVencidasDeAyer(
 
 export function aplicaHoy(medicamento: Medicamento): boolean {
   return (
-    medicamento.dias_recurrentes.length === 0 ||
-    medicamento.dias_recurrentes.includes(diaDeHoy())
+    vigenteEnFecha(medicamento, fechaDeHoy()) &&
+    (medicamento.dias_recurrentes.length === 0 || medicamento.dias_recurrentes.includes(diaDeHoy()))
   );
 }
 
@@ -471,6 +476,17 @@ function columnasComidaPlan(t: { conComida?: ConComida; indicacion?: IndicacionC
   return { conComida: c.con_comida, indicacion: c.indicacion };
 }
 
+/** Columna de cantidad para escribir; con `hayColumnas` se escribe tal cual viene. */
+function columnaCantidad(
+  cantidad: number | null | undefined,
+  forma: FormaMedicamento,
+  hayColumnas: boolean
+): { cantidad_por_toma?: number | null } {
+  if (cantidad === undefined) return {};
+  if (hayColumnas) return { cantidad_por_toma: cantidad };
+  return cantidad === null || (forma === "pastilla" && cantidad === 1) ? {} : { cantidad_por_toma: cantidad };
+}
+
 /**
  * Crea una fila por cada momento elegido en el form nuevo
  * (AgregarMedicamentoScreen del diseño) — mismo dato compartido, hora
@@ -483,14 +499,17 @@ export async function agregarMultiMomento(
   datos: DatosNuevoMedicamentoMultiMomento
 ): Promise<Medicamento[]> {
   // Alta por toma (hora propia + comida por fila) o por momento (hora por defecto).
-  const plan: { hora: string; momento: MomentoDia; conComida: ConComida; indicacion: IndicacionComida | null }[] = datos.tomas?.length
+  const plan: { hora: string; momento: MomentoDia; conComida: ConComida; indicacion: IndicacionComida | null; cantidad?: number | null }[] = datos.tomas?.length
     ? datos.tomas.map((t) => {
       const hora = normalizarHoraDuplicados(t.hora);
-      return { hora, momento: momentoDelDia(hora), ...columnasComidaPlan(t) };
+      return { hora, momento: momentoDelDia(hora), cantidad: normalizarCantidad(t.cantidad), ...columnasComidaPlan(t) };
     })
     : (datos.momentos ?? []).map((m) => ({ hora: HORA_POR_MOMENTO[m], momento: m, ...columnasComidaPlan(datos) }));
   if (plan.length === 0) throw new Error("Falta al menos un horario.");
-  await verificarHorariosDisponibles(supabase, usuarioId, plan.map((t) => ({ nombre: datos.nombre, horaProgramada: t.hora })));
+  const forma = normalizarForma(datos.forma);
+  const dias = normalizarDias(datos.diasRecurrentes);
+  const fechaFin = normalizarFechaFin(datos.fechaFin, fechaDeHoy());
+  await verificarHorariosDisponibles(supabase, usuarioId, plan.map((t) => ({ nombre: datos.nombre, horaProgramada: t.hora, diasRecurrentes: dias })));
 
   // Si ese medicamento (nombre+dosis) ya tiene stock cargado, las filas
   // nuevas nacen enganchadas a él (un solo stock compartido por medicamento).
@@ -505,7 +524,12 @@ export async function agregarMultiMomento(
     unidad: datos.unidad ?? "mg",
     hora_programada: toma.hora,
     momento_dia: toma.momento,
-    dias_recurrentes: [],
+    dias_recurrentes: dias,
+    // Solo los valores que no son los de siempre: sin la migración 052 un alta
+    // común sigue andando y una con estos datos falla en vez de perderlos.
+    ...(forma !== "pastilla" ? { forma } : {}),
+    ...(fechaFin ? { fecha_fin: fechaFin } : {}),
+    ...columnaCantidad(toma.cantidad, forma, false),
     frecuencia: datos.frecuencia ?? null,
     con_comida: toma.conComida,
     ...(toma.indicacion ? { indicacion: toma.indicacion } : {}),
@@ -632,7 +656,11 @@ export async function actualizarGrupo(
   if (!nombre) throw new Error("El nombre no puede quedar vacío.");
   if (new Set(ids).size !== ids.length) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
   if (datos.tomas.length === 0) throw new Error("Tiene que haber al menos un horario.");
-  const tomas = datos.tomas.map((t) => ({ ...t, hora: normalizarHoraDuplicados(t.hora) }));
+  const tomas = datos.tomas.map((t) => ({
+    ...t,
+    hora: normalizarHoraDuplicados(t.hora),
+    ...(t.cantidad !== undefined ? { cantidad: normalizarCantidad(t.cantidad) } : {}),
+  }));
   const existentes = await listarTodos(supabase, usuarioId);
   const filas = existentes.filter((m) => ids.includes(m.id));
   if (filas.length === 0) throw new Error("No encontramos ese medicamento.");
@@ -646,10 +674,17 @@ export async function actualizarGrupo(
   const idsTomas = tomas.flatMap((t) => t.id ? [t.id] : []);
   if (new Set(idsTomas).size !== idsTomas.length) throw new Error("Ese horario está repetido en la edición.");
   const filaPorId = new Map(filas.map((f) => [f.id, f]));
+  const dias = datos.diasRecurrentes === undefined ? undefined : normalizarDias(datos.diasRecurrentes);
+  const forma = datos.forma === undefined ? undefined : normalizarForma(datos.forma);
+  const fechaFin = datos.fechaFin === undefined ? undefined : normalizarFechaFin(datos.fechaFin, fechaDeHoy(), filas[0].fecha_fin);
+  // Con la migración 052 la fila trae estas columnas; sin ella solo se envían valores
+  // que no son los de siempre, para que el guardado falle en vez de perderlos.
+  const hayColumnas = "forma" in filas[0];
+  const formaFinal = forma ?? filas[0].forma ?? "pastilla";
   const candidatos = tomas.map((t) => ({
     nombre,
     horaProgramada: t.hora,
-    diasRecurrentes: (t.id ? filaPorId.get(t.id)! : filas[0]).dias_recurrentes,
+    diasRecurrentes: dias ?? (t.id ? filaPorId.get(t.id)! : filas[0]).dias_recurrentes,
   }));
   comprobarHorarios(candidatos, existentes, [...idsValidos]);
 
@@ -672,6 +707,9 @@ export async function actualizarGrupo(
 
   const compartido: Record<string, unknown> = { nombre, dosis: datos.dosis, unidad: datos.unidad };
   if (datos.frecuencia !== undefined) compartido.frecuencia = datos.frecuencia;
+  if (dias !== undefined) compartido.dias_recurrentes = dias;
+  if (forma !== undefined && (hayColumnas || forma !== "pastilla")) compartido.forma = forma;
+  if (fechaFin !== undefined && (hayColumnas || fechaFin)) compartido.fecha_fin = fechaFin;
   const ahora = new Date().toISOString();
 
   // Primero lo que no puede dejar el grupo a medias: altas y borrados.
@@ -691,6 +729,7 @@ export async function actualizarGrupo(
       return {
         ...base,
         ...compartido,
+        ...columnaCantidad(t.cantidad, formaFinal, hayColumnas),
         hora_programada: t.hora,
         momento_dia: momentoDelDia(t.hora),
         con_comida: comida.con_comida,
@@ -713,6 +752,7 @@ export async function actualizarGrupo(
     const existente = filas.find((f) => f.id === t.id);
     const cambiosToma = {
       ...compartido,
+      ...columnaCantidad(t.cantidad, formaFinal, hayColumnas),
       hora_programada: t.hora,
       momento_dia: momentoDelDia(t.hora),
       con_comida: comida.con_comida,
@@ -739,6 +779,12 @@ export async function actualizarGrupo(
       .from("inventario_pastillas")
       .update({ nombre, dosis: datos.dosis })
       .eq("id", molde.inventario_id);
+  }
+
+  // Otra forma es otra unidad (pastillas, ml…): el stock anterior deja de valer.
+  // El medicamento queda sin stock (la FK pone null); best-effort, como el renombre.
+  if (molde.inventario_id && forma !== undefined && hayColumnas && forma !== molde.forma) {
+    await supabase.from("inventario_pastillas").delete().eq("id", molde.inventario_id).eq("usuario_id", usuarioId);
   }
 }
 
@@ -876,7 +922,7 @@ async function moverStock(supabase: Cliente, medicamentoId: string, direccion: 1
   const inventarioId = data?.inventario_id as string | null | undefined;
   if (!inventarioId) return;
 
-  await ajustarStock(supabase, inventarioId, direccion);
+  await ajustarStockDeToma(supabase, medicamentoId, inventarioId, direccion);
 }
 
 export async function marcarTodosTomados(
@@ -947,7 +993,9 @@ export async function calcularAdherencia(
     const tomadosHoy = tomasPorFecha.get(fechaStr) ?? new Set<string>();
 
     const esperadosHoy = medicamentos.filter(
-      (m) => m.dias_recurrentes.length === 0 || m.dias_recurrentes.includes(diaSemana)
+      (m) =>
+        vigenteEnFecha(m, fechaStr) &&
+        (m.dias_recurrentes.length === 0 || m.dias_recurrentes.includes(diaSemana))
     );
 
     for (const m of esperadosHoy) {

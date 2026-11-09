@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
+import * as inventario from "@/lib/inventario/nucleo";
 import type { DatosActualizarGrupo } from "@/lib/medicamentos/tipos";
 import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
 import type { EstadoAccion } from "../rutina/actions";
@@ -31,13 +32,22 @@ function revalidar() {
   revalidatePath("/app/modo-simple");
 }
 
-export async function guardarMedicamentoAction(ids: string[], datos: DatosActualizarGrupo): Promise<EstadoAccion> {
+export async function guardarMedicamentoAction(
+  ids: string[],
+  datos: DatosActualizarGrupo,
+  stock?: number
+): Promise<EstadoAccion> {
   await requireUser();
   try {
     const supabase = await createClient();
     const objetivo = await duenioEditable(supabase, ids);
     if (!objetivo.ok) return { status: "error", message: objetivo.message };
     await medicamentos.actualizarGrupo(supabase, objetivo.usuarioId, ids, datos);
+    // Best-effort, igual que en el alta: lo principal ya quedó guardado.
+    const fila = datos.tomas.find((t) => t.id)?.id;
+    if (fila && typeof stock === "number" && Number.isFinite(stock) && stock >= 0) {
+      await inventario.guardar(supabase, objetivo.usuarioId, { medicamentoId: fila, stock, pastillasPorToma: 1 }).catch(() => undefined);
+    }
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "No se pudo guardar el medicamento." };
   }

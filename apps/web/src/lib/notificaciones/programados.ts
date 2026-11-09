@@ -1,3 +1,4 @@
+import { vigenteEnFecha } from "@/lib/medicamentos/cuando";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -92,6 +93,7 @@ type FilaMedicamento = {
   unidad: string;
   hora_programada: string;
   dias_recurrentes: DiaSemana[] | null;
+  fecha_fin?: string | null;
   con_comida: string | null;
   notas: string | null;
 };
@@ -164,11 +166,11 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
 
   const { data: medsData, error: errorMeds } = await admin
     .from("medicamentos")
-    .select("id, usuario_id, nombre, dosis, unidad, hora_programada, dias_recurrentes, con_comida, notas");
+    .select("*"); // "*": `fecha_fin` (052) puede no existir todavía y una columna pedida a mano tiraría el cron.
   if (errorMeds) throw new Error(`No se pudieron leer los medicamentos: ${errorMeds.message}`);
   const medicamentos = (medsData ?? []) as FilaMedicamento[];
   const medPorId = new Map(medicamentos.map((m) => [m.id, m]));
-  const deHoy = medicamentos.filter((m) => aplicaHoy(m, diaHoy));
+  const deHoy = medicamentos.filter((m) => aplicaHoy(m, diaHoy) && vigenteEnFecha(m, hoyAR));
 
   const { data: posData } = await admin.from("posposiciones").select("id, medicamento_id, usuario_id, fecha, hasta").eq("fecha", hoyAR);
   const posposiciones = (posData ?? []) as FilaPosposicion[];
