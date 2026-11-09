@@ -1,3 +1,6 @@
+import type { ReactNode } from "react";
+import { fechaTurnoEnPalabras } from "@/lib/turnos/formato";
+import { REMEDIOS_TARJETA_VISIBLES, leerItemsHoy, leerItemsRemedios, type ItemHoy, type ItemRemedio } from "@/lib/chat/tarjeta-rutina";
 import Link from "next/link";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -120,12 +123,12 @@ function TarjetaAccion({
               {[accion.dose, accion.time && `${accion.time} hs`].filter(Boolean).join(" · ")}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <BotonesTarjeta>
             {editable && typeof accion.id === "string" && (
-              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/medicamentos?editar=${accion.id}`} texto="Ajustar detalles" primario />
+              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/medicamentos?editar=${accion.id}`} texto="Ajustar detalles" primario grupo />
             )}
-            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />}
-          </div>
+            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" grupo />}
+          </BotonesTarjeta>
         </div>
       );
     case "appointment_added":
@@ -135,25 +138,41 @@ function TarjetaAccion({
           <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
             <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.specialty)}</div>
             <div className="mt-0.5 text-xs font-medium text-subtle">
-              {String(accion.date)} · {String(accion.time)} hs
+              {fechaTurnoEnPalabras(String(accion.date))} · {String(accion.time).slice(0, 5)} hs
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <BotonesTarjeta>
             {editable && typeof accion.id === "string" && (
-              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos?editar=${accion.id}`} texto="Completar turno" primario />
+              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos?editar=${accion.id}`} texto="Completar turno" primario grupo />
             )}
-            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />}
-          </div>
+            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" grupo />}
+          </BotonesTarjeta>
         </div>
       );
     case "show_today_medications":
+      return <TarjetaHoy items={leerItemsHoy(accion.items)} persona={persona} editable={editable} alCerrar={alCerrar} />;
     case "show_all_medications":
+      return <TarjetaRemedios items={leerItemsRemedios(accion.items)} persona={persona} editable={editable} alCerrar={alCerrar} />;
+    case "medication_taken":
       return (
-        <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
-          <span className="text-[13.5px] font-medium text-subtle">
-            {persona ? `Rutina de ${persona}` : "Tu rutina está actualizada."}
+        <div className={cn(base, "flex items-center gap-2.5 py-3")}>
+          <IconoTomada />
+          <span className="min-w-0 flex-1 break-words text-[13.5px] font-bold">{String(accion.medication_name)}</span>
+          <span className="shrink-0 text-[12.5px] font-semibold text-slate-brand">
+            {persona ? `Anotada a ${persona}` : "Tomada"}
+            {typeof accion.time === "string" ? ` · ${accion.time}` : ""}
           </span>
-          {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />}
+        </div>
+      );
+    case "all_medications_taken":
+      if (typeof accion.count !== "number" || accion.count <= 0) return null;
+      return (
+        <div className={cn(base, "flex items-center gap-2.5 py-3")}>
+          <IconoTomada />
+          <span className="text-[13.5px] font-bold">
+            {accion.count === 1 ? "1 toma anotada" : `${accion.count} tomas anotadas`}
+            {persona ? ` a ${persona}` : ""}
+          </span>
         </div>
       );
     case "open_screen": {
@@ -161,12 +180,8 @@ function TarjetaAccion({
       if (typeof accion.href !== "string" || !(accion.href === "/app" || accion.href.startsWith("/app/"))) return null;
       const label = typeof accion.label === "string" && accion.label.trim() !== "" ? accion.label : "esta pantalla";
       return (
-        <div className={cn(base, "flex items-center justify-between gap-3 py-3")}>
-          <span className="flex items-center gap-2 text-[13.5px] font-medium text-subtle">
-            <VitaIcon name="chevron-right" size={15} />
-            {label}
-          </span>
-          <EnlaceTarjeta alCerrar={alCerrar} href={accion.href} texto={`Abrir ${label}`} primario inline />
+        <div className={cn(base, "py-3")}>
+          <EnlaceTarjeta alCerrar={alCerrar} href={accion.href} texto={`Abrir ${label}`} primario inline grupo />
         </div>
       );
     }
@@ -177,6 +192,105 @@ function TarjetaAccion({
     default:
       return null;
   }
+}
+
+function IconoTomada() {
+  return (
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+      <VitaIcon name="check" size={15} strokeWidth={2.8} />
+    </span>
+  );
+}
+
+function BotonesTarjeta({ children }: { children: ReactNode }) {
+  return <div className="mt-2.5 flex gap-2">{children}</div>;
+}
+
+type PropsLista = { persona: string | null; editable: boolean; alCerrar: () => void };
+
+/** El resto de una lista larga va a la Rutina: la tarjeta no reemplaza esa pantalla. */
+function PieLista({ ocultos, editable, alCerrar }: { ocultos: number; editable: boolean; alCerrar: () => void }) {
+  return (
+    <>
+      {ocultos > 0 && <div className="mt-1.5 text-[12.5px] font-semibold text-subtle">y {ocultos} más</div>}
+      {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" />}
+    </>
+  );
+}
+
+const BASE_LISTA = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-card";
+const FILA_LISTA = "flex items-baseline gap-2.5 border-t border-line-soft py-[7px] first:border-t-0";
+
+function TarjetaHoy({ items, persona, editable, alCerrar }: PropsLista & { items: ItemHoy[] | null }) {
+  const titulo = persona ? `Hoy de ${persona}` : "Hoy";
+  if (!items) return <TarjetaSinLista titulo={titulo} editable={editable} alCerrar={alCerrar} />;
+  const tomadas = items.filter((i) => i.tomado).length;
+  const visibles = items.slice(0, REMEDIOS_TARJETA_VISIBLES);
+  return (
+    <div className={BASE_LISTA}>
+      <CabeceraTarjeta icon="pill" texto={items.length ? `${titulo} · ${tomadas} de ${items.length} tomadas` : titulo} />
+      {items.length === 0 ? (
+        <div className="mt-2 text-[13.5px] font-medium text-subtle">No hay remedios para hoy.</div>
+      ) : (
+        <ul className="mt-1.5">
+          {visibles.map((i, n) => (
+            <li key={`${i.hora}-${i.nombre}-${n}`} className={FILA_LISTA}>
+              <span className="w-[42px] shrink-0 text-[12.5px] font-bold tabular-nums text-slate-brand">{i.hora}</span>
+              <span className={cn("min-w-0 flex-1 break-words text-[13.5px] font-bold", i.tomado && "text-subtle")}>
+                {i.nombre}
+                {i.dosis && <span className="font-medium text-subtle"> {i.dosis}</span>}
+              </span>
+              {i.tomado ? (
+                <span className="flex shrink-0 items-center gap-1 text-[12px] font-bold text-teal-deep">
+                  <VitaIcon name="check" size={13} strokeWidth={2.8} />
+                  Tomada
+                </span>
+              ) : (
+                <span className="shrink-0 text-[12px] font-semibold text-subtle">Pendiente</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <PieLista ocultos={items.length - visibles.length} editable={editable} alCerrar={alCerrar} />
+    </div>
+  );
+}
+
+function TarjetaRemedios({ items, persona, editable, alCerrar }: PropsLista & { items: ItemRemedio[] | null }) {
+  const titulo = persona ? `Remedios de ${persona}` : "Tus remedios";
+  if (!items) return <TarjetaSinLista titulo={titulo} editable={editable} alCerrar={alCerrar} />;
+  const visibles = items.slice(0, REMEDIOS_TARJETA_VISIBLES);
+  return (
+    <div className={BASE_LISTA}>
+      <CabeceraTarjeta icon="pill" texto={items.length ? `${titulo} · ${items.length}` : titulo} />
+      {items.length === 0 ? (
+        <div className="mt-2 text-[13.5px] font-medium text-subtle">Todavía no hay remedios cargados.</div>
+      ) : (
+        <ul className="mt-1.5">
+          {visibles.map((i, n) => (
+            <li key={`${i.nombre}-${n}`} className={cn(FILA_LISTA, "justify-between")}>
+              <span className="min-w-0 break-words text-[13.5px] font-bold">
+                {i.nombre}
+                {i.dosis && <span className="font-medium text-subtle"> {i.dosis}</span>}
+              </span>
+              <span className="shrink-0 text-right text-[12.5px] font-semibold tabular-nums text-slate-brand">{i.horas.join(" · ")}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <PieLista ocultos={items.length - visibles.length} editable={editable} alCerrar={alCerrar} />
+    </div>
+  );
+}
+
+function TarjetaSinLista({ titulo, editable, alCerrar }: { titulo: string; editable: boolean; alCerrar: () => void }) {
+  return (
+    <div className={cn(BASE_LISTA, "flex items-center justify-between gap-3 py-3")}>
+      <span className="text-[13.5px] font-medium text-subtle">{titulo}</span>
+      {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver rutina" inline />}
+    </div>
+  );
 }
 
 function CabeceraTarjeta({ icon, texto }: { icon: string; texto: string }) {
@@ -195,12 +309,15 @@ function EnlaceTarjeta({
   texto,
   inline,
   primario,
+  grupo,
   alCerrar,
 }: {
   href: string;
   texto: string;
   inline?: boolean;
   primario?: boolean;
+  /** Dentro de una fila de botones: reparten el ancho. */
+  grupo?: boolean;
   alCerrar: () => void;
 }) {
   // El chat es un overlay fijo encima de la app: navegar sin cerrarlo deja
@@ -210,9 +327,10 @@ function EnlaceTarjeta({
       href={href}
       onClick={alCerrar}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-3.5 py-2 font-heading text-[12.5px] font-bold",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full py-2 font-heading text-[12.5px] font-bold",
+        grupo ? "flex-1 justify-center px-2.5" : "px-3.5",
         primario ? "bg-primary text-primary-foreground" : "bg-secondary text-teal-deep",
-        !inline && "mt-2.5"
+        !inline && !grupo && "mt-2.5"
       )}
     >
       {texto}

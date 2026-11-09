@@ -1,3 +1,4 @@
+import { itemsDeHoy, itemsDeRemedios } from "@/lib/chat/tarjeta-rutina";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -217,7 +218,7 @@ async function ejecutarEnDestino(
       await medicamentos.marcarTomado(supabase, usuarioId, medicamento.id, true);
       return {
         contenido: `Marcado "${limpiarDato(medicamento.nombre)}" como tomado.`,
-        accionUI: { type: "medication_taken", medication_name: medicamento.nombre },
+        accionUI: { type: "medication_taken", medication_name: medicamento.nombre, time: medicamento.hora_programada.slice(0, 5) },
       };
     }
 
@@ -225,7 +226,7 @@ async function ejecutarEnDestino(
       const cantidad = await medicamentos.marcarTodosTomados(supabase, usuarioId);
       return {
         contenido: `Marcados ${cantidad} medicamentos como tomados.`,
-        accionUI: { type: "all_medications_taken" },
+        accionUI: { type: "all_medications_taken", count: cantidad },
       };
     }
 
@@ -311,11 +312,16 @@ async function ejecutarEnDestino(
       return { contenido: `Alergia "${limpiarDato(nombre)}" agregada.`, accionUI: { type: "allergy_added", name: nombre } };
     }
 
-    case "show_today_medications":
-      return { contenido: "Mostrado.", accionUI: { type: "show_today_medications" } };
+    // Si la lectura falla, la tarjeta sale sin lista (solo con "Ver rutina").
+    case "show_today_medications": {
+      const hoy = await medicamentos.listarHoy(supabase, usuarioId).catch(() => null);
+      return { contenido: "Mostrado.", accionUI: { type: "show_today_medications", ...(hoy ? { items: itemsDeHoy(hoy) } : {}) } };
+    }
 
-    case "show_all_medications":
-      return { contenido: "Mostrado.", accionUI: { type: "show_all_medications" } };
+    case "show_all_medications": {
+      const todos = await medicamentos.listarTodos(supabase, usuarioId).catch(() => null);
+      return { contenido: "Mostrado.", accionUI: { type: "show_all_medications", ...(todos ? { items: itemsDeRemedios(todos, medicamentos.fechaEnAR()) } : {}) } };
+    }
 
     case "open_screen": {
       // Solo claves del catálogo: nunca una ruta que arme el modelo.

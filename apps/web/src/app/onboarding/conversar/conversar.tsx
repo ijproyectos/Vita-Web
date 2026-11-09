@@ -585,7 +585,6 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
   }
 
   function responderFrecuenciaMed(frecuencia: string) {
-    agregarBurbujaUsuario(frecuencia);
     setBorrador((b) => ({ ...b, frecuencia, tomas: [] }));
     preguntarMomentoToma(0, cantidadDeTomas(frecuencia));
   }
