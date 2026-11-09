@@ -128,7 +128,7 @@ export default async function HomePage() {
         opciones={opciones}
         nombre={nombre}
         eyebrowSelector={activo.esPropio ? `${saludoEnAR()},` : "Estás viendo a"}
-        estatico={{ eyebrow: `${saludoEnAR()},`, titulo: `${nombre} 👋`, eyebrowClassName: "text-subtle" }}
+        estatico={{ eyebrow: `${saludoEnAR()},`, titulo: nombre, eyebrowClassName: "text-subtle" }}
         pie={!puedeEditar ? <PastillaLector /> : undefined}
         accion={
           <Link
