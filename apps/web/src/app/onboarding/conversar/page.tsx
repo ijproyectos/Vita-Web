@@ -16,7 +16,7 @@ import { ConversarOnboarding } from "./conversar";
 //
 // Lo que la persona YA respondió (fecha de nacimiento, condiciones, alergias,
 // remedios, turnos, mediciones) se lee de la base y se pasa como estado
-// inicial: recargar la página o volver desde "Prefiero un formulario" no
+// inicial: recargar la página no
 // repite preguntas.
 export default async function OnboardingConversarPage() {
   const usuario = await requireUser();

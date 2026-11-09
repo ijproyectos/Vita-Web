@@ -71,7 +71,7 @@ import {
 // Onboarding conversacional nuevo (reemplaza /onboarding/nombre +
 // /onboarding/chat como camino por defecto — ver pantallas/ingreso /Ingreso1-3.jpeg,
 // la referencia visual/de flujo). El guion viejo (sin IA, por catálogo)
-// sigue existiendo, alcanzable desde "Prefiero un formulario" en el header.
+// sigue existiendo en /onboarding/nombre, pero ya no se ofrece desde la charla.
 //
 // Qué se pregunta lo decide UN estado por persona (`EstadoPersona`, ver
 // lib/onboarding/conversacion.ts): cada respuesta lo actualiza y `avanzar`
@@ -1029,9 +1029,11 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
           antes de seguir, como en el flujo original). */}
       <EncabezadoConversar
         tabs={tabs}
-        linkFormulario="/onboarding/nombre"
         escribiendo={escribiendo}
-        onTerminar={hayAvance && vista.tipo !== "fin" ? terminarDespues : undefined}
+        hayAvance={hayAvance}
+        onTerminar={() => {
+          if (vista.tipo !== "fin") void terminarDespues();
+        }}
       />
 
       <div ref={scrollRef} className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-3.5 pt-[18px]">
