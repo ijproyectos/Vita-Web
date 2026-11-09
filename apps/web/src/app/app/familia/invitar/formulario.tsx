@@ -8,6 +8,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { RELACIONES_CUIDADOR, type ColorPerfil, type RolVinculo } from "@/lib/familia/tipos";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { TarjetasPermiso } from "@/components/vita/tarjetas-permiso";
+import { mensajeInvitacionCuidador } from "@/lib/acceso-codigo/enlace";
 import { invitarCuidadorAction, type ResultadoInvitar } from "../actions";
 
 export type PersonaInvitable = { id: string; nombre: string; sub: string; color: ColorPerfil; propia: boolean };
@@ -51,8 +52,7 @@ export function FormularioInvitar({ personas, personaInicial }: { personas: Pers
   }
 
   function textoInvitacion(url: string) {
-    const quien = persona.propia ? "a mí" : `a ${persona.nombre}`;
-    return `Hola ${primerNombre}, te invito a cuidar ${quien} en vita. Aceptá la invitación con tu cuenta de Google (${email.trim()}): ${url}`;
+    return mensajeInvitacionCuidador({ persona: persona.propia ? null : persona.nombre, url, codigo: enviada?.codigo, email: email.trim() });
   }
 
   function whatsapp(url: string) {
@@ -77,14 +77,15 @@ export function FormularioInvitar({ personas, personaInicial }: { personas: Pers
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-col items-center rounded-[22px] bg-card px-[18px] pb-5 pt-[22px] text-center shadow-card">
           <div className="eyebrow text-subtle">Invitación para {primerNombre}</div>
-          <div className="mt-3.5 w-full rounded-[16px] bg-secondary px-3.5 py-3 text-left">
-            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">Link de invitación</div>
-            <div className="mt-1 break-all text-[12.5px] font-semibold leading-[1.4] text-teal-deep">{enviada.url}</div>
-          </div>
-          <p className="mt-3.5 max-w-[300px] text-pretty text-[12.5px] font-medium leading-[1.45] text-slate-brand">
-            {primerNombre} entra con la cuenta de Google de <b className="text-foreground">{enviada.email}</b> y ya ve{" "}
-            {quien === "a vos" ? "tus remedios" : `a ${quien}`}. Entra como {rolNombre}.
-          </p>
+          {enviada.codigo && (
+            <div className="mt-3 font-heading text-[34px] font-extrabold tabular-nums tracking-[0.14em] text-teal-deep">{enviada.codigo}</div>
+          )}
+          <div className="mt-3 w-full break-all text-[12.5px] font-semibold leading-[1.4] text-teal-deep">{enviada.url}</div>
+          <dl className="mt-3.5 w-full divide-y divide-foreground/[0.06] border-t border-foreground/[0.06] text-left text-[13px]">
+            <div className="flex justify-between gap-3 py-2"><dt className="text-subtle">Cuida a</dt><dd className="font-bold">{quien === "a vos" ? "Vos" : quien}</dd></div>
+            <div className="flex justify-between gap-3 py-2"><dt className="text-subtle">Permiso</dt><dd className="font-bold">{rolNombre}</dd></div>
+            <div className="flex justify-between gap-3 py-2"><dt className="text-subtle">Entra con</dt><dd className="break-all text-right font-bold">{enviada.email}</dd></div>
+          </dl>
           <div className="mt-[18px] flex w-full gap-2">
             <button
               type="button"
@@ -138,7 +139,7 @@ export function FormularioInvitar({ personas, personaInicial }: { personas: Pers
           className={CAMPO}
         />
         <span className="px-1 pt-2 text-[11.5px] font-medium leading-[1.4] text-subtle">
-          Con este mail entra a vita: tiene que ser el de su cuenta de Google.
+          Con este mail entra a vita.
         </span>
       </label>
 

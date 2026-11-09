@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireCuidador } from "@/lib/dal";
+import { rolSobre } from "@/lib/familia/perfil-activo";
 import { VitaIcon } from "@/lib/vita-icons";
 import { FormularioAgregarMedicamentoElder } from "./formulario";
 
@@ -15,7 +16,8 @@ export default async function AgregarMedicamentoElderPage(
   const { elderId } = await props.params;
   const { elders } = await requireCuidador();
   const elder = elders.find((e) => e.elderId === elderId);
-  if (!elder) {
+  // Un Lector no carga nada: la RLS igual lo rechazaría.
+  if (!elder || (await rolSobre(elderId)) !== "editar") {
     notFound();
   }
 

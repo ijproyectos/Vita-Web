@@ -17,7 +17,7 @@ import type { MotivoReclamoRechazado } from "@/lib/cuidadores/tipos";
 const MENSAJE_POR_MOTIVO: Record<MotivoReclamoRechazado, string> = {
   invitacion_no_encontrada: "Esta invitación no existe, ya fue usada o fue revocada.",
   invitacion_expirada: "Esta invitación ya venció. Pedile a la persona que te invitó que te comparta una nueva.",
-  invitacion_no_corresponde_a_esta_cuenta: "Esta invitación fue enviada a otra cuenta de Google. Iniciá sesión con esa cuenta.",
+  invitacion_no_corresponde_a_esta_cuenta: "Esta invitación fue enviada a otro mail. Entrá con esa cuenta.",
   error_desconocido: "No pudimos procesar la invitación. Probá de nuevo en unos minutos.",
 };
 
@@ -41,5 +41,5 @@ export async function aceptarInvitacionAction(
     return { status: "error", mensaje: MENSAJE_POR_MOTIVO[resultado.error] };
   }
 
-  redirect("/cuidar");
+  redirect("/app");
 }

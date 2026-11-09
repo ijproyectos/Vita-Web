@@ -68,6 +68,25 @@ function aPayload(s: PushSubscription) {
 
 // Estado + acciones del push, compartidos con el paso de permiso del
 // onboarding (`/onboarding/permiso`) para no duplicar el flujo de suscripción.
+/**
+ * Pide permiso y suscribe, sin interfaz. Llamarla DENTRO del toque, sin await
+ * antes. Nunca rechaza: si no se puede o dice que no, el flujo sigue igual.
+ */
+export async function pedirAvisosPush(): Promise<void> {
+  try {
+    if (!CLAVE_VAPID || typeof Notification === "undefined" || !("serviceWorker" in navigator)) return;
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") return;
+    const registro = await obtenerRegistro();
+    const suscripcion =
+      (await registro.pushManager.getSubscription()) ??
+      (await registro.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: claveAUint8(CLAVE_VAPID) }));
+    await guardarSuscripcionAction(aPayload(suscripcion));
+  } catch {
+    // Quedan apagados; se activan después desde Perfil.
+  }
+}
+
 export function useNotificacionesPush() {
   const [estado, setEstado] = useState<EstadoPush>("cargando");
   const [pendiente, startTransition] = useTransition();

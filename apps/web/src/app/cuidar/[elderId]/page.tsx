@@ -1,3 +1,4 @@
+import { rolSobre } from "@/lib/familia/perfil-activo";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireCuidador } from "@/lib/dal";
@@ -38,6 +39,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
     notFound();
   }
 
+  const puedeEditar = (await rolSobre(elderId)) === "editar";
   const supabase = await createClient();
   const [medsHoy, medsAyer, adherencia, inventarios] = await Promise.all([
     medicamentos.listarHoy(supabase, elderId),
@@ -100,6 +102,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
                 med={{ ...med, tomado: false, toma_id: null }}
                 divider={i < medsAyer.length - 1}
                 ahoraAR={ahoraAR}
+                puedeRecordar={puedeEditar}
                 elderId={elderId}
                 stock={med.inventario_id ? (stockPorId.get(med.inventario_id) ?? null) : null}
                 deAyer
@@ -112,9 +115,11 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
       <div>
         <div className="flex items-center justify-between px-1.5 pb-2.5">
           <div className="font-heading text-[15px] font-bold">Medicamentos de hoy</div>
-          <Link href={`/cuidar/${elderId}/agregar-medicamento`} className="text-xs font-semibold text-primary">
-            + Agregar medicamento
-          </Link>
+          {puedeEditar && (
+            <Link href={`/cuidar/${elderId}/agregar-medicamento`} className="text-xs font-semibold text-primary">
+              + Agregar medicamento
+            </Link>
+          )}
         </div>
         {medsHoy.length === 0 ? (
           <div className="rounded-[20px] bg-card p-5 text-center text-sm text-muted-foreground shadow-card">
@@ -128,6 +133,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
                 med={med}
                 divider={i < medsHoy.length - 1}
                 ahoraAR={ahoraAR}
+                puedeRecordar={puedeEditar}
                 elderId={elderId}
                 stock={med.inventario_id ? (stockPorId.get(med.inventario_id) ?? null) : null}
               />
@@ -171,6 +177,7 @@ function FilaMedicamentoSoloLectura({
   med,
   divider,
   ahoraAR,
+  puedeRecordar,
   elderId,
   stock,
   deAyer = false,
@@ -178,6 +185,7 @@ function FilaMedicamentoSoloLectura({
   med: MedicamentoConToma;
   divider: boolean;
   ahoraAR: string;
+  puedeRecordar: boolean;
   elderId: string;
   stock: ResumenStock | null;
   deAyer?: boolean;
@@ -204,7 +212,7 @@ function FilaMedicamentoSoloLectura({
         </div>
         {stock && <BadgeStock stock={stock} className="mt-1" />}
         {/* Ya llegó su hora y sigue sin tomarse: se puede recordar. */}
-        {!deAyer && !med.tomado && med.hora_programada <= ahoraAR && (
+        {puedeRecordar && !deAyer && !med.tomado && med.hora_programada <= ahoraAR && (
           <BotonRecordarle elderId={elderId} medicamentoId={med.id} />
         )}
       </div>

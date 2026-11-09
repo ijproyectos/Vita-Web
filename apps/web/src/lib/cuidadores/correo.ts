@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { enviarEmail, type ResultadoEnvio } from "@/lib/email/smtp";
 import { invitacionCuidador } from "@/lib/email/plantillas/invitacion-cuidador";
 import { codigoVinculacion } from "@/lib/email/plantillas/codigo-vinculacion";
-import { urlCodigo } from "@/lib/acceso-codigo/enlace";
+import { urlCodigo, urlDeInvitacion } from "@/lib/acceso-codigo/enlace";
 import { obtenerPerfil } from "@/lib/perfil/nucleo";
 import type { VinculoCuidador } from "./tipos";
 
@@ -23,7 +23,7 @@ async function nombreDe(supabase: SupabaseClient, usuarioId: string): Promise<st
 export async function enviarInvitacionPorMail(
   supabase: SupabaseClient,
   elderId: string,
-  vinculo: Pick<VinculoCuidador, "email_invitado" | "token" | "expira_at">,
+  vinculo: Pick<VinculoCuidador, "email_invitado" | "token" | "expira_at"> & { rol: "editar" | "ver"; codigo?: string | null },
   origen: string,
   /** Si invita alguien que gestiona el perfil (no la propia persona), su id. */
   quienInvitaId?: string
@@ -34,7 +34,8 @@ export async function enviarInvitacionPorMail(
   const diasVigencia = Math.max(1, Math.ceil(msRestantes / (24 * 60 * 60 * 1000)));
   const plantilla = invitacionCuidador({
     nombreElder,
-    urlInvitacion: `${origen}/cuidar/invitacion/${vinculo.token}`,
+    urlInvitacion: urlDeInvitacion(origen, vinculo),
+    rol: vinculo.rol,
     diasVigencia,
     origen,
     nombreQuienInvita,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -131,6 +132,7 @@ export function LoginForm({
   /** Código ya validado (6 dígitos) que vino del link corto /c/[codigo]: abre la vista de código con las cajas llenas. */
   codigoInicial?: string;
 }) {
+  const router = useRouter();
   const [vista, setVista] = useState<Vista>(codigoInicial ? "codigo" : "bienvenida");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -267,6 +269,7 @@ export function LoginForm({
       startCodigo(async () => {
         const previa = await verCodigoAction(v).catch((): EstadoVerCodigo => ({ status: "sinVista" }));
         if (previa.status === "ok") setVistaPrevia(previa.vista);
+        else if (previa.status === "invitacion") router.push(`/c/${v}`);
         else if (previa.status === "error") {
           setErrorCodigo(previa.mensaje);
           setCodigo("");
