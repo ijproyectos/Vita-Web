@@ -1,6 +1,8 @@
 // Datos de las tarjetas "Hoy" y "Tus remedios" del chat. Lógica pura.
 // Las tarjetas viajan por el stream y no se guardan: siempre son del momento.
 
+import { textoDosis } from "@/lib/medicamentos/tipos";
+
 export const REMEDIOS_TARJETA_VISIBLES = 6;
 
 type ConHorario = { nombre: string; dosis: string | null; unidad: string; hora_programada: string; fecha_fin?: string | null };
@@ -8,7 +10,7 @@ type ConHorario = { nombre: string; dosis: string | null; unidad: string; hora_p
 export type ItemHoy = { hora: string; nombre: string; dosis: string | null; tomado: boolean };
 export type ItemRemedio = { nombre: string; dosis: string | null; horas: string[] };
 
-const dosisDe = (m: ConHorario) => (m.dosis?.trim() ? `${m.dosis.trim()} ${m.unidad}`.trim() : null);
+const dosisDe = (m: ConHorario) => textoDosis(m) || null;
 
 export function itemsDeHoy(meds: (ConHorario & { tomado: boolean })[]): ItemHoy[] {
   return meds

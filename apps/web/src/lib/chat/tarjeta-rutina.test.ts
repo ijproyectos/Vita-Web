@@ -16,6 +16,9 @@ describe("tarjetas de remedios del chat", () => {
     expect(r).toHaveLength(1);
     expect(r[0].horas).toEqual(["08:00", "20:00"]);
   });
+  it("no repite la unidad si la dosis ya la trae", () => {
+    expect(itemsDeHoy([{ ...m("A", "08:00"), dosis: "50 mg", tomado: false }])[0].dosis).toBe("50 mg");
+  });
   it("sin dosis no inventa una", () => {
     expect(itemsDeHoy([{ ...m("A", "08:00"), dosis: null, tomado: false }])[0].dosis).toBeNull();
   });
