@@ -140,7 +140,7 @@ export default async function FamiliaPage() {
           <p className="px-1 pt-2.5 text-pretty text-[12.5px] font-medium leading-[1.45] text-subtle">
             {activo.esPropio
               ? "Invitá a alguien para que vea tus remedios y reciba tus avisos."
-              : "Por ahora sos la única. Invitá a alguien para que también reciba los avisos."}
+              : "Por ahora solo estás vos. Invitá a alguien para que también reciba los avisos."}
           </p>
         )}
       </section>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CONFIG_FORMA } from "@/lib/medicamentos/forma";
+import { CONFIG_FORMA, seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -205,6 +205,11 @@ export function DetalleMedicamento({
             >
               {tomado ? "Desmarcar toma" : "Marcar como tomada"}
             </button>
+            {seCuentaConFoto(med.forma) && (
+              <Link href={`/app/pastillas/contar?medicamento=${med.id}&desde=medicamentos`} className={CLASE_BOTON_SECUNDARIO}>
+                Contar
+              </Link>
+            )}
             {onEditar ? (
               <button type="button" onClick={onEditar} className={CLASE_BOTON_SECUNDARIO}>
                 Editar

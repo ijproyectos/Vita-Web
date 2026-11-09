@@ -227,7 +227,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   // Turnos de hoy y mañana + stock.
   const { data: turnosData } = await admin
     .from("turnos")
-    .select("id, usuario_id, especialidad, profesional, lugar, fecha, hora, acompanado")
+    .select("id, usuario_id, especialidad, profesional, lugar, fecha, hora, acompanado, llevar")
     .in("fecha", [hoyAR, mananaAR]);
   const turnos = (turnosData ?? []) as {
     id: string;
@@ -238,6 +238,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     fecha: string;
     hora: string;
     acompanado: boolean | null;
+    llevar: unknown;
   }[];
 
   const { data: invData } = await admin.from("inventario_pastillas").select("id, usuario_id, nombre, stock, umbral_alerta");
@@ -310,7 +311,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   for (const t of turnos) {
     const prefs = prefsDe(t.usuario_id);
     if (!prefs.aviso_turnos || silenciado(t.usuario_id) || !TURNO_HORA.test(t.hora)) continue;
-    const datosTurno = { turnoId: t.id, especialidad: t.especialidad, profesional: t.profesional, lugar: t.lugar, hora: t.hora };
+    const datosTurno = { turnoId: t.id, especialidad: t.especialidad, profesional: t.profesional, lugar: t.lugar, hora: t.hora, llevar: t.llevar };
 
     if (t.fecha === mananaAR && horaAR >= "20:00" && horaAR < "23:00") {
       if (await reclamarEnvio(admin, "turno_dia_antes", t.id, t.fecha, t.usuario_id)) {
@@ -508,7 +509,7 @@ type ContextoFamilia = {
   horaAR: string;
   mananaAR: string;
   deHoy: FilaMedicamento[];
-  turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string; acompanado: boolean | null }[];
+  turnos: { id: string; usuario_id: string; especialidad: string; profesional: string | null; fecha: string; hora: string; llevar: unknown; acompanado: boolean | null }[];
   stockBajo: { id: string; usuario_id: string; nombre: string; stock: number }[];
   resumen: ResumenProgramados;
 };
@@ -620,6 +621,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           turnoId: t.id,
           especialidad: t.especialidad,
           hora: t.hora,
+          llevar: t.llevar,
           rolDestino: cu.rol,
         });
         await entregarAviso(
@@ -639,6 +641,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         especialidad: t.especialidad,
         profesional: t.profesional,
         hora: t.hora,
+        llevar: t.llevar,
         rolDestino: cu.rol,
       });
       await entregarAviso(

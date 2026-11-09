@@ -2,6 +2,7 @@
 // después la acción; voseo rioplatense; nunca alarmante.
 import type { PayloadPush } from "./push";
 import { fechaHoraTurnoTexto } from "./turno-acompanado-logica";
+import { textoLlevarAviso } from "@/lib/turnos/tipos";
 
 /**
  * Destino de un aviso sobre otra persona. La ficha (`/app/familia/<id>`) es de
@@ -153,7 +154,13 @@ type TurnoAviso = {
   profesional: string | null;
   lugar: string | null;
   hora: string;
+  llevar?: unknown;
 };
+
+/** Agrega "Llevá: …" al cuerpo del aviso del día anterior, si hay algo para llevar. */
+function conLlevar(cuerpo: string, llevar: unknown): string {
+  return [cuerpo, textoLlevarAviso(llevar)].filter(Boolean).join(" · ");
+}
 
 function urlMapas(lugar: string | null): Record<string, string> {
   return lugar ? { mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lugar)}` } : {};
@@ -164,7 +171,7 @@ export function payloadTurnoDiaAntes(t: TurnoAviso): PayloadPush {
   const detalle = [horaCorta(t.hora), t.profesional?.trim() || null].filter(Boolean).join(" · ");
   return {
     title: `Mañana tenés ${t.especialidad}`,
-    body: detalle,
+    body: conLlevar(detalle, t.llevar),
     url: "/app/rutina",
     tag: `turno-dia-antes-${t.turnoId}`,
     actions: t.lugar ? [{ action: "como-llegar", title: "Cómo llegar" }] : undefined,
@@ -260,12 +267,13 @@ export function payloadTurnoPersonaDiaAntes(t: {
   especialidad: string;
   profesional: string | null;
   hora: string;
+  llevar?: unknown;
   rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const detalle = [horaCorta(t.hora), t.profesional?.trim() || null].filter(Boolean).join(" · ");
   return {
     title: `Mañana ${primerNombre(t.personaNombre)} tiene ${t.especialidad}`,
-    body: detalle,
+    body: conLlevar(detalle, t.llevar),
     url: urlFichaPersona(t.personaId, t.rolDestino),
     tag: `turno-persona-${t.turnoId}`,
   };
@@ -349,11 +357,12 @@ export function payloadTurnoAcompanadoDiaAntes(t: {
   turnoId: string;
   especialidad: string;
   hora: string;
+  llevar?: unknown;
   rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   return {
     title: `Mañana ${primerNombre(t.personaNombre)} tiene turno de ${t.especialidad}`,
-    body: `A las ${horaCorta(t.hora)} · pidió compañía.`,
+    body: conLlevar(`A las ${horaCorta(t.hora)} · pidió compañía.`, t.llevar),
     url: urlFichaPersona(t.personaId, t.rolDestino),
     tag: `turno-acompanado-dia-antes-${t.turnoId}`,
   };
