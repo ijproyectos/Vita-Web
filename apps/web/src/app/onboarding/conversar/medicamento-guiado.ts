@@ -72,3 +72,19 @@ export function tituloMed(b: Pick<BorradorMed, "nombre" | "dosis" | "unidad">): 
 export function lineaDeToma(t: TomaGuiada): string {
   return [t.hora, opcionDeIndicacion(t.indicacion)?.etiqueta].filter(Boolean).join(" · ");
 }
+
+// --- Resumen final de la charla --------------------------------------------
+
+/** Cuántos remedios se ven antes de "Ver N más". */
+export const REMEDIOS_RESUMEN_VISIBLES = 4;
+
+/** De ["08:00 · Con el desayuno", "20:00"] a "08:00 · 20:00": en el resumen va solo la hora. */
+export function horasDeRemedio(tomas: string[]): string {
+  return tomas.map((t) => t.split(" · ")[0]).join(" · ");
+}
+
+/** Los primeros, salvo que esté abierto o sobre uno solo: "Ver 1 más" no ahorra nada. */
+export function remediosVisibles<T>(meds: T[], abierto: boolean): { visibles: T[]; ocultos: number } {
+  if (abierto || meds.length <= REMEDIOS_RESUMEN_VISIBLES + 1) return { visibles: meds, ocultos: 0 };
+  return { visibles: meds.slice(0, REMEDIOS_RESUMEN_VISIBLES), ocultos: meds.length - REMEDIOS_RESUMEN_VISIBLES };
+}

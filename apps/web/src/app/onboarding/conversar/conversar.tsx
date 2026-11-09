@@ -62,7 +62,9 @@ import {
   etiquetaDeToma,
   horaSugeridaSinComida,
   leerDosis,
+  horasDeRemedio,
   lineaDeToma,
+  remediosVisibles,
   tituloMed,
   UNIDAD_POR_CHIP,
   type BorradorMed,
@@ -1619,7 +1621,7 @@ function subPersona(relacion: string | null, nacimiento: Nacimiento | null): str
 // la de la persona a cargo. Los remedios y los turnos se apilan debajo de su
 // título (uno por bloque), no en una columna angosta a la derecha: con varios
 // se leen enteros y envuelven.
-function TarjetaResumenPropia({
+export function TarjetaResumenPropia({
   resumen,
   titulo = "Tu perfil",
   sub = "Vos",
@@ -1663,35 +1665,47 @@ function TarjetaResumenPropia({
         {filas.slice(0, 2).map(([k, v]) => (
           <FilaResumen key={k} etiqueta={k} lineas={v} />
         ))}
-        <div className="flex flex-col gap-2 border-b border-line-soft py-[9px]">
-          <span className="text-[13px] font-semibold text-slate-brand">Remedios</span>
-          {resumen.meds.length === 0 ? (
-            <span className="text-[13px] font-bold text-subtle">Sin cargar</span>
-          ) : (
-            resumen.meds.map((m, i) => (
-              <div key={`${m.titulo}-${i}`} className="flex flex-col gap-0.5 rounded-[var(--radius-item)] bg-secondary px-3 py-2">
-                <span className="break-words text-[13.5px] font-extrabold">{m.titulo}</span>
-                {m.tomas.map((t) => (
-                  <span key={t} className="break-words text-[12.5px] font-semibold text-slate-brand">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            ))
-          )}
-        </div>
-        <div className="flex flex-col gap-2 border-b border-line-soft py-[9px]">
-          <span className="text-[13px] font-semibold text-slate-brand">Turnos</span>
-          {resumen.turnos.length === 0 ? (
-            <span className="text-[13px] font-bold text-subtle">Sin cargar</span>
-          ) : (
-            resumen.turnos.map((t, i) => <FilaTurno key={`${t.fecha}-${t.hora}-${i}`} turno={t} anioActual={anioActual} />)
-          )}
-        </div>
+        <RemediosResumen meds={resumen.meds} />
+        {resumen.turnos.length === 0 ? (
+          <FilaResumen etiqueta="Turnos" lineas={[]} />
+        ) : (
+          <div className="flex flex-col gap-2 border-b border-line-soft py-[9px]">
+            <span className="text-[13px] font-semibold text-slate-brand">Turnos · {resumen.turnos.length}</span>
+            {resumen.turnos.map((t, i) => (
+              <FilaTurno key={`${t.fecha}-${t.hora}-${i}`} turno={t} anioActual={anioActual} />
+            ))}
+          </div>
+        )}
         {filas.slice(2).map(([k, v]) => (
           <FilaResumen key={k} etiqueta={k} lineas={v} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// Una línea por remedio: nombre a la izquierda y horas a la derecha. Con muchos
+// se muestran los primeros y el resto se abre, para que la tarjeta se pueda leer.
+function RemediosResumen({ meds }: { meds: RemedioResumen[] }) {
+  const [abierto, setAbierto] = useState(false);
+  if (meds.length === 0) return <FilaResumen etiqueta="Remedios" lineas={[]} />;
+  const { visibles, ocultos } = remediosVisibles(meds, abierto);
+  return (
+    <div className="flex flex-col border-b border-line-soft py-[9px]">
+      <span className="text-[13px] font-semibold text-slate-brand">Remedios · {meds.length}</span>
+      <ul className="mt-1 flex flex-col">
+        {visibles.map((m, i) => (
+          <li key={`${m.titulo}-${i}`} className="flex items-baseline justify-between gap-3 border-t border-line-soft py-[7px] first:border-t-0">
+            <span className="min-w-0 break-words text-[13.5px] font-bold">{m.titulo}</span>
+            <span className="shrink-0 text-right text-[12.5px] font-semibold tabular-nums text-slate-brand">{horasDeRemedio(m.tomas)}</span>
+          </li>
+        ))}
+      </ul>
+      {ocultos > 0 && (
+        <button type="button" onClick={() => setAbierto(true)} className="mt-1 self-start py-1 text-[13px] font-bold text-teal-deep">
+          Ver {ocultos} más
+        </button>
+      )}
     </div>
   );
 }

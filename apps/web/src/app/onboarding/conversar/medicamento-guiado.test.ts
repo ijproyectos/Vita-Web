@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { etiquetaDeToma, leerDosis, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
+import { etiquetaDeToma, horasDeRemedio, leerDosis, remediosVisibles, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
 
 describe("leerDosis", () => {
   it("lee valor y unidad", () => {
@@ -41,5 +41,17 @@ describe("chips de unidad", () => {
   it("cada chip mapea a una unidad", () => {
     for (const c of CHIPS_UNIDAD) expect(UNIDAD_POR_CHIP[c]).toBeTruthy();
     expect(UNIDAD_POR_CHIP.comprimidos).toBe("comp.");
+  });
+});
+
+describe("resumen de remedios", () => {
+  it("deja solo las horas", () => {
+    expect(horasDeRemedio(["08:00 · Con el desayuno", "20:00"])).toBe("08:00 · 20:00");
+  });
+  it("corta la lista larga y no esconde uno solo", () => {
+    const seis = [1, 2, 3, 4, 5, 6];
+    expect(remediosVisibles(seis, false)).toEqual({ visibles: [1, 2, 3, 4], ocultos: 2 });
+    expect(remediosVisibles(seis, true)).toEqual({ visibles: seis, ocultos: 0 });
+    expect(remediosVisibles([1, 2, 3, 4, 5], false)).toEqual({ visibles: [1, 2, 3, 4, 5], ocultos: 0 });
   });
 });
