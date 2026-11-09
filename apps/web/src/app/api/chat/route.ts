@@ -1,3 +1,4 @@
+import { tarjetasParaGuardar } from "@/lib/chat/tarjetas";
 import "server-only";
 
 import { after, NextResponse } from "next/server";
@@ -268,6 +269,8 @@ export async function POST(request: Request) {
       const enviarFin = () => controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 
       let textoAcumulado = ""; // se persiste como UN mensaje del asistente al final,
+
+      const tarjetasDelTurno: { type: string; [clave: string]: unknown }[] = [];
       // igual a como el cliente lo muestra en una sola burbuja.
       let tokensInputAcumulados = 0;
       let tokensCacheLecturaAcumulados = 0;
@@ -390,7 +393,7 @@ export async function POST(request: Request) {
             medicion.errorCodigo = directa.codigo ?? null;
             if (directa.accionUI) enviar({ action: directa.accionUI });
             enviar({ chunk: directa.texto });
-            await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", directa.texto);
+            await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", directa.texto, directa.accionUI ? tarjetasParaGuardar([directa.accionUI]) : []);
             enviarFin();
             return;
           }
@@ -572,7 +575,10 @@ export async function POST(request: Request) {
                 mensajeOrigenId,
               }
             );
-            if (resultado.accionUI) enviar({ action: resultado.accionUI });
+            if (resultado.accionUI) {
+              enviar({ action: resultado.accionUI });
+              tarjetasDelTurno.push(resultado.accionUI);
+            }
             if (resultado.accionUI && TOOLS_DE_ESCRITURA.has(uso.name)) escriturasHechas++;
             resultadosTool.push({
               type: "tool_result",
@@ -603,7 +609,7 @@ export async function POST(request: Request) {
         }
 
         if (textoAcumulado) {
-          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado);
+          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado, tarjetasParaGuardar(tarjetasDelTurno));
           respuestaGuardada = true;
           // La respuesta salió completa y quedó guardada: recién ahora cuenta como "ya se lo pregunté".
           if (contradiccionesAMarcar.length > 0 && !fallaPorTiempo && !cortePorTiempo) await marcarContradiccionesPreguntadas(supabase, contradiccionesAMarcar);

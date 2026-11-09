@@ -1,3 +1,4 @@
+import { textoDosis } from "@/lib/medicamentos/tipos";
 import { itemsDeHoy, itemsDeRemedios } from "@/lib/chat/tarjeta-rutina";
 import "server-only";
 
@@ -185,7 +186,7 @@ async function ejecutarEnDestino(
           type: "medication_added",
           id: creado.id,
           name: creado.nombre,
-          dose: creado.dosis,
+          dose: textoDosis(creado) || null,
           time: creado.hora_programada,
         },
       };

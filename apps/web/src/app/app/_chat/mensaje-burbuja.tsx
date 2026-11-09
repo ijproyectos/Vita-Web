@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { fechaTurnoEnPalabras } from "@/lib/turnos/formato";
+import { agruparTarjetas, tituloHoyGuardado, type Tarjeta, type TarjetaAgrupada } from "@/lib/chat/tarjetas";
 import { REMEDIOS_TARJETA_VISIBLES, leerItemsHoy, leerItemsRemedios, type ItemHoy, type ItemRemedio } from "@/lib/chat/tarjeta-rutina";
 import Link from "next/link";
 import { VitaAvatar } from "@/components/vita/v-mark";
@@ -13,7 +14,10 @@ export type MensajeChatUI = {
   timestamp: string;
   /** Saludo inicial local (no es parte del hilo guardado). */
   bienvenida?: boolean;
-  accion?: { type: string; [clave: string]: unknown };
+  /** Tarjetas de este mensaje, en el orden en que llegaron. */
+  tarjetas?: Tarjeta[];
+  /** Vino del historial: "Hoy" muestra de cuándo es. */
+  guardado?: boolean;
   // Botones de respuesta rápida (confirmaciones de familia), armados por el servidor.
   opciones?: string[];
   // Opción afirmativa -> id de la acción pendiente en el servidor (confirmación atada).
@@ -62,7 +66,9 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, 
           )}
         </div>
       </div>
-      {m.accion && <TarjetaAccion accion={m.accion} alCerrar={alCerrar} esPropio={esPropio} />}
+      {agruparTarjetas(m.tarjetas ?? []).map((t, i) => (
+        <TarjetaAccion key={`${t.type}-${i}`} accion={t} alCerrar={alCerrar} esPropio={esPropio} guardadoEn={m.guardado ? m.timestamp : undefined} />
+      ))}
       {m.opciones && m.opciones.length > 0 && alElegirOpcion && (
         <div className="flex flex-wrap gap-2 pl-9" role="group" aria-label="Respuestas rápidas">
           {m.opciones.map((o) => (
@@ -103,11 +109,15 @@ function TarjetaAccion({
   accion,
   alCerrar,
   esPropio,
+  guardadoEn,
 }: {
-  accion: { type: string; [clave: string]: unknown };
+  accion: TarjetaAgrupada;
   alCerrar: () => void;
   esPropio: boolean;
+  guardadoEn?: string;
 }) {
+  if (isGrupo(accion)) return <TarjetaGrupo grupo={accion} esPropio={esPropio} alCerrar={alCerrar} />;
+
   const persona = typeof accion.persona === "string" ? accion.persona : null;
   const editable = esPropio && !persona;
   const base = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-card";
@@ -150,7 +160,7 @@ function TarjetaAccion({
         </div>
       );
     case "show_today_medications":
-      return <TarjetaHoy items={leerItemsHoy(accion.items)} persona={persona} editable={editable} alCerrar={alCerrar} />;
+      return <TarjetaHoy items={leerItemsHoy(accion.items)} persona={persona} editable={editable} alCerrar={alCerrar} guardadoEn={guardadoEn} />;
     case "show_all_medications":
       return <TarjetaRemedios items={leerItemsRemedios(accion.items)} persona={persona} editable={editable} alCerrar={alCerrar} />;
     case "medication_taken":
@@ -175,6 +185,12 @@ function TarjetaAccion({
           </span>
         </div>
       );
+    case "profile_updated":
+      return <FilaConfirmada texto={persona ? `Perfil de ${persona} actualizado` : "Perfil actualizado"} />;
+    case "condition_added":
+      return <FilaConfirmada texto={typeof accion.label === "string" ? accion.label : "Condición"} detalle={persona ? `Agregada a ${persona}` : "Condición agregada"} />;
+    case "allergy_added":
+      return <FilaConfirmada texto={typeof accion.name === "string" ? accion.name : "Alergia"} detalle={persona ? `Agregada a ${persona}` : "Alergia agregada"} />;
     case "open_screen": {
       // Solo navegación: se muestra aunque sea de otra persona. Defensivo con el href.
       if (typeof accion.href !== "string" || !(accion.href === "/app" || accion.href.startsWith("/app/"))) return null;
@@ -192,6 +208,10 @@ function TarjetaAccion({
     default:
       return null;
   }
+}
+
+function isGrupo(t: TarjetaAgrupada): t is Extract<TarjetaAgrupada, { type: "grupo" }> {
+  return t.type === "grupo" && Array.isArray((t as { items?: unknown }).items);
 }
 
 function IconoTomada() {
@@ -221,8 +241,55 @@ function PieLista({ ocultos, editable, alCerrar }: { ocultos: number; editable: 
 const BASE_LISTA = "ml-9 w-[82%] rounded-[20px] rounded-bl-[6px] bg-card p-3.5 shadow-card";
 const FILA_LISTA = "flex items-baseline gap-2.5 border-t border-line-soft py-[7px] first:border-t-0";
 
-function TarjetaHoy({ items, persona, editable, alCerrar }: PropsLista & { items: ItemHoy[] | null }) {
-  const titulo = persona ? `Hoy de ${persona}` : "Hoy";
+function FilaConfirmada({ texto, detalle }: { texto: string; detalle?: string }) {
+  return (
+    <div className={cn(BASE_LISTA, "flex items-center gap-2.5 py-3")}>
+      <IconoTomada />
+      <span className="min-w-0 flex-1 break-words text-[13.5px] font-bold">{texto}</span>
+      {detalle && <span className="shrink-0 text-[12.5px] font-semibold text-slate-brand">{detalle}</span>}
+    </div>
+  );
+}
+
+const TITULO_GRUPO: Record<string, (n: number, persona: string | null) => string> = {
+  medication_added: (n, p) => `${n} medicamentos agregados${p ? ` a ${p}` : ""}`,
+  appointment_added: (n, p) => `${n} turnos agendados${p ? ` para ${p}` : ""}`,
+  medication_taken: (n, p) => `${n} tomas anotadas${p ? ` a ${p}` : ""}`,
+};
+
+function lineaDeGrupo(t: Tarjeta): { titulo: string; detalle: string } {
+  const texto = (v: unknown) => (typeof v === "string" && v ? v : null);
+  if (t.type === "appointment_added") {
+    return { titulo: texto(t.specialty) ?? "Turno", detalle: [texto(t.date) && fechaTurnoEnPalabras(String(t.date)), texto(t.time)?.slice(0, 5)].filter(Boolean).join(" · ") };
+  }
+  if (t.type === "medication_taken") return { titulo: texto(t.medication_name) ?? "Remedio", detalle: texto(t.time) ?? "" };
+  return { titulo: [texto(t.name), texto(t.dose)].filter(Boolean).join(" "), detalle: texto(t.time)?.slice(0, 5) ?? "" };
+}
+
+function TarjetaGrupo({ grupo, esPropio, alCerrar }: { grupo: Extract<TarjetaAgrupada, { type: "grupo" }>; esPropio: boolean; alCerrar: () => void }) {
+  const icono = grupo.tipo === "appointment_added" ? "stethoscope" : grupo.tipo === "medication_taken" ? "check" : "pill";
+  return (
+    <div className={BASE_LISTA}>
+      <CabeceraTarjeta icon={icono} texto={TITULO_GRUPO[grupo.tipo](grupo.items.length, grupo.persona)} />
+      <ul className="mt-1.5">
+        {grupo.items.map((t, i) => {
+          const { titulo, detalle } = lineaDeGrupo(t);
+          return (
+            <li key={i} className={cn(FILA_LISTA, grupo.tipo === "appointment_added" ? "flex-col gap-0.5" : "justify-between")}>
+              <span className="min-w-0 break-words text-[13.5px] font-bold">{titulo}</span>
+              <span className={cn("text-[12.5px] font-semibold tabular-nums text-slate-brand", grupo.tipo !== "appointment_added" && "shrink-0 text-right")}>{detalle}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {esPropio && !grupo.persona && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" />}
+    </div>
+  );
+}
+
+function TarjetaHoy({ items, persona, editable, alCerrar, guardadoEn }: PropsLista & { items: ItemHoy[] | null; guardadoEn?: string }) {
+  const base = guardadoEn ? tituloHoyGuardado(guardadoEn) : "Hoy";
+  const titulo = persona ? `${base} · ${persona}` : base;
   if (!items) return <TarjetaSinLista titulo={titulo} editable={editable} alCerrar={alCerrar} />;
   const tomadas = items.filter((i) => i.tomado).length;
   const visibles = items.slice(0, REMEDIOS_TARJETA_VISIBLES);
