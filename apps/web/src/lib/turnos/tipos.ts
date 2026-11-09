@@ -86,10 +86,3 @@ export const SUGERENCIAS_LLEVAR: Record<string, string[]> = {
   "Odontología": ["Radiografías anteriores"],
   "Kinesiología": ["La orden de kinesiología", "Ropa cómoda"],
 };
-
-/** Ítems base del checklist: [texto, etiqueta, activo por defecto]. */
-export const BASE_LLEVAR: [string, string, boolean][] = [
-  ["DNI", "Siempre", true],
-  ["Credencial de PAMI", "Opcional", true],
-  ["Credencial de obra social", "Opcional", false],
-];

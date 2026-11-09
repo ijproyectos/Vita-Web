@@ -5,7 +5,8 @@ import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { TopBar } from "../top-bar";
 import { VitaShortcutButton } from "../vita-shortcut-button";
 import { createClient } from "@/lib/supabase/server";
-import { detallesDisponibles } from "@/lib/turnos/nucleo";
+import { detallesDisponibles, listarEspecialidadesUsadas } from "@/lib/turnos/nucleo";
+import { obtenerPerfil } from "@/lib/perfil/nucleo";
 import { FormularioAgregarTurno } from "./formulario";
 
 export default async function AgregarTurnoPage() {
@@ -14,7 +15,12 @@ export default async function AgregarTurnoPage() {
   const activo = await obtenerPerfilActivo();
   if (activo.rol !== "editar") redirect("/app");
 
-  const llevarDisponible = await detallesDisponibles(await createClient());
+  const supabase = await createClient();
+  const [llevarDisponible, especialidadesUsadas, perfil] = await Promise.all([
+    detallesDisponibles(supabase),
+    listarEspecialidadesUsadas(supabase, activo.id),
+    obtenerPerfil(supabase, activo.id).catch(() => null),
+  ]);
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
@@ -23,6 +29,8 @@ export default async function AgregarTurnoPage() {
       {activo.esPropio ? <VitaShortcutButton size="banner" /> : <BannerPerfil perfil={activo} accion="cargar" />}
       <FormularioAgregarTurno
         llevarDisponible={llevarDisponible}
+        especialidadesUsadas={especialidadesUsadas}
+        obraSocial={perfil?.obra_social ?? null}
         paraNombre={activo.esPropio ? undefined : activo.nombre.split(" ")[0]}
       />
     </div>
