@@ -10,6 +10,7 @@ import { AceptarInvitacion } from "@/components/vita/invitacion/aceptar-invitaci
 import { OtraCuenta } from "@/components/vita/invitacion/otra-cuenta";
 import { PantallaInvitada } from "@/components/vita/invitacion/piezas";
 import { RecibirInvitacion } from "@/components/vita/invitacion/recibir-invitacion";
+import { YaUsaVita } from "@/components/vita/invitacion/ya-usa-vita";
 import type { RolVinculo } from "@/lib/familia/tipos";
 import { aceptarInvitacionPorCodigoAction, entrarConCodigoMailAction, pedirCodigoMailAction } from "./invitacion-actions";
 
@@ -105,9 +106,25 @@ export function EntrarInvitacion(d: Datos) {
 }
 
 /** Con la sesión del mail correcto: "Vas a cuidar a…". */
-export function AceptarHost({ codigo, nombre, persona, rol, esPerfilGestionado }: { codigo: string; nombre?: string | null; persona: string; rol: RolVinculo; esPerfilGestionado: boolean }) {
+export function AceptarHost({
+  codigo,
+  nombre,
+  persona,
+  rol,
+  esPerfilGestionado,
+  lista,
+}: {
+  codigo: string;
+  nombre?: string | null;
+  persona: string;
+  rol: RolVinculo;
+  esPerfilGestionado: boolean;
+  /** Ya cuida a otras personas: primero ve que esta se suma a su lista. */
+  lista?: { yo: string; actuales: string[] } | null;
+}) {
   const router = useRouter();
   const enCurso = useRef(false);
+  const [vioLista, setVioLista] = useState(false);
 
   function empezar() {
     if (enCurso.current) return;
@@ -127,6 +144,7 @@ export function AceptarHost({ codigo, nombre, persona, rol, esPerfilGestionado }
     })();
   }
 
+  if (lista && !vioLista) return <YaUsaVita yo={lista.yo} actuales={lista.actuales} nueva={persona} onContinuar={() => setVioLista(true)} />;
   return <AceptarInvitacion nombre={nombre} persona={persona} rol={rol} esPerfilGestionado={esPerfilGestionado} onEmpezar={empezar} />;
 }
 
