@@ -192,10 +192,9 @@ export async function buscarInventarioId(
 export async function guardar(
   supabase: Cliente,
   usuarioId: string,
-  datos: { medicamentoId: string; stock: number; pastillasPorToma: number }
+  datos: { medicamentoId: string; stock: number; pastillasPorToma?: number }
 ): Promise<Inventario> {
   const stock = acotarStock(datos.stock);
-  const porToma = acotarEntero(datos.pastillasPorToma, 1, PASTILLAS_POR_TOMA_MAXIMO);
 
   const { data: filas, error: errFilas } = await supabase
     .from("medicamentos")
@@ -213,6 +212,8 @@ export async function guardar(
   const existentes = await listar(supabase, usuarioId);
   const existente = existentes.find((i) => claveMedicamento(i.nombre, i.dosis) === clave);
 
+  // Sin `pastillasPorToma` explícito se conserva el valor ya guardado (1 si es nuevo).
+  const porToma = acotarEntero(datos.pastillasPorToma ?? existente?.pastillas_por_toma ?? 1, 1, PASTILLAS_POR_TOMA_MAXIMO);
   const cambios = { stock, pastillas_por_toma: porToma, updated_at: new Date().toISOString() };
 
   async function actualizar(id: string): Promise<Inventario> {

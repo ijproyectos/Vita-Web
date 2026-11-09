@@ -46,7 +46,7 @@ export async function guardarMedicamentoAction(
     // Best-effort, igual que en el alta: lo principal ya quedó guardado.
     const fila = datos.tomas.find((t) => t.id)?.id;
     if (fila && typeof stock === "number" && Number.isFinite(stock) && stock >= 0) {
-      await inventario.guardar(supabase, objetivo.usuarioId, { medicamentoId: fila, stock, pastillasPorToma: 1 }).catch(() => undefined);
+      await inventario.guardar(supabase, objetivo.usuarioId, { medicamentoId: fila, stock }).catch(() => undefined);
     }
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "No se pudo guardar el medicamento." };
