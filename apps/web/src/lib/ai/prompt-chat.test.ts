@@ -138,3 +138,7 @@ describe("prompt caching del chat", () => {
     expect(sin).not.toContain("Cumpleaños");
   });
 });
+
+it("le pide no repetir en el texto la lista que ya muestra la tarjeta", () => {
+  expect(SYSTEM_PROMPT).toContain("No repitas\n  esa lista en el texto");
+});

@@ -315,12 +315,12 @@ async function ejecutarEnDestino(
     // Si la lectura falla, la tarjeta sale sin lista (solo con "Ver rutina").
     case "show_today_medications": {
       const hoy = await medicamentos.listarHoy(supabase, usuarioId).catch(() => null);
-      return { contenido: "Mostrado.", accionUI: { type: "show_today_medications", ...(hoy ? { items: itemsDeHoy(hoy) } : {}) } };
+      return { contenido: "La tarjeta con la lista ya está en pantalla: no la repitas.", accionUI: { type: "show_today_medications", ...(hoy ? { items: itemsDeHoy(hoy) } : {}) } };
     }
 
     case "show_all_medications": {
       const todos = await medicamentos.listarTodos(supabase, usuarioId).catch(() => null);
-      return { contenido: "Mostrado.", accionUI: { type: "show_all_medications", ...(todos ? { items: itemsDeRemedios(todos, medicamentos.fechaEnAR()) } : {}) } };
+      return { contenido: "La tarjeta con la lista ya está en pantalla: no la repitas.", accionUI: { type: "show_all_medications", ...(todos ? { items: itemsDeRemedios(todos, medicamentos.fechaEnAR()) } : {}) } };
     }
 
     case "open_screen": {
