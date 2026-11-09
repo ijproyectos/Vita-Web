@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { PantallaPermiso } from "./pantalla";
+import { DESTINO_CON_TOUR } from "@/lib/tour/pasos";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -22,7 +23,7 @@ export default async function OnboardingPermisoPage(props: { searchParams: Promi
   const destino =
     pp && UUID.test(pp)
       ? `/onboarding/vincular-cuidado?perfilPendienteId=${pp}`
-      : "/app";
+      : DESTINO_CON_TOUR;
 
   return <PantallaPermiso destino={destino} cuida={cuida} />;
 }

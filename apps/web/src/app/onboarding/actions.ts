@@ -1,5 +1,6 @@
 "use server";
 
+import { DESTINO_CON_TOUR } from "@/lib/tour/pasos";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -76,7 +77,7 @@ export async function omitirIntroAction() {
 // usa la app para cuidar a alguien, todavía le falta vincular ese celular
 // — la manda a /onboarding/vincular-cuidado en vez de directo a /app.
 async function redirigirSegunUsoApp(supabase: SupabaseClient, usuarioId: string): Promise<never> {
-  let destino = "/app";
+  let destino: string = DESTINO_CON_TOUR;
   try {
     const perfil = await perfilNucleo.obtenerPerfil(supabase, usuarioId);
     if (perfil?.uso_app === "cuido" || perfil?.uso_app === "ambos") destino = "/onboarding/vincular-cuidado";
