@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
-import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
+import { MENSAJE_SOLO_LECTURA, perfilActivoEditable, rolSobre } from "@/lib/familia/perfil-activo";
 
 export type ResultadoContacto = { ok: true } | { ok: false; message: string };
 
@@ -11,9 +11,17 @@ export type DatosContacto = { nombre: string; relacion: string; telefono: string
 
 // Contacto de emergencia (V7): nombre, "Es tu…" y teléfono. Es el mismo
 // contacto que usa el botón Ayuda del modo simple (`tel:`). Nunca lanza.
-export async function guardarContactoEmergenciaAction(datos: DatosContacto): Promise<ResultadoContacto> {
-  const destino = await perfilActivoEditable();
-  if (!destino.ok) return destino;
+// `personaId`: la ficha de una persona a cargo, sin importar el perfil activo.
+export async function guardarContactoEmergenciaAction(datos: DatosContacto, personaId?: string): Promise<ResultadoContacto> {
+  let destinoId: string;
+  if (personaId) {
+    if (typeof personaId !== "string" || (await rolSobre(personaId)) !== "editar") return { ok: false, message: MENSAJE_SOLO_LECTURA };
+    destinoId = personaId;
+  } else {
+    const destino = await perfilActivoEditable();
+    if (!destino.ok) return destino;
+    destinoId = destino.perfil.id;
+  }
 
   const t = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
   const nombre = t(datos?.nombre, 120);
@@ -27,13 +35,14 @@ export async function guardarContactoEmergenciaAction(datos: DatosContacto): Pro
 
   try {
     const supabase = await createClient();
-    await perfilNucleo.actualizarPerfil(supabase, destino.perfil.id, {
+    await perfilNucleo.actualizarPerfil(supabase, destinoId, {
       contacto_emergencia_nombre: nombre || null,
       contacto_emergencia_telefono: telefono || null,
       // Si la migración 025 no está aplicada, actualizarPerfil la omite sola.
       contacto_emergencia_relacion: vacio ? null : relacion || null,
     });
     revalidatePath("/app/perfil");
+    revalidatePath("/app/familia", "layout");
     revalidatePath("/app/modo-simple");
     revalidatePath("/app/resumen-salud");
     return { ok: true };
