@@ -366,6 +366,7 @@ function paraModelo(m: Medicamento | MedicamentoConToma) {
     time_of_day: momentoDiaAIngles(m.momento_dia),
     condition: m.condicion ? limpiarDato(m.condicion) : m.condicion,
     recurring_days: diasAIngles(m.dias_recurrentes),
+    end_date: m.fecha_fin ?? null,
     meal_indication: indicacionDeComida(m),
     ...("tomado" in m ? { taken: m.tomado } : {}),
   };

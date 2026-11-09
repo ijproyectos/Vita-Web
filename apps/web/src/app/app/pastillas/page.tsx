@@ -96,9 +96,11 @@ export default async function PastillasPage() {
                       </div>
                     )}
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
-                      <span className="rounded-full bg-secondary px-2.5 py-1 font-semibold">
-                        {inv.pastillas_por_toma} por toma
-                      </span>
+                      {!g.usaCantidadPorToma && (
+                        <span className="rounded-full bg-secondary px-2.5 py-1 font-semibold">
+                          {inv.pastillas_por_toma} por toma
+                        </span>
+                      )}
                       {dias !== null && (
                         <span className="rounded-full bg-secondary px-2.5 py-1 font-semibold">
                           {dias === 0 ? "Alcanza para menos de un día" : `Te alcanza para ~${dias} ${dias === 1 ? "día" : "días"}`}

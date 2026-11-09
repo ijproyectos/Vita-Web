@@ -69,7 +69,7 @@ export default async function HomePage() {
 
   // Tira de poco stock (V7): el medicamento con menos pastillas, "alcanzan hasta el jueves".
   const stockBajo: ItemStockBajo[] = grupos
-    .filter((g) => g.inventario && g.inventario.stock < g.inventario.umbral_alerta)
+    .filter((g) => !g.terminado && g.inventario && g.inventario.stock < g.inventario.umbral_alerta)
     .sort((a, b) => a.inventario!.stock - b.inventario!.stock)
     .map((g) => {
       const dias = inventarioNucleo.diasQueAlcanza(g);

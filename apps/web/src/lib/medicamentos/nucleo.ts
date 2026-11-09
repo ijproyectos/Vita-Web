@@ -355,6 +355,18 @@ function faltaColumnaIndicacion(error: { code?: string; message?: string }): boo
   return /indicacion/i.test(message) && (error.code === "42703" || error.code === "PGRST204" || /column/i.test(message));
 }
 
+function faltaColumnaPlan(error: { code?: string; message?: string }): boolean {
+  return /forma|cantidad_por_toma|fecha_fin/i.test(error.message ?? "") && (error.code === "42703" || error.code === "PGRST204");
+}
+
+function sinPlan(fila: Record<string, unknown>): Record<string, unknown> {
+  const { forma: _f, cantidad_por_toma: _c, fecha_fin: _d, ...resto } = fila;
+  void _f;
+  void _c;
+  void _d;
+  return resto;
+}
+
 function sinIndicacion<T extends Record<string, unknown>>(fila: T): Omit<T, "indicacion"> {
   const { indicacion: _indicacion, ...resto } = fila;
   void _indicacion;
@@ -525,11 +537,9 @@ export async function agregarMultiMomento(
     hora_programada: toma.hora,
     momento_dia: toma.momento,
     dias_recurrentes: dias,
-    // Solo los valores que no son los de siempre: sin la migración 052 un alta
-    // común sigue andando y una con estos datos falla en vez de perderlos.
-    ...(forma !== "pastilla" ? { forma } : {}),
+    ...(datos.forma !== undefined ? { forma } : {}),
     ...(fechaFin ? { fecha_fin: fechaFin } : {}),
-    ...columnaCantidad(toma.cantidad, forma, false),
+    ...columnaCantidad(toma.cantidad, forma, true),
     frecuencia: datos.frecuencia ?? null,
     con_comida: toma.conComida,
     ...(toma.indicacion ? { indicacion: toma.indicacion } : {}),
@@ -540,6 +550,12 @@ export async function agregarMultiMomento(
   let { data, error } = await supabase.from("medicamentos").insert(filas).select();
   if (error && filas.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
     ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinIndicacion)).select());
+  }
+  // Sin la migración 052 un alta común sigue andando; una con forma, fin o
+  // cantidad especial falla en vez de perder el dato.
+  const planComun = forma === "pastilla" && !fechaFin && plan.every((t) => t.cantidad == null || t.cantidad === 1);
+  if (error && planComun && faltaColumnaPlan(error)) {
+    ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinPlan)).select());
   }
   if (error) {
     traducirErrorDuplicado(error);

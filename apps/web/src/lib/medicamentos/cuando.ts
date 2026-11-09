@@ -71,6 +71,20 @@ export function vigenteEnFecha(medicamento: { fecha_fin?: string | null }, fecha
   return !medicamento.fecha_fin || fecha <= medicamento.fecha_fin.slice(0, 10);
 }
 
+/**
+ * Saca los stocks cuyos medicamentos ya terminaron todos: no hay que avisar que
+ * se repongan. Un stock sin ninguna fila enganchada se conserva.
+ */
+export function sinTratamientoTerminado<T extends { id: string }>(
+  inventarios: T[],
+  medicamentos: { inventario_id?: string | null; fecha_fin?: string | null }[],
+  fecha: string
+): T[] {
+  const enganchados = new Set(medicamentos.map((m) => m.inventario_id).filter(Boolean));
+  const vigentes = new Set(medicamentos.filter((m) => vigenteEnFecha(m, fecha)).map((m) => m.inventario_id));
+  return inventarios.filter((i) => !enganchados.has(i.id) || vigentes.has(i.id));
+}
+
 /** Fecha real "YYYY-MM-DD", o null. */
 export function fechaValida(valor: unknown): string | null {
   if (typeof valor !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return null;

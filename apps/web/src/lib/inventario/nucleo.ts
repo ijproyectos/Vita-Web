@@ -30,6 +30,8 @@ export type GrupoMedicamento = {
   consumoPropioPorDia?: number;
   /** Alguna toma tiene cantidad propia: "pastillas por toma" del stock deja de aplicar. */
   usaCantidadPorToma?: boolean;
+  /** Todas sus tomas ya pasaron la fecha de fin. */
+  terminado?: boolean;
   inventario: Inventario | null;
 };
 
@@ -106,6 +108,7 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
         tomasPorDia: 0,
         consumoPropioPorDia: 0,
         usaCantidadPorToma: false,
+        terminado: true,
         inventario:
           (fila.inventario_id ? inventarioPorId.get(fila.inventario_id) : undefined) ??
           inventarioPorClave.get(clave) ??
@@ -115,7 +118,9 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
     }
     grupo.medicamentoIds.push(fila.id);
     const dias = fila.dias_recurrentes?.length ?? 0;
-    const veces = !vigenteEnFecha(fila, hoy) ? 0 : dias === 0 ? 1 : dias / 7;
+    const vigente = vigenteEnFecha(fila, hoy);
+    if (vigente) grupo.terminado = false;
+    const veces = !vigente ? 0 : dias === 0 ? 1 : dias / 7;
     if (fila.cantidad_por_toma != null) {
       grupo.usaCantidadPorToma = true;
       grupo.consumoPropioPorDia = (grupo.consumoPropioPorDia ?? 0) + veces * consumoDeToma(fila.forma ?? "pastilla", fila.cantidad_por_toma);

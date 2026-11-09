@@ -1,4 +1,4 @@
-import { vigenteEnFecha } from "@/lib/medicamentos/cuando";
+import { sinTratamientoTerminado, vigenteEnFecha } from "@/lib/medicamentos/cuando";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -94,6 +94,7 @@ type FilaMedicamento = {
   hora_programada: string;
   dias_recurrentes: DiaSemana[] | null;
   fecha_fin?: string | null;
+  inventario_id?: string | null;
   con_comida: string | null;
   notas: string | null;
 };
@@ -236,9 +237,10 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   }[];
 
   const { data: invData } = await admin.from("inventario_pastillas").select("id, usuario_id, nombre, stock, umbral_alerta");
-  const stockBajo = ((invData ?? []) as { id: string; usuario_id: string; nombre: string; stock: number; umbral_alerta: number }[]).filter(
+  const stockBajoTodos = ((invData ?? []) as { id: string; usuario_id: string; nombre: string; stock: number; umbral_alerta: number }[]).filter(
     (i) => esStockBajo(i.stock, i.umbral_alerta)
   );
+  const stockBajo = sinTratamientoTerminado(stockBajoTodos, medicamentos, hoyAR);
 
   // Preferencias de todos los usuarios involucrados (una sola lectura).
   const usuarios = new Set<string>();

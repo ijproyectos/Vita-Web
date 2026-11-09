@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CONFIG_FORMA } from "@/lib/medicamentos/forma";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -134,7 +135,7 @@ export function DetalleMedicamento({
         <Dato label="Horario" valor={horarios.join(" · ")} sub={porDia === 1 ? "1 vez por día" : `${porDia} veces por día`} />
         <Dato
           label="Quedan"
-          valor={stock ? `${stock.stock} comp.` : "—"}
+          valor={stock ? `${stock.stock} ${!med.forma || med.forma === "pastilla" ? "comp." : CONFIG_FORMA[med.forma].unidadStock}` : "—"}
           sub={
             !stock
               ? "Sin stock cargado"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alternarDia, CUANDO_INICIAL, fechaFinDe, fechaHoyAR, fechaValida, resumenCuando, vigenteEnFecha } from "./cuando";
+import { alternarDia, CUANDO_INICIAL, fechaFinDe, fechaHoyAR, fechaValida, resumenCuando, sinTratamientoTerminado, vigenteEnFecha } from "./cuando";
 import { DIAS_SEMANA } from "./tipos";
 
 const HOY = "2026-11-09";
@@ -68,4 +68,19 @@ describe("fechaValida", () => {
 
 it("fechaHoyAR usa la zona de Argentina", () => {
   expect(fechaHoyAR(new Date("2026-11-10T02:00:00Z"))).toBe("2026-11-09");
+});
+
+describe("sinTratamientoTerminado", () => {
+  const stocks = [{ id: "a" }, { id: "b" }, { id: "suelto" }];
+  it("saca solo los stocks con todas sus tomas terminadas", () => {
+    const meds = [
+      { inventario_id: "a", fecha_fin: "2026-11-08" },
+      { inventario_id: "b", fecha_fin: "2026-11-08" },
+      { inventario_id: "b", fecha_fin: null },
+    ];
+    expect(sinTratamientoTerminado(stocks, meds, HOY).map((i) => i.id)).toEqual(["b", "suelto"]);
+  });
+  it("el último día todavía cuenta", () => {
+    expect(sinTratamientoTerminado([{ id: "a" }], [{ inventario_id: "a", fecha_fin: HOY }], HOY)).toHaveLength(1);
+  });
 });
