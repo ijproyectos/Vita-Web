@@ -68,7 +68,8 @@ export function FormularioMonitoreo({
 
       <div>
         <Etiqueta text="Qué medir" />
-        <ChipsMetrica tipos={TIPOS_PLAN} valor={tipo} onElegir={setTipo} />
+        {/* Al editar la métrica queda fija: para medir otra cosa se crea un monitoreo nuevo. */}
+        <ChipsMetrica tipos={existente ? TIPOS_PLAN.filter((t) => t === tipo) : TIPOS_PLAN} valor={tipo} onElegir={setTipo} />
         <input type="hidden" name="tipo" value={tipo} />
         {esOtra && (
           <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_110px] gap-2.5">

@@ -68,17 +68,19 @@ export type TramoHoy<M> = { hora: string; medicion: M | null };
 
 /**
  * A qué horario corresponde cada medición del día: cuenta desde 60 min antes de
- * ese horario hasta 60 min antes del siguiente. Una medición suelta a la tarde
- * no apaga el aviso de la noche. `medicionesHoy`: de esta métrica, cualquier orden.
+ * ese horario hasta 60 min antes del siguiente; si dos horarios están a menos
+ * de 2 h, el corte es el punto medio. Una medición suelta a la tarde no apaga
+ * el aviso de la noche. `medicionesHoy`: de esta métrica, cualquier orden.
  */
 export function tramosDeHoy<M extends Pick<Medicion, "medido_at">>(horarios: { hora: string }[], medicionesHoy: M[]): TramoHoy<M>[] {
   const horas = horarios.map((h) => h.hora).sort();
   const conMinutos = medicionesHoy
     .map((m) => ({ m, min: aMinutos(horaAR(m.medido_at) || "00:00"), iso: m.medido_at }))
     .sort((a, b) => b.iso.localeCompare(a.iso));
+  const adelanto = (anterior: string, actual: string) => Math.min(ADELANTO_MIN, Math.floor((aMinutos(actual) - aMinutos(anterior)) / 2));
   return horas.map((hora, i) => {
-    const desde = aMinutos(hora) - ADELANTO_MIN;
-    const hasta = i + 1 < horas.length ? aMinutos(horas[i + 1]) - ADELANTO_MIN : 24 * 60;
+    const desde = aMinutos(hora) - (i > 0 ? adelanto(horas[i - 1], hora) : ADELANTO_MIN);
+    const hasta = i + 1 < horas.length ? aMinutos(horas[i + 1]) - adelanto(hora, horas[i + 1]) : 24 * 60;
     return { hora, medicion: conMinutos.find((x) => x.min >= desde && x.min < hasta)?.m ?? null };
   });
 }

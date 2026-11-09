@@ -42,6 +42,20 @@ describe("tramosDeHoy", () => {
     expect(manana.medicion).not.toBeNull();
     expect(noche.medicion).toBeNull();
   });
+  it("con horarios cercanos corta en el punto medio", () => {
+    const horarios = [H("08:00"), H("08:30")];
+    const a = tramosDeHoy(horarios, [aLas("08:05")]);
+    expect(a[0].medicion).not.toBeNull();
+    expect(a[1].medicion).toBeNull();
+    const b = tramosDeHoy(horarios, [aLas("08:15")]);
+    expect(b[0].medicion).toBeNull();
+    expect(b[1].medicion).not.toBeNull();
+  });
+  it("con horarios lejanos sigue contando desde una hora antes", () => {
+    const [manana, noche] = tramosDeHoy([H("08:00"), H("20:00")], [aLas("19:10")]);
+    expect(manana.medicion).toBeNull();
+    expect(noche.medicion).not.toBeNull();
+  });
   it("en cada horario queda la más nueva", () => {
     const [t] = tramosDeHoy([H("08:00")], [aLas("08:05"), aLas("09:30")]);
     expect(t.medicion?.medido_at).toContain("T09:30");
