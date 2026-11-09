@@ -2,10 +2,10 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aMonitoreo } from "@/lib/mediciones/planes-nucleo";
-import { esDeLaMetrica, fraseMedir, planAplica, tramosDeHoy, type Monitoreo } from "@/lib/mediciones/plan";
+import { esDeLaMetrica, franjaApagada, fraseMedir, planAplica, tramosDeHoy, type Monitoreo } from "@/lib/mediciones/plan";
 import { hrefNuevaMedicion, type Medicion } from "@/lib/mediciones/tipos";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
-import { entregarAviso, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
+import { entregarAviso, franjasMedirApagadasDe, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
 import { enSilencioNocturno, minutosDesde, PREFERENCIAS_POR_DEFECTO } from "./avisos-tipos";
 import { refDeterminista } from "./avisos-familia-reglas";
 
@@ -13,8 +13,8 @@ type FilaMedicion = Pick<Medicion, "usuario_id" | "tipo" | "nombre_otra" | "medi
 
 /**
  * "Hora de medir…" a la hora de cada plan, salvo que ya se haya medido. Respeta
- * el silencio nocturno y cada plan se apaga desde su detalle; el diseño no
- * trae un interruptor general. Sin la migración 053 no hace nada.
+ * el silencio nocturno y las tandas apagadas en Configurar avisos; cada plan
+ * se apaga además desde su detalle. Sin la migración 053 no hace nada.
  */
 export async function procesarMonitoreos(
   admin: SupabaseClient,
@@ -39,8 +39,9 @@ export async function procesarMonitoreos(
   if (toca.length === 0) return 0;
 
   const usuarios = [...new Set(toca.map((c) => c.plan.usuario_id))];
-  const [prefs, mediciones] = await Promise.all([
+  const [prefs, franjas, mediciones] = await Promise.all([
     obtenerPreferenciasDe(admin, usuarios),
+    franjasMedirApagadasDe(admin, usuarios),
     admin.from("mediciones").select("usuario_id, tipo, nombre_otra, medido_at").in("usuario_id", usuarios).gte("medido_at", `${hoyAR}T00:00:00-03:00`),
   ]);
   // Sin saber qué se midió no se avisa: un recordatorio de más también molesta.
@@ -50,6 +51,7 @@ export async function procesarMonitoreos(
   let enviados = 0;
   for (const { plan, hora } of toca) {
     if (enSilencioNocturno(prefs.get(plan.usuario_id) ?? PREFERENCIAS_POR_DEFECTO, horaAR)) continue;
+    if (franjaApagada(franjas.get(plan.usuario_id) ?? [], hora)) continue;
     const deHoy = filas.filter((m) => m.usuario_id === plan.usuario_id && esDeLaMetrica(m, plan));
     if (tramosDeHoy(plan.horarios, deHoy).find((t) => t.hora === hora)?.medicion) continue;
     if (!(await reclamarEnvio(admin, "medicion_hora", refDeterminista(plan.id, hora), hoyAR, plan.usuario_id))) continue;

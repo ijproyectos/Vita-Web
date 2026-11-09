@@ -10,16 +10,34 @@ import {
   actualizarEsperaDePersona,
   actualizarPreferencias,
   cancelarPosposiciones,
+  guardarFranjasMedir,
   marcarLeido,
   marcarTodosLeidos,
   posponerDosis,
 } from "./avisos";
 import { CLAVES_BOOLEANAS, ESPERAS_CUIDADOR, MINUTOS_POSPONER_SERVIDOR, esHoraValida, type PreferenciasAvisos } from "./avisos-tipos";
 import { POSPONER_OPCIONES } from "@/lib/modo-simple/tipos";
+import { ORDEN_MOMENTOS } from "@/lib/rutina/momento";
 
 // Server Actions de suscripción push. Nunca lanzan (requireUser queda fuera
 // del try porque redirige lanzando un error de control de Next).
 export type EstadoPush = { status: "success" } | { status: "error"; message: string };
+
+/** Tandas del día sin avisos de medición. Recibe la lista entera: tocar rápido no pisa nada. */
+export async function guardarFranjasMedirAction(apagadas: string[]): Promise<EstadoPush> {
+  const usuario = await requireUser();
+  if (!Array.isArray(apagadas)) return { status: "error", message: "No pudimos guardar tu cambio. Probá de nuevo." };
+  const validas = ORDEN_MOMENTOS.filter((m) => apagadas.includes(m));
+  try {
+    const supabase = await createClient();
+    const r = await guardarFranjasMedir(supabase, usuario.id, validas);
+    if (!r.ok) return { status: "error", message: "No pudimos guardar tu cambio. Probá de nuevo." };
+  } catch {
+    return { status: "error", message: "No pudimos guardar tu cambio. Probá de nuevo." };
+  }
+  revalidatePath("/app/avisos/configuracion");
+  return { status: "success" };
+}
 
 type EntradaSuscripcion = {
   endpoint: string;

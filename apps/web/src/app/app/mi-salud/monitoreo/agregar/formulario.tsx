@@ -14,6 +14,7 @@ import {
   ETIQUETA_CONTEXTO,
   META_MEDICION,
   TIPOS_MEDICION,
+  TIPOS_PLAN,
   dentroDeRango,
   esTipoMedicion,
   metaDe,
@@ -95,7 +96,8 @@ export function FormularioMedicion({
       <div>
         <Etiqueta text="Métrica" />
         <div className="flex flex-wrap gap-2">
-          {TIPOS_MEDICION.map((t) => {
+          {/* Una métrica fuera de la lista solo aparece si se viene a cargar justo esa. */}
+          {TIPOS_MEDICION.filter((t) => TIPOS_PLAN.includes(t) || t === tipoInicial).map((t) => {
             const sel = tipo === t;
             return (
               <button

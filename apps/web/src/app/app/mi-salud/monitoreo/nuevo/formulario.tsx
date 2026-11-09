@@ -11,7 +11,7 @@ import { CUANDO_INICIAL, fechaFinDe, fechaHoyAR, type CuandoForm } from "@/lib/m
 import { relacionDeToma } from "@/lib/medicamentos/comidas";
 import { siguienteHora } from "@/lib/medicamentos/forma";
 import { MAX_HORARIOS_PLAN, fraseMedir, type HorarioPlan, type Monitoreo } from "@/lib/mediciones/plan";
-import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, META_MEDICION, TIPOS_MEDICION, type TipoRegistrable } from "@/lib/mediciones/tipos";
+import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, META_MEDICION, TIPOS_PLAN, type TipoRegistrable } from "@/lib/mediciones/tipos";
 import type { EstadoAccion } from "../../../rutina/actions";
 import { guardarMonitoreoAction } from "../actions";
 
@@ -75,12 +75,11 @@ export function FormularioMonitoreo({
             aria-label="Qué medir"
             className="w-full cursor-pointer appearance-none rounded-full bg-card py-[15px] pl-[18px] pr-10 text-[15px] font-bold shadow-item outline-none"
           >
-            {TIPOS_MEDICION.map((t) => (
+            {TIPOS_PLAN.map((t) => (
               <option key={t} value={t}>
                 {META_MEDICION[t].nombre}
               </option>
             ))}
-            <option value="otra">Otra</option>
           </select>
           <VitaIcon name="chevron-down" size={12} strokeWidth={2.6} className="pointer-events-none absolute right-[18px] top-1/2 -translate-y-1/2 text-subtle" />
         </div>

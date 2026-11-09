@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
-import { claveNombreOtra, esTipoRegistrable, volverSeguro } from "@/lib/mediciones/tipos";
+import { TIPOS_PLAN, claveNombreOtra, esTipoMedicion, volverSeguro } from "@/lib/mediciones/tipos";
 import { TopBar } from "../../../top-bar";
 import { FormularioMonitoreo } from "./formulario";
 
@@ -18,8 +18,8 @@ export default async function NuevoMonitoreoPage(props: PageProps<"/app/mi-salud
   const params = await props.searchParams;
   const volver = volverSeguro(primero(params?.volver));
   const pedido = primero(params?.tipo);
-  const tipo = esTipoRegistrable(pedido) ? pedido : "presion";
-  const nombre = tipo === "otra" ? (primero(params?.nombre) ?? "") : "";
+  const tipo = esTipoMedicion(pedido) && TIPOS_PLAN.includes(pedido) ? pedido : "presion";
+  const nombre = "";
 
   // Con un plan ya guardado para esa métrica, se abre para cambiarlo.
   const supabase = await createClient();

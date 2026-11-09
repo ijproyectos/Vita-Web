@@ -32,10 +32,9 @@ import { cn } from "@/lib/utils";
 import { TopBar } from "../../../top-bar";
 import { BadgeMedicion } from "../componentes";
 import { EliminarMedicionButton } from "../eliminar-medicion-button";
-import { QuitarMonitoreoButton } from "../quitar-monitoreo-button";
+import { TarjetaPlan } from "../tarjeta-plan";
 import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
 import { esDeLaMetrica } from "@/lib/mediciones/plan";
-import { fechaHoyAR, resumenCuando } from "@/lib/medicamentos/cuando";
 
 export default async function MonitoreoDetallePage(props: PageProps<"/app/mi-salud/monitoreo/[tipo]">) {
   await requireUser();
@@ -61,7 +60,6 @@ export default async function MonitoreoDetallePage(props: PageProps<"/app/mi-sal
   const unidadOtra = plan?.unidad_otra ?? historial[0]?.unidad_otra ?? null;
   const meta = metaDe({ tipo, nombre_otra: plan?.nombre_otra ?? historial[0]?.nombre_otra ?? nombreOtra, unidad_otra: unidadOtra });
   const resumen = resumirTipo(tipo, historial, meta);
-  const hoyPlan = fechaHoyAR();
   const volverDetalle = hrefDetalleMetrica(consulta);
   const ultima = resumen.ultima;
 
@@ -238,23 +236,11 @@ export default async function MonitoreoDetallePage(props: PageProps<"/app/mi-sal
       )}
 
       {plan && (
-        <div className="rounded-[20px] bg-card p-[18px] shadow-card">
-          <div className="eyebrow text-subtle">Te aviso</div>
-          <div className="mt-1.5 font-heading text-[15px] font-extrabold tabular-nums tracking-[-0.02em]">
-            {plan.horarios.map((h) => h.hora).join(" · ")}
-          </div>
-          <div className="mt-0.5 text-[12.5px] font-medium text-slate-brand">
-            {resumenCuando({ dias: plan.dias_recurrentes, hasta: plan.fecha_fin ? "fecha" : "siempre", fechaElegida: plan.fecha_fin ?? "" }, hoyPlan)}
-          </div>
-          {puedeEditar && (
-            <div className="mt-3.5 flex items-center justify-between gap-2.5 border-t border-foreground/[0.06] pt-3">
-              <Link href={hrefNuevoMonitoreo({ tipo, nombre: nombreOtra, volver: volverDetalle })} className="text-[13px] font-bold text-teal-deep">
-                Cambiar horarios
-              </Link>
-              <QuitarMonitoreoButton monitoreoId={plan.id} />
-            </div>
-          )}
-        </div>
+        <TarjetaPlan
+          plan={plan}
+          puedeEditar={puedeEditar}
+          hrefCambiar={hrefNuevoMonitoreo({ tipo, nombre: nombreOtra, volver: volverDetalle })}
+        />
       )}
 
       {puedeEditar && (

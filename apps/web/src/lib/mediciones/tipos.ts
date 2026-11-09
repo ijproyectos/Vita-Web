@@ -4,6 +4,9 @@
 
 export const TIPOS_MEDICION = ["presion", "glucemia", "peso", "pulso", "saturacion", "temperatura"] as const;
 export type TipoMedicion = (typeof TIPOS_MEDICION)[number];
+/** Lo que se ofrece por ahora al crear un monitoreo o cargar un valor (decisión 2026-11-09). */
+export const TIPOS_PLAN: readonly TipoMedicion[] = ["presion", "glucemia", "peso", "temperatura"];
+
 /** Las seis métricas fijas más "Otra", que la persona nombra (053). */
 export type TipoRegistrable = TipoMedicion | "otra";
 

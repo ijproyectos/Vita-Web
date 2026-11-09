@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { ETIQUETA_MOMENTO, ORDEN_MOMENTOS, RANGO_MOMENTO } from "@/lib/rutina/momento";
 import { Interruptor } from "@/components/vita/interruptor";
 import { Segmentado } from "@/components/vita/segmentado";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import {
   guardarEsperaPersonasAction,
+  guardarFranjasMedirAction,
   guardarPreferenciaAvisosAction,
   type EstadoPush,
   type ParchePreferencias,
@@ -36,15 +38,19 @@ export function FormularioConfigAvisos({
   personas,
   puedeEditarEspera,
   esperaPersona,
+  franjasApagadas,
 }: {
   inicial: PreferenciasAvisos;
   /** Personas que cuido (vacío si no cuido a nadie o falta la migración 028). */
   personas: PersonaCfg[];
   puedeEditarEspera: boolean;
   esperaPersona: number | null;
+  /** Tandas apagadas de "Hora de medir…"; null sin la migración 053. */
+  franjasApagadas: string[] | null;
 }) {
   const [prefs, setPrefs] = useState<PreferenciasAvisos>(inicial);
   const [espera, setEspera] = useState<number>(esperaPersona ?? 30);
+  const [apagadas, setApagadas] = useState<string[]>(franjasApagadas ?? []);
   const [error, setError] = useState<ErrorGuardado | null>(null);
   const [reintentando, setReintentando] = useState(false);
 
@@ -131,6 +137,31 @@ export function FormularioConfigAvisos({
           ))}
         </div>
       </section>
+
+      {franjasApagadas !== null && (
+        <section>
+          <h2 className="eyebrow px-0.5 pb-2.5 text-primary">Avisos para medirte</h2>
+          <div className="overflow-hidden rounded-[20px] bg-card shadow-card">
+            {ORDEN_MOMENTOS.map((m) => (
+              <FilaSwitch
+                key={m}
+                label={ETIQUETA_MOMENTO[m]}
+                sub={`De ${RANGO_MOMENTO[m].replace(" – ", " a ")} hs`}
+                activo={!apagadas.includes(m)}
+                onChange={(prendido) => {
+                  const anterior = apagadas;
+                  const nuevas = prendido ? apagadas.filter((x) => x !== m) : [...apagadas, m];
+                  void cambiar({
+                    aplicar: () => setApagadas(nuevas),
+                    revertir: () => setApagadas(anterior),
+                    guardar: () => guardarFranjasMedirAction(nuevas),
+                  });
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {personas.length > 0 && (
         <section>

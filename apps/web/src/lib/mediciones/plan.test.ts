@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fraseMedir, horariosDesde, metricasDe, planAplica, tramosDeHoy, validarPlan, type Monitoreo } from "./plan";
+import { franjaApagada, fraseMedir, horariosDesde, metricasDe, planAplica, tramosDeHoy, validarPlan, type Monitoreo } from "./plan";
 import { validarMedicion, type Medicion } from "./tipos";
 
 const H = (hora: string) => ({ hora, conComida: "no-importa" as const, indicacion: null });
@@ -91,6 +91,12 @@ describe("metricasDe", () => {
     expect(ms[1].mediciones).toHaveLength(1);
     expect(ms[1].meta.nombre).toBe("Dolor");
   });
+});
+
+it("franjaApagada mira la tanda del horario", () => {
+  expect(franjaApagada(["mañana"], "08:00")).toBe(true);
+  expect(franjaApagada(["mañana"], "21:00")).toBe(false);
+  expect(franjaApagada([], "08:00")).toBe(false);
 });
 
 it("fraseMedir usa el artículo de cada métrica", () => {
