@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
+import type { ItemMedir } from "./tipos";
 import { ProgressRing } from "@/components/vita/progress-ring";
 import { EncabezadoPerfil } from "@/components/vita/encabezado-perfil";
 import { CheckToggle } from "./check-toggle";
@@ -49,6 +51,7 @@ const PESTANAS: { clave: Vista; etiqueta: string }[] = [
 ];
 
 export function RutinaView({
+  medirHoy,
   medsHoy,
   todosLosMeds,
   turnosHoy,
@@ -62,6 +65,7 @@ export function RutinaView({
   perfil,
   opciones,
 }: {
+  medirHoy: ItemMedir[];
   medsHoy: MedicamentoConToma[];
   todosLosMeds: Medicamento[];
   turnosHoy: Turno[];
@@ -189,6 +193,7 @@ export function RutinaView({
           <TimelineHoy
             medsHoy={medsHoy}
             turnosHoy={turnosHoy}
+            medirHoy={medirHoy}
             tomadoDe={tomadoDe}
             pendiente={pendiente}
             puedeEditar={puedeEditar}
@@ -241,6 +246,7 @@ export function RutinaView({
 }
 
 function TimelineHoy({
+  medirHoy,
   medsHoy,
   turnosHoy,
   tomadoDe,
@@ -253,6 +259,7 @@ function TimelineHoy({
 }: {
   medsHoy: MedicamentoConToma[];
   turnosHoy: Turno[];
+  medirHoy: ItemMedir[];
   tomadoDe: (m: MedicamentoConToma) => boolean;
   pendiente: boolean;
   puedeEditar: boolean;
@@ -266,11 +273,13 @@ function TimelineHoy({
       {ORDEN_MOMENTOS.map((momento) => {
         const meds = medsHoy.filter((m) => m.momento_dia === momento).sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
         const turnos = turnosHoy.filter((t) => momentoDelDia(t.hora) === momento).sort((a, b) => a.hora.localeCompare(b.hora));
-        const total = meds.length + turnos.length;
+        const medir = medirHoy.filter((m) => momentoDelDia(m.hora) === momento);
+        const total = meds.length + turnos.length + medir.length;
         // Medicamentos y turnos juntos, por hora (a igual hora, el medicamento primero).
         const items = [
           ...meds.map((med, indice) => ({ tipo: "med" as const, hora: med.hora_programada.slice(0, 5), med, indice })),
           ...turnos.map((turno) => ({ tipo: "turno" as const, hora: turno.hora.slice(0, 5), turno })),
+          ...medir.map((item) => ({ tipo: "medir" as const, hora: item.hora, item })),
         ].sort((a, b) => a.hora.localeCompare(b.hora) || (a.tipo === b.tipo ? 0 : a.tipo === "med" ? -1 : 1));
 
         if (total === 0) {
@@ -319,8 +328,10 @@ function TimelineHoy({
                     onAlternar={() => onAlternar(it.med)}
                     onAbrir={() => onAbrirMed(it.med)}
                   />
-                ) : (
+                ) : it.tipo === "turno" ? (
                   <AptItem key={it.turno.id} turno={it.turno} onAbrir={() => onAbrirTurno(it.turno)} />
+                ) : (
+                  <MedirItem key={it.item.clave} item={it.item} />
                 )
               )}
             </div>
@@ -391,6 +402,24 @@ function MedItem({
           )
         )}
       </div>
+    </div>
+  );
+}
+
+function MedirItem({ item }: { item: ItemMedir }) {
+  return (
+    <div className={cn("relative", item.valor && "opacity-60")}>
+      <span className="absolute -left-[15px] top-6 size-2.5 rounded-full bg-chip-violet-ink" />
+      <Link href={item.href} className="flex w-full items-center gap-3 rounded-[var(--radius-item)] bg-card p-3 text-left shadow-item">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-chip-violet-bg text-chip-violet-ink">
+          <VitaIcon name="chart" size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{item.titulo}</div>
+          <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">{item.valor ? `Cargada · ${item.valor}` : "Tocá para cargar el valor"}</div>
+        </div>
+        <div className="text-[13px] font-bold tabular-nums">{item.hora}</div>
+      </Link>
     </div>
   );
 }

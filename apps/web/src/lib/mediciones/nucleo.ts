@@ -4,10 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   validarMedicion,
   esContextoGlucemia,
-  esTipoMedicion,
+  esTipoRegistrable,
   type EntradaMedicion,
   type Medicion,
-  type TipoMedicion,
+  type TipoRegistrable,
 } from "./tipos";
 
 // Mismo patrón que lib/turnos/nucleo.ts — funciones puras
@@ -20,7 +20,7 @@ type Fila = Record<string, unknown>;
 // `numeric` llega como número por PostgREST, pero se coerciona igual: un
 // valor raro nunca debe romper la pantalla.
 function aMedicion(fila: Fila): Medicion | null {
-  if (!esTipoMedicion(fila.tipo)) return null;
+  if (!esTipoRegistrable(fila.tipo)) return null;
   const valor = Number(fila.valor);
   if (!Number.isFinite(valor)) return null;
   const num = (v: unknown) => (v === null || v === undefined ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -28,6 +28,8 @@ function aMedicion(fila: Fila): Medicion | null {
     id: String(fila.id),
     usuario_id: String(fila.usuario_id),
     tipo: fila.tipo,
+    nombre_otra: typeof fila.nombre_otra === "string" ? fila.nombre_otra : null,
+    unidad_otra: typeof fila.unidad_otra === "string" ? fila.unidad_otra : null,
     valor,
     valor_secundario: num(fila.valor_secundario),
     pulso: num(fila.pulso),
@@ -57,7 +59,7 @@ export async function listarRecientes(supabase: Cliente, usuarioId: string, limi
 export async function listarPorTipo(
   supabase: Cliente,
   usuarioId: string,
-  tipo: TipoMedicion,
+  tipo: TipoRegistrable,
   limite = 100
 ): Promise<Medicion[]> {
   const { data, error } = await supabase
@@ -86,7 +88,7 @@ export async function listarRecientesSeguro(supabase: Cliente, usuarioId: string
 export async function listarPorTipoSeguro(
   supabase: Cliente,
   usuarioId: string,
-  tipo: TipoMedicion
+  tipo: TipoRegistrable
 ): Promise<Medicion[]> {
   try {
     return await listarPorTipo(supabase, usuarioId, tipo);
@@ -104,6 +106,8 @@ export async function agregar(supabase: Cliente, usuarioId: string, entrada: Ent
   const fila: Record<string, unknown> = {
     usuario_id: usuarioId,
     tipo: d.tipo,
+    // Sin la 053 estas columnas no existen: solo se mandan en una "Otra".
+    ...(d.tipo === "otra" ? { nombre_otra: d.nombreOtra, unidad_otra: d.unidadOtra } : {}),
     valor: d.valor,
     valor_secundario: d.valorSecundario,
     pulso: d.pulso,

@@ -20,6 +20,15 @@ import { esColorPerfil, type MiembroFamilia, type OpcionPerfil, type PerfilActiv
 
 export const COOKIE_PERFIL_ACTIVO = "vita_perfil";
 
+// httpOnly; nunca se confía en su valor (se valida en cada request).
+export const OPCIONES_COOKIE_PERFIL = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+  path: "/app",
+  maxAge: 60 * 60 * 24 * 180,
+} as const;
+
 type Contexto = {
   usuarioId: string;
   propio: PerfilActivo;

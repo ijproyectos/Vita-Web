@@ -89,6 +89,11 @@ import { createClient } from "@supabase/supabase-js";
  * `timingSafeEqual`) se acuña una sesión de ese usuario (getUserById + generateLink + verifyOtp) y se cachea en memoria; luego todo
  * corre con RLS como ese usuario. Atajo de pruebas a reemplazar por tokens por dispositivo (diseño de la migración 048).
  *
+ * Invitación de cuidador por código (`lib/invitaciones/nucleo.ts`, migración 054): quien abre `/c/<código>` no tiene sesión.
+ * Con freno por IP lee la invitación (solo primeros nombres y permiso), guarda y verifica el código que va a la casilla invitada
+ * y, recién si acertó, crea la cuenta de ese mail o abre su sesión (equivale a "olvidé mi contraseña"). Aceptar va con el cliente
+ * de SESIÓN (la RPC revalida el mail) y el aviso a quien invitó se manda después de eso.
+ *
  * Fuera de esos usos (y de `lib/cuenta/nucleo.ts`, que borra la cuenta
  * del usuario ya autenticado), nunca importar este cliente desde código que
  * atiende una request de un usuario autenticado — para eso están `lib/supabase/{server,client}.ts`,

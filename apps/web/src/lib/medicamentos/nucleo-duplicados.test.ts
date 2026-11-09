@@ -5,7 +5,7 @@ import { ErrorMedicamentoAmbiguo } from "./resolucion";
 import type { DatosNuevoMedicamento, Medicamento } from "./tipos";
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/inventario/nucleo", () => ({ ajustarStock: vi.fn(), buscarInventarioId: vi.fn() }));
+vi.mock("@/lib/inventario/nucleo", () => ({ ajustarStock: vi.fn(), ajustarStockDeToma: vi.fn(), buscarInventarioId: vi.fn() }));
 const { buscarInventarioId } = await import("@/lib/inventario/nucleo");
 const { agregar, agregarMultiMomento, actualizarHorario, actualizarGrupo, buscarPorNombre, verificarHorariosDisponibles } = await import("./nucleo");
 

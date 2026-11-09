@@ -44,6 +44,9 @@ const STOCK: Estilo = { icon: "alert-triangle", clases: "bg-secondary text-slate
 
 const ESTILO_POR_TIPO: Record<string, Estilo> = {
   dosis: { icon: "pill", clases: OK.clases },
+  medicion: { icon: "chart", clases: OK.clases },
+  invitacion_aceptada: OK,
+  medicion_persona: { icon: "chart", clases: OK.clases },
   dosis_pospuesta: { icon: "clock", clases: OK.clases },
   dosis_segundo: ALERTA,
   dosis_vencida_cuidador: ALERTA,

@@ -9,10 +9,14 @@ import { obtenerOpcionesPerfil, obtenerPerfilActivo } from "@/lib/familia/perfil
 import { fechaISOEnAR } from "@/lib/rutina/formato";
 import { inicioCalendario } from "@/lib/rutina/historial";
 import { horaAR } from "@/lib/mediciones/resumen";
-import { formatearValor, META_MEDICION } from "@/lib/mediciones/tipos";
+import { formatearValor, hrefNuevaMedicion, metaDe } from "@/lib/mediciones/tipos";
+import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
+import { esDeLaMetrica, fraseMedir, planAplica, tramosDeHoy } from "@/lib/mediciones/plan";
+import { diaSemanaDe } from "@/lib/medicamentos/nucleo";
 import { RutinaView } from "./rutina-view";
 import type { StockDetalle } from "./detalle-medicamento";
 import type { MedicionDia } from "./historial-view";
+import type { ItemMedir } from "./tipos";
 
 export default async function RutinaPage() {
   await requireUser();
@@ -25,7 +29,7 @@ export default async function RutinaPage() {
   const hoy = medicamentos.fechaEnAR();
   const desde = inicioCalendario(hoy);
 
-  const [medsHoy, todosLosMeds, turnosHoy, turnosProximos, adherencia, grupos, tomas, mediciones, recetas] = await Promise.all([
+  const [medsHoy, todosLosMeds, turnosHoy, turnosProximos, adherencia, grupos, tomas, mediciones, planes, recetas] = await Promise.all([
     medicamentos.listarHoy(supabase, pid),
     medicamentos.listarTodos(supabase, pid),
     turnosNucleo.listarDeHoy(supabase, pid),
@@ -34,6 +38,7 @@ export default async function RutinaPage() {
     inventarioNucleo.listarGruposSeguro(supabase, pid),
     medicamentos.listarTomasDesde(supabase, pid, desde),
     medicionesNucleo.listarRecientesSeguro(supabase, pid),
+    planesNucleo.listarSeguro(supabase, pid),
     recetasNucleo.listarProximasSeguro(supabase, pid),
   ]);
 
@@ -56,13 +61,30 @@ export default async function RutinaPage() {
     .map(({ fecha, m }) => ({
       fecha,
       hora: horaAR(m.medido_at),
-      nombre: META_MEDICION[m.tipo].nombre,
+      nombre: metaDe(m).nombre,
       valor: formatearValor(m),
-      unidad: META_MEDICION[m.tipo].unidad,
+      unidad: metaDe(m).unidad,
     }));
+
+  // "Medir…" de hoy: un item por horario de cada plan vigente.
+  const dia = diaSemanaDe(new Date());
+  const delDia = mediciones.filter((m) => fechaISOEnAR(new Date(m.medido_at)) === hoy);
+  const medirHoy: ItemMedir[] = planes
+    .filter((p) => planAplica(p, dia, hoy))
+    .flatMap((p) => {
+      const meta = metaDe(p);
+      return tramosDeHoy(p.horarios, delDia.filter((m) => esDeLaMetrica(m, p))).map((t) => ({
+        clave: `${p.id}-${t.hora}`,
+        hora: t.hora,
+        titulo: `Medir ${fraseMedir(p)}`,
+        valor: t.medicion ? `${formatearValor(t.medicion)} ${meta.unidad}`.trim() : null,
+        href: hrefNuevaMedicion({ tipo: p.tipo, nombre: p.nombre_otra, unidad: p.unidad_otra, hora: t.hora, volver: "/app/rutina" }),
+      }));
+    });
 
   return (
     <RutinaView
+      medirHoy={medirHoy}
       medsHoy={medsHoy}
       todosLosMeds={todosLosMeds}
       turnosHoy={turnosHoy}

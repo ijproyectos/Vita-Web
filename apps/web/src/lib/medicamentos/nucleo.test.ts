@@ -5,7 +5,7 @@ import type { DiaSemana } from "./tipos";
 // el núcleo de inventario; solo se prueban las funciones puras de hora, así que
 // se anulan esas dependencias.
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/inventario/nucleo", () => ({ ajustarStock: vi.fn(), buscarInventarioId: vi.fn() }));
+vi.mock("@/lib/inventario/nucleo", () => ({ ajustarStock: vi.fn(), ajustarStockDeToma: vi.fn(), buscarInventarioId: vi.fn() }));
 
 const {
   esDosisVencida,

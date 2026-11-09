@@ -6,9 +6,10 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
-import { COOKIE_PERFIL_ACTIVO, esPerfilValido } from "@/lib/familia/perfil-activo";
+import { COOKIE_PERFIL_ACTIVO, OPCIONES_COOKIE_PERFIL, esPerfilValido } from "@/lib/familia/perfil-activo";
 import { hayPersonaConNombre } from "@/lib/familia/solo-mirar";
 import { enviarInvitacionPorMail } from "@/lib/cuidadores/correo";
+import { urlDeInvitacion } from "@/lib/acceso-codigo/enlace";
 import { emailValido, origenPublico } from "@/lib/email/origen";
 import { permitirEnvio } from "@/lib/email/limite";
 import {
@@ -22,14 +23,6 @@ import { CONDICIONES } from "@/lib/onboarding/catalogo-condiciones";
 // Server Actions de Familia. Nunca lanzan; requireUser queda fuera del try
 // (redirige). La autorización real la hacen la RLS y las RPCs de 021.
 
-// Cookie del perfil activo: httpOnly, nunca se confía en su valor (se valida en cada request).
-const OPCIONES_COOKIE_PERFIL = {
-  httpOnly: true,
-  sameSite: "lax",
-  secure: process.env.NODE_ENV === "production",
-  path: "/app",
-  maxAge: 60 * 60 * 24 * 180,
-} as const;
 
 function revalidarApp() {
   revalidatePath("/app", "layout");
@@ -192,7 +185,7 @@ export async function quitarCuidadorAction(vinculoId: string, personaId: string)
 }
 
 export type ResultadoInvitar =
-  | { status: "success"; url: string; emailEnviado: boolean; email: string; vinculoId: string }
+  | { status: "success"; url: string; codigo: string | null; emailEnviado: boolean; email: string; vinculoId: string }
   | { status: "error"; message: string };
 
 /**
@@ -242,13 +235,13 @@ export async function invitarCuidadorAction(datos: {
       ? await enviarInvitacionPorMail(
           supabase,
           personaId,
-          { email_invitado: email, token: r.token, expira_at: r.expiraAt },
+          { email_invitado: email, token: r.token, expira_at: r.expiraAt, rol, codigo: r.codigo },
           origen,
           usuario.id
         )
       : { ok: false as const };
     revalidatePath("/app/familia", "layout");
-    return { status: "success", url: `${origen}/cuidar/invitacion/${r.token}`, emailEnviado: envio.ok, email, vinculoId: r.vinculoId };
+    return { status: "success", url: urlDeInvitacion(origen, { token: r.token, codigo: r.codigo }), codigo: r.codigo, emailEnviado: envio.ok, email, vinculoId: r.vinculoId };
   } catch {
     return { status: "error", message: "No pudimos crear la invitación. Probá de nuevo." };
   }
@@ -266,14 +259,17 @@ export async function reenviarInvitacionAction(personaId: string, vinculoId: str
     const inv = lista?.find((c) => c.vinculoId === vinculoId && c.estado === "pendiente" && c.puedeGestionar);
     if (!inv?.token || !inv.email) return { status: "error", message: "No encontramos esa invitación." };
     const origen = await origenPublico();
-    const url = `${origen}/cuidar/invitacion/${inv.token}`;
+    // Sin la migración 054 la RPC no existe: queda el link largo.
+    const { data: codigoRpc } = await supabase.rpc("codigo_de_invitacion", { p_vinculo: vinculoId });
+    const codigo = typeof codigoRpc === "string" ? codigoRpc : null;
+    const url = urlDeInvitacion(origen, { token: inv.token, codigo });
     if (!permitirEnvio(inv.vinculoId)) {
       return { status: "error", message: "Ya mandamos varios mails. Probá más tarde o compartí el link." };
     }
     const envio = await enviarInvitacionPorMail(
       supabase,
       personaId,
-      { email_invitado: inv.email, token: inv.token, expira_at: inv.expiraAt ?? new Date().toISOString() },
+      { email_invitado: inv.email, token: inv.token, expira_at: inv.expiraAt ?? new Date().toISOString(), rol: inv.rol, codigo },
       origen,
       usuario.id
     );

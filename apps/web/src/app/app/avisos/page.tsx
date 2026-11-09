@@ -41,7 +41,8 @@ export default async function AvisosPage() {
     perfilNucleo.obtenerNombre(supabase, usuario.id),
   ]);
   const recordatorios = await listarRecordatoriosPendientes(supabase, usuario.id, medsHoy);
-  const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
+  const formas = await inventarioNucleo.formasDeInventarios(supabase, usuario.id);
+  const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios).map((i) => ({ ...i, forma: formas.get(i.id) }));
   // Un Lector no tiene "Mis pastillas" (actúa sobre otro perfil): el banner solo informa.
   const soloMirar = esVistaSoloMirar(await obtenerPerfilActivo());
 
@@ -85,7 +86,7 @@ export default async function AvisosPage() {
       />
       <TarjetaAvisosApagados />
       <AvisoRecordatorio items={recordatorios} href="/app/modo-simple" />
-      <AvisoStockBajo items={stockBajo} href={soloMirar ? undefined : "/app/pastillas"} />
+      <AvisoStockBajo items={stockBajo} href={soloMirar ? undefined : "/app/medicamentos"} />
       <ListaAvisos
         items={items}
         personas={personas}

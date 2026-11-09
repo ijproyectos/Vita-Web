@@ -1,3 +1,4 @@
+import { textoQuedan } from "@/lib/inventario/tipos";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import * as compartirNucleo from "@/lib/compartir/nucleo";
@@ -134,7 +135,7 @@ function Resumen({ r }: { r: ResumenProfesional }) {
                     COMIDAS[m.con_comida] ?? null,
                     m.duracion ? `Duración: ${m.duracion}` : null,
                     m.condicion ? `Para: ${m.condicion}` : null,
-                    m.pastillas_restantes != null ? `Quedan ${m.pastillas_restantes} pastillas` : null,
+                    m.pastillas_restantes != null ? textoQuedan(m.pastillas_restantes, m.forma) : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}

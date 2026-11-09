@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
 import * as estudiosNucleo from "@/lib/estudios/nucleo";
 import * as medicionesNucleo from "@/lib/mediciones/nucleo";
-import { agruparPorTipo, resumirTipo } from "@/lib/mediciones/resumen";
-import { TIPOS_MEDICION } from "@/lib/mediciones/tipos";
+import { resumirTipo } from "@/lib/mediciones/resumen";
+import { metricasDe } from "@/lib/mediciones/plan";
+import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
+import { hrefDetalleMetrica } from "@/lib/mediciones/tipos";
 import { VitaIcon } from "@/lib/vita-icons";
 import * as registrosNucleo from "@/lib/registros/nucleo";
 import { armarFeed } from "@/lib/registros/feed";
@@ -46,10 +48,11 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
   // Familia: Mi Salud muestra la salud del perfil activo.
   const [activo, opciones] = await Promise.all([obtenerPerfilActivo(), obtenerOpcionesPerfil()]);
   const puedeEditar = activo.rol === "editar";
-  const [perfil, estudios, mediciones, consultas, vacunas] = await Promise.all([
+  const [perfil, estudios, mediciones, planes, consultas, vacunas] = await Promise.all([
     obtenerPerfilCacheado(activo.id),
     estudiosNucleo.listar(supabase, activo.id),
     medicionesNucleo.listarRecientesSeguro(supabase, activo.id),
+    planesNucleo.listarSeguro(supabase, activo.id),
     registrosNucleo.listarConsultasSeguro(supabase, activo.id),
     registrosNucleo.listarVacunasSeguro(supabase, activo.id),
   ]);
@@ -57,10 +60,11 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
   // El diseño oculta "Vacunas" por defecto: el chip aparece solo si hay alguna cargada.
   const filtros = FILTROS.filter((f) => f.id !== "vacuna" || vacunas.length > 0);
   const visibles = filtro === "todo" ? feed : feed.filter((r) => r.cat === filtro);
-  const medicionesPorTipo = agruparPorTipo(mediciones);
-  const resumenes = TIPOS_MEDICION.filter((t) => medicionesPorTipo.has(t)).map((t) =>
-    resumirTipo(t, medicionesPorTipo.get(t)!)
-  );
+  const resumenes = metricasDe(mediciones, planes).map((m) => ({
+    clave: m.clave,
+    resumen: resumirTipo(m.tipo, m.mediciones, m.meta),
+    href: hrefDetalleMetrica({ tipo: m.tipo, nombre_otra: m.nombreOtra }),
+  }));
   const condiciones = perfil?.condiciones ?? [];
   const alergias = perfil?.alergias ?? [];
   const nombre = perfil?.nombre?.trim() || activo.nombre;
@@ -151,7 +155,7 @@ export default async function MiSaludPage(props: PageProps<"/app/mi-salud">) {
         ) : (
           <div className="-mx-[18px] flex gap-2.5 overflow-x-auto px-[18px] pb-1">
             {resumenes.map((r) => (
-              <TarjetaMini key={r.tipo} resumen={r} />
+              <TarjetaMini key={r.clave} resumen={r.resumen} href={r.href} />
             ))}
           </div>
         )}

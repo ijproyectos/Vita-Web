@@ -1,3 +1,4 @@
+import { cantidadStock } from "@/lib/medicamentos/forma";
 // Tipos y helpers puros del inventario de pastillas — sin `server-only` a
 // propósito: los componentes de cliente (badge, flujo de conteo) importan de
 // acá las mismas reglas (umbral, clave de agrupación) que usa el núcleo.
@@ -39,12 +40,20 @@ export function esStockBajo(stock: number, umbral: number): boolean {
   return stock < umbral;
 }
 
-export function textoQuedan(stock: number): string {
-  if (stock <= 0) return "No quedan pastillas";
-  return stock === 1 ? "Queda 1 pastilla" : `Quedan ${stock} pastillas`;
+/** "Quedan 12,5 pastillas", "Queda 1 ml". Sin forma (o sin la migración 052) son pastillas. */
+export function textoQuedan(stock: number, forma?: unknown): string {
+  if (stock <= 0) return forma && forma !== "pastilla" ? "No queda nada" : "No quedan pastillas";
+  return `${stock === 1 ? "Queda" : "Quedan"} ${cantidadStock(forma, stock)}`;
 }
 
 /** Entero acotado a [min, max]; cualquier cosa no numérica devuelve `min`. */
+/** Stock válido: admite medias pastillas y ml, con dos decimales. */
+export function acotarStock(valor: unknown): number {
+  const n = typeof valor === "number" ? valor : Number(valor);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(STOCK_MAXIMO, Math.max(0, Math.round(n * 100) / 100));
+}
+
 export function acotarEntero(valor: unknown, min: number, max: number): number {
   const n = typeof valor === "number" ? valor : Number(valor);
   if (!Number.isFinite(n)) return min;

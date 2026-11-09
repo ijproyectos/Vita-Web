@@ -15,6 +15,7 @@ export const PANTALLAS = {
   mi_salud: { ruta: "/app/mi-salud", titulo: "Mi Salud", descripcion: "tu estado, estudios, mediciones, consultas y vacunas" },
   agregar_estudio: { ruta: "/app/mi-salud/agregar-estudio", titulo: "Agregar estudio", descripcion: "subir la foto o el PDF de un estudio para que vita lo lea" },
   monitoreo: { ruta: "/app/mi-salud/monitoreo", titulo: "Monitoreo", descripcion: "ver tus mediciones de presión, glucemia, peso, etc." },
+  nuevo_monitoreo: { ruta: "/app/mi-salud/monitoreo/nuevo", titulo: "Nuevo monitoreo", descripcion: "elegir qué medir, a qué horas y qué días, para que vita avise" },
   agregar_medicion: { ruta: "/app/mi-salud/monitoreo/agregar", titulo: "Agregar medición", descripcion: "cargar una medición nueva" },
   condiciones: { ruta: "/app/condiciones", titulo: "Mis condiciones", descripcion: "ver y editar tus condiciones y alergias" },
   resumen_salud: { ruta: "/app/resumen-salud", titulo: "Resumen de salud", descripcion: "tu perfil médico: datos básicos, condiciones y alergias" },

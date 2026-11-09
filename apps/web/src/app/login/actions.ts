@@ -20,6 +20,8 @@ export type EstadoVerCodigo =
   // `sinVista`: no se pudo mirar el código (error interno): la pantalla sigue
   // por el camino directo de siempre, sin el "¿Sos vos?".
   | { status: "sinVista" }
+  // Código de una invitación de cuidador: sigue en /c/<código>.
+  | { status: "invitacion" }
   | { status: "error"; mensaje: string };
 
 // "¿Sos vos?" (Onboarding V7 `isWho`): mira a quién pertenece el código SIN
@@ -30,6 +32,7 @@ export async function verCodigoAction(codigo: string): Promise<EstadoVerCodigo> 
   if (!/^\d{6}$/.test(limpio)) return { status: "error", mensaje: "Ingresá el código de 6 dígitos." };
   const r = await verCodigo(limpio, await ipDelCliente());
   if (r.ok) return { status: "ok", vista: r.vista };
+  if (r.motivo === "invitacion") return { status: "invitacion" };
   if (r.motivo === "bloqueado") return { status: "error", mensaje: "Demasiados intentos. Esperá unos minutos." };
   if (r.motivo === "invalido") return { status: "error", mensaje: MSG_INVALIDO };
   return { status: "sinVista" };

@@ -15,11 +15,16 @@ export function FormularioContacto({
   inicial,
   conRelacion,
   soloLectura,
+  personaId,
+  volverA = "/app/perfil",
 }: {
   inicial: { nombre: string; relacion: string; telefono: string };
   /** false mientras la migración 025 no esté aplicada: se ocultan los chips. */
   conRelacion: boolean;
   soloLectura: boolean;
+  /** Ficha de una persona a cargo; sin esto se edita el perfil activo. */
+  personaId?: string;
+  volverA?: string;
 }) {
   const router = useRouter();
   const [nombre, setNombre] = useState(inicial.nombre);
@@ -36,10 +41,10 @@ export function FormularioContacto({
       return;
     }
     startTransition(async () => {
-      const r = await guardarContactoEmergenciaAction({ nombre, relacion: relacion || "Otro", telefono });
+      const r = await guardarContactoEmergenciaAction({ nombre, relacion: relacion || "Otro", telefono }, personaId);
       if (r.ok) {
         toast.success("Contacto de emergencia guardado");
-        router.replace("/app/perfil");
+        router.replace(volverA);
       } else setError(r.message);
     });
   }
@@ -47,7 +52,7 @@ export function FormularioContacto({
   function quitar() {
     setError(null);
     startTransition(async () => {
-      const r = await guardarContactoEmergenciaAction({ nombre: "", relacion: "", telefono: "" });
+      const r = await guardarContactoEmergenciaAction({ nombre: "", relacion: "", telefono: "" }, personaId);
       if (r.ok) {
         setNombre("");
         setRelacion("");

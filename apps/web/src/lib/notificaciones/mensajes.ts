@@ -2,6 +2,8 @@
 // después la acción; voseo rioplatense; nunca alarmante.
 import type { PayloadPush } from "./push";
 import { fechaHoraTurnoTexto } from "./turno-acompanado-logica";
+import { textoLlevarAviso } from "@/lib/turnos/tipos";
+import { cantidadStock, seCuentaConFoto } from "@/lib/medicamentos/forma";
 
 /**
  * Destino de un aviso sobre otra persona. La ficha (`/app/familia/<id>`) es de
@@ -153,7 +155,13 @@ type TurnoAviso = {
   profesional: string | null;
   lugar: string | null;
   hora: string;
+  llevar?: unknown;
 };
+
+/** Agrega "Llevá: …" al cuerpo del aviso del día anterior, si hay algo para llevar. */
+function conLlevar(cuerpo: string, llevar: unknown): string {
+  return [cuerpo, textoLlevarAviso(llevar)].filter(Boolean).join(" · ");
+}
 
 function urlMapas(lugar: string | null): Record<string, string> {
   return lugar ? { mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lugar)}` } : {};
@@ -164,7 +172,7 @@ export function payloadTurnoDiaAntes(t: TurnoAviso): PayloadPush {
   const detalle = [horaCorta(t.hora), t.profesional?.trim() || null].filter(Boolean).join(" · ");
   return {
     title: `Mañana tenés ${t.especialidad}`,
-    body: detalle,
+    body: conLlevar(detalle, t.llevar),
     url: "/app/rutina",
     tag: `turno-dia-antes-${t.turnoId}`,
     actions: t.lugar ? [{ action: "como-llegar", title: "Cómo llegar" }] : undefined,
@@ -184,18 +192,28 @@ export function payloadTurno2h(t: TurnoAviso): PayloadPush {
   };
 }
 
+/** A un cuidador Admin, cuando la persona no tiene avisos activos en ningún celular. */
+export function payloadMedirPersona(d: { personaId: string; personaNombre: string; monitoreoId: string; que: string; hora: string }): PayloadPush {
+  return {
+    title: `Hora de medir ${d.que} de ${primerNombre(d.personaNombre)}`,
+    body: "Podés cargar el valor desde su perfil.",
+    url: urlFichaPersona(d.personaId, "editar"),
+    tag: `medir-persona-${d.monitoreoId}-${d.hora}`,
+    renotify: true,
+    datos: { monitoreoId: d.monitoreoId },
+  };
+}
+
 /** Stock por debajo del umbral (una vez por día por medicamento). */
-export function payloadStockBajo(s: { inventarioId: string; nombre: string; stock: number; fechaAR: string }): PayloadPush {
+export function payloadStockBajo(s: { inventarioId: string; nombre: string; stock: number; fechaAR: string; forma?: unknown }): PayloadPush {
   const titulo =
     s.stock <= 0
       ? `Se terminó tu ${s.nombre}`
-      : s.stock === 1
-        ? `Te queda 1 pastilla de ${s.nombre}`
-        : `Te quedan ${s.stock} pastillas de ${s.nombre}`;
+      : `Te ${s.stock === 1 ? "queda" : "quedan"} ${cantidadStock(s.forma, s.stock)} de ${s.nombre}`;
   return {
     title: titulo,
     body: "Para que lo pidas a tiempo.",
-    url: "/app/pastillas",
+    url: seCuentaConFoto(s.forma) ? "/app/pastillas" : "/app/medicamentos",
     tag: `stock-${s.inventarioId}-${s.fechaAR}`,
   };
 }
@@ -260,12 +278,13 @@ export function payloadTurnoPersonaDiaAntes(t: {
   especialidad: string;
   profesional: string | null;
   hora: string;
+  llevar?: unknown;
   rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const detalle = [horaCorta(t.hora), t.profesional?.trim() || null].filter(Boolean).join(" · ");
   return {
     title: `Mañana ${primerNombre(t.personaNombre)} tiene ${t.especialidad}`,
-    body: detalle,
+    body: conLlevar(detalle, t.llevar),
     url: urlFichaPersona(t.personaId, t.rolDestino),
     tag: `turno-persona-${t.turnoId}`,
   };
@@ -279,15 +298,14 @@ export function payloadStockPersona(s: {
   nombre: string;
   stock: number;
   fechaAR: string;
+  forma?: unknown;
   rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const quien = primerNombre(s.personaNombre);
   const titulo =
     s.stock <= 0
       ? `A ${quien} se le terminó el ${s.nombre}`
-      : s.stock === 1
-        ? `A ${quien} le queda 1 pastilla de ${s.nombre}`
-        : `A ${quien} le quedan ${s.stock} pastillas de ${s.nombre}`;
+      : `A ${quien} le ${s.stock === 1 ? "queda" : "quedan"} ${cantidadStock(s.forma, s.stock)} de ${s.nombre}`;
   return {
     title: titulo,
     body: "Para que lo pida a tiempo.",
@@ -349,11 +367,12 @@ export function payloadTurnoAcompanadoDiaAntes(t: {
   turnoId: string;
   especialidad: string;
   hora: string;
+  llevar?: unknown;
   rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   return {
     title: `Mañana ${primerNombre(t.personaNombre)} tiene turno de ${t.especialidad}`,
-    body: `A las ${horaCorta(t.hora)} · pidió compañía.`,
+    body: conLlevar(`A las ${horaCorta(t.hora)} · pidió compañía.`, t.llevar),
     url: urlFichaPersona(t.personaId, t.rolDestino),
     tag: `turno-acompanado-dia-antes-${t.turnoId}`,
   };

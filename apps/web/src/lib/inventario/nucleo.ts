@@ -1,10 +1,12 @@
 import "server-only";
+import { fechaHoyAR, vigenteEnFecha } from "@/lib/medicamentos/cuando";
+import { consumoDeToma, type FormaMedicamento } from "@/lib/medicamentos/forma";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   PASTILLAS_POR_TOMA_MAXIMO,
-  STOCK_MAXIMO,
   acotarEntero,
+  acotarStock,
   claveMedicamento,
   esStockBajo,
   type Inventario,
@@ -22,8 +24,16 @@ export type GrupoMedicamento = {
   /** Id de una de las filas del grupo — sirve de "handle" para la UI. */
   representanteId: string;
   medicamentoIds: string[];
+  /** Sin valor: migración 052 sin aplicar, se trata como pastilla. */
+  forma?: FormaMedicamento;
   /** Tomas por día de calendario (una fila diaria = 1; días puntuales = n/7). */
   tomasPorDia: number;
+  /** Stock por día de las tomas con cantidad propia (migración 052); no entran en `tomasPorDia`. */
+  consumoPropioPorDia?: number;
+  /** Alguna toma tiene cantidad propia: "pastillas por toma" del stock deja de aplicar. */
+  usaCantidadPorToma?: boolean;
+  /** Todas sus tomas ya pasaron la fecha de fin. */
+  terminado?: boolean;
   inventario: Inventario | null;
 };
 
@@ -33,6 +43,9 @@ type FilaMed = {
   dosis: string | null;
   dias_recurrentes: string[] | null;
   inventario_id: string | null;
+  forma?: FormaMedicamento;
+  cantidad_por_toma?: number | null;
+  fecha_fin?: string | null;
 };
 
 export async function listar(supabase: Cliente, usuarioId: string): Promise<Inventario[]> {
@@ -69,10 +82,11 @@ export function filtrarStockBajo(inventarios: Inventario[]): Inventario[] {
  * (nombre+dosis) y les adjunta su inventario, si lo tienen.
  */
 export async function listarGrupos(supabase: Cliente, usuarioId: string): Promise<GrupoMedicamento[]> {
+  const hoy = fechaHoyAR();
   const [{ data, error }, inventarios] = await Promise.all([
     supabase
       .from("medicamentos")
-      .select("id, nombre, dosis, dias_recurrentes, inventario_id")
+      .select("*")
       .eq("usuario_id", usuarioId)
       .order("hora_programada", { ascending: true }),
     listar(supabase, usuarioId),
@@ -92,8 +106,12 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
         nombre: fila.nombre,
         dosis: fila.dosis,
         representanteId: fila.id,
+        forma: fila.forma,
         medicamentoIds: [],
         tomasPorDia: 0,
+        consumoPropioPorDia: 0,
+        usaCantidadPorToma: false,
+        terminado: true,
         inventario:
           (fila.inventario_id ? inventarioPorId.get(fila.inventario_id) : undefined) ??
           inventarioPorClave.get(clave) ??
@@ -103,13 +121,28 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
     }
     grupo.medicamentoIds.push(fila.id);
     const dias = fila.dias_recurrentes?.length ?? 0;
-    grupo.tomasPorDia += dias === 0 ? 1 : dias / 7;
+    const vigente = vigenteEnFecha(fila, hoy);
+    if (vigente) grupo.terminado = false;
+    const veces = !vigente ? 0 : dias === 0 ? 1 : dias / 7;
+    if (fila.cantidad_por_toma != null) {
+      grupo.usaCantidadPorToma = true;
+      grupo.consumoPropioPorDia = (grupo.consumoPropioPorDia ?? 0) + veces * consumoDeToma(fila.forma ?? "pastilla", fila.cantidad_por_toma);
+    } else {
+      grupo.tomasPorDia += veces;
+    }
   }
 
   return [...grupos.values()];
 }
 
 /** Como `listarGrupos` pero ante cualquier fallo (migración 014 sin aplicar) devuelve []. */
+/** Forma de cada stock, para hablar en su unidad. Sin la migración 052 queda vacío (son pastillas). */
+export async function formasDeInventarios(supabase: Cliente, usuarioId: string): Promise<Map<string, FormaMedicamento>> {
+  const { data, error } = await supabase.from("medicamentos").select("inventario_id, forma").eq("usuario_id", usuarioId).not("inventario_id", "is", null);
+  if (error) return new Map();
+  return new Map((data as { inventario_id: string; forma: FormaMedicamento }[]).map((f) => [f.inventario_id, f.forma]));
+}
+
 export async function listarGruposSeguro(supabase: Cliente, usuarioId: string): Promise<GrupoMedicamento[]> {
   try {
     return await listarGrupos(supabase, usuarioId);
@@ -121,7 +154,7 @@ export async function listarGruposSeguro(supabase: Cliente, usuarioId: string): 
 /** Días que alcanza el stock al ritmo actual; null si no se puede derivar. */
 export function diasQueAlcanza(grupo: GrupoMedicamento): number | null {
   if (!grupo.inventario) return null;
-  const porDia = grupo.tomasPorDia * grupo.inventario.pastillas_por_toma;
+  const porDia = grupo.tomasPorDia * grupo.inventario.pastillas_por_toma + (grupo.consumoPropioPorDia ?? 0);
   if (porDia <= 0) return null;
   return Math.floor(grupo.inventario.stock / porDia);
 }
@@ -159,14 +192,13 @@ export async function buscarInventarioId(
 export async function guardar(
   supabase: Cliente,
   usuarioId: string,
-  datos: { medicamentoId: string; stock: number; pastillasPorToma: number }
+  datos: { medicamentoId: string; stock: number; pastillasPorToma?: number }
 ): Promise<Inventario> {
-  const stock = acotarEntero(datos.stock, 0, STOCK_MAXIMO);
-  const porToma = acotarEntero(datos.pastillasPorToma, 1, PASTILLAS_POR_TOMA_MAXIMO);
+  const stock = acotarStock(datos.stock);
 
   const { data: filas, error: errFilas } = await supabase
     .from("medicamentos")
-    .select("id, nombre, dosis, dias_recurrentes, inventario_id")
+    .select("*")
     .eq("usuario_id", usuarioId);
   if (errFilas) throw new Error(`No se pudieron leer los medicamentos: ${errFilas.message}`);
 
@@ -180,6 +212,8 @@ export async function guardar(
   const existentes = await listar(supabase, usuarioId);
   const existente = existentes.find((i) => claveMedicamento(i.nombre, i.dosis) === clave);
 
+  // Sin `pastillasPorToma` explícito se conserva el valor ya guardado (1 si es nuevo).
+  const porToma = acotarEntero(datos.pastillasPorToma ?? existente?.pastillas_por_toma ?? 1, 1, PASTILLAS_POR_TOMA_MAXIMO);
   const cambios = { stock, pastillas_por_toma: porToma, updated_at: new Date().toISOString() };
 
   async function actualizar(id: string): Promise<Inventario> {
@@ -230,6 +264,29 @@ export async function guardar(
   if (errLink) throw new Error(`No se pudo vincular el stock al medicamento: ${errLink.message}`);
 
   return inventario;
+}
+
+/**
+ * Mueve el stock con la cantidad de ESA toma. Sin la migración 052 (la RPC no
+ * existe) cae a `ajustarStock`. Nunca lanza, igual que `ajustarStock`.
+ */
+export async function ajustarStockDeToma(
+  supabase: Cliente,
+  medicamentoId: string,
+  inventarioId: string,
+  direccion: 1 | -1
+): Promise<number | null> {
+  try {
+    const { data, error } = await supabase.rpc("ajustar_stock_por_toma", {
+      p_medicamento_id: medicamentoId,
+      p_direccion: direccion,
+    });
+    if (error?.code === "PGRST202" || error?.code === "42883") return ajustarStock(supabase, inventarioId, direccion);
+    if (error) return null;
+    return typeof data === "number" ? data : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

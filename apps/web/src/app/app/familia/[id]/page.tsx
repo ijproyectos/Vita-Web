@@ -13,6 +13,8 @@ import { FilaCuidador } from "@/components/vita/fila-cuidador";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../../top-bar";
 import { AccionesMiembro, EditarMiembro } from "./acciones";
+import { HoyPendientes } from "./hoy-pendientes";
+import { resumenHoy } from "@/lib/familia/pendientes-hoy";
 
 // V7 "fam-perfil": una persona que cuido. Solo se llega con un vínculo
 // aceptado (listar_familia); cualquier otro id es 404.
@@ -28,11 +30,15 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
   const puedeEditar = miembro.rol === "editar";
   const primerNombre = miembro.nombre.split(" ")[0];
 
-  const [perfil, nRemedios, miNombre] = await Promise.all([
+  const [perfil, nRemedios, miNombre, dosisHoy] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, id).catch(() => null),
     medicamentosNucleo.contarRemediosDistintos(supabase, id).catch(() => 0),
     perfilNucleo.obtenerNombre(supabase, usuario.id),
+    medicamentosNucleo.listarHoy(supabase, id).catch(() => []),
   ]);
+  const hoy = resumenHoy(dosisHoy, medicamentosNucleo.horaEnAR());
+  const emergencia = perfil?.contacto_emergencia_nombre?.trim();
+  const emergenciaSub = [perfil?.contacto_emergencia_relacion?.trim(), perfil?.contacto_emergencia_telefono?.trim()].filter(Boolean).join(" · ");
   const meta = [
     perfil ? edadTexto(perfil) : null,
     perfil?.obra_social?.trim() || null,
@@ -41,7 +47,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
     .filter(Boolean)
     .join(" · ");
 
-  const { lista: cuidadores } = await familiaNucleo.cuidadoresDePersona(supabase, {
+  const { lista: cuidadores, completa } = await familiaNucleo.cuidadoresDePersona(supabase, {
     personaId: id,
     usuarioId: usuario.id,
     miNombre,
@@ -49,6 +55,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
     esPropio: false,
   });
   const otrosAceptados = cuidadores.filter((c) => c.estado === "aceptado" && !c.esYo).length;
+  const puedeInvitar = puedeEditar && completa && cuidadores.some((c) => c.puedeGestionar);
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
@@ -64,6 +71,17 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
 
       {/* Propio de la app (no está en el diseño): cambia el perfil activo. */}
       <AccionesMiembro elderId={miembro.id} vinculoId={miembro.vinculoId} nombre={primerNombre} soloVerRutina />
+
+      {hoy.pendientes.length > 0 && (
+        <HoyPendientes
+          elderId={miembro.id}
+          nombre={primerNombre}
+          subtitulo={hoy.subtitulo}
+          pendientes={hoy.pendientes}
+          conectado={miembro.conectado}
+          puedeRecordar={puedeEditar}
+        />
+      )}
 
       <section>
         <h2 className="eyebrow px-1 pb-2.5 text-subtle">Su celular</h2>
@@ -113,6 +131,27 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
         </Link>
       </section>
 
+      {puedeEditar && (
+        <section>
+          <h2 className="eyebrow px-1 pb-2.5 text-subtle">Contacto de emergencia</h2>
+          <Link
+            href={`/app/perfil/contacto-emergencia?persona=${id}`}
+            className="flex items-center gap-3 rounded-[20px] bg-card px-4 py-[15px] shadow-card transition-transform active:scale-[0.99]"
+          >
+            <span className="flex size-[42px] shrink-0 items-center justify-center rounded-[14px] bg-chip-rose-bg text-chip-rose-ink">
+              <VitaIcon name="phone" size={19} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{emergencia || "Sin cargar"}</span>
+              <span className="mt-0.5 block text-pretty text-[11.5px] font-medium text-subtle">
+                {emergencia ? emergenciaSub : "A quien llama el botón Ayuda de su modo simple."}
+              </span>
+            </span>
+            <span className="shrink-0 text-[12.5px] font-extrabold text-teal-deep">{emergencia ? "Editar" : "Agregar"}</span>
+          </Link>
+        </section>
+      )}
+
       <section>
         <h2 className="eyebrow px-1 pb-2.5 text-subtle">Quién la cuida</h2>
         <ul className="overflow-hidden rounded-[20px] bg-card shadow-card">
@@ -128,6 +167,20 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
             </li>
           ))}
         </ul>
+        {cuidadores.length <= 1 && puedeInvitar && (
+          <p className="px-1.5 pt-2.5 text-pretty text-[12px] font-medium leading-[1.5] text-subtle">
+            Por ahora solo estás vos. Invitá a alguien para que también reciba los avisos.
+          </p>
+        )}
+        {puedeInvitar && (
+          <Link
+            href={`/app/familia/invitar?persona=${id}`}
+            className="mt-2.5 flex items-center justify-center gap-[7px] rounded-full bg-primary p-[15px] font-heading text-[14px] font-extrabold text-primary-foreground shadow-cta-sm active:scale-[0.98] motion-reduce:transform-none"
+          >
+            <VitaIcon name="plus" size={16} strokeWidth={2.6} />
+            Invitar a un cuidador
+          </Link>
+        )}
       </section>
 
       {/* Propio de la app (no está en el diseño): nombre y color del perfil. */}

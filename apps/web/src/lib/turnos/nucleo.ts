@@ -192,6 +192,18 @@ export async function eliminar(
   if (error) throw new Error(`No se pudo eliminar el turno: ${error.message}`);
 }
 
+/** Especialidades de turnos ya cargados, la más reciente primero. Nunca lanza: es solo un atajo. */
+export async function listarEspecialidadesUsadas(supabase: Cliente, usuarioId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("turnos")
+    .select("especialidad")
+    .eq("usuario_id", usuarioId)
+    .order("fecha", { ascending: false })
+    .limit(40);
+  if (error) return [];
+  return [...new Set((data ?? []).map((t) => t.especialidad as string).filter(Boolean))];
+}
+
 /** ¿Existen las columnas de la migración 023 (dirección, teléfono, "Qué llevar")? Nunca lanza. */
 export async function detallesDisponibles(supabase: Cliente): Promise<boolean> {
   const { error } = await supabase.from("turnos").select("llevar").limit(1);

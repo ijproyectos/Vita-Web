@@ -8,17 +8,18 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import type { EstadoAccion } from "../../../rutina/actions";
 import { crearMedicionAction } from "../actions";
+import { ChipsMetrica } from "../chips-metrica";
 import {
   AVISO_REFERENCIA,
   CONTEXTOS_GLUCEMIA,
   ETIQUETA_CONTEXTO,
-  META_MEDICION,
-  TIPOS_MEDICION,
+  TIPOS_PLAN,
   dentroDeRango,
   esTipoMedicion,
+  metaDe,
   parsearNumero,
   type ContextoGlucemia,
-  type TipoMedicion,
+  type TipoRegistrable,
 } from "@/lib/mediciones/tipos";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
@@ -26,10 +27,25 @@ const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
 const CLASE_INPUT_VALOR =
   "w-24 rounded-[var(--radius-item)] bg-secondary py-2.5 text-center font-heading text-[38px] font-bold tracking-[-0.04em] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 
-export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: string; volver: string }) {
+export function FormularioMedicion({
+  tipoInicial,
+  volver,
+  otra,
+  metricaFija = false,
+  ultimoValor,
+}: {
+  tipoInicial: string;
+  volver: string;
+  /** Métrica "Otra" ya elegida: solo se carga el valor. */
+  otra?: { nombre: string; unidad: string } | null;
+  /** Ya se sabe qué se mide: no se ofrecen los chips. */
+  metricaFija?: boolean;
+  /** Último valor cargado, como referencia en el campo ("120/80"). */
+  ultimoValor?: string | null;
+}) {
   const router = useRouter();
   const volverAtras = useVolver(volver);
-  const [tipo, setTipo] = useState<TipoMedicion>(esTipoMedicion(tipoInicial) ? tipoInicial : "presion");
+  const [tipo, setTipo] = useState<TipoRegistrable>(otra ? "otra" : esTipoMedicion(tipoInicial) ? tipoInicial : "presion");
   const [valor, setValor] = useState("");
   const [secundario, setSecundario] = useState("");
   const [pulso, setPulso] = useState("");
@@ -48,7 +64,8 @@ export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: strin
   }
   const [estado, formAction, pendiente] = useActionState(accion, ESTADO_INICIAL);
 
-  const meta = META_MEDICION[tipo];
+  const [phValor, phSecundario] = (ultimoValor ?? "").split("/");
+  const meta = metaDe({ tipo, nombre_otra: otra?.nombre, unidad_otra: otra?.unidad });
   const esPresion = tipo === "presion";
   const num = parsearNumero(valor);
   const sec = parsearNumero(secundario);
@@ -75,38 +92,31 @@ export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: strin
 
   return (
     <form action={formAction} className="flex flex-col gap-[22px] pb-24">
+      {otra ? (
+        <>
+          <input type="hidden" name="tipo" value="otra" />
+          <input type="hidden" name="nombreOtra" value={otra.nombre} />
+          <input type="hidden" name="unidadOtra" value={otra.unidad} />
+        </>
+      ) : metricaFija ? (
+        <input type="hidden" name="tipo" value={tipo} />
+      ) : (
       <div>
         <Etiqueta text="Métrica" />
-        <div className="flex flex-wrap gap-2">
-          {TIPOS_MEDICION.map((t) => {
-            const sel = tipo === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setTipo(t);
-                  setValor("");
-                  setSecundario("");
-                  setPulso("");
-                  setContexto("");
-                }}
-                aria-pressed={sel}
-                className={cn(
-                  "inline-flex items-center gap-[7px] rounded-full px-4 py-[11px] text-[13.5px] font-bold transition-all motion-reduce:transition-none",
-                  sel
-                    ? "bg-primary text-primary-foreground shadow-cta"
-                    : "bg-card text-slate-brand shadow-item"
-                )}
-              >
-                <VitaIcon name={META_MEDICION[t].icono} size={16} />
-                {META_MEDICION[t].nombre}
-              </button>
-            );
-          })}
-        </div>
+        <ChipsMetrica
+          tipos={TIPOS_PLAN}
+          valor={tipo}
+          onElegir={(t) => {
+            setTipo(t);
+            setValor("");
+            setSecundario("");
+            setPulso("");
+            setContexto("");
+          }}
+        />
         <input type="hidden" name="tipo" value={tipo} />
       </div>
+      )}
 
       <div>
         <Etiqueta text="Valor" requerido />
@@ -118,7 +128,7 @@ export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: strin
             inputMode="decimal"
             autoComplete="off"
             aria-label={esPresion ? "Presión máxima (sistólica)" : meta.nombre}
-            placeholder="—"
+            placeholder={phValor || "—"}
             className={CLASE_INPUT_VALOR}
           />
           {esPresion && (
@@ -131,7 +141,7 @@ export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: strin
                 inputMode="decimal"
                 autoComplete="off"
                 aria-label="Presión mínima (diastólica)"
-                placeholder="—"
+                placeholder={phSecundario || "—"}
                 className={CLASE_INPUT_VALOR}
               />
             </>

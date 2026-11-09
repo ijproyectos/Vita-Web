@@ -2,7 +2,7 @@ import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { crearEscala, cuandoAR, type ResumenTipo, type TonoBadge } from "@/lib/mediciones/resumen";
-import { META_MEDICION, formatearValor, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
+import { formatearValor, hrefDetalleMetrica, hrefNuevoMonitoreo } from "@/lib/mediciones/tipos";
 
 const CLASES_BADGE: Record<TonoBadge, string> = {
   ok: "bg-chip-teal-bg text-chip-teal-ink",
@@ -31,7 +31,7 @@ export function EstadoVacioMonitoreo({ puedeEditar, volver }: { puedeEditar: boo
       </div>
       {puedeEditar && (
         <Link
-          href={hrefNuevaMedicion({ volver })}
+          href={hrefNuevoMonitoreo({ volver })}
           className="mt-2 inline-flex rounded-full bg-primary px-5 py-[11px] font-heading text-[13.5px] font-extrabold text-primary-foreground shadow-cta-sm"
         >
           Agregar medición
@@ -42,10 +42,23 @@ export function EstadoVacioMonitoreo({ puedeEditar, volver }: { puedeEditar: boo
 }
 
 /** Tarjeta chica (186px) del carrusel "Monitoreo activo" de Mi Salud. */
-export function TarjetaMini({ resumen }: { resumen: ResumenTipo }) {
-  const meta = META_MEDICION[resumen.tipo];
+export function TarjetaMini({ resumen, href }: { resumen: ResumenTipo; href: string }) {
+  const meta = resumen.meta;
   const ultima = resumen.ultima;
-  if (!ultima) return null;
+  if (!ultima) {
+    return (
+      <Link href={href} className="w-[186px] shrink-0 rounded-[18px] bg-card p-3.5 shadow-card transition-transform active:scale-[0.98] motion-reduce:transition-none">
+        <div className="flex items-start justify-between gap-2">
+          <div className="eyebrow !tracking-[0.14em]" style={{ color: meta.color }}>
+            {meta.nombre}
+          </div>
+          <BadgeMedicion badge={resumen.badge} className="text-[10px]" />
+        </div>
+        <div className="mt-2.5 text-[26px] font-bold tracking-[-0.04em]">—</div>
+        <div className="mt-0.5 text-[11px] font-medium text-subtle">sin datos</div>
+      </Link>
+    );
+  }
   const valores = resumen.serie.map((m) => m.valor);
   const escala = crearEscala(valores, 36, 32);
   // El gráfico mini usa 158px de ancho: el viewBox de la escala es 300.
@@ -57,7 +70,7 @@ export function TarjetaMini({ resumen }: { resumen: ResumenTipo }) {
 
   return (
     <Link
-      href={`/app/mi-salud/monitoreo/${resumen.tipo}`}
+      href={hrefDetalleMetrica({ tipo: resumen.tipo, nombre_otra: ultima.nombre_otra })}
       className="w-[186px] shrink-0 rounded-[18px] bg-card p-3.5 shadow-card transition-transform active:scale-[0.98] motion-reduce:transition-none"
     >
       <div className="flex items-start justify-between gap-2">

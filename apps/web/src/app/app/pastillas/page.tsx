@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { esStockBajo, textoQuedan } from "@/lib/inventario/tipos";
+import { numeroConComa, seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { TopBar } from "../top-bar";
@@ -14,7 +15,8 @@ export default async function PastillasPage() {
   const supabase = await createClient();
   const activo = await obtenerPerfilActivo();
   const puedeEditar = activo.rol === "editar";
-  const grupos = await inventarioNucleo.listarGrupos(supabase, activo.id);
+  // Jarabes, gotas y demás no se cuentan con foto: su stock se carga al editarlos.
+  const grupos = (await inventarioNucleo.listarGrupos(supabase, activo.id)).filter((g) => seCuentaConFoto(g.forma));
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
@@ -37,7 +39,7 @@ export default async function PastillasPage() {
 
       {grupos.length === 0 ? (
         <div className="rounded-[20px] bg-secondary p-5 text-center">
-          <p className="text-sm text-muted-foreground">Todavía no hay medicamentos cargados.</p>
+          <p className="text-sm text-muted-foreground">Todavía no hay pastillas cargadas.</p>
           {puedeEditar && (
             <Link href="/app/agregar-medicamento" className="mt-2 inline-block text-sm font-semibold text-primary">
               Agregar un medicamento →
@@ -78,7 +80,7 @@ export default async function PastillasPage() {
                           bajo && "text-chip-amber-ink"
                         )}
                       >
-                        {inv.stock}
+                        {numeroConComa(inv.stock)}
                       </div>
                       <div className="mt-0.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
                         pastillas
@@ -96,9 +98,11 @@ export default async function PastillasPage() {
                       </div>
                     )}
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
-                      <span className="rounded-full bg-secondary px-2.5 py-1 font-semibold">
-                        {inv.pastillas_por_toma} por toma
-                      </span>
+                      {!g.usaCantidadPorToma && (
+                        <span className="rounded-full bg-secondary px-2.5 py-1 font-semibold">
+                          {inv.pastillas_por_toma} por toma
+                        </span>
+                      )}
                       {dias !== null && (
                         <span className="rounded-full bg-secondary px-2.5 py-1 font-semibold">
                           {dias === 0 ? "Alcanza para menos de un día" : `Te alcanza para ~${dias} ${dias === 1 ? "día" : "días"}`}
