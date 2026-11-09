@@ -11,6 +11,7 @@ import {
   minutosDesde,
   type PreferenciasAvisos,
 } from "./avisos-tipos";
+import { procesarMonitoreos } from "./medir";
 import { entregarAviso, existeEnvio, familiaAvisosDisponible, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
 import {
   cuidadorRecibe,
@@ -79,6 +80,8 @@ export type ResumenProgramados = {
   turnoPersona: number;
   stockPersona: number;
   cumpleanos: number;
+  medir: number;
+  errorMedir?: string;
   /** Solo si falló la parte de familia (el resto del tick no se ve afectado). */
   errorFamilia?: string;
   /** Solo si falló el saludo de cumpleaños (el resto del tick no se ve afectado). */
@@ -154,6 +157,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     turnoPersona: 0,
     stockPersona: 0,
     cumpleanos: 0,
+    medir: 0,
   };
 
   const hoyAR = fechaEnAR(ahora);
@@ -429,6 +433,12 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     } catch (e) {
       resumen.errorCumpleanos = e instanceof Error ? e.message : "Fallo en el saludo de cumpleaños.";
     }
+  }
+
+  try {
+    resumen.medir = await procesarMonitoreos(admin, hoyAR, horaAR, diaHoy);
+  } catch (e) {
+    resumen.errorMedir = e instanceof Error ? e.message : "Fallo en los avisos de medición.";
   }
 
   return resumen;

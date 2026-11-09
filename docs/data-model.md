@@ -117,6 +117,23 @@ Momento del día (para agrupar en la Rutina) se deriva de `hora` con `momentoDel
 
 Columnas agregadas por la migración 023 (aplicada 2026-10-22): `direccion text null` (+ "Cómo llegar"), `telefono text null` (+ "Llamar al consultorio") y `llevar jsonb not null default '[]'` — checklist "Qué llevar" como `[{"t": "DNI", "ok": false}]` (máx. 30 ítems, `ok` = ya lo preparó). `lib/turnos/nucleo.ts` degrada (reintenta sin estas columnas) si la migración falta.
 
+## `monitoreos`
+
+Planes de "Nuevo monitoreo" (`053_monitoreos.sql`, escrita, NO aplicada). Una fila por métrica y persona (guardarla de nuevo la reemplaza; índice único `idx_monitoreos_unico`). Lo medido sigue en `mediciones`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| tipo | text | los seis de `mediciones` o `otra` |
+| nombre_otra / unidad_otra | text | solo `otra`; nombre obligatorio (<= 40), unidad opcional (<= 12) |
+| horarios | jsonb | 1 a 4 `{hora, conComida, indicacion}` |
+| dias_recurrentes | text[] | vacío = todos los días |
+| fecha_fin | date | inclusive; null = sin fin |
+| created_at / updated_at | timestamptz | |
+
+RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`lib/notificaciones/medir.ts`, dedupe `medicion_hora`) salvo silencio nocturno o si ya se midió: una medición cuenta para un horario desde 60 min antes de él hasta 60 min antes del siguiente (`tramosDeHoy`).
+
 ## `mediciones`
 
 "Monitoreo activo" de Mi Salud (`022_mediciones.sql`, aplicada 2026-10-22). Una fila = una medición puntual.
@@ -133,6 +150,7 @@ Columnas agregadas por la migración 023 (aplicada 2026-10-22): `direccion text 
 | medido_at | timestamptz | default `now()`; el momento del día se deriva de la hora AR, sin columna |
 | notas | text | opcional, máx. 500 caracteres |
 | created_at | timestamptz | |
+| nombre_otra / unidad_otra | text | 053: solo tipo `otra`, que no tiene rango de plausibilidad propio (`abs(valor) <= 1000000`) |
 
 Los CHECK por tipo (`mediciones_valor_rango`, etc.) son de **plausibilidad** (descartan errores de tipeo), no rangos clínicos. Índice `(usuario_id, tipo, medido_at desc)`. Los rangos de referencia que muestra la UI (`lib/mediciones/tipos.ts`) viven en código, son orientativos y no se guardan.
 

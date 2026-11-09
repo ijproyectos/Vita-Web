@@ -120,18 +120,20 @@ export function HojaCuando({
   valor,
   onCambio,
   onCerrar,
+  titulo = "¿Cuándo lo toma?",
 }: {
   abierto: boolean;
   valor: CuandoForm;
   onCambio: (cuando: CuandoForm) => void;
   onCerrar: () => void;
+  titulo?: string;
 }) {
   const [algunos, setAlgunos] = useState(false);
   const mostrarDias = algunos || valor.dias.length > 0;
 
   return (
     <Hoja abierto={abierto} onCerrar={onCerrar}>
-      <SheetTitle className="font-heading text-[21px] font-extrabold tracking-[-0.02em]">¿Cuándo lo toma?</SheetTitle>
+      <SheetTitle className="font-heading text-[21px] font-extrabold tracking-[-0.02em]">{titulo}</SheetTitle>
       <SheetDescription className="sr-only">Elegí los días y hasta cuándo</SheetDescription>
 
       <div className="eyebrow mb-2.5 mt-[18px] text-subtle">Días</div>

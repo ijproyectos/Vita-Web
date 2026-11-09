@@ -16,9 +16,10 @@ import {
   TIPOS_MEDICION,
   dentroDeRango,
   esTipoMedicion,
+  metaDe,
   parsearNumero,
   type ContextoGlucemia,
-  type TipoMedicion,
+  type TipoRegistrable,
 } from "@/lib/mediciones/tipos";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
@@ -26,10 +27,19 @@ const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
 const CLASE_INPUT_VALOR =
   "w-24 rounded-[var(--radius-item)] bg-secondary py-2.5 text-center font-heading text-[38px] font-bold tracking-[-0.04em] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 
-export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: string; volver: string }) {
+export function FormularioMedicion({
+  tipoInicial,
+  volver,
+  otra,
+}: {
+  tipoInicial: string;
+  volver: string;
+  /** Métrica "Otra" ya elegida: solo se carga el valor. */
+  otra?: { nombre: string; unidad: string } | null;
+}) {
   const router = useRouter();
   const volverAtras = useVolver(volver);
-  const [tipo, setTipo] = useState<TipoMedicion>(esTipoMedicion(tipoInicial) ? tipoInicial : "presion");
+  const [tipo, setTipo] = useState<TipoRegistrable>(otra ? "otra" : esTipoMedicion(tipoInicial) ? tipoInicial : "presion");
   const [valor, setValor] = useState("");
   const [secundario, setSecundario] = useState("");
   const [pulso, setPulso] = useState("");
@@ -48,7 +58,7 @@ export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: strin
   }
   const [estado, formAction, pendiente] = useActionState(accion, ESTADO_INICIAL);
 
-  const meta = META_MEDICION[tipo];
+  const meta = metaDe({ tipo, nombre_otra: otra?.nombre, unidad_otra: otra?.unidad });
   const esPresion = tipo === "presion";
   const num = parsearNumero(valor);
   const sec = parsearNumero(secundario);
@@ -75,6 +85,13 @@ export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: strin
 
   return (
     <form action={formAction} className="flex flex-col gap-[22px] pb-24">
+      {otra ? (
+        <>
+          <input type="hidden" name="tipo" value="otra" />
+          <input type="hidden" name="nombreOtra" value={otra.nombre} />
+          <input type="hidden" name="unidadOtra" value={otra.unidad} />
+        </>
+      ) : (
       <div>
         <Etiqueta text="Métrica" />
         <div className="flex flex-wrap gap-2">
@@ -107,6 +124,7 @@ export function FormularioMedicion({ tipoInicial, volver }: { tipoInicial: strin
         </div>
         <input type="hidden" name="tipo" value={tipo} />
       </div>
+      )}
 
       <div>
         <Etiqueta text="Valor" requerido />

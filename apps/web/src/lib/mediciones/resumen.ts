@@ -4,7 +4,7 @@
 
 import { fechaConOffset, fechaISOEnAR, formatoFechaCorta } from "@/lib/rutina/formato";
 import { ETIQUETA_MOMENTO, momentoDelDia } from "@/lib/rutina/momento";
-import { dentroDeRango, formatearNumero, META_MEDICION, type Medicion, type TipoMedicion } from "./tipos";
+import { dentroDeRango, formatearNumero, metaDe, type Medicion, type MetaMedicion, type TipoMedicion, type TipoRegistrable } from "./tipos";
 
 const ZONA_AR = "America/Argentina/Buenos_Aires";
 const INICIAL_DIA = ["D", "L", "M", "M", "J", "V", "S"];
@@ -65,7 +65,8 @@ export function diaAR(iso: string): string {
 export type TonoBadge = "ok" | "aviso" | "neutro";
 
 export type ResumenTipo = {
-  tipo: TipoMedicion;
+  tipo: TipoRegistrable;
+  meta: MetaMedicion;
   n: number;
   ultima: Medicion | null;
   /** Hasta PUNTOS_GRAFICO mediciones, de la más vieja a la más nueva. */
@@ -83,22 +84,22 @@ export type ResumenTipo = {
   insight: string;
 };
 
-function badgeDe(tipo: TipoMedicion, ultima: Medicion | null, previa: Medicion | null): ResumenTipo["badge"] {
+function badgeDe(meta: MetaMedicion, ultima: Medicion | null, previa: Medicion | null): ResumenTipo["badge"] {
   if (!ultima) return { texto: "Nuevo", tono: "neutro" };
   const dentro = dentroDeRango(ultima);
   if (dentro === true) return { texto: "En rango", tono: "ok" };
   if (dentro === false) return { texto: "Fuera de rango", tono: "aviso" };
   if (!previa) return { texto: "Nuevo", tono: "neutro" };
   const dif = ultima.valor - previa.valor;
-  const dec = META_MEDICION[tipo].decimales;
+  const dec = meta.decimales;
   if (Math.abs(dif) < 10 ** -dec / 2) return { texto: "Sin cambios", tono: "neutro" };
   const signo = dif > 0 ? "↑" : "↓";
-  return { texto: `${signo} ${formatearNumero(Math.abs(dif), dec)} ${META_MEDICION[tipo].unidad}`, tono: "neutro" };
+  return { texto: `${signo} ${formatearNumero(Math.abs(dif), dec)} ${meta.unidad}`.trim(), tono: "neutro" };
 }
 
 /** `desc`: mediciones de UN tipo, más nuevas primero. */
-export function resumirTipo(tipo: TipoMedicion, desc: Medicion[]): ResumenTipo {
-  const meta = META_MEDICION[tipo];
+export function resumirTipo(tipo: TipoRegistrable, desc: Medicion[], metaPropia?: MetaMedicion): ResumenTipo {
+  const meta = metaPropia ?? metaDe({ tipo, nombre_otra: desc[0]?.nombre_otra, unidad_otra: desc[0]?.unidad_otra });
   const serie = desc.slice(0, PUNTOS_GRAFICO).reverse();
   const n = serie.length;
   const valores = serie.map((m) => m.valor);
@@ -132,6 +133,7 @@ export function resumirTipo(tipo: TipoMedicion, desc: Medicion[]): ResumenTipo {
 
   return {
     tipo,
+    meta,
     n,
     ultima,
     serie,
@@ -141,16 +143,17 @@ export function resumirTipo(tipo: TipoMedicion, desc: Medicion[]): ResumenTipo {
     delta,
     fueraDeRango,
     evaluables: evaluadas.length,
-    badge: badgeDe(tipo, ultima, previa),
+    badge: badgeDe(meta, ultima, previa),
     textoPromedio,
     insight,
   };
 }
 
-/** Agrupa una lista mixta (más nuevas primero) por tipo, conservando el orden. */
+/** Agrupa las métricas fijas (más nuevas primero); las "Otra" van por `metricasDe`. */
 export function agruparPorTipo(desc: Medicion[]): Map<TipoMedicion, Medicion[]> {
   const mapa = new Map<TipoMedicion, Medicion[]>();
   for (const m of desc) {
+    if (m.tipo === "otra") continue;
     const lista = mapa.get(m.tipo);
     if (lista) lista.push(m);
     else mapa.set(m.tipo, [m]);
