@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { etiquetaDeToma, horasDeRemedio, leerDosis, remediosVisibles, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
+import { alternarHora, frecuenciaDeHoras, horasDeRemedio, textoHoras, textoVeces, tomasDesdeHoras, leerDosis, remediosVisibles, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
 
 describe("leerDosis", () => {
   it("lee valor y unidad", () => {
@@ -14,16 +14,6 @@ describe("leerDosis", () => {
   it("texto que no es una dosis es ilegible", () => {
     expect(leerDosis("no sé")).toEqual({ tipo: "ilegible" });
     expect(leerDosis("")).toEqual({ tipo: "ilegible" });
-  });
-});
-
-describe("etiquetaDeToma", () => {
-  it("null si hay una sola toma", () => {
-    expect(etiquetaDeToma(0, 1)).toBeNull();
-  });
-  it("ordinal si hay varias, también pasado el catálogo", () => {
-    expect(etiquetaDeToma(0, 2)).toBe("1.ª toma");
-    expect(etiquetaDeToma(7, 9)).toBe("8.ª toma");
   });
 });
 
@@ -53,5 +43,27 @@ describe("resumen de remedios", () => {
     expect(remediosVisibles(seis, false)).toEqual({ visibles: [1, 2, 3, 4], ocultos: 2 });
     expect(remediosVisibles(seis, true)).toEqual({ visibles: seis, ocultos: 0 });
     expect(remediosVisibles([1, 2, 3, 4, 5], false)).toEqual({ visibles: [1, 2, 3, 4, 5], ocultos: 0 });
+  });
+});
+
+describe("horas del remedio", () => {
+  it("prende y apaga en orden", () => {
+    expect(alternarHora(["20:00"], "08:00")).toEqual(["08:00", "20:00"]);
+    expect(alternarHora(["08:00", "20:00"], "08:00")).toEqual(["20:00"]);
+  });
+  it("no pasa del máximo", () => {
+    const cuatro = ["08:00", "12:00", "16:00", "20:00"];
+    expect(alternarHora(cuatro, "22:00")).toEqual(cuatro);
+    expect(alternarHora(cuatro, "12:00")).toHaveLength(3);
+  });
+  it("arma los textos", () => {
+    expect(textoHoras(["08:00"])).toBe("08:00");
+    expect(textoHoras(["08:00", "14:00", "21:00"])).toBe("08:00, 14:00 y 21:00");
+    expect(textoVeces(1)).toBe("1 vez por día");
+    expect(textoVeces(2)).toBe("2 veces por día");
+    expect(frecuenciaDeHoras(["08:00", "20:00"])).toBe("2x día");
+  });
+  it("cada hora es una toma sin comida", () => {
+    expect(tomasDesdeHoras(["08:00"])).toEqual([{ hora: "08:00", conComida: "no-importa", indicacion: null }]);
   });
 });

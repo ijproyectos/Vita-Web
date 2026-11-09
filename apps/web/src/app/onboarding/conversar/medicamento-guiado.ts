@@ -1,5 +1,4 @@
-import { indicacionesDelMomento, opcionDeIndicacion, type ComidaToma, type OpcionComida } from "@/lib/medicamentos/comidas";
-import { HORA_POR_MOMENTO, type MomentoDia } from "@/lib/medicamentos/tipos";
+import { opcionDeIndicacion, type ComidaToma } from "@/lib/medicamentos/comidas";
 import { separarDosis, UNIDADES_DOSIS } from "@/lib/inventario/tipos";
 
 // Piezas puras del paso guiado de remedios del onboarding (una pregunta por
@@ -46,21 +45,42 @@ export function leerDosis(texto: string): LecturaDosis {
   return unidad ? { tipo: "completa", valor, unidad } : { tipo: "sin-unidad", numero: valor };
 }
 
-/** Opciones de comida que se ofrecen para un momento del día (las del catálogo, como en el selector de hora). */
-export function comidasDelMomento(momento: MomentoDia): OpcionComida[] {
-  return indicacionesDelMomento(momento);
+// --- Elegir remedio y horas --------------------------------------------------
+
+export const REMEDIOS_RAPIDOS = ["Metformina", "Losartán", "Levotiroxina"] as const;
+
+export const HORAS_RAPIDAS_MED = [
+  { hora: "08:00", etiqueta: "Mañana", icono: "sunrise" },
+  { hora: "14:00", etiqueta: "Tarde", icono: "sun" },
+  { hora: "21:00", etiqueta: "Noche", icono: "moon" },
+] as const;
+
+export const MAX_HORAS_MED = 4;
+
+/** Prende o apaga una hora, en orden. No suma si ya hay el máximo. */
+export function alternarHora(horas: string[], hora: string): string[] {
+  if (horas.includes(hora)) return horas.filter((h) => h !== hora);
+  return horas.length >= MAX_HORAS_MED ? horas : [...horas, hora].sort();
 }
 
-/** Hora sugerida de "No importa" para un momento: la misma que usa el alta por momento. */
-export function horaSugeridaSinComida(momento: MomentoDia): string {
-  return HORA_POR_MOMENTO[momento];
+/** "08:00", "08:00 y 20:00", "08:00, 14:00 y 21:00" */
+export function textoHoras(horas: string[]): string {
+  if (horas.length < 2) return horas[0] ?? "";
+  return `${horas.slice(0, -1).join(", ")} y ${horas[horas.length - 1]}`;
 }
 
-const ORDINALES = ["1.ª", "2.ª", "3.ª", "4.ª", "5.ª", "6.ª"];
+export function textoVeces(n: number): string {
+  return n === 1 ? "1 vez por día" : `${n} veces por día`;
+}
 
-/** "1.ª toma" si hay varias; null si es una sola. */
-export function etiquetaDeToma(indice: number, total: number): string | null {
-  return total > 1 ? `${ORDINALES[indice] ?? `${indice + 1}.ª`} toma` : null;
+/** Texto descriptivo de `frecuencia`: las tomas reales son las horas elegidas. */
+export function frecuenciaDeHoras(horas: string[]): string {
+  return `${horas.length}x día`;
+}
+
+/** La comida se completa después, en la ficha del medicamento. */
+export function tomasDesdeHoras(horas: string[]): TomaGuiada[] {
+  return horas.map((hora) => ({ hora, conComida: "no-importa", indicacion: null }));
 }
 
 /** "Losartán 50 mg" */
