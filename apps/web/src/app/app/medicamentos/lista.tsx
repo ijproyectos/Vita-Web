@@ -19,8 +19,8 @@ import { EditorTomas } from "@/components/vita/editor-tomas";
 import { CampoMedicamento } from "@/components/vita/campo-medicamento";
 import { FilaCuando, FilaStock, HojaCuando, HojaCuantoQueda, SelectForma } from "@/components/vita/campos-medicamento";
 import type { TomaForm } from "@/lib/medicamentos/comidas";
-import { fechaFinDe, fechaHoyAR, type CuandoForm } from "@/lib/medicamentos/cuando";
-import { CONFIG_FORMA, consumoDeToma, frecuenciaDeTomas, type FormaMedicamento } from "@/lib/medicamentos/forma";
+import { fechaFinDe, fechaHoyAR, tratamientoTerminado, type CuandoForm } from "@/lib/medicamentos/cuando";
+import { CONFIG_FORMA, consumoDeToma, frecuenciaDeTomas, seCuentaConFoto, type FormaMedicamento } from "@/lib/medicamentos/forma";
 import { indicacionDeComida, textoDosis, type Medicamento } from "@/lib/medicamentos/tipos";
 import { separarDosis } from "@/lib/inventario/tipos";
 import { colorChipPorIndice, type ColorChip } from "@/lib/perfil/tipos";
@@ -76,10 +76,15 @@ function edicionDe(grupo: Grupo, stocks: StockPorFila): Edicion {
   };
 }
 
-function resumenFila(filas: Medicamento[]): string {
+function resumenFila(filas: Medicamento[], hoy: string): string {
   const horas = filas.map((f) => f.hora_programada.slice(0, 5)).join(" y ");
   const indicaciones = [...new Set(filas.map((f) => indicacionDeComida(f)).filter((x): x is string => !!x))];
-  return [textoDosis(filas[0]), `${horas} hs`, indicaciones.length ? indicaciones.join(" · ") : "Sin indicación cargada"]
+  return [
+    tratamientoTerminado(filas, hoy) ? "Terminado" : null,
+    textoDosis(filas[0]),
+    `${horas} hs`,
+    indicaciones.length ? indicaciones.join(" · ") : "Sin indicación cargada",
+  ]
     .filter(Boolean)
     .join(" · ");
 }
@@ -100,6 +105,7 @@ export function ListaMedicamentos({
   stocks: StockPorFila;
 }) {
   const router = useRouter();
+  const hoy = fechaHoyAR();
   const [edicion, setEdicion] = useState<Edicion | null>(() => {
     const g = grupos.find((x) => x.id === editarInicial);
     return g ? edicionDe(g, stocks) : null;
@@ -222,18 +228,20 @@ export function ListaMedicamentos({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">{nombre}</div>
-                      <div className="mt-0.5 text-[11.5px] font-medium leading-snug text-subtle">{resumenFila(g.filas)}</div>
+                      <div className="mt-0.5 text-[11.5px] font-medium leading-snug text-subtle">{resumenFila(g.filas, hoy)}</div>
                     </div>
                   </button>
                   {puedeEditar && (
                     <>
-                      <Link
-                        href={`/app/pastillas/contar?medicamento=${g.filas[0].id}&desde=medicamentos`}
-                        aria-label={`Contar pastillas de ${nombre}`}
-                        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-canvas/60 text-slate-brand transition-colors hover:bg-canvas"
-                      >
-                        <VitaIcon name="camera" size={14} strokeWidth={2.2} />
-                      </Link>
+                      {seCuentaConFoto(g.filas[0].forma) && (
+                        <Link
+                          href={`/app/pastillas/contar?medicamento=${g.filas[0].id}&desde=medicamentos`}
+                          aria-label={`Contar pastillas de ${nombre}`}
+                          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-canvas/60 text-slate-brand transition-colors hover:bg-canvas"
+                        >
+                          <VitaIcon name="camera" size={14} strokeWidth={2.2} />
+                        </Link>
+                      )}
                       <BotonLapiz etiqueta={`Editar ${nombre}`} onClick={() => { setBorrando(null); setEdicion(edicionDe(g, stocks)); }} />
                       <BotonPapelera etiqueta={`Eliminar ${nombre}`} onClick={() => { setEdicion(null); setBorrando(g.id); }} />
                     </>

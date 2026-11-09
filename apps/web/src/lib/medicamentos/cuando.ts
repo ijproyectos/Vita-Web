@@ -71,6 +71,11 @@ export function vigenteEnFecha(medicamento: { fecha_fin?: string | null }, fecha
   return !medicamento.fecha_fin || fecha <= medicamento.fecha_fin.slice(0, 10);
 }
 
+/** Terminado = ninguna de sus tomas sigue vigente esa fecha. */
+export function tratamientoTerminado(filas: { fecha_fin?: string | null }[], fecha: string): boolean {
+  return filas.length > 0 && !filas.some((f) => vigenteEnFecha(f, fecha));
+}
+
 /**
  * Saca los stocks cuyos medicamentos ya terminaron todos: no hay que avisar que
  * se repongan. Un stock sin ninguna fila enganchada se conserva.

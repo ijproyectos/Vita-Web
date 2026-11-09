@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/dal";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import { seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { TAMANO_MAXIMO_BYTES, contarPastillasEnFoto, type ConteoPastillas } from "@/lib/inventario/contar";
 import {
   PASTILLAS_POR_TOMA_MAXIMO,
@@ -103,7 +104,8 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
     if (!medicamentoId) {
       if (!nombre) return { status: "error", message: "Escribí el nombre del medicamento." };
 
-      const grupos = await inventarioNucleo.listarGrupos(supabase, pid);
+      // Un blíster nunca pisa el stock en ml de un jarabe o gotas con el mismo nombre.
+      const grupos = (await inventarioNucleo.listarGrupos(supabase, pid)).filter((g) => seCuentaConFoto(g.forma));
       const clave = claveMedicamento(nombre, dosisValor);
       let coincidencia = grupos.find((g) => g.clave === clave);
       if (!coincidencia && !dosisValor) {

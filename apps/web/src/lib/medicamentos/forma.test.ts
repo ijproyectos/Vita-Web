@@ -6,8 +6,20 @@ import {
   frecuenciaDeTomas,
   pasoCantidad,
   resumenStock,
+  seCuentaConFoto,
   siguienteHora,
 } from "./forma";
+
+describe("seCuentaConFoto", () => {
+  it("solo las pastillas se cuentan con foto", () => {
+    expect(seCuentaConFoto("pastilla")).toBe(true);
+    for (const forma of ["jarabe", "gotas", "inyeccion", "otro"]) expect(seCuentaConFoto(forma)).toBe(false);
+  });
+  it("sin forma guardada se trata como pastilla", () => {
+    expect(seCuentaConFoto(undefined)).toBe(true);
+    expect(seCuentaConFoto(null)).toBe(true);
+  });
+});
 
 describe("adivinarForma", () => {
   it("detecta la forma por el nombre", () => {

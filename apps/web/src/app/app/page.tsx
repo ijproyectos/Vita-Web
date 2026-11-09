@@ -25,6 +25,7 @@ import { TarjetaEmpecemos } from "@/components/vita/tarjeta-empecemos";
 import { TarjetaCumpleanos } from "@/components/vita/tarjeta-cumpleanos";
 import { edadQueCumple } from "@/lib/onboarding/nacimiento";
 import { TiraStock, type ItemStockBajo } from "@/components/vita/tira-stock";
+import { seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { indicacionDeComida, textoDosis } from "@/lib/medicamentos/tipos";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
@@ -75,6 +76,7 @@ export default async function HomePage() {
       const dias = inventarioNucleo.diasQueAlcanza(g);
       return {
         medicamentoId: g.representanteId,
+        seCuentaConFoto: seCuentaConFoto(g.forma),
         nombre: g.nombre,
         stock: g.inventario!.stock,
         hasta: dias === null ? null : nombreDelDia(fechaConOffset(dias)),

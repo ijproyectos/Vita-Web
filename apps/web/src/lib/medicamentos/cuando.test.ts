@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alternarDia, CUANDO_INICIAL, fechaFinDe, fechaHoyAR, fechaValida, resumenCuando, sinTratamientoTerminado, vigenteEnFecha } from "./cuando";
+import { alternarDia, CUANDO_INICIAL, fechaFinDe, fechaHoyAR, fechaValida, resumenCuando, sinTratamientoTerminado, tratamientoTerminado, vigenteEnFecha } from "./cuando";
 import { DIAS_SEMANA } from "./tipos";
 
 const HOY = "2026-11-09";
@@ -54,6 +54,25 @@ describe("vigenteEnFecha", () => {
   it("el último día todavía cuenta y el siguiente no", () => {
     expect(vigenteEnFecha({ fecha_fin: HOY }, HOY)).toBe(true);
     expect(vigenteEnFecha({ fecha_fin: HOY }, "2026-11-10")).toBe(false);
+  });
+});
+
+describe("tratamientoTerminado", () => {
+  const AYER = "2026-11-08";
+  it("el último día todavía no está terminado", () => {
+    expect(tratamientoTerminado([{ fecha_fin: HOY }], HOY)).toBe(false);
+  });
+  it("está terminado desde el día siguiente a la fecha de fin", () => {
+    expect(tratamientoTerminado([{ fecha_fin: AYER }, { fecha_fin: AYER }], HOY)).toBe(true);
+  });
+  it("sin fecha de fin nunca termina", () => {
+    expect(tratamientoTerminado([{ fecha_fin: null }], HOY)).toBe(false);
+  });
+  it("si una toma sigue vigente, no está terminado", () => {
+    expect(tratamientoTerminado([{ fecha_fin: AYER }, { fecha_fin: null }], HOY)).toBe(false);
+  });
+  it("sin filas no está terminado", () => {
+    expect(tratamientoTerminado([], HOY)).toBe(false);
   });
 });
 

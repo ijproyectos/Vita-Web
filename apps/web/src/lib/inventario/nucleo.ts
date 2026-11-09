@@ -24,6 +24,8 @@ export type GrupoMedicamento = {
   /** Id de una de las filas del grupo — sirve de "handle" para la UI. */
   representanteId: string;
   medicamentoIds: string[];
+  /** Sin valor: migración 052 sin aplicar, se trata como pastilla. */
+  forma?: FormaMedicamento;
   /** Tomas por día de calendario (una fila diaria = 1; días puntuales = n/7). */
   tomasPorDia: number;
   /** Stock por día de las tomas con cantidad propia (migración 052); no entran en `tomasPorDia`. */
@@ -104,6 +106,7 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
         nombre: fila.nombre,
         dosis: fila.dosis,
         representanteId: fila.id,
+        forma: fila.forma,
         medicamentoIds: [],
         tomasPorDia: 0,
         consumoPropioPorDia: 0,

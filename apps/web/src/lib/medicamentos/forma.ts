@@ -41,6 +41,11 @@ export function esForma(valor: unknown): valor is FormaMedicamento {
   return typeof valor === "string" && valor in CONFIG_FORMA;
 }
 
+/** Solo las pastillas se cuentan con foto. Sin forma guardada (migración 052 sin aplicar) es pastilla. */
+export function seCuentaConFoto(forma: unknown): boolean {
+  return CONFIG_FORMA[esForma(forma) ? forma : "pastilla"].conFoto;
+}
+
 /** Forma que sugiere el nombre, o null si no dice nada. */
 export function adivinarForma(nombre: string): FormaMedicamento | null {
   const n = nombre.toLowerCase();

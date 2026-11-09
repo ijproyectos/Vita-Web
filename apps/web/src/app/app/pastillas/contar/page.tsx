@@ -6,6 +6,7 @@ import { TopBar } from "../../top-bar";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { destinoSeguro } from "@/lib/navegacion/destino-seguro";
+import { seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { FlujoContar, type OpcionMedicamento } from "./flujo-contar";
 
 export default async function ContarPastillasPage(props: PageProps<"/app/pastillas/contar">) {
@@ -28,7 +29,12 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
     "/app/pastillas"
   );
 
-  const grupos = await inventarioNucleo.listarGrupos(supabase, activo.id);
+  const todos = await inventarioNucleo.listarGrupos(supabase, activo.id);
+  // Un enlace viejo a un jarabe o gotas va a su edición, donde se carga cuánto queda.
+  if (preseleccionado && todos.some((g) => g.medicamentoIds.includes(preseleccionado) && !seCuentaConFoto(g.forma))) {
+    redirect(`/app/medicamentos?editar=${encodeURIComponent(preseleccionado)}`);
+  }
+  const grupos = todos.filter((g) => seCuentaConFoto(g.forma));
 
   const opciones: OpcionMedicamento[] = grupos.map((g) => ({
     id: g.representanteId,
