@@ -136,7 +136,7 @@ RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`
 
 ## `codigos_mail_invitacion`
 
-Código de un solo uso a la casilla invitada (`054_invitacion_codigo.sql`, escrita, NO aplicada). Una fila por invitación; solo `service_role`, RLS sin policies. Guarda el HMAC, nunca el código. 10 min, 5 intentos, 1 envío por minuto y 5 por hora (`guardar_codigo_mail_invitacion`, `verificar_codigo_mail_invitacion`). La 054 también agrega `vinculos_cuidador.invitado_por` y usa `codigo` en las invitaciones por mail (con `elder_id` presente).
+Código de un solo uso a la casilla invitada (`054_invitacion_codigo.sql`, escrita, NO aplicada). Una fila por invitación; solo `service_role`, RLS sin policies. Guarda el HMAC, nunca el código. 10 min, 5 intentos por código y 1 envío por minuto por invitación (`guardar_codigo_mail_invitacion`, `verificar_codigo_mail_invitacion`, `consumir_codigo_mail_invitacion`). Los topes por MAIL, sumando todas sus invitaciones, viven en `limites_mail_invitacion` (solo `service_role`, eventos `envio`/`fallo`, retención 1 día): máx. 5 envíos y 10 verificaciones fallidas por hora; reenviar no los reinicia y, pasado el tope de fallos, se rechaza con el mismo error genérico hasta que corra la ventana. El código se consume recién con la sesión abierta (si otro pedido lo consumió antes, se cierra la sesión). La 054 también agrega `vinculos_cuidador.invitado_por` y usa `codigo` en las invitaciones por mail (con `elder_id` presente).
 
 ## `mediciones`
 

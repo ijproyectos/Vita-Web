@@ -124,6 +124,7 @@ export async function pedirCodigoMail(codigo: string, email: unknown, ip: string
     const { data: guardado, error } = await admin.rpc("guardar_codigo_mail_invitacion", {
       p_vinculo: inv.vinculoId,
       p_hash: hashCodigoMail(inv.vinculoId, secreto),
+      p_email: inv.email.toLowerCase().trim(),
     });
     if (error) return { estado: "error" };
     if (guardado === "espera" || guardado === "tope") return { estado: guardado };
@@ -153,9 +154,11 @@ export async function entrarConCodigoMail(supabase: Cliente, codigo: string, ema
     const inv = await leerInvitacion(admin, codigo);
     if (!inv || !mailCoincide(inv.email, email)) return { estado: "incorrecto" };
 
+    const hash = hashCodigoMail(inv.vinculoId, codigoMail);
     const { data: valido, error } = await admin.rpc("verificar_codigo_mail_invitacion", {
       p_vinculo: inv.vinculoId,
-      p_hash: hashCodigoMail(inv.vinculoId, codigoMail),
+      p_hash: hash,
+      p_email: inv.email.toLowerCase().trim(),
     });
     if (error) return { estado: "error" };
     if (valido !== true) return { estado: "incorrecto" };
@@ -169,7 +172,20 @@ export async function entrarConCodigoMail(supabase: Cliente, codigo: string, ema
     // Ya tenía cuenta: se entra a esa.
     if (errorCrear && errorCrear.code !== "email_exists" && errorCrear.status !== 422) return { estado: "error" };
 
-    return (await abrirSesion(admin, supabase, inv.email)) ? { estado: "ok" } : { estado: "error" };
+    if (!(await abrirSesion(admin, supabase, inv.email))) return { estado: "error" };
+
+    // El código se consume recién con la sesión abierta, así un fallo al entrar
+    // no obliga a pedir otro mail. Si otro pedido lo consumió antes, este no
+    // conserva la sesión: sigue siendo de un solo uso.
+    const { data: consumido, error: errorConsumir } = await admin.rpc("consumir_codigo_mail_invitacion", {
+      p_vinculo: inv.vinculoId,
+      p_hash: hash,
+    });
+    if (errorConsumir || consumido !== true) {
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      return { estado: errorConsumir ? "error" : "incorrecto" };
+    }
+    return { estado: "ok" };
   } catch {
     return { estado: "error" };
   }

@@ -155,15 +155,28 @@ create table codigos_mail_invitacion (
   hash text not null,
   intentos int not null default 0,
   expira_at timestamptz not null,
-  enviado_at timestamptz not null default now(),
-  ventana_desde timestamptz not null default now(),
-  envios_ventana int not null default 1
+  enviado_at timestamptz not null default now()
 );
 
 alter table codigos_mail_invitacion enable row level security;
 
--- 'ok' | 'espera' (menos de 1 min del anterior) | 'tope' (5 por hora).
-create or replace function guardar_codigo_mail_invitacion(p_vinculo uuid, p_hash text)
+-- Eventos de envío y de verificación fallida POR MAIL (normalizado), sumando
+-- todas las invitaciones: reenviar o pedir otra invitación no reinicia el tope.
+-- Solo service_role (RLS sin policies).
+create table limites_mail_invitacion (
+  id bigint generated always as identity primary key,
+  email text not null,
+  tipo text not null check (tipo in ('envio', 'fallo')),
+  creado_at timestamptz not null default now()
+);
+
+create index limites_mail_invitacion_email_idx on limites_mail_invitacion (email, tipo, creado_at desc);
+
+alter table limites_mail_invitacion enable row level security;
+
+-- 'ok' | 'espera' (menos de 1 min del anterior) | 'tope' (5 por hora por mail,
+-- sumando todas las invitaciones de esa casilla).
+create or replace function guardar_codigo_mail_invitacion(p_vinculo uuid, p_hash text, p_email text)
 returns text
 language plpgsql
 security definer
@@ -171,37 +184,50 @@ set search_path = public, pg_temp
 as $$
 declare
   f codigos_mail_invitacion%rowtype;
+  v_email text := lower(btrim(coalesce(p_email, '')));
 begin
+  if v_email = '' then
+    return 'tope';
+  end if;
+  -- Serializa por mail para que el conteo no se pase con pedidos simultáneos.
+  perform pg_advisory_xact_lock(hashtext('limites_mail_invitacion:' || v_email));
+  delete from limites_mail_invitacion where creado_at < now() - interval '1 day';
+
+  if (select count(*) from limites_mail_invitacion
+      where email = v_email and tipo = 'envio' and creado_at > now() - interval '1 hour') >= 5 then
+    return 'tope';
+  end if;
+
   select * into f from codigos_mail_invitacion where vinculo_id = p_vinculo for update;
   if not found then
     begin
       insert into codigos_mail_invitacion (vinculo_id, hash, expira_at)
       values (p_vinculo, p_hash, now() + interval '10 minutes');
-      return 'ok';
     exception when unique_violation then
       return 'espera';
     end;
+  else
+    if f.enviado_at > now() - interval '1 minute' then
+      return 'espera';
+    end if;
+    -- Los intentos fallidos no se limpian acá: cuentan en limites_mail_invitacion.
+    update codigos_mail_invitacion
+    set hash = p_hash,
+        intentos = 0,
+        expira_at = now() + interval '10 minutes',
+        enviado_at = now()
+    where vinculo_id = p_vinculo;
   end if;
-  if f.enviado_at > now() - interval '1 minute' then
-    return 'espera';
-  end if;
-  if f.ventana_desde > now() - interval '1 hour' and f.envios_ventana >= 5 then
-    return 'tope';
-  end if;
-  update codigos_mail_invitacion
-  set hash = p_hash,
-      intentos = 0,
-      expira_at = now() + interval '10 minutes',
-      enviado_at = now(),
-      ventana_desde = case when f.ventana_desde > now() - interval '1 hour' then f.ventana_desde else now() end,
-      envios_ventana = case when f.ventana_desde > now() - interval '1 hour' then f.envios_ventana + 1 else 1 end
-  where vinculo_id = p_vinculo;
+  insert into limites_mail_invitacion (email, tipo) values (v_email, 'envio');
   return 'ok';
 end;
 $$;
 
--- true solo si coincide, sigue vigente y quedan intentos (5). Se consume al acertar.
-create or replace function verificar_codigo_mail_invitacion(p_vinculo uuid, p_hash text)
+-- true solo si coincide, sigue vigente, quedan intentos (5 por código) y el mail
+-- no pasó 10 fallos en la última hora (sumando todas sus invitaciones). NO
+-- consume el código: se consume con consumir_codigo_mail_invitacion una vez que
+-- la sesión se abrió. Un fallo se anota por mail, así que reenviar no lo limpia.
+create or replace function verificar_codigo_mail_invitacion(p_vinculo uuid, p_hash text, p_email text)
 returns boolean
 language plpgsql
 security definer
@@ -209,22 +235,56 @@ set search_path = public, pg_temp
 as $$
 declare
   f codigos_mail_invitacion%rowtype;
+  v_email text := lower(btrim(coalesce(p_email, '')));
 begin
+  if v_email = '' then
+    return false;
+  end if;
+  perform pg_advisory_xact_lock(hashtext('limites_mail_invitacion:' || v_email));
+  delete from limites_mail_invitacion where creado_at < now() - interval '1 day';
+
+  if (select count(*) from limites_mail_invitacion
+      where email = v_email and tipo = 'fallo' and creado_at > now() - interval '1 hour') >= 10 then
+    return false;
+  end if;
+
   select * into f from codigos_mail_invitacion where vinculo_id = p_vinculo for update;
   if not found or f.expira_at < now() or f.intentos >= 5 then
     return false;
   end if;
   if f.hash <> p_hash then
     update codigos_mail_invitacion set intentos = intentos + 1 where vinculo_id = p_vinculo;
+    insert into limites_mail_invitacion (email, tipo) values (v_email, 'fallo');
     return false;
   end if;
-  -- Sin borrar la fila: el freno de 1 por minuto y 5 por hora sigue valiendo.
-  update codigos_mail_invitacion set expira_at = now() - interval '1 second' where vinculo_id = p_vinculo;
   return true;
 end;
 $$;
 
-revoke execute on function guardar_codigo_mail_invitacion(uuid, text) from public, anon, authenticated;
-revoke execute on function verificar_codigo_mail_invitacion(uuid, text) from public, anon, authenticated;
-grant execute on function guardar_codigo_mail_invitacion(uuid, text) to service_role;
-grant execute on function verificar_codigo_mail_invitacion(uuid, text) to service_role;
+-- Consume el código (un solo uso). true solo para quien lo consume primero:
+-- si dos pedidos pasaron la verificación a la vez, el segundo recibe false y
+-- el llamador cierra la sesión que había abierto. Sin borrar la fila: el freno
+-- de 1 por minuto sigue valiendo.
+create or replace function consumir_codigo_mail_invitacion(p_vinculo uuid, p_hash text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_filas int;
+begin
+  update codigos_mail_invitacion
+  set expira_at = now() - interval '1 second'
+  where vinculo_id = p_vinculo and hash = p_hash and expira_at >= now();
+  get diagnostics v_filas = row_count;
+  return v_filas = 1;
+end;
+$$;
+
+revoke execute on function guardar_codigo_mail_invitacion(uuid, text, text) from public, anon, authenticated;
+revoke execute on function verificar_codigo_mail_invitacion(uuid, text, text) from public, anon, authenticated;
+revoke execute on function consumir_codigo_mail_invitacion(uuid, text) from public, anon, authenticated;
+grant execute on function guardar_codigo_mail_invitacion(uuid, text, text) to service_role;
+grant execute on function verificar_codigo_mail_invitacion(uuid, text, text) to service_role;
+grant execute on function consumir_codigo_mail_invitacion(uuid, text) to service_role;
