@@ -17,7 +17,10 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { EditorTomas } from "@/components/vita/editor-tomas";
 import { CampoMedicamento } from "@/components/vita/campo-medicamento";
-import { ajustarTomas, cantidadDeTomas, FRECUENCIAS_MEDICAMENTO, type TomaForm } from "@/lib/medicamentos/comidas";
+import { FilaCuando, FilaStock, HojaCuando, HojaCuantoQueda, SelectForma } from "@/components/vita/campos-medicamento";
+import type { TomaForm } from "@/lib/medicamentos/comidas";
+import { fechaFinDe, fechaHoyAR, type CuandoForm } from "@/lib/medicamentos/cuando";
+import { CONFIG_FORMA, consumoDeToma, frecuenciaDeTomas, type FormaMedicamento } from "@/lib/medicamentos/forma";
 import { indicacionDeComida, textoDosis, type Medicamento } from "@/lib/medicamentos/tipos";
 import { separarDosis } from "@/lib/inventario/tipos";
 import { colorChipPorIndice, type ColorChip } from "@/lib/perfil/tipos";
@@ -26,10 +29,8 @@ import type { DatosDetalleMedicamento } from "@/lib/rutina/detalle-datos";
 import { DetalleMedicamentoHost } from "../rutina/detalle-medicamento-host";
 import { eliminarMedicamentoGrupoAction, guardarMedicamentoAction } from "./actions";
 
-// Lista de "Mis medicamentos" con edición en la fila (V7 D:1985). Este form de
-// edición es independiente del de alta: cuando el alta pase al modelo
-// "horarios por toma" (paquete 6) conviene extraer de acá el editor de tomas
-// (`EditorTomas`) y compartirlo.
+// Lista de "Mis medicamentos" con edición en la fila (V7): misma carga por toma
+// que el alta (`EditorTomas`, `campos-medicamento`).
 
 type Grupo = { id: string; filas: Medicamento[] };
 
@@ -40,33 +41,38 @@ const TONO: Record<ColorChip, string> = {
   rose: "bg-chip-rose-bg text-chip-rose-ink",
 };
 
-const FRECUENCIAS = FRECUENCIAS_MEDICAMENTO;
+/** Stock actual por id de fila, para precargar la edición. */
+export type StockPorFila = Record<string, { stock: number; porToma: number }>;
 
 type Edicion = {
   grupoId: string;
   nombre: string;
   dosis: string;
-  frecuencia: string;
-  frecuenciaTocada: boolean;
+  forma: FormaMedicamento;
   tomas: TomaForm[];
+  cuando: CuandoForm;
+  cuandoTocado: boolean;
+  stock: number | null;
+  stockTocado: boolean;
 };
 
 type ErrorSheet = { detalle: string; reintentar: () => void; descartar: () => void } | null;
 
-function frecuenciaInicial(filas: Medicamento[]): string {
-  const guardada = filas[0].frecuencia ?? "";
-  if ((FRECUENCIAS as readonly string[]).includes(guardada)) return guardada;
-  return filas.length >= 3 ? "3x día" : filas.length === 2 ? "2x día" : "1x día";
-}
-
-function edicionDe(grupo: Grupo): Edicion {
+function edicionDe(grupo: Grupo, stocks: StockPorFila): Edicion {
+  const primera = grupo.filas[0];
+  const forma = primera.forma ?? "pastilla";
+  const guardado = stocks[primera.id];
+  const cantidadVieja = forma === "pastilla" && guardado ? guardado.porToma : CONFIG_FORMA[forma].porDefecto;
   return {
     grupoId: grupo.id,
-    nombre: grupo.filas[0].nombre,
-    dosis: textoDosis(grupo.filas[0]),
-    frecuencia: frecuenciaInicial(grupo.filas),
-    frecuenciaTocada: false,
-    tomas: grupo.filas.map((f) => ({ id: f.id, hora: f.hora_programada.slice(0, 5), conComida: f.con_comida, indicacion: f.indicacion ?? null })),
+    nombre: primera.nombre,
+    dosis: textoDosis(primera),
+    forma,
+    tomas: grupo.filas.map((f) => ({ id: f.id, hora: f.hora_programada.slice(0, 5), conComida: f.con_comida, indicacion: f.indicacion ?? null, cantidad: f.cantidad_por_toma ?? cantidadVieja })),
+    cuando: { dias: primera.dias_recurrentes, hasta: primera.fecha_fin ? "fecha" : "siempre", fechaElegida: primera.fecha_fin?.slice(0, 10) ?? "" },
+    cuandoTocado: false,
+    stock: guardado?.stock ?? null,
+    stockTocado: false,
   };
 }
 
@@ -84,17 +90,19 @@ export function ListaMedicamentos({
   puedeEditar,
   perfil,
   detalle,
+  stocks,
 }: {
   grupos: Grupo[];
   editarInicial?: string;
   puedeEditar: boolean;
   perfil: PerfilActivo;
   detalle: DatosDetalleMedicamento;
+  stocks: StockPorFila;
 }) {
   const router = useRouter();
   const [edicion, setEdicion] = useState<Edicion | null>(() => {
     const g = grupos.find((x) => x.id === editarInicial);
-    return g ? edicionDe(g) : null;
+    return g ? edicionDe(g, stocks) : null;
   });
   const [borrando, setBorrando] = useState<string | null>(null);
   const [abierto, setAbierto] = useState<{ id: string; indice: number } | null>(null);
@@ -128,9 +136,15 @@ export function ListaMedicamentos({
           nombre: e.nombre,
           dosis,
           unidad,
-          frecuencia: e.frecuenciaTocada ? e.frecuencia : undefined,
+          // La frecuencia es descriptiva: solo se actualiza si cambió la cantidad de tomas.
+          frecuencia: e.tomas.length !== grupo.filas.length ? frecuenciaDeTomas(e.tomas.length) : undefined,
+          forma: e.forma,
+          // Sin tocar "Cuándo" no se reescribe: filas viejas pueden tener días distintos.
+          diasRecurrentes: e.cuandoTocado ? e.cuando.dias : undefined,
+          fechaFin: e.cuandoTocado ? fechaFinDe(e.cuando, fechaHoyAR()) : undefined,
           tomas: e.tomas,
-        }
+        },
+        e.stockTocado && e.stock !== null ? e.stock : undefined
       );
       if (r.status === "success") {
         toast.success("Cambios guardados");
@@ -220,7 +234,7 @@ export function ListaMedicamentos({
                       >
                         <VitaIcon name="camera" size={14} strokeWidth={2.2} />
                       </Link>
-                      <BotonLapiz etiqueta={`Editar ${nombre}`} onClick={() => { setBorrando(null); setEdicion(edicionDe(g)); }} />
+                      <BotonLapiz etiqueta={`Editar ${nombre}`} onClick={() => { setBorrando(null); setEdicion(edicionDe(g, stocks)); }} />
                       <BotonPapelera etiqueta={`Eliminar ${nombre}`} onClick={() => { setEdicion(null); setBorrando(g.id); }} />
                     </>
                   )}
@@ -241,7 +255,7 @@ export function ListaMedicamentos({
           setAbierto(null);
           if (g) {
             setBorrando(null);
-            setEdicion(edicionDe(g));
+            setEdicion(edicionDe(g, stocks));
           }
         }}
         onCerrar={() => setAbierto(null)}
@@ -272,13 +286,28 @@ function FormEdicion({
   onGuardar: () => void;
   onCancelar: () => void;
 }) {
-  function elegirFrecuencia(f: string) {
-    const tomas = ajustarTomas(edicion.tomas, cantidadDeTomas(f));
-    onCambio({ ...edicion, frecuencia: f, frecuenciaTocada: true, tomas });
+  const [hojaCuando, setHojaCuando] = useState(false);
+  const [hojaStock, setHojaStock] = useState(false);
+  const config = CONFIG_FORMA[edicion.forma];
+  const consumoPorDia =
+    edicion.tomas.reduce((total, t) => total + consumoDeToma(edicion.forma, t.cantidad ?? config.porDefecto), 0) *
+    (edicion.cuando.dias.length > 0 ? edicion.cuando.dias.length / 7 : 1);
+  const filaParaContar = edicion.tomas.find((t) => t.id)?.id;
+
+  function cambiarForma(forma: FormaMedicamento) {
+    if (forma === edicion.forma) return;
+    onCambio({
+      ...edicion,
+      forma,
+      stock: null,
+      stockTocado: false,
+      tomas: edicion.tomas.map((t) => ({ ...t, cantidad: CONFIG_FORMA[forma].porDefecto })),
+    });
   }
 
   const horasRepetidas = new Set(edicion.tomas.map((t) => t.hora)).size !== edicion.tomas.length;
-  const puedeGuardar = edicion.nombre.trim() !== "" && edicion.tomas.every((t) => t.hora) && !horasRepetidas;
+  const faltaFecha = edicion.cuando.hasta === "fecha" && !edicion.cuando.fechaElegida;
+  const puedeGuardar = edicion.nombre.trim() !== "" && edicion.tomas.every((t) => t.hora) && !horasRepetidas && !faltaFecha;
 
   return (
     <form
@@ -293,35 +322,43 @@ function FormEdicion({
           <CampoMedicamento variante="pill" value={edicion.nombre} onChange={(nombre) => onCambio({ ...edicion, nombre })} ariaLabel="Nombre del medicamento" />
         </CampoPill>
         <CampoPill etiqueta="Dosis">
-          <input value={edicion.dosis} onChange={(e) => onCambio({ ...edicion, dosis: e.target.value })} placeholder="500 mg" className={CLASE_INPUT_PILL} />
+          <input value={edicion.dosis} onChange={(e) => onCambio({ ...edicion, dosis: e.target.value })} placeholder={config.placeholderDosis} className={CLASE_INPUT_PILL} />
         </CampoPill>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="eyebrow pl-1 text-subtle">Frecuencia</span>
-        <div className="flex flex-wrap gap-[7px]">
-          {FRECUENCIAS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => elegirFrecuencia(f)}
-              className={cn(
-                "rounded-full px-3.5 py-[9px] text-[12.5px] font-bold transition-all motion-reduce:transition-none",
-                edicion.frecuencia === f
-                  ? "bg-ink text-background"
-                  : "bg-card text-slate-brand shadow-item"
-              )}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
+      <CampoPill etiqueta="Forma">
+        <SelectForma valor={edicion.forma} onCambio={cambiarForma} className={CLASE_INPUT_PILL} />
+      </CampoPill>
 
       <div className="flex flex-col gap-2">
         <span className="eyebrow pl-1 text-subtle">Horarios</span>
-        <EditorTomas tomas={edicion.tomas} onCambio={(tomas) => onCambio({ ...edicion, tomas })} />
+        <EditorTomas tomas={edicion.tomas} onCambio={(tomas) => onCambio({ ...edicion, tomas })} forma={edicion.forma} />
       </div>
+
+      <FilaCuando cuando={edicion.cuando} onClick={() => setHojaCuando(true)} />
+      <FilaStock
+        forma={edicion.forma}
+        stock={edicion.stock}
+        consumoPorDia={consumoPorDia}
+        href={config.conFoto && filaParaContar ? `/app/pastillas/contar?medicamento=${filaParaContar}&desde=medicamentos` : undefined}
+        onClick={() => setHojaStock(true)}
+      />
+      <HojaCuando
+        abierto={hojaCuando}
+        valor={edicion.cuando}
+        onCambio={(cuando) => onCambio({ ...edicion, cuando, cuandoTocado: true })}
+        onCerrar={() => setHojaCuando(false)}
+      />
+      <HojaCuantoQueda
+        abierto={hojaStock}
+        forma={edicion.forma}
+        valor={edicion.stock}
+        onConfirmar={(stock) => {
+          onCambio({ ...edicion, stock, stockTocado: true });
+          setHojaStock(false);
+        }}
+        onCerrar={() => setHojaStock(false)}
+      />
 
       <BotonesGuardar pendiente={pendiente} deshabilitado={!puedeGuardar} onCancelar={onCancelar} />
     </form>

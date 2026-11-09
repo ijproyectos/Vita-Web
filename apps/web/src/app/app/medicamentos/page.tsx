@@ -8,7 +8,8 @@ import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../top-bar";
 import { cargarDatosDetalleMedicamento } from "@/lib/rutina/detalle-datos";
-import { ListaMedicamentos } from "./lista";
+import * as inventario from "@/lib/inventario/nucleo";
+import { ListaMedicamentos, type StockPorFila } from "./lista";
 
 // Mis medicamentos (V7): un renglón por medicamento con sus horarios, lápiz
 // para editarlo en la propia fila y papelera. `?editar=<id>` abre esa fila ya
@@ -20,6 +21,11 @@ export default async function MedicamentosPage(props: PageProps<"/app/medicament
   const todos = await medicamentos.listarTodos(supabase, activo.id);
   const grupos = agruparMedicamentos(todos);
   const detalle = await cargarDatosDetalleMedicamento(supabase, activo.id, todos);
+  const stocks: StockPorFila = {};
+  for (const g of await inventario.listarGruposSeguro(supabase, activo.id)) {
+    if (!g.inventario) continue;
+    for (const id of g.medicamentoIds) stocks[id] = { stock: g.inventario.stock, porToma: g.inventario.pastillas_por_toma };
+  }
 
   const pedido = (await props.searchParams)?.editar;
   const editarId = Array.isArray(pedido) ? pedido[0] : pedido;
@@ -40,6 +46,7 @@ export default async function MedicamentosPage(props: PageProps<"/app/medicament
         puedeEditar={puedeEditar}
         perfil={activo}
         detalle={detalle}
+        stocks={stocks}
       />
 
       <Link
