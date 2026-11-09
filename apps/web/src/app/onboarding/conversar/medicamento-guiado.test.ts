@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alternarHora, frecuenciaDeHoras, horasDeRemedio, textoHoras, textoVeces, tomasDesdeHoras, leerDosis, remediosVisibles, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
+import { frecuenciaDeHoras, moverHora, siguienteHoraMed, horasDeRemedio, textoHoras, textoVeces, tomasDesdeHoras, leerDosis, remediosVisibles, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
 
 describe("leerDosis", () => {
   it("lee valor y unidad", () => {
@@ -47,14 +47,16 @@ describe("resumen de remedios", () => {
 });
 
 describe("horas del remedio", () => {
-  it("prende y apaga en orden", () => {
-    expect(alternarHora(["20:00"], "08:00")).toEqual(["08:00", "20:00"]);
-    expect(alternarHora(["08:00", "20:00"], "08:00")).toEqual(["20:00"]);
+  it("mueve la hora y da la vuelta al día", () => {
+    expect(moverHora("08:00", 30)).toBe("08:30");
+    expect(moverHora("23:30", 30)).toBe("00:00");
+    expect(moverHora("00:00", -30)).toBe("23:30");
   });
-  it("no pasa del máximo", () => {
-    const cuatro = ["08:00", "12:00", "16:00", "20:00"];
-    expect(alternarHora(cuatro, "22:00")).toEqual(cuatro);
-    expect(alternarHora(cuatro, "12:00")).toHaveLength(3);
+  it("propone el próximo horario sin repetir", () => {
+    expect(siguienteHoraMed(["08:00"])).toBe("20:00");
+    expect(siguienteHoraMed(["08:00", "20:00"])).toBe("02:00");
+    expect(siguienteHoraMed(["08:00", "14:00", "20:00", "02:00"].slice(0, 2).concat("20:00"))).toBe("02:00");
+    expect(siguienteHoraMed(["20:00", "02:00", "08:00"])).toBe("14:00");
   });
   it("arma los textos", () => {
     expect(textoHoras(["08:00"])).toBe("08:00");

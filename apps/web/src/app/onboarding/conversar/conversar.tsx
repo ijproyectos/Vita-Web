@@ -7,7 +7,8 @@ import type { MedicionesEnCasa, UsoApp } from "@/lib/perfil/tipos";
 import { CLASES_COLOR } from "@/lib/familia/colores";
 import type { ColorPerfil } from "@/lib/familia/tipos";
 import { generarCodigoAccesoAction } from "@/app/cuidar/[elderId]/actions";
-import { SelectorHora } from "@/components/vita/selector-hora";
+import { MOMENTOS_SELECTOR } from "@/lib/medicamentos/comidas";
+import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaISOEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { FilaTurno } from "@/components/vita/fila-turno";
@@ -55,11 +56,11 @@ import {
 import {
   BORRADOR_VACIO,
   CHIPS_UNIDAD,
-  alternarHora,
   frecuenciaDeHoras,
-  HORAS_RAPIDAS_MED,
   MAX_HORAS_MED,
+  moverHora,
   REMEDIOS_RAPIDOS,
+  siguienteHoraMed,
   textoHoras,
   textoVeces,
   tomasDesdeHoras,
@@ -536,8 +537,8 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
     setVista({ tipo: "med-dosis" });
   }
 
+  // La pregunta va dentro de la tarjeta de horas.
   function preguntarHoras() {
-    decir(q((n) => `¿A qué hora lo toma ${n}? Tocá una o varias.`, "¿A qué hora lo tomás? Tocá una o varias."));
     setVista({ tipo: "med-horas" });
   }
 
@@ -1280,84 +1281,94 @@ function MarcaCongelada({ texto }: { texto: string }) {
   );
 }
 
-// Las horas del remedio, de un toque: se elige una o varias y "Otra hora" abre
-// el selector. Cuántas se toquen es cuántas veces por día lo toma.
+// Las horas del remedio, todo dentro de la tarjeta: momento del día, hora con
+// − / + y más horarios. Cuántos haya es cuántas veces por día lo toma.
 function TarjetaHorasMed({ onListo }: { onListo: (horas: string[]) => void }) {
-  const [horas, setHoras] = useState<string[]>([]);
-  const [selector, setSelector] = useState(false);
+  const [horas, setHoras] = useState<string[]>([MOMENTOS_SELECTOR[0].hora]);
+  const [activa, setActiva] = useState(0);
   const raiz = useRef<HTMLDivElement>(null);
-  // La tarjeta crece al sumar horas: "Listo" no puede quedar tapado por la barra de abajo.
+  // La tarjeta crece al sumar horarios: "Listo" no puede quedar tapado por la barra de abajo.
   useEffect(() => {
     raiz.current?.scrollIntoView({ block: "end" });
   }, [horas.length]);
-  const extras = horas.filter((h) => !HORAS_RAPIDAS_MED.some((r) => r.hora === h));
-  const lleno = horas.length >= MAX_HORAS_MED;
+
+  const hora = horas[activa];
+  const momento = momentoDelDia(hora);
+  const repetidas = new Set(horas).size !== horas.length;
+  const cambiar = (nueva: string) => setHoras((h) => h.map((x, i) => (i === activa ? nueva : x)));
+
+  function agregar() {
+    setHoras((h) => [...h, siguienteHoraMed(h)]);
+    setActiva(horas.length);
+  }
+
+  function quitar(i: number) {
+    setHoras((h) => h.filter((_, k) => k !== i));
+    setActiva((a) => (a >= i && a > 0 ? a - 1 : a));
+  }
 
   return (
-    <div ref={raiz} className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-card">
-      <div className="grid grid-cols-3 gap-2">
-        {HORAS_RAPIDAS_MED.map((r) => {
-          const on = horas.includes(r.hora);
-          return (
-            <button
-              key={r.hora}
-              type="button"
-              aria-pressed={on}
-              onClick={() => setHoras((h) => alternarHora(h, r.hora))}
-              className={cn(
-                "flex flex-col items-center gap-1 rounded-[16px] py-3 transition-colors active:scale-[0.97] motion-reduce:transition-none motion-reduce:transform-none",
-                on ? "bg-primary text-primary-foreground shadow-cta-sm" : "bg-secondary text-slate-brand"
-              )}
-            >
-              <VitaIcon name={r.icono} size={18} />
-              <span className="font-heading text-[15px] font-extrabold tabular-nums">{r.hora}</span>
-              <span className="text-[11px] font-semibold">{r.etiqueta}</span>
-            </button>
-          );
-        })}
-      </div>
-      {extras.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {extras.map((h) => (
-            <button key={h} type="button" aria-label={`Quitar las ${h}`} onClick={() => setHoras((a) => alternarHora(a, h))} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[13px] font-extrabold tabular-nums text-primary-foreground">
-              {h}
-              <VitaIcon name="close" size={11} strokeWidth={3} />
-            </button>
+    <div ref={raiz} className="flex flex-col rounded-[20px] bg-card p-3.5 shadow-card">
+      <div className="font-heading text-[18px] font-extrabold tracking-[-0.02em]">¿A qué hora?</div>
+
+      {horas.length > 1 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {horas.map((h, i) => (
+            <span key={i} className={cn("inline-flex items-center rounded-full text-[13px] font-extrabold tabular-nums", i === activa ? "bg-primary text-primary-foreground" : "bg-secondary text-slate-brand")}>
+              <button type="button" aria-pressed={i === activa} onClick={() => setActiva(i)} className="py-1.5 pl-3 pr-1">
+                {h}
+              </button>
+              <button type="button" aria-label={`Quitar las ${h}`} onClick={() => quitar(i)} className="py-1.5 pl-1 pr-2.5">
+                <VitaIcon name="close" size={11} strokeWidth={3} />
+              </button>
+            </span>
           ))}
         </div>
       )}
-      <button
-        type="button"
-        disabled={lleno}
-        onClick={() => setSelector(true)}
-        className="flex items-center justify-center gap-1.5 rounded-[14px] border-[1.5px] border-dashed border-primary/45 py-2.5 text-[13px] font-extrabold text-teal-deep disabled:opacity-50"
-      >
-        <VitaIcon name="plus" size={13} strokeWidth={2.8} />
-        Otra hora
-      </button>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[12.5px] font-semibold text-subtle" aria-live="polite">
-          {horas.length === 0 ? "Tocá una o varias" : textoVeces(horas.length)}
+
+      <div className="eyebrow mb-2 mt-3.5 text-subtle">Momento del día</div>
+      <div className="flex gap-1.5">
+        {MOMENTOS_SELECTOR.map((m) => (
+          <button
+            key={m.momento}
+            type="button"
+            aria-pressed={momento === m.momento}
+            onClick={() => cambiar(m.hora)}
+            className={cn("flex-1 rounded-[12px] py-2.5 text-[12px] font-bold transition-colors motion-reduce:transition-none", momento === m.momento ? "bg-ink text-background" : "bg-secondary text-slate-brand")}
+          >
+            {m.etiqueta}
+          </button>
+        ))}
+      </div>
+
+      <div className="eyebrow mb-2 mt-3.5 text-subtle">Hora</div>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => cambiar(moverHora(hora, -30))} aria-label="30 minutos menos" className="h-[52px] w-12 rounded-[var(--radius-item)] bg-secondary text-2xl font-bold text-slate-brand active:scale-95 motion-reduce:transform-none">
+          −
+        </button>
+        <div aria-live="polite" className="flex h-[52px] flex-1 items-center justify-center rounded-[var(--radius-item)] bg-secondary font-heading text-[26px] font-bold tabular-nums tracking-[-0.03em]">
+          {hora}
+        </div>
+        <button type="button" onClick={() => cambiar(moverHora(hora, 30))} aria-label="30 minutos más" className="h-[52px] w-12 rounded-[var(--radius-item)] bg-secondary text-2xl font-bold text-slate-brand active:scale-95 motion-reduce:transform-none">
+          +
+        </button>
+      </div>
+
+      {horas.length < MAX_HORAS_MED && (
+        <button type="button" onClick={agregar} className="mt-2.5 flex items-center justify-center gap-1.5 rounded-[14px] border-[1.5px] border-dashed border-primary/45 py-2.5 text-[13px] font-extrabold text-teal-deep active:scale-[0.98] motion-reduce:transform-none">
+          <VitaIcon name="plus" size={13} strokeWidth={2.8} />
+          Agregar otro horario
+        </button>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className={cn("text-[12.5px] font-semibold", repetidas ? "text-destructive" : "text-subtle")} aria-live="polite">
+          {repetidas ? "Hay dos a la misma hora" : textoVeces(horas.length)}
         </span>
-        <button
-          type="button"
-          disabled={horas.length === 0}
-          onClick={() => onListo(horas)}
-          className="rounded-full bg-primary px-6 py-2.5 text-[13.5px] font-extrabold text-primary-foreground shadow-cta-sm disabled:bg-secondary disabled:text-subtle disabled:shadow-none"
-        >
+        <button type="button" disabled={repetidas} onClick={() => onListo([...horas].sort())} className="rounded-full bg-primary px-6 py-2.5 text-[13.5px] font-extrabold text-primary-foreground shadow-cta-sm disabled:bg-secondary disabled:text-subtle disabled:shadow-none">
           Listo
         </button>
       </div>
-      <SelectorHora
-        abierto={selector}
-        hora="12:00"
-        conComidas={false}
-        onCerrar={() => setSelector(false)}
-        onConfirmar={(hora) => {
-          setHoras((h) => (h.includes(hora) ? h : alternarHora(h, hora)));
-          setSelector(false);
-        }}
-      />
     </div>
   );
 }

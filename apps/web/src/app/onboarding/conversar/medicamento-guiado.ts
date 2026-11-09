@@ -49,18 +49,23 @@ export function leerDosis(texto: string): LecturaDosis {
 
 export const REMEDIOS_RAPIDOS = ["Metformina", "Losartán", "Levotiroxina"] as const;
 
-export const HORAS_RAPIDAS_MED = [
-  { hora: "08:00", etiqueta: "Mañana", icono: "sunrise" },
-  { hora: "14:00", etiqueta: "Tarde", icono: "sun" },
-  { hora: "21:00", etiqueta: "Noche", icono: "moon" },
-] as const;
-
 export const MAX_HORAS_MED = 4;
 
-/** Prende o apaga una hora, en orden. No suma si ya hay el máximo. */
-export function alternarHora(horas: string[], hora: string): string[] {
-  if (horas.includes(hora)) return horas.filter((h) => h !== hora);
-  return horas.length >= MAX_HORAS_MED ? horas : [...horas, hora].sort();
+function aMinutos(hora: string): number {
+  return Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5));
+}
+
+/** Suma o resta minutos, dando la vuelta al día. */
+export function moverHora(hora: string, delta: number): string {
+  const n = (((aMinutos(hora) + delta) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+}
+
+/** Hora que propone "Agregar otro horario": 12 h después de la primera, o 6 después de la última, sin repetir. */
+export function siguienteHoraMed(horas: string[]): string {
+  let hora = moverHora(horas[horas.length - 1], horas.length === 1 ? 720 : 360);
+  while (horas.includes(hora)) hora = moverHora(hora, 30);
+  return hora;
 }
 
 /** "08:00", "08:00 y 20:00", "08:00, 14:00 y 21:00" */
