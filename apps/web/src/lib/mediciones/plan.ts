@@ -4,7 +4,6 @@
 import { vigenteEnFecha, DIAS_CUANDO, fechaValida } from "@/lib/medicamentos/cuando";
 import type { ComidaToma } from "@/lib/medicamentos/comidas";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
-import { momentoDelDia } from "@/lib/rutina/momento";
 import { horaAR } from "./resumen";
 import {
   TIPOS_MEDICION,
@@ -82,11 +81,6 @@ export function tramosDeHoy<M extends Pick<Medicion, "medido_at">>(horarios: { h
     const hasta = i + 1 < horas.length ? aMinutos(horas[i + 1]) - ADELANTO_MIN : 24 * 60;
     return { hora, medicion: conMinutos.find((x) => x.min >= desde && x.min < hasta)?.m ?? null };
   });
-}
-
-/** Tanda del día de un horario; si la persona la apagó, no se avisa. */
-export function franjaApagada(apagadas: readonly string[], hora: string): boolean {
-  return apagadas.includes(momentoDelDia(hora));
 }
 
 export type Metrica = {

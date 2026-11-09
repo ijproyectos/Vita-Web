@@ -132,7 +132,7 @@ Planes de "Nuevo monitoreo" (`053_monitoreos.sql`, escrita, NO aplicada). Una fi
 | fecha_fin | date | inclusive; null = sin fin |
 | created_at / updated_at | timestamptz | |
 
-RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`lib/notificaciones/medir.ts`, dedupe `medicion_hora`) salvo silencio nocturno, tanda apagada (`preferencias_avisos.medir_franjas_apagadas`, también de la 053; se lee aparte de las demás preferencias) o si ya se midió: una medición cuenta para un horario desde 60 min antes de él hasta 60 min antes del siguiente (`tramosDeHoy`).
+RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`lib/notificaciones/medir.ts`, dedupe `medicion_hora`) salvo silencio nocturno o si ya se midió. Si la persona no tiene avisos activos en ningún celular (`push_suscripciones`), también avisa a sus cuidadores Admin (`medicion_persona`). Una medición cuenta para un horario desde 60 min antes de él hasta 60 min antes del siguiente (`tramosDeHoy`).
 
 ## `mediciones`
 

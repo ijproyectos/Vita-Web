@@ -160,31 +160,6 @@ export async function actualizarPreferencias(
   return { ok: true };
 }
 
-// Tandas apagadas de "Hora de medir…" (053). Van aparte de COLUMNAS_PREFS: sin
-// la migración, un select conjunto perdería todas las demás preferencias.
-
-/** null = la migración 053 todavía no está: se oculta la sección. Nunca lanza. */
-export async function franjasMedirApagadas(supabase: Cliente, usuarioId: string): Promise<string[] | null> {
-  const { data, error } = await supabase.from("preferencias_avisos").select("medir_franjas_apagadas").eq("usuario_id", usuarioId).maybeSingle();
-  if (error) return null;
-  return ((data as { medir_franjas_apagadas?: string[] } | null)?.medir_franjas_apagadas ?? []);
-}
-
-export async function guardarFranjasMedir(supabase: Cliente, usuarioId: string, apagadas: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await supabase
-    .from("preferencias_avisos")
-    .upsert({ usuario_id: usuarioId, medir_franjas_apagadas: apagadas, updated_at: new Date().toISOString() }, { onConflict: "usuario_id" });
-  return error ? { ok: false, error: error.message } : { ok: true };
-}
-
-export async function franjasMedirApagadasDe(admin: Cliente, usuarioIds: string[]): Promise<Map<string, string[]>> {
-  const mapa = new Map<string, string[]>();
-  const { data, error } = await admin.from("preferencias_avisos").select("usuario_id, medir_franjas_apagadas").in("usuario_id", usuarioIds);
-  if (error) return mapa;
-  for (const f of (data ?? []) as { usuario_id: string; medir_franjas_apagadas: string[] }[]) mapa.set(f.usuario_id, f.medir_franjas_apagadas ?? []);
-  return mapa;
-}
-
 /**
  * La espera antes de avisar a quien cuida es de la PERSONA (la lee el cron
  * desde su fila). Un cuidador Admin la edita por la policy de la 021.

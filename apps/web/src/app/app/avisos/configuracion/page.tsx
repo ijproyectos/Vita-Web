@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
-import { esperaDePersona, franjasMedirApagadas, obtenerPreferenciasConEstado } from "@/lib/notificaciones/avisos";
+import { esperaDePersona, obtenerPreferenciasConEstado } from "@/lib/notificaciones/avisos";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { Grupo } from "@/app/app/perfil/filas";
@@ -14,10 +14,9 @@ import { FormularioConfigAvisos } from "./formulario";
 export default async function ConfigurarAvisosPage() {
   const usuario = await requireUser();
   const supabase = await createClient();
-  const [{ prefs, familiaDisponible }, familia, franjasApagadas] = await Promise.all([
+  const [{ prefs, familiaDisponible }, familia] = await Promise.all([
     obtenerPreferenciasConEstado(supabase, usuario.id),
     listarFamilia(supabase),
-    franjasMedirApagadas(supabase, usuario.id),
   ]);
 
   // La espera antes de avisarle al cuidador es de la PERSONA; un Admin la edita.
@@ -35,7 +34,6 @@ export default async function ConfigurarAvisosPage() {
         personas={familiaDisponible ? familia.map((p) => ({ id: p.id, nombre: p.nombre, relacion: p.relacion })) : []}
         puedeEditarEspera={Boolean(admin)}
         esperaPersona={esperaPersona}
-        franjasApagadas={franjasApagadas}
       />
     </div>
   );

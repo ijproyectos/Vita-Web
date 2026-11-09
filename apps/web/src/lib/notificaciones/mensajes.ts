@@ -191,6 +191,18 @@ export function payloadTurno2h(t: TurnoAviso): PayloadPush {
   };
 }
 
+/** A un cuidador Admin, cuando la persona no tiene avisos activos en ningún celular. */
+export function payloadMedirPersona(d: { personaId: string; personaNombre: string; monitoreoId: string; que: string; hora: string }): PayloadPush {
+  return {
+    title: `Hora de medir ${d.que} de ${primerNombre(d.personaNombre)}`,
+    body: "Podés cargar el valor desde su perfil.",
+    url: urlFichaPersona(d.personaId, "editar"),
+    tag: `medir-persona-${d.monitoreoId}-${d.hora}`,
+    renotify: true,
+    datos: { monitoreoId: d.monitoreoId },
+  };
+}
+
 /** Stock por debajo del umbral (una vez por día por medicamento). */
 export function payloadStockBajo(s: { inventarioId: string; nombre: string; stock: number; fechaAR: string }): PayloadPush {
   const titulo =

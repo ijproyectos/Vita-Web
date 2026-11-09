@@ -58,8 +58,3 @@ alter table mediciones
       else nombre_otra is null and unidad_otra is null
     end
   );
-
--- Tandas del día con los avisos de medición apagados ("mañana", "mediodia",
--- "tarde", "noche"). Vacío = todas prendidas.
-alter table preferencias_avisos
-  add column medir_franjas_apagadas text[] not null default '{}';

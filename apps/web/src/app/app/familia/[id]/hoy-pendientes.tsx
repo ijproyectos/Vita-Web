@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { recordarleAction } from "@/app/cuidar/[elderId]/actions";
 import type { DosisPendiente } from "@/lib/familia/pendientes-hoy";
@@ -24,6 +25,7 @@ export function HoyPendientes({
   conectado: boolean;
   puedeRecordar: boolean;
 }) {
+  const router = useRouter();
   const [avisados, setAvisados] = useState<string[]>([]);
   const [pendiente, iniciar] = useTransition();
   const sinAvisar = pendientes.filter((p) => !avisados.includes(p.id));
@@ -36,10 +38,12 @@ export function HoyPendientes({
     iniciar(async () => {
       const logrados: string[] = [];
       let enviados = 0;
+      let yaTomadas = 0;
       for (const id of ids) {
         const r = await recordarleAction(elderId, id).catch(() => null);
         if (r?.status === "enviado") enviados++;
-        if (r?.status === "enviado" || r?.status === "repetido" || r?.status === "ya-tomada") logrados.push(id);
+        if (r?.status === "enviado" || r?.status === "repetido") logrados.push(id);
+        if (r?.status === "ya-tomada") yaTomadas++;
         if (r?.status === "sin-avisos") {
           toast.info(SIN_AVISOS);
           break;
@@ -51,7 +55,10 @@ export function HoyPendientes({
       }
       setAvisados((a) => [...a, ...logrados]);
       if (enviados > 0) toast.success(`Le mandamos el aviso a ${nombre}`);
+      else if (yaTomadas > 0) toast.success(yaTomadas === 1 ? "Ya la tomó" : "Ya las tomó");
       else if (logrados.length > 0) toast.info("Ya le recordaste hace un rato");
+      // Lo que se tomó mientras tanto sale de la lista.
+      if (yaTomadas > 0) router.refresh();
     });
   }
 
