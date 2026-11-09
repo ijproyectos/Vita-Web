@@ -8,11 +8,11 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import type { EstadoAccion } from "../../../rutina/actions";
 import { crearMedicionAction } from "../actions";
+import { ChipsMetrica } from "../chips-metrica";
 import {
   AVISO_REFERENCIA,
   CONTEXTOS_GLUCEMIA,
   ETIQUETA_CONTEXTO,
-  META_MEDICION,
   TIPOS_MEDICION,
   TIPOS_PLAN,
   dentroDeRango,
@@ -95,35 +95,18 @@ export function FormularioMedicion({
       ) : (
       <div>
         <Etiqueta text="Métrica" />
-        <div className="flex flex-wrap gap-2">
-          {/* Una métrica fuera de la lista solo aparece si se viene a cargar justo esa. */}
-          {TIPOS_MEDICION.filter((t) => TIPOS_PLAN.includes(t) || t === tipoInicial).map((t) => {
-            const sel = tipo === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setTipo(t);
-                  setValor("");
-                  setSecundario("");
-                  setPulso("");
-                  setContexto("");
-                }}
-                aria-pressed={sel}
-                className={cn(
-                  "inline-flex items-center gap-[7px] rounded-full px-4 py-[11px] text-[13.5px] font-bold transition-all motion-reduce:transition-none",
-                  sel
-                    ? "bg-primary text-primary-foreground shadow-cta"
-                    : "bg-card text-slate-brand shadow-item"
-                )}
-              >
-                <VitaIcon name={META_MEDICION[t].icono} size={16} />
-                {META_MEDICION[t].nombre}
-              </button>
-            );
-          })}
-        </div>
+        {/* Una métrica fuera de la lista solo aparece si se viene a cargar justo esa. */}
+        <ChipsMetrica
+          tipos={TIPOS_MEDICION.filter((t) => TIPOS_PLAN.includes(t) || t === tipoInicial)}
+          valor={tipo}
+          onElegir={(t) => {
+            setTipo(t);
+            setValor("");
+            setSecundario("");
+            setPulso("");
+            setContexto("");
+          }}
+        />
         <input type="hidden" name="tipo" value={tipo} />
       </div>
       )}

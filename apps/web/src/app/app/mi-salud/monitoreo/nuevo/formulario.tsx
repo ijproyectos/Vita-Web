@@ -11,9 +11,10 @@ import { CUANDO_INICIAL, fechaFinDe, fechaHoyAR, type CuandoForm } from "@/lib/m
 import { relacionDeToma } from "@/lib/medicamentos/comidas";
 import { siguienteHora } from "@/lib/medicamentos/forma";
 import { MAX_HORARIOS_PLAN, fraseMedir, type HorarioPlan, type Monitoreo } from "@/lib/mediciones/plan";
-import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, META_MEDICION, TIPOS_PLAN, type TipoRegistrable } from "@/lib/mediciones/tipos";
+import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, TIPOS_PLAN, type TipoRegistrable } from "@/lib/mediciones/tipos";
 import type { EstadoAccion } from "../../../rutina/actions";
 import { guardarMonitoreoAction } from "../actions";
+import { ChipsMetrica } from "../chips-metrica";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
 const HORARIO_INICIAL: HorarioPlan = { hora: "08:00", conComida: "no-importa", indicacion: null };
@@ -67,22 +68,8 @@ export function FormularioMonitoreo({
 
       <div>
         <Etiqueta text="Qué medir" />
-        <div className="relative">
-          <select
-            name="tipo"
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value as TipoRegistrable)}
-            aria-label="Qué medir"
-            className="w-full cursor-pointer appearance-none rounded-full bg-card py-[15px] pl-[18px] pr-10 text-[15px] font-bold shadow-item outline-none"
-          >
-            {TIPOS_PLAN.map((t) => (
-              <option key={t} value={t}>
-                {META_MEDICION[t].nombre}
-              </option>
-            ))}
-          </select>
-          <VitaIcon name="chevron-down" size={12} strokeWidth={2.6} className="pointer-events-none absolute right-[18px] top-1/2 -translate-y-1/2 text-subtle" />
-        </div>
+        <ChipsMetrica tipos={TIPOS_PLAN} valor={tipo} onElegir={setTipo} />
+        <input type="hidden" name="tipo" value={tipo} />
         {esOtra && (
           <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_110px] gap-2.5">
             <input name="nombreOtra" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={MAX_NOMBRE_OTRA} placeholder="¿Qué medís?" aria-label="Qué medís" className={CLASE_INPUT} />
