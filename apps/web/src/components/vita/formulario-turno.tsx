@@ -13,6 +13,7 @@ import { credencialDeObraSocial } from "@/lib/turnos/alta";
 import { SUGERENCIAS_LLEVAR, type ItemLlevar, type Turno } from "@/lib/turnos/tipos";
 import { verboAvisa } from "@/lib/notificaciones/destinatario";
 import { MapaLugar } from "@/components/vita/mapa-lugar";
+import { consultaMapa } from "@/lib/turnos/mapa";
 
 /** El DNI es el único ítem fijo; la credencial entra como sugerencia. */
 const DNI = "DNI";
@@ -54,8 +55,10 @@ export function FormularioTurno({
   const credencial = credencialDeObraSocial(obraSocial);
   const [especialidad, setEspecialidad] = useState(turno?.especialidad ?? "");
   const [profesional, setProfesional] = useState(turno?.profesional ?? "");
-  const [lugar, setLugar] = useState(turno?.lugar ?? "");
-  const [direccion, setDireccion] = useState(turno?.direccion ?? "");
+  // Un solo campo "Lugar o dirección" (se guarda en `lugar`). Un turno viejo con
+  // dirección aparte la trae acá unida, y al guardar esa columna se vacía.
+  const [lugar, setLugar] = useState(() => consultaMapa(turno?.lugar, turno?.direccion) ?? turno?.lugar ?? turno?.direccion ?? "");
+  const teniaDireccion = !!turno?.direccion?.trim();
   const [telefono, setTelefono] = useState(turno?.telefono ?? "");
   const [fecha, setFecha] = useState(turno?.fecha ?? "");
   const [hora, setHora] = useState(turno?.hora.slice(0, 5) ?? "10:30");
@@ -104,6 +107,7 @@ export function FormularioTurno({
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-[22px] pb-24">
       {turno && <input type="hidden" name="turnoId" value={turno.id} />}
+      {teniaDireccion && <input type="hidden" name="direccion" value="" />}
       <div>
         <EtiquetaSeccion text="Especialidad" />
         <div className="mt-3.5">
@@ -120,15 +124,13 @@ export function FormularioTurno({
             name="lugar"
             value={lugar}
             onChange={(e) => setLugar(e.target.value)}
-            placeholder="Sanatorio, clínica o dirección"
+            placeholder="Lugar o dirección: sanatorio, clínica, calle…"
             aria-label="Lugar o dirección"
+            autoComplete="off"
             className={CLASE_CAMPO}
           />
-          {llevarDisponible && (
-            <input name="direccion" value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Dirección (opcional)" aria-label="Dirección" autoComplete="street-address" className={CLASE_CAMPO} />
-          )}
           {/* Se ve el mapa acá mismo para confirmar el lugar, sin salir de la app. */}
-          <MapaLugar lugar={lugar} direccion={llevarDisponible ? direccion : undefined} />
+          <MapaLugar lugar={lugar} />
           {llevarDisponible && (
             <input name="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Teléfono del consultorio (opcional)" inputMode="tel" aria-label="Teléfono del consultorio" className={CLASE_CAMPO} />
           )}
