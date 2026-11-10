@@ -38,7 +38,7 @@ import {
   type PorCorregir,
   type TurnoSimple,
 } from "@/components/vita/modo-simple/piezas";
-import { marcarTomadoAction } from "../rutina/actions";
+import { marcarGrupoTomadoAction } from "../rutina/actions";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import type { MedHoy, TurnoProximo } from "@/lib/modo-simple/respuestas";
@@ -114,6 +114,7 @@ export function Pantalla({
   // "confirmado" es la única fase que sí necesita estado local: es
   // puramente transitoria y nunca la manda el servidor.
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
+  const [guardado, setGuardado] = useState(false);
   const hayGrupo = grupo.length > 0;
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
@@ -169,22 +170,27 @@ export function Pantalla({
   }
 
   function confirmar() {
-    if (!hayGrupo || pendiente) return;
+    if (!hayGrupo || pendiente || confirmadoLocal) return;
+    // "¡Listo!" al instante (optimista): el servidor guarda por detrás y, si
+    // falla, se vuelve atrás con el aviso.
+    setConfirmadoLocal(true);
+    posponer.cancelar();
     startTransition(async () => {
       try {
-        // Cada dosis del grupo se marca con la misma acción de siempre
-        // (marcarTomado) — no hay un camino de escritura paralelo.
-        const resultados = await Promise.all(grupo.map((m) => marcarTomadoAction(m.id, true)));
-        if (resultados.some((r) => r.status === "error")) {
+        // Todo el grupo en una sola acción (usa marcarTomado por dentro: no
+        // hay un camino de escritura paralelo).
+        const resultado = await marcarGrupoTomadoAction(grupo.map((m) => m.id));
+        if (resultado.status === "error") {
           // Puede haberse registrado solo una parte: se vuelve a leer del
           // servidor para que la pantalla muestre lo que realmente quedó.
+          setConfirmadoLocal(false);
           toast.error("No se pudo registrar toda la toma. Probá de nuevo.");
           router.refresh();
           return;
         }
-        posponer.cancelar();
-        setConfirmadoLocal(true);
+        setGuardado(true);
       } catch {
+        setConfirmadoLocal(false);
         toast.error("No se pudo registrar la toma. Probá de nuevo.");
       }
     });
@@ -203,11 +209,13 @@ export function Pantalla({
     void cancelarPosposicionAction(grupo.map((m) => m.id)).catch(() => {});
   }
 
+  // Se refresca recién cuando el servidor confirmó (si no, podría traer la
+  // dosis todavía sin marcar).
   useEffect(() => {
-    if (!confirmadoLocal) return;
+    if (!guardado) return;
     const t = setTimeout(() => router.refresh(), 2400);
     return () => clearTimeout(t);
-  }, [confirmadoLocal, router]);
+  }, [guardado, router]);
 
   const { estado: estadoVoz, iniciar: iniciarVoz, detener: detenerVoz } = useGrabacionVoz({
     onTranscripcion: (texto) => {

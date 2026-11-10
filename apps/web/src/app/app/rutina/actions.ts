@@ -55,6 +55,38 @@ export async function marcarTomadoAction(medicamentoId: string, tomado: boolean,
   return { status: "success" };
 }
 
+/**
+ * Modo simple, "Ya tomé las N": todo el grupo en UNA acción. Next despacha las
+ * Server Actions de a una por cliente, así que N llamadas a `marcarTomadoAction`
+ * eran N viajes en fila, cada uno re-renderizando la pantalla. Acá se valida y
+ * se marca en paralelo dentro del servidor, y NO se revalida: la página del
+ * modo simple se refresca sola después (`router.refresh`) y las demás son
+ * dinámicas, así que la respuesta no trae un re-render que nadie mira.
+ */
+export async function marcarGrupoTomadoAction(medicamentoIds: string[]): Promise<EstadoAccion> {
+  await requireUser();
+  const ids = [...new Set(medicamentoIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
+  if (ids.length === 0) return { status: "success" };
+  const supabase = await createClient();
+  try {
+    const objetivos = await Promise.all(ids.map((id) => duenioEditable(supabase, id)));
+    const negado = objetivos.find((o) => !o.ok);
+    if (negado && !negado.ok) return { status: "error", message: negado.message };
+    const resultados = await Promise.allSettled(
+      ids.map((id, i) => {
+        const o = objetivos[i];
+        return o.ok ? medicamentos.marcarTomado(supabase, o.usuarioId, id, true) : Promise.resolve();
+      })
+    );
+    if (resultados.some((r) => r.status === "rejected")) {
+      return { status: "error", message: "No se pudo registrar toda la toma." };
+    }
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "No se pudo registrar la toma." };
+  }
+  return { status: "success" };
+}
+
 // Marcar todos los pendientes de hoy de una — el diálogo/botón viejo
 // (marcar-todos-button.tsx) se había perdido al migrar de Medicamentos a
 // Rutina; el hallazgo del review lo marcó como regresión real, no un
