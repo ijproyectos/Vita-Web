@@ -12,7 +12,6 @@ import { FilaCuando, FilaStock, HojaCuando, HojaCuantoQueda, SelectForma } from 
 import { ajustarTomas, type TomaForm } from "@/lib/medicamentos/comidas";
 import { CUANDO_INICIAL, fechaFinDe, fechaHoyAR, type CuandoForm } from "@/lib/medicamentos/cuando";
 import {
-  adivinarForma,
   CONFIG_FORMA,
   consumoDeToma,
   frecuenciaDeTomas,
@@ -60,7 +59,6 @@ export function FormularioMedicamento({
     inicial?.dosis ? `${inicial.dosis} ${inicial.unidad}`.trim() : ""
   );
   const [forma, setForma] = useState<FormaMedicamento>("pastilla");
-  const [formaTocada, setFormaTocada] = useState(false);
   const [tomas, setTomas] = useState<TomaForm[]>(() => {
     const porToma = Number(inicial?.pastillasPorToma);
     const valida = porToma >= CONFIG_FORMA.pastilla.minimo && porToma <= CONFIG_FORMA.pastilla.maximo;
@@ -103,11 +101,6 @@ export function FormularioMedicamento({
     setTomas((prev) => prev.map((t) => ({ ...t, cantidad: CONFIG_FORMA[nueva].porDefecto })));
   }
 
-  function cambiarNombre(valor: string) {
-    setNombre(valor);
-    const sugerida = adivinarForma(valor);
-    if (sugerida && !formaTocada) cambiarForma(sugerida);
-  }
 
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-[22px] pb-24">
@@ -130,7 +123,7 @@ export function FormularioMedicamento({
           <CampoMedicamento
             name="nombre"
             value={nombre}
-            onChange={cambiarNombre}
+            onChange={setNombre}
             placeholder="Ibupirac, Metformina…"
             ariaLabel="Nombre del medicamento"
           />
@@ -147,10 +140,7 @@ export function FormularioMedicamento({
           <div className="w-[138px] shrink-0">
             <SelectForma
               valor={forma}
-              onCambio={(f) => {
-                setFormaTocada(true);
-                cambiarForma(f);
-              }}
+              onCambio={cambiarForma}
               className="w-full rounded-full border border-foreground/10 bg-card py-[13px] pl-[18px] text-sm font-bold outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             />
           </div>

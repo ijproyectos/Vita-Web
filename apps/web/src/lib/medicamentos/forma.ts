@@ -46,16 +46,6 @@ export function seCuentaConFoto(forma: unknown): boolean {
   return CONFIG_FORMA[esForma(forma) ? forma : "pastilla"].conFoto;
 }
 
-/** Forma que sugiere el nombre, o null si no dice nada. */
-export function adivinarForma(nombre: string): FormaMedicamento | null {
-  const n = nombre.toLowerCase();
-  if (/jarabe|suspensi|susp\b/.test(n)) return "jarabe";
-  if (/gota/.test(n)) return "gotas";
-  if (/inyec|ampolla|insulina|jeringa/.test(n)) return "inyeccion";
-  if (/crema|pomada|inhal|puff|parche|spray/.test(n)) return "otro";
-  return null;
-}
-
 export function numeroConComa(n: number): string {
   return String(n).replace(".", ",");
 }
