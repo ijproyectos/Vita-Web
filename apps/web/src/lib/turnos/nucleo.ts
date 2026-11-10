@@ -183,13 +183,16 @@ export async function eliminar(
   usuarioId: string,
   turnoId: string
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("turnos")
     .delete()
     .eq("id", turnoId)
-    .eq("usuario_id", usuarioId);
+    .eq("usuario_id", usuarioId)
+    .select("id");
 
   if (error) throw new Error(`No se pudo eliminar el turno: ${error.message}`);
+  // Si la RLS no lo dejó (o ya no estaba), no se borró nada: nunca se informa éxito.
+  if (!data || data.length === 0) throw new Error("No se pudo eliminar el turno.");
 }
 
 /** Especialidades de turnos ya cargados, la más reciente primero. Nunca lanza: es solo un atajo. */

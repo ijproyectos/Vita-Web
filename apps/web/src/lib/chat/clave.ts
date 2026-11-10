@@ -68,6 +68,12 @@ export function claveSemantica(nombre: string, input: Record<string, unknown>): 
     case "add_allergy":
       campos = [input.name];
       break;
+    case "delete_appointment":
+      campos = [input.appointment_id];
+      break;
+    case "update_appointment":
+      campos = [input.appointment_id, input.date, normHora(input.time), input.professional, input.place, input.notes, input.with_company];
+      break;
     case "add_measurement":
       campos = [input.type, input.value, input.secondary_value, input.pulse, input.glucose_context, input.measured_at];
       break;

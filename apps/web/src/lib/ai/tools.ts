@@ -249,6 +249,8 @@ async function ejecutarEnDestino(
     // tras la confirmación, lo ejecuta por id (lib/chat/pedidos.ts). Defensa en profundidad.
     case "update_schedule":
     case "delete_schedule":
+    case "update_appointment":
+    case "delete_appointment":
       return { contenido: "Esta acción requiere la confirmación del usuario y no se ejecutó nada." };
 
     case "mark_taken": {

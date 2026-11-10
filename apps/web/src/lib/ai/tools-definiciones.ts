@@ -302,6 +302,36 @@ const TOOLS_BASE: Anthropic.Tool[] = [
       },
     },
   },  {
+    name: "update_appointment",
+    description:
+      "Cambia un turno existente (día, hora, profesional, lugar, indicación o si va acompañado). Pasá el appointment_id exacto que te dio list_upcoming_appointments; nunca lo inventes. No ejecuta nada sola: el servidor muestra la pregunta con el botón Confirmar.",
+    input_schema: {
+      type: "object",
+      properties: {
+        appointment_id: { type: "string", description: "El id del turno, tal cual vino de list_upcoming_appointments." },
+        date: { type: "string", description: "Nuevo día, YYYY-MM-DD (nunca en el pasado)." },
+        time: { type: "string", description: "Nueva hora, HH:MM." },
+        professional: { type: "string", description: "Nuevo profesional ('' para quitarlo)." },
+        place: { type: "string", description: "Nuevo lugar o dirección ('' para quitarlo)." },
+        notes: { type: "string", description: "Nueva indicación ('' para quitarla)." },
+        with_company: { type: "boolean", description: "true si va acompañado (avisa a quienes la cuidan)." },
+      },
+      required: ["appointment_id"],
+    },
+  },
+  {
+    name: "delete_appointment",
+    description:
+      "Borra un turno existente. Pasá el appointment_id exacto que te dio list_upcoming_appointments; nunca lo inventes. No ejecuta nada sola: el servidor muestra la pregunta con el botón Confirmar.",
+    input_schema: {
+      type: "object",
+      properties: {
+        appointment_id: { type: "string", description: "El id del turno, tal cual vino de list_upcoming_appointments." },
+      },
+      required: ["appointment_id"],
+    },
+  },
+  {
     name: "add_measurement",
     description:
       "Anota una medición que la persona te dice (presión, glucemia, peso, temperatura, saturación o pulso). Sin measured_at se guarda con la fecha y hora de ahora. Repetí el valor en tu respuesta para que la persona lo vea. Para explicar el valor, nunca diagnostiques.",

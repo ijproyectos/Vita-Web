@@ -15,17 +15,30 @@ export const TOOLS_DE_ESCRITURA = new Set([
   "add_condition",
   "add_allergy",
   "add_measurement",
+  "update_appointment",
+  "delete_appointment",
 ]);
 
 // Escrituras CLÍNICAS o destructivas: sobre otra persona, la confirmación tiene
 // que estar ATADA a esa acción exacta (el botón con el id de la pendiente, o un
 // "sí" tipeado mientras sea la única pendiente). `mark_all_taken` además
 // silencia la alerta de dosis vencida a los cuidadores.
-export const TOOLS_CONFIRMACION_ATADA = new Set(["mark_taken", "mark_all_taken", "delete_schedule", "update_schedule"]);
+export const TOOLS_CONFIRMACION_ATADA = new Set([
+  "mark_taken",
+  "mark_all_taken",
+  "delete_schedule",
+  "update_schedule",
+  "update_appointment",
+  "delete_appointment",
+]);
 
 // Borrar o cambiar el horario de un medicamento pide confirmación del servidor
 // SIEMPRE, también sobre los datos propios (se pierde historial / cambia cuándo suena).
-export const TOOLS_CONFIRMACION_PROPIA = new Set(["delete_schedule", "update_schedule"]);
+// Lo mismo para cambiar o borrar un turno (se pierden sus avisos / cambia cuándo suena).
+export const TOOLS_CONFIRMACION_PROPIA = new Set(["delete_schedule", "update_schedule", "update_appointment", "delete_appointment"]);
+
+/** Las de TOOLS_CONFIRMACION_PROPIA que actúan sobre un turno (las demás, sobre un horario de medicamento). */
+export const TOOLS_TURNO_CONFIRMADO = new Set(["update_appointment", "delete_appointment"]);
 
 // Tools que leen o escriben datos de una persona: son las únicas que aceptan
 // `persona_id`. set_avatar_mood es un efecto de interfaz, sin destino.

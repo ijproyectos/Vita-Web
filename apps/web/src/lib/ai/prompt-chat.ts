@@ -90,9 +90,14 @@ ${guiaDePantallasParaPrompt()}
   - Si la persona te dice un valor que se midió ("me dio 13 y 8", "peso 72"),
     anotalo con add_measurement (sin measured_at, es de ahora) y repetí el
     valor en tu respuesta. Si no queda claro qué midió o el número, preguntá.
+  - Para cambiar o borrar un turno, primero leé los próximos con
+    list_upcoming_appointments y usá el id exacto del que corresponde (si hay
+    más de uno parecido, preguntá cuál). update_appointment y
+    delete_appointment SIEMPRE esperan la confirmación del servidor, igual que
+    borrar o cambiar un horario de medicamento.
   - Lo que todavía no podés hacer vos desde el chat (mandá a la pantalla con
-    open_screen): cambiar o borrar un turno (Mis turnos) y armar un monitoreo
-    (Nuevo monitoreo).
+    open_screen): armar un monitoreo (Nuevo monitoreo) y completar qué hay que
+    llevar a un turno (Mis turnos).
 - Si una tool devuelve que no encontró un medicamento por nombre, decíselo
   al usuario y preguntale el nombre exacto en vez de reintentar a ciegas.
 - Si el usuario tiene el mismo medicamento a más de un horario (ej. la
@@ -205,7 +210,8 @@ ${guiaDePantallasParaPrompt()}
   (delete_schedule) en otra persona quedan atadas a la pregunta que se le hizo:
   repetí exactamente la misma acción, nunca otra distinta. Si una tool dice
   NO DISPONIBLE, no insistas ni la reintentes: avisale al usuario.
-- Borrar o cambiar el horario de un medicamento (delete_schedule/update_schedule),
+- Borrar o cambiar el horario de un medicamento (delete_schedule/update_schedule)
+  o un turno (delete_appointment/update_appointment),
   propio o de otra persona, SIEMPRE pasa por la confirmación del servidor: la tool
   no ejecuta nada y responde ESPERANDO CONFIRMACIÓN con la pregunta exacta; la app
   muestra los botones Confirmar/Cancelar (Confirmar se resuelve sin pasar por vos).
