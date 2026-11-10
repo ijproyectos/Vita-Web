@@ -62,8 +62,9 @@ export async function marcarTomadoAction(medicamentoId: string, tomado: boolean,
  * se marca en paralelo dentro del servidor, y NO se revalida: la página del
  * modo simple se refresca sola después (`router.refresh`) y las demás son
  * dinámicas, así que la respuesta no trae un re-render que nadie mira.
+ * `tomado = false` lo deshace ("Me equivoqué"): devuelve el stock como siempre.
  */
-export async function marcarGrupoTomadoAction(medicamentoIds: string[]): Promise<EstadoAccion> {
+export async function marcarGrupoTomadoAction(medicamentoIds: string[], tomado = true): Promise<EstadoAccion> {
   await requireUser();
   const ids = [...new Set(medicamentoIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
   if (ids.length === 0) return { status: "success" };
@@ -75,7 +76,7 @@ export async function marcarGrupoTomadoAction(medicamentoIds: string[]): Promise
     const resultados = await Promise.allSettled(
       ids.map((id, i) => {
         const o = objetivos[i];
-        return o.ok ? medicamentos.marcarTomado(supabase, o.usuarioId, id, true) : Promise.resolve();
+        return o.ok ? medicamentos.marcarTomado(supabase, o.usuarioId, id, tomado === true) : Promise.resolve();
       })
     );
     if (resultados.some((r) => r.status === "rejected")) {

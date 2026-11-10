@@ -50,7 +50,7 @@ import { CharlaSimple } from "./charla-simple";
 
 // Fases del state machine (spec: waiting | confirmed | alerted | resting).
 // "confirmado" es transitoria (solo local, nunca viene del servidor): se
-// entra al confirmar y se sale sola a los ~2.4s pidiendo un refresh del
+// entra al confirmar y se sale sola a los ~6 s (tiempo para "Me equivoqué") pidiendo un refresh del
 // server component, que recalcula el próximo grupo pendiente (u ninguno).
 type Fase = "esperando" | "alertado" | "confirmado" | "descanso";
 
@@ -209,11 +209,25 @@ export function Pantalla({
     void cancelarPosposicionAction(grupo.map((m) => m.id)).catch(() => {});
   }
 
+  // "Me equivoqué": vuelve a la tarjeta enseguida y desmarca en el servidor.
+  // Next encola las acciones, así que corre después de la confirmación aunque
+  // esa todavía no haya terminado.
+  function deshacer() {
+    setConfirmadoLocal(false);
+    setGuardado(false);
+    void marcarGrupoTomadoAction(grupo.map((m) => m.id), false)
+      .then((r) => {
+        if (r.status === "error") toast.error("No se pudo deshacer. Avisale a tu familia.");
+      })
+      .catch(() => toast.error("No se pudo deshacer. Avisale a tu familia."))
+      .finally(() => router.refresh());
+  }
+
   // Se refresca recién cuando el servidor confirmó (si no, podría traer la
-  // dosis todavía sin marcar).
+  // dosis todavía sin marcar). Unos segundos, para dar tiempo a "Me equivoqué".
   useEffect(() => {
     if (!guardado) return;
-    const t = setTimeout(() => router.refresh(), 2400);
+    const t = setTimeout(() => router.refresh(), 6000);
     return () => clearTimeout(t);
   }, [guardado, router]);
 
@@ -292,7 +306,7 @@ export function Pantalla({
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-cream">
       {fase === "confirmado" ? (
-        <FaseConfirmado grupo={grupo} />
+        <FaseConfirmado grupo={grupo} onDeshacer={deshacer} />
       ) : pendienteDeGesto ? (
         <>
           <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
@@ -462,7 +476,7 @@ function FaseGesto({ onTocar, estado }: { onTocar: () => void; estado: EstadoAva
   );
 }
 
-function FaseConfirmado({ grupo }: { grupo: Dosis[] }) {
+function FaseConfirmado({ grupo, onDeshacer }: { grupo: Dosis[]; onDeshacer: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-teal-deep px-8 text-center text-primary-foreground">
       <div className="flex size-24 items-center justify-center rounded-full bg-primary-foreground/20">
@@ -474,6 +488,13 @@ function FaseConfirmado({ grupo }: { grupo: Dosis[] }) {
           ? `Registramos que tomaste ${grupo[0].nombre}`
           : `Registramos tus ${grupo.length} pastillas: ${listaHablada(grupo.map((m) => m.nombre))}`}
       </div>
+      <button
+        type="button"
+        onClick={onDeshacer}
+        className="mt-6 min-h-14 rounded-full border-2 border-primary-foreground/60 px-6 text-[18px] font-bold text-primary-foreground transition-transform active:scale-[0.98] motion-reduce:transition-none"
+      >
+        {grupo.length === 1 ? "Me equivoqué, no la tomé" : "Me equivoqué, no las tomé"}
+      </button>
     </div>
   );
 }
