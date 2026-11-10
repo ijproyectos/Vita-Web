@@ -55,7 +55,11 @@ export function CampoMedicamento({
   const idOpcion = (i: number) => `${idLista}-op-${i}`;
 
   function escribir(valor: string) {
-    onChange(valor);
+    // Escribió la marca exacta ("Forxiga") sin tocar la lista: cuenta como elegirla,
+    // así la droga también se completa.
+    const exacta = sugerirMedicamentos(valor).find((s) => s.marca && normalizar(s.marca) === normalizar(valor));
+    if (exacta && onElegir) onElegir({ nombre: valor, droga: exacta.nombre });
+    else onChange(valor);
     setElegida(false);
     setActivo(-1);
   }

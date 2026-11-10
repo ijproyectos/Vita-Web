@@ -121,6 +121,11 @@ describe("buscarMedicamentoContado", () => {
     expect(buscarMedicamentoContado([forxiga], "Forxiga", "5")).toBeUndefined();
   });
 
+  it("con dosis y dos marcas de la misma droga y dosis, no adivina", () => {
+    const otraMarca = { ...c("Otra marca", "10"), droga: "Dapagliflozina" };
+    expect(buscarMedicamentoContado([forxiga, otraMarca], "Dapagliflozina", "10")).toBeUndefined();
+  });
+
   it("sin dosis y dos con el mismo nombre, no adivina", () => {
     const otra = c("Forxiga", "5");
     expect(buscarMedicamentoContado([forxiga, otra], "Forxiga", null)).toBeUndefined();

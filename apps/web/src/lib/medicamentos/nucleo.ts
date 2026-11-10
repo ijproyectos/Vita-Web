@@ -373,6 +373,15 @@ function sinDroga<T extends Record<string, unknown>>(fila: T): Omit<T, "droga"> 
   return resto;
 }
 
+/**
+ * Fila para una base sin la columna `droga`: vuelve al nombre tal como lo
+ * escribió la persona ("Forxiga (Dapagliflozina)"), así la droga que venía en
+ * el paréntesis no se pierde mientras la 056 no esté aplicada.
+ */
+function sinColumnaDroga<T extends Record<string, unknown>>(fila: T, nombreOriginal: string): Omit<T, "droga"> {
+  return { ...sinDroga(fila), nombre: nombreOriginal } as Omit<T, "droga">;
+}
+
 function sinPlan(fila: Record<string, unknown>): Record<string, unknown> {
   const { forma: _f, cantidad_por_toma: _c, fecha_fin: _d, ...resto } = fila;
   void _f;
@@ -493,7 +502,7 @@ export async function agregar(
     ({ data, error } = await supabase.from("medicamentos").insert(fila).select().single());
   }
   if (error && droga && faltaColumnaDroga(error)) {
-    const sinColumna = sinDroga(fila);
+    const sinColumna = sinColumnaDroga(fila, datosCrudos.nombre.trim());
     ({ data, error } = await supabase
       .from("medicamentos")
       .insert(comida.indicacion ? { ...sinColumna, indicacion: comida.indicacion } : sinColumna)
@@ -581,7 +590,7 @@ export async function agregarMultiMomento(
   let aInsertar: Record<string, unknown>[] = filas;
   let { data, error } = await supabase.from("medicamentos").insert(aInsertar).select();
   if (error && droga && faltaColumnaDroga(error)) {
-    aInsertar = filas.map(sinDroga);
+    aInsertar = filas.map((f) => sinColumnaDroga(f, datosCrudos.nombre.trim()));
     ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
   }
   if (error && aInsertar.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
@@ -596,7 +605,7 @@ export async function agregarMultiMomento(
     ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
   }
   if (error && droga && faltaColumnaDroga(error)) {
-    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar.map(sinDroga)).select());
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar.map((f) => sinColumnaDroga(f, datosCrudos.nombre.trim()))).select());
   }
   if (error) {
     traducirErrorDuplicado(error);
@@ -709,7 +718,9 @@ export async function actualizarGrupo(
   ids: string[],
   datos: DatosActualizarGrupo
 ): Promise<void> {
-  const { nombre, droga } = normalizarNombreYDroga(datos.nombre, datos.droga);
+  const separado = normalizarNombreYDroga(datos.nombre, datos.droga);
+  let nombre = separado.nombre;
+  const droga = separado.droga;
   if (!nombre) throw new Error("El nombre no puede quedar vacío.");
   if (new Set(ids).size !== ids.length) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
   if (datos.tomas.length === 0) throw new Error("Tiene que haber al menos un horario.");
@@ -724,6 +735,9 @@ export async function actualizarGrupo(
   // Every id must exist for this person and be a take of the same medicine
   // (rows of one group share name and dose); otherwise we would edit unrelated rows.
   if (filas.length !== ids.length || !mismoGrupo(filas)) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
+  // Sin la migración 056 no hay dónde guardar la droga: el nombre queda como se escribió.
+  const hayColumnaDroga = "droga" in filas[0];
+  if (!hayColumnaDroga) nombre = datos.nombre.trim();
 
   const idsValidos = new Set(filas.map((f) => f.id));
   if (datos.tomas.some((t) => t.id && !idsValidos.has(t.id))) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
@@ -768,7 +782,7 @@ export async function actualizarGrupo(
   if (forma !== undefined && (hayColumnas || forma !== "pastilla")) compartido.forma = forma;
   if (fechaFin !== undefined && (hayColumnas || fechaFin)) compartido.fecha_fin = fechaFin;
   // Sin la migración 056 la fila no trae `droga`: no se manda (ver faltaColumnaDroga).
-  if (droga !== undefined && "droga" in filas[0]) compartido.droga = droga;
+  if (droga !== undefined && hayColumnaDroga) compartido.droga = droga;
   const ahora = new Date().toISOString();
 
   // Primero lo que no puede dejar el grupo a medias: altas y borrados.

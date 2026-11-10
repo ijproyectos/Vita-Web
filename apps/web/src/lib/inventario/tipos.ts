@@ -42,8 +42,8 @@ type Candidato = { clave: string; nombre: string; dosis: string | null; droga?: 
  * A qué medicamento ya cargado corresponde un conteo por foto. Primero la
  * clave exacta; si no, compara el nombre y la droga (su columna o, en
  * filas viejas, el paréntesis "Forxiga (Dapagliflozina)"): el blister puede
- * decir "Forxiga" o "Dapagliflozina". Sin dosis solo enlaza si hay UNO solo con ese nombre;
- * con dosis, tiene que coincidir también la dosis.
+ * decir "Forxiga" o "Dapagliflozina". Solo enlaza si hay UNO que coincide (con
+ * dosis, tiene que coincidir también la dosis).
  */
 export function buscarMedicamentoContado<T extends Candidato>(
   candidatos: T[],
@@ -60,8 +60,10 @@ export function buscarMedicamentoContado<T extends Candidato>(
     const { nombre: n, droga } = separarNombreDroga(c.nombre);
     return [n, droga, c.droga ?? null].some((x) => x !== null && nombresBuscados.has(norma(x)));
   });
-  if (dosis) return mismoNombre.find((c) => norma(c.dosis ?? "") === norma(dosis));
-  return mismoNombre.length === 1 ? mismoNombre[0] : undefined;
+  // Con dosis o sin ella, solo se enlaza si hay UNO: dos marcas con la misma
+  // droga y dosis no se adivinan (pisaría el stock de la equivocada).
+  const candidatosFinales = dosis ? mismoNombre.filter((c) => norma(c.dosis ?? "") === norma(dosis)) : mismoNombre;
+  return candidatosFinales.length === 1 ? candidatosFinales[0] : undefined;
 }
 
 /** "Poco stock" = menos pastillas que el umbral (por defecto, menos de 5). */
