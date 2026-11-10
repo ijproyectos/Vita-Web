@@ -186,10 +186,13 @@ export function TarjetaGrupo({
   onEscuchar,
   onPosponer,
   onAlternarVoz,
+  deAyer = false,
 }: {
   grupo: Dosis[];
   momento: MomentoDia | null;
   alertado: boolean;
+  /** Dosis de ayer sin tomar, en la ventana 00:00-00:30 (igual que "Era ayer" en el resto de la app). */
+  deAyer?: boolean;
   confirmando: boolean;
   escuchandoVoz: boolean;
   silenciada: boolean;
@@ -207,7 +210,7 @@ export function TarjetaGrupo({
     <div className="rounded-[28px] bg-card p-5 shadow-card">
       {alertado && (
         <div className="eyebrow mb-1.5 flex items-center gap-1.5 text-aviso-ink">
-          <VitaIcon name="alert-triangle" size={14} strokeWidth={2.6} /> Todavía no confirmaste
+          <VitaIcon name="alert-triangle" size={14} strokeWidth={2.6} /> {deAyer ? "Era de ayer" : "Todavía no confirmaste"}
         </div>
       )}
       <div className="flex items-start justify-between gap-3">

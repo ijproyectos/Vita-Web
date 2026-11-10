@@ -66,6 +66,7 @@ export function Pantalla({
   porCorregir,
   hayMedsHoy,
   vencida,
+  fechaDosis = null,
   recordatorios,
   config,
   turno,
@@ -102,6 +103,8 @@ export function Pantalla({
   /** Había medicación programada hoy (distingue "todo tomado" de "nada cargado"). */
   hayMedsHoy: boolean;
   vencida: boolean;
+  /** Fecha de AYER cuando el grupo son dosis de ayer en la ventana de medianoche; si no, null. */
+  fechaDosis?: string | null;
   /** Un familiar le recordó estas dosis (aviso tranquilo, sin sonido). */
   recordatorios: { medicamentoId: string; nombre: string; horaProgramada: string }[];
 }) {
@@ -179,7 +182,7 @@ export function Pantalla({
       try {
         // Todo el grupo en una sola acción (usa marcarTomado por dentro: no
         // hay un camino de escritura paralelo).
-        const resultado = await marcarGrupoTomadoAction(grupo.map((m) => m.id));
+        const resultado = await marcarGrupoTomadoAction(grupo.map((m) => m.id), true, fechaDosis ?? undefined);
         if (resultado.status === "error") {
           // Puede haberse registrado solo una parte: se vuelve a leer del
           // servidor para que la pantalla muestre lo que realmente quedó.
@@ -215,7 +218,7 @@ export function Pantalla({
   function deshacer() {
     setConfirmadoLocal(false);
     setGuardado(false);
-    void marcarGrupoTomadoAction(grupo.map((m) => m.id), false)
+    void marcarGrupoTomadoAction(grupo.map((m) => m.id), false, fechaDosis ?? undefined)
       .then((r) => {
         if (r.status === "error") toast.error("No se pudo deshacer. Avisale a tu familia.");
       })
@@ -350,6 +353,7 @@ export function Pantalla({
                   grupo={grupo}
                   momento={momento}
                   alertado={fase === "alertado"}
+                  deAyer={!!fechaDosis}
                   confirmando={pendiente}
                   escuchandoVoz={estadoVoz !== "inactivo"}
                   silenciada={silenciada}

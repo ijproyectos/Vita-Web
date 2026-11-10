@@ -49,7 +49,17 @@ export default async function ModoSimplePage() {
     // Solo para la respuesta hablada de la charla: sin "ver turnos" no se menciona ninguno.
     config.ver_turnos ? opcional(proximoTurnoParaCharla(supabase, usuario.id, ahoraHHMM), null, "el próximo turno") : null,
   ]);
-  const { primera, momento, enGrupo, resto, invalidas } = proximoGrupoPendiente(hoy, ahoraHHMM);
+  const pendienteHoy = proximoGrupoPendiente(hoy, ahoraHHMM);
+  // Medianoche (00:00-00:30 AR): la dosis de AYER sin tomar va primero, como "Era ayer" en el
+  // resto de la app; se marca con la fecha de ayer. Fuera de la ventana no consulta nada.
+  const deAyer = [...(await medicamentos.listarVencidasDeAyer(supabase, usuario.id))].sort((a, b) =>
+    a.hora_programada.localeCompare(b.hora_programada)
+  );
+  const fechaDosis = deAyer.length > 0 ? medicamentos.fechaAyerEnAR() : null;
+  const { resto, invalidas } = pendienteHoy;
+  const enGrupo = deAyer.length > 0 ? deAyer : pendienteHoy.enGrupo;
+  const primera = deAyer.length > 0 ? deAyer[0] : pendienteHoy.primera;
+  const momento = deAyer.length > 0 ? momentoDelDia(deAyer[0].hora_programada) : pendienteHoy.momento;
 
   const cabecera = {
     usuarioId: usuario.id,
@@ -67,8 +77,10 @@ export default async function ModoSimplePage() {
     medsHoy: hoy.map((m) => ({ nombre: m.nombre, hora_programada: m.hora_programada, tomado: m.tomado })),
   };
 
-  const vencida = primera ? medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN) : false;
-  const recordatorios = enGrupo.length ? await opcional(listarRecordatoriosPendientes(supabase, usuario.id, enGrupo), [], "los recordatorios") : [];
+  const vencida = deAyer.length > 0 || (primera ? medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN) : false);
+  // Los recordatorios del familiar son de las dosis de hoy: con una de ayer en pantalla no se muestran.
+  const recordatorios =
+    !fechaDosis && enGrupo.length ? await opcional(listarRecordatoriosPendientes(supabase, usuario.id, pendienteHoy.enGrupo), [], "los recordatorios") : [];
 
   return (
     <Pantalla
@@ -76,7 +88,8 @@ export default async function ModoSimplePage() {
       // desaparece) y esto fuerza un remount limpio del estado de la
       // pantalla (fase, audio desbloqueado) en vez de arrastrar el estado
       // del grupo anterior.
-      key={enGrupo.map((m) => m.id).join(",") || "descanso"}
+      key={(fechaDosis ? "ayer:" : "") + (enGrupo.map((m) => m.id).join(",") || "descanso")}
+      fechaDosis={fechaDosis}
       {...cabecera}
       grupo={enGrupo.map((m) => ({
         id: m.id,
