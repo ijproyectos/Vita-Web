@@ -3,12 +3,12 @@
 begin;
 do $$
 declare
-  v_elder uuid := gen_random_uuid();
+  v_elder uuid := gen_random_uuid(); v_elder2 uuid := gen_random_uuid();
   v1 uuid; v2 uuid; r text; ok boolean; i int;
 begin
-  insert into auth.users (id, email) values (v_elder, 'elder-' || v_elder || '@example.com');
+  insert into auth.users (id, email) values (v_elder, 'elder-' || v_elder || '@example.com'); insert into auth.users (id, email) values (v_elder2, 'elder-' || v_elder2 || '@example.com');
   insert into vinculos_cuidador (elder_id, email_invitado) values (v_elder, 'x@example.com') returning id into v1;
-  insert into vinculos_cuidador (elder_id, email_invitado) values (v_elder, 'x@example.com') returning id into v2;
+  insert into vinculos_cuidador (elder_id, email_invitado) values (v_elder2, 'x@example.com') returning id into v2;
 
   -- Fallos por mail suman entre invitaciones y reenvíos.
   r := guardar_codigo_mail_invitacion(v1, 'h1', 'X@example.com');
