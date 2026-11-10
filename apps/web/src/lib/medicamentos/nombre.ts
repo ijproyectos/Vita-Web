@@ -39,3 +39,29 @@ export function normalizarNombreYDroga(
   if (final) return { nombre: separado.nombre, droga: final.slice(0, MAX_DROGA) };
   return { nombre: separado.nombre, droga: droga === undefined ? undefined : null };
 }
+
+const norma = (t: string | null | undefined) =>
+  (t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/**
+ * Un remedio ya cargado que parece el mismo con OTRO nombre: comparten la
+ * droga ("Forxiga" con droga Dapagliflozina y un alta de "Dapagliflozina", o
+ * dos marcas de la misma droga). El mismo nombre no cuenta: eso lo cubre el
+ * chequeo de horarios repetidos.
+ */
+export function mismoRemedioConOtroNombre<T extends { nombre: string; droga?: string | null }>(
+  existentes: T[],
+  nuevo: { nombre: string; droga?: string | null }
+): T | null {
+  const nombreNuevo = norma(nuevo.nombre);
+  const clavesNuevo = new Set([nombreNuevo, norma(nuevo.droga)].filter(Boolean));
+  for (const e of existentes) {
+    if (norma(e.nombre) === nombreNuevo) continue;
+    const drogaExistente = norma(e.droga);
+    const nombreExistente = norma(e.nombre);
+    const comparten =
+      (drogaExistente && clavesNuevo.has(drogaExistente)) || (nuevo.droga && norma(nuevo.droga) === nombreExistente);
+    if (comparten) return e;
+  }
+  return null;
+}

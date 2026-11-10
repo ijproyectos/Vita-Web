@@ -3,6 +3,7 @@
 // El orden del array es parte del prefijo cacheado por Anthropic: no reordenar sin motivo.
 import type Anthropic from "@anthropic-ai/sdk";
 import { CLAVES_INDICACION, INDICACIONES_COMIDA } from "@/lib/medicamentos/comidas";
+import { FORMAS } from "@/lib/medicamentos/forma";
 import { MAX_MOTIVO, MINUTOS_ENTRE_PEDIDOS_AYUDA } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { GENEROS, GRUPOS_SANGUINEOS } from "@/lib/perfil/opciones";
 import { CONTEXTOS_GLUCEMIA, TIPOS_MEDICION } from "@/lib/mediciones/tipos";
@@ -50,7 +51,8 @@ const TOOLS_BASE: Anthropic.Tool[] = [
   },
   {
     name: "add_medication",
-    description: "Crea un medicamento nuevo con su horario.",
+    description:
+      "Crea un medicamento nuevo con su horario. Si es jarabe, gotas, inyección u otra forma, pasá form; si tiene duración ('por 7 días'), calculá end_date con la fecha de hoy. Si ya hay uno con la misma droga y otro nombre, la tool te pide preguntar si es el mismo remedio: pasá same_drug_ok: true solo si la persona dijo que es otro.",
     input_schema: {
       type: "object",
       properties: {
@@ -68,6 +70,11 @@ const TOOLS_BASE: Anthropic.Tool[] = [
           description: "Días de la semana en que aplica. Vacío u omitido = todos los días.",
         },
         meal_indication: PROPIEDAD_INDICACION_COMIDA,
+        form: { type: "string", enum: FORMAS.map((f) => f.clave), description: "Forma del medicamento. Omitir = pastilla." },
+        drug: { type: "string", description: "Opcional: la droga o genérico si la persona la dice (ej. 'Dapagliflozina'). Si el nombre es una marca conocida se completa sola. El nombre que se guarda y se muestra es el que la persona conoce." },
+        amount_per_take: { type: "number", description: "Opcional: cuánto toma cada vez, en la unidad de la forma (pastillas, ml, gotas o unidades). Ej. media pastilla = 0.5; 5 ml de jarabe = 5." },
+        end_date: { type: "string", description: "Opcional: último día del tratamiento (YYYY-MM-DD, inclusive). Omitir = sin fin." },
+        same_drug_ok: { type: "boolean", description: "Solo después de que la persona confirmó que NO es el mismo remedio que uno ya cargado con la misma droga." },
       },
       required: ["name", "scheduled_time", "time_of_day"],
     },

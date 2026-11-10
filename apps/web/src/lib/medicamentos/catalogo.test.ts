@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CATALOGO_MEDICAMENTOS,
   normalizar,
+  drogaDeMarca,
   sugerirMedicamentos,
 } from "./catalogo";
 
@@ -76,5 +77,18 @@ describe("sugerirMedicamentos", () => {
 
   it("sin coincidencias devuelve vacío", () => {
     expect(sugerirMedicamentos("zzzz")).toEqual([]);
+  });
+});
+
+describe("drogaDeMarca", () => {
+  it("una marca exacta da su droga", () => {
+    expect(drogaDeMarca("forxiga")).toBe("Dapagliflozina");
+    expect(drogaDeMarca(" Ibupirac ")).toBe("Ibuprofeno");
+  });
+
+  it("el genérico, una marca a medias o algo desconocido no", () => {
+    expect(drogaDeMarca("Dapagliflozina")).toBeNull();
+    expect(drogaDeMarca("Forx")).toBeNull();
+    expect(drogaDeMarca("Remedio inventado")).toBeNull();
   });
 });

@@ -475,9 +475,17 @@ export async function agregar(
 ): Promise<Medicamento> {
   const { nombre, droga } = normalizarNombreYDroga(datosCrudos.nombre, datosCrudos.droga);
   const datos = { ...datosCrudos, nombre };
+  const forma = normalizarForma(datos.forma);
+  const fechaFin = normalizarFechaFin(datos.fechaFin, fechaDeHoy());
+  const cantidad = normalizarCantidad(datos.cantidad);
   await verificarHorariosDisponibles(supabase, usuarioId, [datos]);
   const comida = columnasComida(datos);
+  // Pastilla común sin fin ni cantidad especial: se puede guardar sin la migración 052.
+  const planComun = forma === "pastilla" && !fechaFin && (cantidad === null || cantidad === 1);
   const fila: Record<string, unknown> = {
+    ...(datos.forma !== undefined ? { forma } : {}),
+    ...(fechaFin ? { fecha_fin: fechaFin } : {}),
+    ...columnaCantidad(cantidad ?? undefined, forma, true),
     usuario_id: usuarioId,
     nombre,
     ...(droga ? { droga } : {}),
@@ -511,6 +519,15 @@ export async function agregar(
     if (error && comida.indicacion && faltaColumnaIndicacion(error)) {
       ({ data, error } = await supabase.from("medicamentos").insert(sinColumna).select().single());
     }
+  }
+  // Sin la 052 un alta común sigue andando; una con forma, fin o cantidad especial falla en vez de perder el dato.
+  if (error && planComun && faltaColumnaPlan(error)) {
+    const sinColumnasPlan = sinPlan(fila);
+    ({ data, error } = await supabase
+      .from("medicamentos")
+      .insert(comida.indicacion ? { ...sinColumnasPlan, indicacion: comida.indicacion } : sinColumnasPlan)
+      .select()
+      .single());
   }
 
   if (error) {

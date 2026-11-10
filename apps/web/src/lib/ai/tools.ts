@@ -30,6 +30,9 @@ import * as planesMedicion from "@/lib/mediciones/planes-nucleo";
 import * as estudios from "@/lib/estudios/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { medidoAtDesdeModelo } from "./mapeo";
+import { drogaDeMarca } from "@/lib/medicamentos/catalogo";
+import { mismoRemedioConOtroNombre, normalizarNombreYDroga } from "@/lib/medicamentos/nombre";
+import { esForma } from "@/lib/medicamentos/forma";
 import { acotarLimite, adherenciaParaModelo, estudioParaModelo, medicionParaModelo, monitoreoParaModelo, stockParaModelo, turnoParaModelo } from "./lecturas";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 import { ejecutarResolverContradiccion, ejecutarToolMemoria, NOMBRE_TOOL_RESOLVER_CONTRADICCION, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
@@ -86,13 +89,56 @@ export function normalizarAltaMedicamento(input: Record<string, unknown>): Datos
       throw new ErrorEntradaMedicamento("La dosis y la condición deben ser texto.");
     }
   }
+  if (input.form !== undefined && input.form !== null && !esForma(input.form)) {
+    throw new ErrorEntradaMedicamento("La forma tiene que ser pastilla, jarabe, gotas, inyección u otro.");
+  }
+  if (input.end_date !== undefined && input.end_date !== null && typeof input.end_date !== "string") {
+    throw new ErrorEntradaMedicamento("La fecha de fin tiene que ser YYYY-MM-DD.");
+  }
+  if (input.amount_per_take !== undefined && input.amount_per_take !== null && typeof input.amount_per_take !== "number") {
+    throw new ErrorEntradaMedicamento("La cantidad por toma tiene que ser un número.");
+  }
+  const nombre = input.name.trim();
+  const drogaDicha = typeof input.drug === "string" && input.drug.trim() ? input.drug.trim() : null;
   return {
-    nombre: input.name.trim(),
+    nombre,
+    // La droga que dijo la persona manda; si no, la de una marca conocida del catálogo.
+    droga: drogaDicha ?? drogaDeMarca(nombre),
     dosis: (input.dose as string | null | undefined) ?? null,
     condicion: (input.condition as string | null | undefined) ?? null,
     horaProgramada,
     momentoDia: momentoDelDia(horaProgramada),
     diasRecurrentes,
+    ...(esForma(input.form) ? { forma: input.form } : {}),
+    ...(typeof input.end_date === "string" && input.end_date.trim() ? { fechaFin: input.end_date.trim() } : {}),
+    ...(typeof input.amount_per_take === "number" ? { cantidad: input.amount_per_take } : {}),
+  };
+}
+
+/**
+ * Antes de cargar un remedio: si ya hay uno con la misma droga y otro nombre, se
+ * pregunta (la persona puede conocerlo por la marca). null = se puede seguir.
+ */
+export async function avisoMismoRemedio(
+  supabase: SupabaseClient,
+  destinoId: string,
+  datos: DatosNuevoMedicamento,
+  input: Record<string, unknown>
+): Promise<ResultadoTool | null> {
+  if (input.same_drug_ok === true) return null;
+  // Es una ayuda, no una regla: si la lista no se puede leer, se sigue (el alta valida lo demás).
+  let existentes: Medicamento[] | null;
+  try {
+    existentes = await medicamentos.listarTodos(supabase, destinoId);
+  } catch {
+    existentes = null;
+  }
+  if (!Array.isArray(existentes)) return null;
+  const parecido = mismoRemedioConOtroNombre(existentes, normalizarNombreYDroga(datos.nombre, datos.droga));
+  if (!parecido) return null;
+  const drogaTxt = parecido.droga ? ` (${limpiarDato(parecido.droga)})` : "";
+  return {
+    contenido: `Ya hay un medicamento cargado que parece el mismo: "${limpiarDato(parecido.nombre)}"${drogaTxt}. NO se guardó nada. Preguntale a la persona si es el mismo remedio. Si es el mismo, no lo cargues de nuevo (si cambió el horario, eso se hace con update_schedule). Si dice que es otro, volvé a llamar a add_medication con los mismos datos y same_drug_ok: true.`,
   };
 }
 
@@ -183,10 +229,10 @@ async function ejecutarEnDestino(
       if (indicacion === "invalida") return { contenido: ERROR_INDICACION };
       // Solo claves del catálogo: lo que mande el modelo se valida acá, no se guarda tal cual.
       // Se guarda como se pidió, aunque no coincida con la hora habitual de esa comida.
-      const creado = await medicamentos.agregar(supabase, usuarioId, {
-        ...normalizarAltaMedicamento(input),
-        indicacion: indicacion ?? null,
-      });
+      const datos = normalizarAltaMedicamento(input);
+      const aviso = await avisoMismoRemedio(supabase, usuarioId, datos, input);
+      if (aviso) return aviso;
+      const creado = await medicamentos.agregar(supabase, usuarioId, { ...datos, indicacion: indicacion ?? null });
       return {
         contenido: JSON.stringify(paraModelo(creado)),
         accionUI: {

@@ -38,7 +38,7 @@ export function claveSemantica(nombre: string, input: Record<string, unknown>): 
   let campos: unknown[];
   switch (nombre) {
     case "add_medication":
-      campos = [input.name, normDosis(input.dose), normHora(input.scheduled_time), input.time_of_day, dias];
+      campos = [input.name, normDosis(input.dose), normHora(input.scheduled_time), input.time_of_day, dias, input.form, input.end_date, input.amount_per_take];
       break;
     case "update_schedule":
       campos = [

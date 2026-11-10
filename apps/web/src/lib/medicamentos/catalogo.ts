@@ -285,3 +285,16 @@ export function sugerirMedicamentos(texto: string, limite = 6): Sugerencia[] {
     (a.marca ?? a.nombre).localeCompare(b.marca ?? b.nombre, "es");
   return [...empiezan.sort(alfabetico), ...contienen.sort(alfabetico)].slice(0, limite);
 }
+
+/**
+ * La droga (genérico) de una marca del catálogo escrita EXACTA ("Forxiga" ->
+ * "Dapagliflozina"); null si no es una marca conocida o ya es el genérico.
+ */
+export function drogaDeMarca(nombre: string): string | null {
+  const q = normalizar(nombre);
+  if (!q) return null;
+  for (const { entrada, marcasN } of INDICE) {
+    if (marcasN.some((m) => m.n === q)) return entrada.nombre;
+  }
+  return null;
+}

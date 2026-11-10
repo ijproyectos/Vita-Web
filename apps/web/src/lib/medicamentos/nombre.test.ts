@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizarNombreYDroga, separarNombreDroga } from "./nombre";
+import { mismoRemedioConOtroNombre, normalizarNombreYDroga, separarNombreDroga } from "./nombre";
 
 describe("separarNombreDroga", () => {
   it("separa el nombre comercial de la droga entre paréntesis", () => {
@@ -41,5 +41,27 @@ describe("normalizarNombreYDroga", () => {
 
   it("acota el largo de la droga", () => {
     expect(normalizarNombreYDroga("X", "a".repeat(200)).droga).toHaveLength(80);
+  });
+});
+
+describe("mismoRemedioConOtroNombre", () => {
+  const forxiga = { nombre: "Forxiga", droga: "Dapagliflozina" };
+
+  it("el genérico de una marca ya cargada es el mismo remedio", () => {
+    expect(mismoRemedioConOtroNombre([forxiga], { nombre: "Dapagliflozina", droga: null })).toBe(forxiga);
+  });
+
+  it("otra marca de la misma droga también", () => {
+    expect(mismoRemedioConOtroNombre([forxiga], { nombre: "Otra marca", droga: "dapagliflozina" })).toBe(forxiga);
+  });
+
+  it("una marca nueva cuya droga es el nombre de uno cargado", () => {
+    const generico = { nombre: "Dapagliflozina", droga: null };
+    expect(mismoRemedioConOtroNombre([generico], { nombre: "Forxiga", droga: "Dapagliflozina" })).toBe(generico);
+  });
+
+  it("el mismo nombre o remedios distintos no avisan", () => {
+    expect(mismoRemedioConOtroNombre([forxiga], { nombre: "Forxiga", droga: "Dapagliflozina" })).toBeNull();
+    expect(mismoRemedioConOtroNombre([forxiga], { nombre: "Metformina", droga: null })).toBeNull();
   });
 });

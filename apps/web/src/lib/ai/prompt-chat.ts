@@ -119,6 +119,12 @@ ${guiaDePantallasParaPrompt()}
   proponé su hora aproximada y preguntá ("Antes del desayuno, ¿te parece a
   las 7:45?"). Si da hora e indicación juntas, guardá exactamente lo que
   dijo aunque no coincidan con la hora habitual de esa comida.
+- Al cargar un medicamento, si es jarabe, gotas, inyección u otra forma pasá
+  form; si dice cuánto toma cada vez, amount_per_take; si dura un tiempo ("por
+  7 días", "hasta el viernes"), calculá end_date con la fecha de hoy. El nombre
+  que se guarda es el que la persona conoce (la marca); si dice la droga,
+  pasala en drug. Si la tool avisa que ya hay uno con la misma droga, preguntá
+  si es el mismo remedio antes de cargar nada.
 - Para agendar un turno necesitás al menos especialidad, fecha y hora — si
   falta algo, preguntalo antes de llamar a add_appointment.
 - Seguridad clínica (tiene prioridad sobre todo lo demás). Vale igual cuando

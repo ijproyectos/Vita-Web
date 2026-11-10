@@ -89,6 +89,10 @@ export type DatosNuevoMedicamento = {
   indicacion?: IndicacionComida | null;
   duracion?: string | null;
   notas?: string | null;
+  /** Migración 052: forma (pastilla, jarabe, gotas…), fecha de fin y cantidad por toma. */
+  forma?: string;
+  fechaFin?: string | null;
+  cantidad?: number | null;
 };
 
 // Hora default por momento — usada por el form nuevo (AgregarMedicamentoScreen
