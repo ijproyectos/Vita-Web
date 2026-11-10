@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { respuestaProximoTurno, respuestaQueMeToca, respuestaYaTome, unirNombres, type MedHoy } from "./respuestas";
+import { listaDelDia, respuestaProximoTurno, respuestaQueMeToca, respuestaYaTome, unirNombres, type MedHoy } from "./respuestas";
 
 const med = (nombre: string, hora: string, tomado: boolean): MedHoy => ({ nombre, hora_programada: hora, tomado });
 
@@ -59,21 +59,32 @@ describe("respuestaQueMeToca", () => {
   it("sin pastillas", () => {
     expect(respuestaQueMeToca([])).toBe("Hoy no tenés pastillas cargadas.");
   });
-  it("agrupa por hora, ordena y marca las tomadas", () => {
-    expect(
-      respuestaQueMeToca([med("C", "14:00", false), med("A", "08:00", true), med("B", "08:00", true)])
-    ).toBe("A las 8 de la mañana, A y B. Esas ya las tomaste. A las 2 de la tarde, C.");
+  it("todas tomadas", () => {
+    expect(respuestaQueMeToca([med("A", "08:00", true), med("B", "21:00", true)])).toBe("Ya tomaste todas las de hoy. Muy bien.");
   });
-  it("una sola tomada", () => {
-    expect(respuestaQueMeToca([med("A", "08:00", true)])).toBe("A las 8 de la mañana, A. Esa ya la tomaste.");
+  it("una sola pendiente", () => {
+    expect(respuestaQueMeToca([med("A", "08:00", true), med("Losartán", "21:00", false)])).toBe("Te falta una: Losartán, a las 9 de la noche.");
   });
-  it("tomada a medias no dice que ya las tomó", () => {
-    expect(respuestaQueMeToca([med("A", "08:00", true), med("B", "08:00", false)])).toBe("A las 8 de la mañana, A y B.");
+  it("varias pendientes: cuántas y la próxima, sin recitar el día", () => {
+    const r = respuestaQueMeToca([med("C", "22:00", false), med("A", "08:00", true), med("B", "21:00", false), med("D", "21:00", false)]);
+    expect(r).toBe("Te faltan 3. La próxima: B y D, a las 9 de la noche.");
+    expect(r).not.toContain("A");
   });
-  it("hora ilegible va al final", () => {
-    expect(respuestaQueMeToca([med("X", "??", false), med("A", "08:00", false)])).toBe(
-      "A las 8 de la mañana, A. Sin horario, X."
-    );
+  it("hora ilegible", () => {
+    expect(respuestaQueMeToca([med("X", "??", false)])).toBe("Te falta una: X, sin horario.");
+  });
+});
+
+describe("listaDelDia", () => {
+  it("una por renglón, ordenada por hora, ilegibles al final", () => {
+    expect(listaDelDia([med("C", "22:00", false), med("X", "??", false), med("A", "08:00:00", true)])).toEqual([
+      { hora: "08:00", nombre: "A", tomado: true },
+      { hora: "22:00", nombre: "C", tomado: false },
+      { hora: null, nombre: "X", tomado: false },
+    ]);
+  });
+  it("sin nombre dice Pastilla", () => {
+    expect(listaDelDia([med(" ", "08:00", false)])[0].nombre).toBe("Pastilla");
   });
 });
 
@@ -104,23 +115,10 @@ describe("respuestaProximoTurno", () => {
   });
 });
 
-describe("respuestaQueMeToca: nunca da por tomada una franja con algo pendiente", () => {
-  const fila = (nombre: string, tomado: boolean): MedHoy => ({ nombre, hora_programada: "08:00", tomado });
-  it("mismo remedio en dos filas, una tomada y otra pendiente", () => {
-    expect(respuestaQueMeToca([fila("Enalapril", true), fila("Enalapril", false)])).not.toContain("ya la");
-  });
-  it("una fila sin nombre tomada y otra con nombre pendiente", () => {
-    expect(respuestaQueMeToca([fila("", true), fila("Losartán", false)])).not.toContain("ya la");
-  });
-  it("todas las filas tomadas, aunque se repita el nombre", () => {
-    expect(respuestaQueMeToca([fila("Enalapril", true), fila("Enalapril", true)])).toContain("Esa ya la tomaste.");
-  });
-});
-
 describe("nombres vacíos", () => {
   it("respuestaQueMeToca usa una palabra neutra si ninguna fila tiene nombre", () => {
-    expect(respuestaQueMeToca([med("", "08:00", false)])).toBe("A las 8 de la mañana, una pastilla.");
-    expect(respuestaQueMeToca([med(" ", "08:00", false), med("", "08:00", false)])).toBe("A las 8 de la mañana, 2 pastillas.");
+    expect(respuestaQueMeToca([med("", "08:00", false)])).toBe("Te falta una: una pastilla, a las 8 de la mañana.");
+    expect(respuestaQueMeToca([med(" ", "08:00", false), med("", "08:00", false)])).toBe("Te faltan 2. La próxima: 2 pastillas, a las 8 de la mañana.");
   });
   it("respuestaYaTome no deja frases vacías", () => {
     const r = respuestaYaTome([med("", "08:00", false), med("", "08:00", false)], "09:00");

@@ -14,7 +14,7 @@ import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { guardarMedicionSimpleAction } from "@/lib/modo-simple/actions";
 import { horaActualEnAR } from "@/lib/modo-simple/formato";
-import { respuestaProximoTurno, respuestaQueMeToca, respuestaYaTome, type MedHoy, type TurnoProximo } from "@/lib/modo-simple/respuestas";
+import { listaDelDia, respuestaProximoTurno, respuestaQueMeToca, respuestaYaTome, type FilaDelDia, type MedHoy, type TurnoProximo } from "@/lib/modo-simple/respuestas";
 import { VELOCIDAD_VOZ_LENTA, type PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import {
   PREFIJO_ANIMO,
@@ -112,6 +112,8 @@ export function CharlaSimple({
   const [fase, setFase] = useState<Fase>(inicial?.fase ?? "inicio");
   const [pregunta, setPregunta] = useState(inicial?.pregunta ?? "");
   const [respuesta, setRespuesta] = useState(inicial?.respuesta ?? "");
+  // Las pastillas de hoy en renglones, debajo de la respuesta corta (solo en las de remedios).
+  const [lista, setLista] = useState<FilaDelDia[] | null>(null);
   const [ayudaLlamar, setAyudaLlamar] = useState(inicial?.ayudaLlamar ?? false);
   const [avisados, setAvisados] = useState<string[]>(inicial?.avisados ?? []);
   const [medicion, setMedicion] = useState<MedicionPropuesta | null>(inicial?.medicion ?? null);
@@ -199,13 +201,15 @@ export function CharlaSimple({
     setAvisados(extras?.avisados ?? []);
     setMedicion(null);
     setMood(extras?.mood ?? null);
+    setLista(null);
   }
 
-  function responderLocal(preg: string, texto: string) {
+  function responderLocal(preg: string, texto: string, filas?: FilaDelDia[]) {
     const turno = nuevoTurno();
     detener();
     setAviso(null);
     mostrarRespuesta(preg, texto);
+    if (filas && filas.length > 0) setLista(filas);
     void hablar(texto, turno);
   }
 
@@ -292,8 +296,8 @@ export function CharlaSimple({
   function alTocarChip(chip: Chip) {
     desbloquearVoz();
     if (chip.id === "turno") responderLocal(chip.label, respuestaProximoTurno(turnoProximo, fechaISOEnAR()));
-    else if (chip.id === "tome") responderLocal(chip.label, respuestaYaTome(medsHoy, horaActualEnAR()));
-    else if (chip.id === "toca") responderLocal(chip.label, respuestaQueMeToca(medsHoy));
+    else if (chip.id === "tome") responderLocal(chip.label, respuestaYaTome(medsHoy, horaActualEnAR()), listaDelDia(medsHoy));
+    else if (chip.id === "toca") responderLocal(chip.label, respuestaQueMeToca(medsHoy), listaDelDia(medsHoy));
     else {
       // vita pregunta cómo está y, cuando termina de hablar, escucha la respuesta.
       const turno = nuevoTurno();
@@ -570,6 +574,7 @@ export function CharlaSimple({
                 {respuesta}
               </div>
             </div>
+            {lista && <ListaDelDia filas={lista} />}
             <AvisoFamilia nombres={avisados} />
             {ayudaLlamar && (
               <BotonAyuda
@@ -666,6 +671,34 @@ export function CharlaSimple({
         </div>
       )}
     </div>
+  );
+}
+
+/** Una pastilla por renglón: hora, nombre y si ya está tomada. Grande y sin texto corrido. */
+function ListaDelDia({ filas }: { filas: FilaDelDia[] }) {
+  return (
+    <ul className="flex flex-col gap-2" aria-label="Tus pastillas de hoy">
+      {filas.map((f, i) => (
+        <li
+          key={i}
+          className={cn(
+            "flex items-center gap-3 rounded-[var(--radius-item)] px-4 py-3",
+            f.tomado ? "bg-secondary text-slate-brand" : "bg-card shadow-item"
+          )}
+        >
+          <span className="w-[64px] shrink-0 text-[20px] font-extrabold tabular-nums">{f.hora ?? "—"}</span>
+          <span className="line-clamp-2 min-w-0 flex-1 text-[20px] font-bold leading-tight">{f.nombre}</span>
+          {f.tomado ? (
+            <span className="flex shrink-0 items-center gap-1 text-[16px] font-bold text-teal-deep">
+              <VitaIcon name="check" size={20} strokeWidth={3} />
+              Tomada
+            </span>
+          ) : (
+            <span className="shrink-0 text-[16px] font-bold text-aviso-ink">Falta</span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

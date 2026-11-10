@@ -1,5 +1,6 @@
 // Respuestas habladas de los chips del modo simple. PURO: sin I/O ni IA, recibe
-// los datos ya cargados. Voseo rioplatense, 1-2 frases cortas, horas en palabras, sin listas.
+// los datos ya cargados. Voseo rioplatense, 1-2 frases cortas, horas en palabras;
+// el detalle del día va aparte, como lista en pantalla (`listaDelDia`).
 import { diasEntre, horaEnPalabras } from "./formato";
 
 export type MedHoy = { nombre: string; hora_programada: string; tomado: boolean };
@@ -112,18 +113,33 @@ export function respuestaYaTome(meds: MedHoy[], ahoraHHMM: string): string {
   return `Sí, ya tomaste ${unirNombres([...new Set(tomadas)])}.${sufijo}`;
 }
 
-/** "¿Qué pastillas me tocan hoy?" */
+/**
+ * "¿Qué pastillas me tocan hoy?": corto a propósito (antes recitaba el día
+ * entero en un párrafo). Dice cuántas faltan y cuál es la próxima; el detalle
+ * va en la lista que se muestra abajo (`listaDelDia`).
+ */
 export function respuestaQueMeToca(meds: MedHoy[]): string {
   if (meds.length === 0) return "Hoy no tenés pastillas cargadas.";
-  const frases = agruparPorHora(meds).map((g) => {
-    const cabecera = g.hora ? horaEnPalabras(g.hora) : "Sin horario";
-    // "Ya la tomaste" solo si no queda NINGUNA fila pendiente a esa hora (contar
-    // filas, no nombres: puede haber filas repetidas o sin nombre).
-    const todas = g.pendientes === 0 && g.tomadas > 0;
-    const sufijo = todas ? ` ${(g.nombres.length > 0 ? g.nombres.length === 1 : g.filas === 1) ? "Esa ya la tomaste." : "Esas ya las tomaste."}` : "";
-    return `${cabecera}, ${nombresODefault(g)}.${sufijo}`;
-  });
-  return frases.join(" ");
+  const pendientes = meds.filter((m) => !m.tomado);
+  if (pendientes.length === 0) return "Ya tomaste todas las de hoy. Muy bien.";
+  const proxima = agruparPorHora(pendientes)[0];
+  const cuando = proxima.hora ? minuscula(horaEnPalabras(proxima.hora)) : "sin horario";
+  const cual = `${nombresODefault(proxima)}, ${cuando}`;
+  if (pendientes.length === 1) return `Te falta una: ${cual}.`;
+  return `Te faltan ${pendientes.length}. La próxima: ${cual}.`;
+}
+
+export type FilaDelDia = { hora: string | null; nombre: string; tomado: boolean };
+
+/** Las pastillas de hoy, una por renglón y en orden de hora (las de hora ilegible al final). */
+export function listaDelDia(meds: MedHoy[]): FilaDelDia[] {
+  return meds
+    .map((m) => ({ hora: normalizarHora(m.hora_programada), nombre: m.nombre.trim() || "Pastilla", tomado: m.tomado }))
+    .sort((a, b) => {
+      if (a.hora === null) return b.hora === null ? 0 : 1;
+      if (b.hora === null) return -1;
+      return aMinutos(a.hora) - aMinutos(b.hora);
+    });
 }
 
 function fechaEnPalabras(fechaISO: string, hoyISO: string): string | null {
