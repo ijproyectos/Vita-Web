@@ -1,5 +1,6 @@
 "use server";
 
+import { DESTINO_CON_TOUR } from "@/lib/tour/pasos";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -42,8 +43,8 @@ export async function guardarNombreAction(nombre: string): Promise<ErrorAccion> 
 // que rama internamente según el valor guardado (tabs "persona"+"vos" para
 // cuido/ambos, un único tab "vos" para "yo"). El guion viejo
 // (/onboarding/nombre → /onboarding/chat, catálogo sin IA) sigue existiendo
-// como fallback manual — ver el link "Prefiero un formulario" dentro del
-// flujo conversacional.
+// como fallback manual, pero la charla ya no lo enlaza (en su lugar hay un
+// botón para saltear la pregunta): hoy solo se llega por su URL.
 export async function guardarUsoAppAction(usoApp: UsoApp): Promise<ErrorAccion> {
   const usuario = await requireUser();
   const supabase = await createClient();
@@ -76,7 +77,7 @@ export async function omitirIntroAction() {
 // usa la app para cuidar a alguien, todavía le falta vincular ese celular
 // — la manda a /onboarding/vincular-cuidado en vez de directo a /app.
 async function redirigirSegunUsoApp(supabase: SupabaseClient, usuarioId: string): Promise<never> {
-  let destino = "/app";
+  let destino: string = DESTINO_CON_TOUR;
   try {
     const perfil = await perfilNucleo.obtenerPerfil(supabase, usuarioId);
     if (perfil?.uso_app === "cuido" || perfil?.uso_app === "ambos") destino = "/onboarding/vincular-cuidado";

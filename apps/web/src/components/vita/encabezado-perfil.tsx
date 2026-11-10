@@ -41,6 +41,7 @@ export function EncabezadoPerfil({
     <div className="mt-1.5 flex items-start justify-between">
       <div className="min-w-0">
         {conSelector ? (
+          <div data-tour="perfil">
           <SelectorPerfil
             opciones={opciones}
             activoId={perfil.id}
@@ -55,6 +56,7 @@ export function EncabezadoPerfil({
               </span>
             </span>
           </SelectorPerfil>
+          </div>
         ) : (
           <>
             <div className={cn("eyebrow", estatico.eyebrowClassName ?? "text-primary")}>{estatico.eyebrow}</div>

@@ -13,6 +13,7 @@ import { cargarHiloAction, obtenerUsoHoyAction } from "./chat-actions";
 import { BarraUso, barraUsoTono, sinCupo, textoConsultas, textoRestante } from "@/components/uso-ia/barra-uso";
 import type { UsoDiario } from "@/lib/uso-ia/tipos";
 import { MensajeBurbuja, type MensajeChatUI } from "./mensaje-burbuja";
+import { leerTarjetas } from "@/lib/chat/tarjetas";
 import { separadorAntes } from "@/lib/chat/hilo";
 import type { MensajeChat } from "@/lib/chat/tipos";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
@@ -46,7 +47,8 @@ function moodValido(mood: unknown): EstadoAvatar {
 }
 
 function aMensajeUI(m: MensajeChat): MensajeChatUI {
-  return { role: m.role, content: m.contenido, timestamp: m.created_at };
+  const tarjetas = leerTarjetas(m.tarjetas);
+  return { role: m.role, content: m.contenido, timestamp: m.created_at, ...(tarjetas.length ? { tarjetas, guardado: true } : {}) };
 }
 
 function mensajeBienvenida(): MensajeChatUI {
@@ -446,7 +448,8 @@ export function VitaChatOverlay({
             if (esAccionDeEscritura(evento.action.type)) huboEscritura = true;
             setMensajes((prev) => {
               const copia = [...prev];
-              copia[copia.length - 1] = { ...copia[copia.length - 1], accion: evento.action };
+              const ultimo = copia[copia.length - 1];
+              copia[copia.length - 1] = { ...ultimo, tarjetas: [...(ultimo.tarjetas ?? []), evento.action] };
               return copia;
             });
             // Una escritura en un familiar dice para quién (accion.persona).

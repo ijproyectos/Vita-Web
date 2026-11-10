@@ -69,6 +69,7 @@ export function BottomNav({
         {/* V7: el FAB central muestra el isotipo (V sobre teal), no el
             personaje. Mismo botón y misma función: abre el chat con vita. */}
         <button
+          data-tour="vita"
           type="button"
           onClick={() => abrir()}
           aria-label="Abrir chat con vita"
@@ -141,6 +142,7 @@ function NavItem({
 
   return (
     <Link
+      data-tour={TOUR_POR_RUTA[href]}
       href={href}
       aria-current={activo ? "page" : undefined}
       onPointerDown={empezar}
@@ -165,6 +167,9 @@ function NavItem({
     </Link>
   );
 }
+
+// Pestañas que resalta el recorrido de la primera vez.
+const TOUR_POR_RUTA: Record<string, string> = { "/app/rutina": "rutina", "/app/mi-salud": "salud" };
 
 // useLinkStatus solo funciona como hijo del <Link>: da feedback inmediato
 // (ícono pulsando) mientras el servidor responde, así no se vuelve a tocar.

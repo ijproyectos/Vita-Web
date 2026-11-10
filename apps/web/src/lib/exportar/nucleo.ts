@@ -1,7 +1,9 @@
+import "server-only";
+
+import { leerTarjetas, type Tarjeta } from "@/lib/chat/tarjetas";
 import type { Medicion } from "@/lib/mediciones/tipos";
 import type { Monitoreo } from "@/lib/mediciones/plan";
 import { aMonitoreo } from "@/lib/mediciones/planes-nucleo";
-import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { esEmailDeCuentaPorCodigo } from "@/lib/acceso-codigo/tipos";
@@ -61,7 +63,7 @@ export type BorradorExportado = {
 export type ConversacionExportada = {
   id: string;
   iniciada_el: string;
-  mensajes: Pick<MensajeChat, "role" | "contenido" | "created_at">[];
+  mensajes: (Pick<MensajeChat, "role" | "contenido" | "created_at"> & { tarjetas?: Tarjeta[] })[];
 };
 
 /** Recuerdos de vita (vigentes y reemplazados; un recuerdo borrado no conserva texto, así que no hay nada para exportar). */
@@ -401,6 +403,8 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
           role: m.role,
           contenido: m.contenido,
           created_at: m.created_at,
+          // `select("*")`: sin la migración 055 la columna no viene y el export sale igual, sin tarjetas.
+          ...(leerTarjetas(m.tarjetas).length ? { tarjetas: leerTarjetas(m.tarjetas) } : {}),
         })),
       }))
       .filter((c) => c.mensajes.length > 0),

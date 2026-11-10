@@ -22,6 +22,8 @@ import { EncabezadoPerfil, PastillaLector } from "@/components/vita/encabezado-p
 import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
 import { TarjetaDosisVencida, type DosisVencida } from "@/components/vita/tarjeta-dosis-vencida";
 import { TarjetaEmpecemos } from "@/components/vita/tarjeta-empecemos";
+import { TourPrimeraVez } from "@/components/vita/tour-primera-vez";
+import { PARAM_TOUR } from "@/lib/tour/pasos";
 import { TarjetaCumpleanos } from "@/components/vita/tarjeta-cumpleanos";
 import { edadQueCumple } from "@/lib/onboarding/nacimiento";
 import { TiraStock, type ItemStockBajo } from "@/components/vita/tira-stock";
@@ -32,7 +34,7 @@ import { nombreConMayuscula } from "@/lib/perfil/formato";
 import { TurnosHome } from "./turnos-home";
 import { InicioSoloMirar } from "./inicio-solo-mirar";
 
-export default async function HomePage() {
+export default async function HomePage(props: PageProps<"/app">) {
   const usuario = await requireUser();
   const supabase = await createClient();
   // Familia: los datos son del perfil activo (propio o de alguien que cuido);
@@ -123,6 +125,7 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <InstalarVita />
+      {(await props.searchParams)?.[PARAM_TOUR] === "1" && activo.esPropio && <TourPrimeraVez nombre={nombre} />}
 
       {/* Saludo + selector de perfil + avisos */}
       <EncabezadoPerfil
@@ -130,10 +133,11 @@ export default async function HomePage() {
         opciones={opciones}
         nombre={nombre}
         eyebrowSelector={activo.esPropio ? `${saludoEnAR()},` : "Estás viendo a"}
-        estatico={{ eyebrow: `${saludoEnAR()},`, titulo: `${nombre} 👋`, eyebrowClassName: "text-subtle" }}
+        estatico={{ eyebrow: `${saludoEnAR()},`, titulo: nombre, eyebrowClassName: "text-subtle" }}
         pie={!puedeEditar ? <PastillaLector /> : undefined}
         accion={
           <Link
+            data-tour="bell"
             href="/app/avisos"
             aria-label={hayAvisos ? "Avisos, hay novedades" : "Avisos"}
             className="relative flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card text-slate-brand shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
@@ -169,14 +173,17 @@ export default async function HomePage() {
       </Link>
 
       {primeraVez ? (
+        <div data-tour="empezar">
         <TarjetaEmpecemos
           titulo={activo.esPropio ? "Contame qué remedios tomás" : `Contame qué remedios toma ${nombre}`}
           puedeEditar={puedeEditar}
         />
+        </div>
       ) : (
         <>
       {/* Adherencia de hoy */}
       <Link
+        data-tour="hoy"
         href="/app/rutina"
         className="rounded-[20px] bg-teal-deep px-[18px] pb-4 pt-[18px] text-primary-foreground transition-transform active:scale-[0.99] motion-reduce:transition-none"
       >
