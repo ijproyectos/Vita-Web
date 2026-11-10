@@ -40,7 +40,7 @@ export function FormularioMedicamento({
   etiquetaGuardar,
   onExito,
   volverA = "/app/rutina",
-  mostrarContar = false,
+  mostrarStock = false,
 }: {
   accion: (prev: EstadoAccion, formData: FormData) => Promise<EstadoAccion>;
   inicial?: InicialMedicamento;
@@ -48,8 +48,12 @@ export function FormularioMedicamento({
   onExito?: () => void;
   /** Destino de Cancelar/Descartar sin historial dentro de la app. */
   volverA?: string;
-  /** Ofrece "Contar pastillas con foto" (solo para el perfil activo, no para el alta del cuidador). */
-  mostrarContar?: boolean;
+  /**
+   * Muestra la fila de stock (solo para el perfil activo, no para el alta del
+   * cuidador). Acá se carga a mano: contar con foto se hace desde el
+   * medicamento ya guardado, porque salir a otra pantalla perdía lo cargado.
+   */
+  mostrarStock?: boolean;
 }) {
   const volver = useVolver(volverA);
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
@@ -175,14 +179,8 @@ export function FormularioMedicamento({
       </div>
 
       <FilaCuando cuando={cuando} onClick={() => setHojaCuando(true)} />
-      {mostrarContar && (
-        <FilaStock
-          forma={forma}
-          stock={stock}
-          consumoPorDia={consumoPorDia}
-          href={config.conFoto ? `/app/pastillas/contar?desde=agregar${nombre.trim() ? `&nombre=${encodeURIComponent(nombre.trim().slice(0, 80))}` : ""}` : undefined}
-          onClick={() => setHojaStock(true)}
-        />
+      {mostrarStock && (
+        <FilaStock forma={forma} stock={stock} consumoPorDia={consumoPorDia} onClick={() => setHojaStock(true)} />
       )}
       <HojaCuando abierto={hojaCuando} valor={cuando} onCambio={setCuando} onCerrar={() => setHojaCuando(false)} />
       <HojaCuantoQueda

@@ -300,7 +300,6 @@ function FormEdicion({
   const consumoPorDia =
     edicion.tomas.reduce((total, t) => total + consumoDeToma(edicion.forma, t.cantidad ?? config.porDefecto), 0) *
     (edicion.cuando.dias.length > 0 ? edicion.cuando.dias.length / 7 : 1);
-  const filaParaContar = edicion.tomas.find((t) => t.id)?.id;
 
   function cambiarForma(forma: FormaMedicamento) {
     if (forma === edicion.forma) return;
@@ -344,13 +343,8 @@ function FormEdicion({
       </div>
 
       <FilaCuando cuando={edicion.cuando} onClick={() => setHojaCuando(true)} />
-      <FilaStock
-        forma={edicion.forma}
-        stock={edicion.stock}
-        consumoPorDia={consumoPorDia}
-        href={config.conFoto && filaParaContar ? `/app/pastillas/contar?medicamento=${filaParaContar}&desde=medicamentos` : undefined}
-        onClick={() => setHojaStock(true)}
-      />
+      {/* A mano: contar con foto sale de la edición y perdía los cambios; se cuenta desde la fila (cámara). */}
+      <FilaStock forma={edicion.forma} stock={edicion.stock} consumoPorDia={consumoPorDia} onClick={() => setHojaStock(true)} />
       <HojaCuando
         abierto={hojaCuando}
         valor={edicion.cuando}
