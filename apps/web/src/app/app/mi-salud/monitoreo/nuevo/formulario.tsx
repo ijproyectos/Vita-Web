@@ -14,6 +14,7 @@ import { MAX_HORARIOS_PLAN, fraseMedir, type HorarioPlan, type Monitoreo } from 
 import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, TIPOS_PLAN, type TipoRegistrable } from "@/lib/mediciones/tipos";
 import type { EstadoAccion } from "../../../rutina/actions";
 import { guardarMonitoreoAction } from "../actions";
+import { verboAvisa } from "@/lib/notificaciones/destinatario";
 import { ChipsMetrica } from "../chips-metrica";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
@@ -25,11 +26,14 @@ export function FormularioMonitoreo({
   nombreInicial,
   existente,
   volver,
+  paraNombre,
 }: {
   tipoInicial: TipoRegistrable;
   nombreInicial: string;
   existente: Monitoreo | null;
   volver: string;
+  /** Primer nombre de la persona cuando el perfil activo no es el propio. */
+  paraNombre?: string;
 }) {
   const router = useRouter();
   const volverAtras = useVolver(volver);
@@ -53,7 +57,7 @@ export function FormularioMonitoreo({
   async function accion(prev: EstadoAccion, formData: FormData): Promise<EstadoAccion> {
     const resultado = await guardarMonitoreoAction(prev, formData);
     if (resultado.status === "success") {
-      toast.success(`Listo. vita te avisa para medir ${fraseMedir({ tipo, nombre_otra: nombre })}`);
+      toast.success(`Listo. vita ${verboAvisa(paraNombre)} para medir ${fraseMedir({ tipo, nombre_otra: nombre })}`);
       router.replace(volver);
     }
     return resultado;
@@ -127,7 +131,11 @@ export function FormularioMonitoreo({
 
       <div className="flex items-start gap-[11px]">
         <div className="min-h-[34px] w-[3px] self-stretch rounded-[3px] bg-primary" />
-        <p className="text-[12.5px] font-medium leading-normal text-slate-brand">vita te avisa a cada hora. Tocás el aviso y cargás el valor.</p>
+        <p className="text-[12.5px] font-medium leading-normal text-slate-brand">
+          {paraNombre
+            ? `vita le avisa a ${paraNombre} a cada hora. Si no tiene vita en su celular, te avisa a vos.`
+            : "vita te avisa a cada hora. Tocás el aviso y cargás el valor."}
+        </p>
       </div>
 
       {estado.status === "error" && (

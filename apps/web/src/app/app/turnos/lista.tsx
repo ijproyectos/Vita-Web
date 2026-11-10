@@ -21,6 +21,7 @@ import type { Turno } from "@/lib/turnos/tipos";
 import type { PerfilActivo } from "@/lib/familia/tipos";
 import { DetalleTurno } from "../rutina/detalle-turno";
 import { eliminarTurnoAction, guardarTurnoAction, type DatosEdicionTurno } from "./actions";
+import { MapaLugar } from "@/components/vita/mapa-lugar";
 
 type ErrorSheet = { detalle: string; reintentar: () => void; descartar: () => void } | null;
 
@@ -245,6 +246,7 @@ function FormEdicionTurno({
           <input value={form.direccion} onChange={(e) => onCambio({ ...form, direccion: e.target.value })} placeholder="ej. Av. Cabildo 2450" className={CLASE_INPUT_PILL} />
         </CampoPill>
       )}
+      <MapaLugar lugar={form.lugar} direccion={form.direccion} />
       {form.telefono !== undefined && (
         <CampoPill etiqueta="Teléfono del consultorio">
           <input value={form.telefono} onChange={(e) => onCambio({ ...form, telefono: e.target.value })} placeholder="ej. 11 4444 5555" inputMode="tel" className={CLASE_INPUT_PILL} />

@@ -30,7 +30,13 @@ export default async function NuevoMonitoreoPage(props: PageProps<"/app/mi-salud
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <TopBar eyebrow="Monitoreo" title={existente ? "Cambiar monitoreo" : "Nuevo monitoreo"} volverA={volver} />
       <BannerPerfil perfil={activo} accion="cargar" />
-      <FormularioMonitoreo tipoInicial={tipo} nombreInicial={nombre} existente={existente} volver={volver} />
+      <FormularioMonitoreo
+        tipoInicial={tipo}
+        nombreInicial={nombre}
+        existente={existente}
+        volver={volver}
+        paraNombre={activo.esPropio ? undefined : activo.nombre.split(" ")[0]}
+      />
     </div>
   );
 }

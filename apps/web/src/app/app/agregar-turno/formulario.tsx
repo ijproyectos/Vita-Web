@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { crearTurnoAction, type EstadoAccion } from "../rutina/actions";
 import { credencialDeObraSocial } from "@/lib/turnos/alta";
 import { SUGERENCIAS_LLEVAR, type ItemLlevar } from "@/lib/turnos/tipos";
+import { verboAvisa } from "@/lib/notificaciones/destinatario";
+import { MapaLugar } from "@/components/vita/mapa-lugar";
 
 /** El DNI es el único ítem fijo; la credencial entra como sugerencia. */
 const DNI = "DNI";
@@ -99,19 +101,16 @@ export function FormularioAgregarTurno({
         <EtiquetaSeccion text="Profesional y lugar" />
         <div className="mt-3.5 flex flex-col gap-[9px]">
           <input name="profesional" value={profesional} onChange={(e) => setProfesional(e.target.value)} placeholder="Dr. / Dra." className={CLASE_CAMPO} />
-          <div className="flex items-center gap-2">
-            <input name="lugar" value={lugar} onChange={(e) => setLugar(e.target.value)} placeholder="Sanatorio, clínica o centro" className={cn(CLASE_CAMPO, "min-w-0 flex-1")} />
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lugar.trim() || "sanatorio")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Abrir en Google Maps"
-              className="flex shrink-0 items-center gap-1.5 rounded-full bg-card px-3.5 py-[15px] text-[13px] font-extrabold text-teal-deep shadow-item"
-            >
-              <VitaIcon name="navigation" size={14} strokeWidth={2.4} />
-              Mapa
-            </a>
-          </div>
+          <input
+            name="lugar"
+            value={lugar}
+            onChange={(e) => setLugar(e.target.value)}
+            placeholder="Sanatorio, clínica o dirección"
+            aria-label="Lugar o dirección"
+            className={CLASE_CAMPO}
+          />
+          {/* Se ve el mapa acá mismo para confirmar el lugar, sin salir de la app. */}
+          <MapaLugar lugar={lugar} />
           {llevarDisponible && (
             <input name="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Teléfono del consultorio (opcional)" inputMode="tel" aria-label="Teléfono del consultorio" className={CLASE_CAMPO} />
           )}
@@ -129,7 +128,8 @@ export function FormularioAgregarTurno({
         <input type="hidden" name="fecha" value={fecha} />
         <input type="hidden" name="hora" value={hora} />
         <NotaLateral>
-          Vita te avisa la noche anterior y unas 2 horas antes del turno{especialidad ? ` de ${especialidad.toLowerCase()}` : ""}.
+          Vita {verboAvisa(paraNombre)} la noche anterior y unas 2 horas antes del turno{especialidad ? ` de ${especialidad.toLowerCase()}` : ""}.
+          {paraNombre ? " A vos te avisa la noche anterior." : ""}
         </NotaLateral>
       </div>
 
