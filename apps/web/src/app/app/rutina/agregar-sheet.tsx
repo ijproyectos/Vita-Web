@@ -56,8 +56,8 @@ export function AgregarSheet({
               <Opcion
                 icon="chart"
                 tinte="bg-chip-violet-bg text-chip-violet-ink"
-                titulo="Medición"
-                sub="Qué medir, horarios y días"
+                titulo="Monitoreo"
+                sub="Qué medir, horarios y avisos"
                 href={hrefNuevoMonitoreo({ volver: pathname })}
               />
               <Opcion
@@ -99,7 +99,7 @@ export function AgregarSheet({
   );
 }
 
-function Opcion({
+export function Opcion({
   icon,
   tinte,
   titulo,
