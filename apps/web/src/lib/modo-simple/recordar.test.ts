@@ -4,6 +4,7 @@ import {
   cookieOlvidarModoSimple,
   cookieRecordarModoSimple,
   modoSimpleActivoPara,
+  rutaPermitidaModoSimple,
 } from "./recordar";
 
 const ID = "6f1c2a9e-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
@@ -32,5 +33,30 @@ describe("modo simple recordado por dispositivo", () => {
     expect(modoSimpleActivoPara(undefined, ID)).toBe(false);
     expect(modoSimpleActivoPara("", ID)).toBe(false);
     expect(modoSimpleActivoPara("1", ID)).toBe(false);
+  });
+});
+
+describe("rutaPermitidaModoSimple", () => {
+  it("deja el modo simple, el inicio y las pantallas a las que lleva", () => {
+    expect(rutaPermitidaModoSimple("/app")).toBe(true);
+    expect(rutaPermitidaModoSimple("/app/modo-simple")).toBe(true);
+    expect(rutaPermitidaModoSimple("/app/modo-simple/")).toBe(true);
+    expect(rutaPermitidaModoSimple("/app/mi-salud/monitoreo/agregar")).toBe(true);
+    expect(rutaPermitidaModoSimple("/app/perfil/contacto-emergencia")).toBe(true);
+  });
+
+  it("devuelve al modo simple lo que abren los avisos del celular", () => {
+    expect(rutaPermitidaModoSimple("/app/rutina")).toBe(false);
+    expect(rutaPermitidaModoSimple("/app/pastillas")).toBe(false);
+    expect(rutaPermitidaModoSimple("/app/medicamentos")).toBe(false);
+    expect(rutaPermitidaModoSimple("/app/avisos")).toBe(false);
+    expect(rutaPermitidaModoSimple("/app/perfil")).toBe(false);
+    expect(rutaPermitidaModoSimple("/app/modo-simplex")).toBe(false);
+  });
+
+  it("no toca nada fuera de /app", () => {
+    expect(rutaPermitidaModoSimple("/login")).toBe(true);
+    expect(rutaPermitidaModoSimple("/cuidar")).toBe(true);
+    expect(rutaPermitidaModoSimple("/application")).toBe(true);
   });
 });

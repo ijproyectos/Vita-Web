@@ -29,3 +29,21 @@ export function recordarModoSimple(usuarioId: string) {
 export function olvidarModoSimple() {
   document.cookie = cookieOlvidarModoSimple();
 }
+
+// Pantallas a las que se puede llegar con el modo simple activo. Cualquier
+// otra ruta de /app (un aviso del celular que abre Rutina, Mis pastillas,
+// Avisos…) vuelve al modo simple: la persona nunca cae en la app normal sin
+// haber tocado "Salir del modo simple". `/app` queda libre porque ya decide
+// solo (`destinoDeInicio`).
+const RUTAS_MODO_SIMPLE_EXACTAS = ["/app", "/app/mi-salud/monitoreo/agregar", "/app/perfil/contacto-emergencia"];
+const RUTAS_MODO_SIMPLE_CON_SUBRUTAS = ["/app/modo-simple"];
+
+export function rutaPermitidaModoSimple(pathname: string): boolean {
+  const ruta = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (ruta !== "/app" && !ruta.startsWith("/app/")) return true;
+  if (RUTAS_MODO_SIMPLE_EXACTAS.includes(ruta)) return true;
+  return RUTAS_MODO_SIMPLE_CON_SUBRUTAS.some((base) => ruta === base || ruta.startsWith(`${base}/`));
+}
+
+/** Opciones para que el SERVIDOR renueve la cookie (Safari limita a 7 días las que escribe la página). */
+export const OPCIONES_COOKIE_MODO_SIMPLE = { path: "/", maxAge: UN_ANIO_S, sameSite: "lax" as const, httpOnly: false };
