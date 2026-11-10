@@ -43,3 +43,10 @@ export function normalizarHora(crudo: string): string | null {
   if (h > 23 || Number(minutos) > 59) return null;
   return `${String(h).padStart(2, "0")}:${minutos}`;
 }
+
+/** Suma o resta minutos a una hora "HH:MM", dando la vuelta al día. */
+export function moverHora(hora: string, delta: number): string {
+  const [h, m] = hora.split(":").map(Number);
+  const n = ((((h || 0) * 60 + (m || 0) + delta) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+}

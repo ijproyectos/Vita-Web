@@ -73,6 +73,27 @@ export function indicacionesDelMomento(momento: MomentoDia): OpcionComida[] {
   return INDICACIONES_COMIDA.filter((o) => o.momento === momento);
 }
 
+/** Sin indicación de comida ("Ninguna"). */
+export const SIN_COMIDA: ComidaToma = { conComida: "no-importa", indicacion: null };
+
+/**
+ * Momento del día con que abre el selector de hora: el de la comida elegida
+ * (una toma de las 06:30 "En ayunas" sigue siendo de la mañana) o, si no hay,
+ * el que corresponde a la hora.
+ */
+export function momentoDeToma(hora: string, comida: ComidaToma): MomentoDia {
+  return opcionDeIndicacion(comida.indicacion)?.momento ?? momentoDelDia(hora || "08:00");
+}
+
+/**
+ * Al cambiar de momento, una comida de otro momento deja de valer y vuelve a
+ * "Ninguna"; la de ese mismo momento (o ninguna) se conserva.
+ */
+export function comidaParaMomento(comida: ComidaToma, momento: MomentoDia): ComidaToma {
+  const opcion = opcionDeIndicacion(comida.indicacion);
+  return opcion && opcion.momento !== momento ? SIN_COMIDA : comida;
+}
+
 /** Valor legacy de `con_comida` que acompaña a una indicación ("no-importa" si no hay). */
 export function conComidaDeIndicacion(clave: IndicacionComida | null | undefined): ConComida {
   return opcionDeIndicacion(clave)?.conComida ?? "no-importa";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { momentoDelDia, normalizarHora, ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_MOMENTO } from "./momento";
+import { momentoDelDia, moverHora, normalizarHora, ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_MOMENTO } from "./momento";
 
 describe("momentoDelDia", () => {
   it.each([
@@ -56,5 +56,13 @@ describe("normalizarHora", () => {
   it("rechaza segundos distintos de 00 (08:00:99, 08:00:30)", () => {
     expect(normalizarHora("08:00:99")).toBeNull();
     expect(normalizarHora("08:00:30")).toBeNull();
+  });
+});
+
+describe("moverHora", () => {
+  it("suma y resta minutos dando la vuelta al día", () => {
+    expect(moverHora("08:00", 30)).toBe("08:30");
+    expect(moverHora("23:30", 30)).toBe("00:00");
+    expect(moverHora("00:00", -30)).toBe("23:30");
   });
 });
