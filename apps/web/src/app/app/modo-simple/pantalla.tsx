@@ -39,14 +39,14 @@ import {
   type TurnoSimple,
 } from "@/components/vita/modo-simple/piezas";
 import { marcarGrupoTomadoAction } from "../rutina/actions";
+import { confirmoPorVoz } from "@/lib/modo-simple/confirmacion-voz";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import type { MedHoy, TurnoProximo } from "@/lib/modo-simple/respuestas";
 import { CharlaSimple } from "./charla-simple";
 
-// Coincide EXACTO con el regex del diseño — nunca se toca esta lista de
-// palabras sin actualizar también design/tasks.
-const CONFIRMACION_POR_VOZ = /\b(s[ií]|tom[eé]|listo|ya est[aá])\b/i;
+// La confirmación por voz se aparta a propósito del regex del diseño: ese no
+// entendía "sí" con tilde y confirmaba "no sé si la tomé" (ver confirmacion-voz.ts).
 
 // Fases del state machine (spec: waiting | confirmed | alerted | resting).
 // "confirmado" es transitoria (solo local, nunca viene del servidor): se
@@ -219,7 +219,7 @@ export function Pantalla({
 
   const { estado: estadoVoz, iniciar: iniciarVoz, detener: detenerVoz } = useGrabacionVoz({
     onTranscripcion: (texto) => {
-      if (CONFIRMACION_POR_VOZ.test(texto)) {
+      if (confirmoPorVoz(texto)) {
         confirmar();
       } else {
         toast.info("No te escuché confirmar — tocá el botón cuando la hayas tomado.");
