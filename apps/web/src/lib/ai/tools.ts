@@ -24,7 +24,12 @@ import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
 import { accionPedidoAyuda, textoPedidoAyudaParaModelo } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
-import { validarMedicion } from "@/lib/mediciones/tipos";
+import { esTipoMedicion, validarMedicion, type TipoRegistrable } from "@/lib/mediciones/tipos";
+import * as mediciones from "@/lib/mediciones/nucleo";
+import * as planesMedicion from "@/lib/mediciones/planes-nucleo";
+import * as estudios from "@/lib/estudios/nucleo";
+import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import { acotarLimite, adherenciaParaModelo, estudioParaModelo, medicionParaModelo, monitoreoParaModelo, stockParaModelo, turnoParaModelo } from "./lecturas";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 import { ejecutarResolverContradiccion, ejecutarToolMemoria, NOMBRE_TOOL_RESOLVER_CONTRADICCION, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
 
@@ -282,6 +287,42 @@ async function ejecutarEnDestino(
       };
     }
 
+    // Lecturas: si la lectura falla, se le dice al modelo (nunca un "no tenés nada" falso).
+    case "list_upcoming_appointments":
+      return leer("los turnos", async () => {
+        const proximos = await turnos.listarProximos(supabase, usuarioId, acotarLimite(input.limit, 10, 1, 20));
+        return proximos.map(turnoParaModelo);
+      });
+
+    case "get_medication_stock":
+      return leer("el stock", async () => {
+        const grupos = await inventarioNucleo.listarGrupos(supabase, usuarioId);
+        return grupos.flatMap((g) => stockParaModelo({ ...g, dias: inventarioNucleo.diasQueAlcanza(g) }) ?? []);
+      });
+
+    case "list_measurements":
+      return leer("las mediciones", async () => {
+        const limite = acotarLimite(input.limit, 10, 1, 30);
+        const tipo = esTipoMedicion(input.type) || input.type === "otra" ? (input.type as TipoRegistrable) : null;
+        const [lista, planes] = await Promise.all([
+          tipo ? mediciones.listarPorTipo(supabase, usuarioId, tipo, limite) : mediciones.listarRecientes(supabase, usuarioId, limite),
+          planesMedicion.listarSeguro(supabase, usuarioId),
+        ]);
+        return { measurements: lista.map(medicionParaModelo), monitoring_plans: planes.map(monitoreoParaModelo) };
+      });
+
+    case "list_studies":
+      return leer("los estudios", async () => {
+        const lista = await estudios.listarParaChat(supabase, usuarioId, acotarLimite(input.limit, 5, 1, 10));
+        return lista.map(estudioParaModelo);
+      });
+
+    case "get_adherence":
+      return leer("las tomas", async () => {
+        const dias = acotarLimite(input.days, 7, 1, 30);
+        return adherenciaParaModelo(await medicamentos.calcularAdherencia(supabase, usuarioId, dias), dias);
+      });
+
     case "update_health_profile": {
       const cambios: CambiosPerfil = {};
       if (input.gender) cambios.genero = String(input.gender);
@@ -359,12 +400,20 @@ async function ejecutarEnDestino(
   }
 }
 
+/** Corre una lectura y la devuelve como JSON; si falla, un aviso claro para el modelo. */
+async function leer(queEs: string, fn: () => Promise<unknown>): Promise<ResultadoTool> {
+  try {
+    return { contenido: JSON.stringify(await fn()) };
+  } catch {
+    return { contenido: `No pude leer ${queEs} ahora. Decile que no pudiste y que lo puede ver en la pantalla correspondiente; no digas que no tiene nada cargado.` };
+  }
+}
+
 // Traduce un medicamento al vocabulario en inglés de las tools antes de
 // devolverlo al modelo — mismo mapeo que usan los inputs, en la dirección
 // contraria. Todo string que escribió un usuario pasa por limpiarDato (como el
 // contexto del prompt): un resultado de tool es DATO, nunca una instrucción.
-// (Esta rama no tiene tools de mediciones/estudios/listas de familia; si se
-// agregan, sus strings también van por limpiarDato.)
+// (Las lecturas de turnos, stock, mediciones y estudios dan formato en lecturas.ts, también con limpiarDato.)
 function paraModelo(m: Medicamento | MedicamentoConToma) {
   return {
     id: m.id,

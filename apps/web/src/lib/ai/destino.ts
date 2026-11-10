@@ -33,6 +33,11 @@ export const TOOLS_CON_DESTINO = new Set([
   "list_today_medications",
   "list_all_medications",
   "list_today_appointments",
+  "list_upcoming_appointments",
+  "get_medication_stock",
+  "list_measurements",
+  "list_studies",
+  "get_adherence",
   // Efectos de interfaz que muestran datos de una persona: llevan el destino
   // para que la tarjeta diga de quién es la rutina.
   "show_today_medications",

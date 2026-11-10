@@ -212,6 +212,21 @@ export async function listar(supabase: Cliente, usuarioId: string): Promise<Estu
   return conUrl;
 }
 
+/**
+ * Los últimos estudios para el chat con vita: sin URL firmada (el modelo no
+ * la necesita y firmar cada archivo cuesta un request por estudio).
+ */
+export async function listarParaChat(supabase: Cliente, usuarioId: string, limite = 5): Promise<Estudio[]> {
+  const { data, error } = await supabase
+    .from("estudios")
+    .select("*")
+    .eq("usuario_id", usuarioId)
+    .order("created_at", { ascending: false })
+    .limit(limite);
+  if (error) throw new Error(`No se pudieron leer los estudios: ${error.message}`);
+  return (data as Estudio[]).map((e) => ({ ...e, valores: normalizarValores(e.valores) }));
+}
+
 export async function obtener(
   supabase: Cliente,
   usuarioId: string,

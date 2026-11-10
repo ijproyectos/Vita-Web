@@ -94,6 +94,11 @@ describe("prompt caching del chat", () => {
         "show_all_medications",
         "open_screen",
         "set_avatar_mood",
+        "list_upcoming_appointments",
+        "get_medication_stock",
+        "list_measurements",
+        "list_studies",
+        "get_adherence",
         "recordar",
         "buscar_memoria",
         "resolver_contradiccion",
@@ -148,5 +153,5 @@ it("trae la guía de cómo funciona la app en el bloque estático, con las panta
   expect(SYSTEM_PROMPT).toContain("- vita_plus: vita+");
   expect(SYSTEM_PROMPT).toContain("- invitar_cuidador: Invitar a alguien");
   // Le dice qué todavía no puede hacer, para que mande a la pantalla en vez de inventar.
-  expect(SYSTEM_PROMPT).toContain("Lo que todavía no podés ver ni hacer vos desde el chat");
+  expect(SYSTEM_PROMPT).toContain("Lo que todavía no podés hacer vos desde el chat");
 });
