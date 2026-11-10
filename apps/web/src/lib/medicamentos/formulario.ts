@@ -1,7 +1,9 @@
 import { normalizarHora } from "@/lib/rutina/momento";
 import { conComidaDeIndicacion, esIndicacionComida, type ComidaToma } from "./comidas";
 import { ErrorEntradaMedicamento } from "./duplicados";
-import type { ConComida } from "./tipos";
+import { fechaValida } from "./cuando";
+import { CANTIDAD_MAXIMA, esForma, type FormaMedicamento } from "./forma";
+import { DIAS_SEMANA, type ConComida, type DiaSemana } from "./tipos";
 
 // Lectura de las tomas que manda el formulario de medicamento (alta propia y
 // del cuidador): campos `tomaHora`, `tomaComida` y `tomaIndicacion` en tríos, en el mismo orden.
@@ -40,9 +42,57 @@ export function normalizarTomas(crudas: { hora: unknown; conComida?: unknown; in
   return tomas;
 }
 
-export function leerTomas(formData: FormData): ({ hora: string } & ComidaToma)[] {
+export function leerTomas(formData: FormData): ({ hora: string; cantidad?: number } & ComidaToma)[] {
   const horas = formData.getAll("tomaHora").map(String);
   const comidas = formData.getAll("tomaComida").map(String);
   const indicaciones = formData.getAll("tomaIndicacion").map(String);
-  return normalizarTomas(horas.map((hora, i) => ({ hora, conComida: comidas[i], indicacion: indicaciones[i] })));
+  const cantidades = formData.getAll("tomaCantidad").map(String);
+  return normalizarTomas(horas.map((hora, i) => ({ hora, conComida: comidas[i], indicacion: indicaciones[i] }))).map((t, i) =>
+    cantidades[i] ? { ...t, cantidad: Number(cantidades[i]) } : t
+  );
+}
+
+/** Campos "¿Cuándo lo toma?" y forma, sin validar: los valida el núcleo. */
+export function leerPlanMedicamento(formData: FormData): { forma: string; diasRecurrentes: string[]; fechaFin: string | null } {
+  return {
+    forma: String(formData.get("forma") ?? "pastilla"),
+    diasRecurrentes: formData.getAll("dia").map(String),
+    fechaFin: String(formData.get("fechaFin") ?? "") || null,
+  };
+}
+
+export function normalizarForma(valor: unknown): FormaMedicamento {
+  if (valor === undefined || valor === null) return "pastilla";
+  if (!esForma(valor)) throw new ErrorEntradaMedicamento("Revisá la forma del medicamento.");
+  return valor;
+}
+
+/** Días válidos sin repetir; los 7 equivalen a "todos" (lista vacía). */
+export function normalizarDias(dias: unknown): DiaSemana[] {
+  if (dias === undefined || dias === null) return [];
+  if (!Array.isArray(dias) || dias.some((d) => !DIAS_SEMANA.includes(d as DiaSemana))) {
+    throw new ErrorEntradaMedicamento("Revisá los días elegidos.");
+  }
+  const unicos = [...new Set(dias as DiaSemana[])];
+  return unicos.length === DIAS_SEMANA.length ? [] : unicos;
+}
+
+/**
+ * Fecha de fin válida o null. Una fecha pasada solo se acepta si ya era la
+ * guardada (editar un tratamiento terminado sin tocar su fecha).
+ */
+export function normalizarFechaFin(valor: unknown, hoy: string, actual?: string | null): string | null {
+  if (valor === undefined || valor === null || valor === "") return null;
+  const fecha = fechaValida(valor);
+  if (!fecha) throw new ErrorEntradaMedicamento("Revisá la fecha de fin.");
+  if (fecha < hoy && fecha !== actual?.slice(0, 10)) throw new ErrorEntradaMedicamento("La fecha de fin ya pasó.");
+  return fecha;
+}
+
+/** Cantidad de una toma, o null si no vino. Los pasos los controla la pantalla. */
+export function normalizarCantidad(valor: unknown): number | null {
+  if (valor === undefined || valor === null || valor === "") return null;
+  const n = typeof valor === "number" ? valor : Number(valor);
+  if (!Number.isFinite(n) || n <= 0 || n > CANTIDAD_MAXIMA) throw new ErrorEntradaMedicamento("Revisá la cantidad de cada toma.");
+  return Math.round(n * 100) / 100;
 }

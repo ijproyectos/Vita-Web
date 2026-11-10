@@ -1,3 +1,4 @@
+import { cantidadStock } from "@/lib/medicamentos/forma";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { obtenerHistorial, type HistorialExportado } from "@/lib/exportar/nucleo";
@@ -150,7 +151,7 @@ function Reporte({ h }: { h: HistorialExportado }) {
                 {m.notas && <div className="mt-1 text-[12.5px]">{m.notas}</div>}
                 {stock && (
                   <div className="mt-1 text-[12.5px] font-semibold text-primary">
-                    Stock: {stock.stock} {stock.stock === 1 ? "pastilla" : "pastillas"}
+                    Stock: {cantidadStock(m.forma, stock.stock)}
                   </div>
                 )}
               </Tarjeta>

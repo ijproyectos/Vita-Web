@@ -25,6 +25,7 @@ import { TarjetaEmpecemos } from "@/components/vita/tarjeta-empecemos";
 import { TarjetaCumpleanos } from "@/components/vita/tarjeta-cumpleanos";
 import { edadQueCumple } from "@/lib/onboarding/nacimiento";
 import { TiraStock, type ItemStockBajo } from "@/components/vita/tira-stock";
+import { seCuentaConFoto } from "@/lib/medicamentos/forma";
 import { indicacionDeComida, textoDosis } from "@/lib/medicamentos/tipos";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
@@ -69,12 +70,13 @@ export default async function HomePage() {
 
   // Tira de poco stock (V7): el medicamento con menos pastillas, "alcanzan hasta el jueves".
   const stockBajo: ItemStockBajo[] = grupos
-    .filter((g) => g.inventario && g.inventario.stock < g.inventario.umbral_alerta)
+    .filter((g) => !g.terminado && g.inventario && g.inventario.stock < g.inventario.umbral_alerta)
     .sort((a, b) => a.inventario!.stock - b.inventario!.stock)
     .map((g) => {
       const dias = inventarioNucleo.diasQueAlcanza(g);
       return {
         medicamentoId: g.representanteId,
+        seCuentaConFoto: seCuentaConFoto(g.forma),
         nombre: g.nombre,
         stock: g.inventario!.stock,
         hasta: dias === null ? null : nombreDelDia(fechaConOffset(dias)),

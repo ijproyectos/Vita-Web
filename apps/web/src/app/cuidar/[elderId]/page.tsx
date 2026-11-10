@@ -51,7 +51,8 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
   const stockPorId = new Map<string, ResumenStock>(
     inventarios.map((i) => [i.id, { stock: i.stock, umbral: i.umbral_alerta }])
   );
-  const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios);
+  const formas = await inventarioNucleo.formasDeInventarios(supabase, elderId);
+  const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios).map((i) => ({ ...i, forma: formas.get(i.id) }));
 
   const ahoraAR = medicamentos.horaEnAR();
 
@@ -87,7 +88,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
         </div>
       </div>
 
-      <AvisoStockBajo items={stockBajo} titulo={`A ${elder.nombre} le quedan pocas pastillas`} />
+      <AvisoStockBajo items={stockBajo} titulo={`A ${elder.nombre} le queda poco de estos remedios`} />
 
       {medsAyer.length > 0 && (
         <div>

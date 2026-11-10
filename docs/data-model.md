@@ -117,6 +117,23 @@ Momento del día (para agrupar en la Rutina) se deriva de `hora` con `momentoDel
 
 Columnas agregadas por la migración 023 (aplicada 2026-10-22): `direccion text null` (+ "Cómo llegar"), `telefono text null` (+ "Llamar al consultorio") y `llevar jsonb not null default '[]'` — checklist "Qué llevar" como `[{"t": "DNI", "ok": false}]` (máx. 30 ítems, `ok` = ya lo preparó). `lib/turnos/nucleo.ts` degrada (reintenta sin estas columnas) si la migración falta.
 
+## `monitoreos`
+
+Planes de "Nuevo monitoreo" (`053_monitoreos.sql`, escrita, NO aplicada). Una fila por métrica y persona (guardarla de nuevo la reemplaza; índice único `idx_monitoreos_unico`). Lo medido sigue en `mediciones`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| tipo | text | los seis de `mediciones` o `otra` |
+| nombre_otra / unidad_otra | text | solo `otra`; nombre obligatorio (<= 40), unidad opcional (<= 12) |
+| horarios | jsonb | 1 a 4 `{hora, conComida, indicacion}` |
+| dias_recurrentes | text[] | vacío = todos los días |
+| fecha_fin | date | inclusive; null = sin fin |
+| created_at / updated_at | timestamptz | |
+
+RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`lib/notificaciones/medir.ts`, dedupe `medicion_hora`) salvo silencio nocturno o si ya se midió. Si la persona no tiene avisos activos en ningún celular (`push_suscripciones`), también avisa a sus cuidadores Admin (`medicion_persona`). Una medición cuenta para un horario desde 60 min antes de él hasta 60 min antes del siguiente, o el punto medio si están a menos de 2 h (`tramosDeHoy`).
+
 ## `mediciones`
 
 "Monitoreo activo" de Mi Salud (`022_mediciones.sql`, aplicada 2026-10-22). Una fila = una medición puntual.
@@ -133,6 +150,7 @@ Columnas agregadas por la migración 023 (aplicada 2026-10-22): `direccion text 
 | medido_at | timestamptz | default `now()`; el momento del día se deriva de la hora AR, sin columna |
 | notas | text | opcional, máx. 500 caracteres |
 | created_at | timestamptz | |
+| nombre_otra / unidad_otra | text | 053: solo tipo `otra`, que no tiene rango de plausibilidad propio (`abs(valor) <= 1000000`) |
 
 Los CHECK por tipo (`mediciones_valor_rango`, etc.) son de **plausibilidad** (descartan errores de tipeo), no rangos clínicos. Índice `(usuario_id, tipo, medido_at desc)`. Los rangos de referencia que muestra la UI (`lib/mediciones/tipos.ts`) viven en código, son orientativos y no se guardan.
 
@@ -467,3 +485,7 @@ Migración 036 (escrita, NO aplicada; aditiva sobre 013). Agrega a `uso_ia_diari
 - `contradicciones_memoria`: pares (`memoria_a < memoria_b`, único) marcados por la consolidación. RLS owner-only de SOLO LECTURA; todo cambio por RPC `security definer` con `auth.uid()` (`resolver_contradiccion`, `marcar_contradicciones_preguntadas`, `descartar_consolidacion_pendiente`). Al cerrarse pierde el texto de la pregunta.
 - RPC del trabajador (solo `service_role`): `candidatos_consolidacion`, `recuerdos_para_consolidar`, `reservar_lote_consolidacion`, `aplicar_consolidacion`, `reclamar_lote_consolidacion`, `cerrar_lote_consolidacion`, `intento_fallido_lote_usuario`, `marcar_error_lote_usuario`, `marcar_uso_lote_usuario`, `limpiar_lotes_consolidacion`. `olvidar_memoria`, `olvidar_todo_memoria` y `borrar_recuerdos_de_sesiones_hasta` se reemplazan (como en la 041) para seguir `reemplazada_por_id` y descartar lo pendiente.
 - Jobs `memoria-consolidacion-enviar` (`0 6 * * *`) y `memoria-consolidacion-procesar` (`*/30 * * * *`) derivados del job `dosis-vencidas`. Tests: `supabase/tests/memoria-consolidacion.sql`.
+
+## Medicamentos: forma, cantidad y fin (052)
+
+`medicamentos.forma` (`pastilla`, `jarabe`, `gotas`, `inyeccion`, `otro`), `cantidad_por_toma` (por fila; null = usa `inventario_pastillas.pastillas_por_toma`) y `fecha_fin` (inclusive, fecha AR; null = sin fin). `inventario_pastillas.stock` es decimal. La RPC `ajustar_stock_por_toma` mueve el stock con la cantidad de la toma (gotas en ml, 20 = 1 ml). Todo lector de la agenda usa `vigenteEnFecha` (`lib/medicamentos/cuando.ts`).

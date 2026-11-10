@@ -4,6 +4,11 @@
 
 export const TIPOS_MEDICION = ["presion", "glucemia", "peso", "pulso", "saturacion", "temperatura"] as const;
 export type TipoMedicion = (typeof TIPOS_MEDICION)[number];
+/** Lo que se ofrece por ahora al crear un monitoreo o cargar un valor (decisión 2026-11-09). */
+export const TIPOS_PLAN: readonly TipoMedicion[] = ["presion", "glucemia", "peso", "temperatura"];
+
+/** Las seis métricas fijas más "Otra", que la persona nombra (053). */
+export type TipoRegistrable = TipoMedicion | "otra";
 
 export const CONTEXTOS_GLUCEMIA = ["ayunas", "despues_comer", "otro"] as const;
 export type ContextoGlucemia = (typeof CONTEXTOS_GLUCEMIA)[number];
@@ -17,7 +22,10 @@ export const ETIQUETA_CONTEXTO: Record<ContextoGlucemia, string> = {
 export type Medicion = {
   id: string;
   usuario_id: string;
-  tipo: TipoMedicion;
+  tipo: TipoRegistrable;
+  /** Solo "otra". */
+  nombre_otra?: string | null;
+  unidad_otra?: string | null;
   /** Presión: sistólica. */
   valor: number;
   /** Presión: diastólica. */
@@ -126,6 +134,36 @@ export function esTipoMedicion(v: unknown): v is TipoMedicion {
   return typeof v === "string" && (TIPOS_MEDICION as readonly string[]).includes(v);
 }
 
+export function esTipoRegistrable(v: unknown): v is TipoRegistrable {
+  return v === "otra" || esTipoMedicion(v);
+}
+
+export const MAX_NOMBRE_OTRA = 40;
+export const MAX_UNIDAD_OTRA = 12;
+
+type ConMetrica = { tipo: TipoRegistrable; nombre_otra?: string | null; unidad_otra?: string | null };
+
+/** Datos de la métrica: los fijos, o los que la persona le puso a una "Otra". */
+export function metaDe(m: ConMetrica): MetaMedicion {
+  if (m.tipo !== "otra") return META_MEDICION[m.tipo];
+  const nombre = m.nombre_otra?.trim() || "Otra medición";
+  return {
+    nombre,
+    nombreMin: nombre.toLowerCase(),
+    unidad: m.unidad_otra?.trim() ?? "",
+    icono: "activity",
+    color: "var(--slate)",
+    decimales: 2,
+    min: -1000000,
+    max: 1000000,
+  };
+}
+
+/** Clave sin mayúsculas ni espacios de los bordes: "Otra" se agrupa por nombre. */
+export function claveNombreOtra(nombre: string | null | undefined): string {
+  return (nombre ?? "").trim().toLowerCase();
+}
+
 export function esContextoGlucemia(v: unknown): v is ContextoGlucemia {
   return typeof v === "string" && (CONTEXTOS_GLUCEMIA as readonly string[]).includes(v);
 }
@@ -140,7 +178,7 @@ export function formatearNumero(n: number, decimales = 1): string {
 
 /** "120/80" para presión; el número a secas para el resto. */
 export function formatearValor(m: Pick<Medicion, "tipo" | "valor" | "valor_secundario">): string {
-  const dec = META_MEDICION[m.tipo].decimales;
+  const dec = metaDe(m).decimales;
   if (m.tipo === "presion" && m.valor_secundario != null) {
     return `${formatearNumero(m.valor, 0)}/${formatearNumero(m.valor_secundario, 0)}`;
   }
@@ -154,7 +192,7 @@ export function formatearValor(m: Pick<Medicion, "tipo" | "valor" | "valor_secun
  * pulso…, o glucemia que no es en ayunas). Referencia orientativa.
  */
 export function dentroDeRango(m: Pick<Medicion, "tipo" | "valor" | "contexto">): boolean | null {
-  const rango = META_MEDICION[m.tipo].rango;
+  const rango = metaDe(m).rango;
   if (!rango) return null;
   if (m.tipo === "glucemia" && m.contexto !== "ayunas") return null;
   return m.valor >= rango.min && m.valor <= rango.max;
@@ -174,6 +212,8 @@ export function parsearNumero(texto: unknown): number | null {
 
 export type EntradaMedicion = {
   tipo: unknown;
+  nombreOtra?: unknown;
+  unidadOtra?: unknown;
   valor: unknown;
   valorSecundario?: unknown;
   pulso?: unknown;
@@ -184,7 +224,9 @@ export type EntradaMedicion = {
 };
 
 export type DatosMedicion = {
-  tipo: TipoMedicion;
+  tipo: TipoRegistrable;
+  nombreOtra: string | null;
+  unidadOtra: string | null;
   valor: number;
   valorSecundario: number | null;
   pulso: number | null;
@@ -195,17 +237,35 @@ export type DatosMedicion = {
 
 const MAX_FUTURO_MS = 5 * 60 * 1000;
 
+/** Nombre y unidad de una "Otra"; en las métricas fijas siempre son null. */
+export function validarMetricaOtra(
+  tipo: TipoRegistrable,
+  nombre: unknown,
+  unidad: unknown
+): { ok: true; nombreOtra: string | null; unidadOtra: string | null } | { ok: false; message: string } {
+  if (tipo !== "otra") return { ok: true, nombreOtra: null, unidadOtra: null };
+  const n = typeof nombre === "string" ? nombre.trim() : "";
+  const u = typeof unidad === "string" ? unidad.trim() : "";
+  if (!n) return { ok: false, message: "Escribí qué vas a medir." };
+  if (n.length > MAX_NOMBRE_OTRA) return { ok: false, message: `El nombre es muy largo (máximo ${MAX_NOMBRE_OTRA} caracteres).` };
+  if (u.length > MAX_UNIDAD_OTRA) return { ok: false, message: `La unidad es muy larga (máximo ${MAX_UNIDAD_OTRA} caracteres).` };
+  return { ok: true, nombreOtra: n, unidadOtra: u || null };
+}
+
 /** Normaliza y valida una medición nueva. Nunca lanza. */
 export function validarMedicion(
   entrada: EntradaMedicion,
   ahora: Date = new Date()
 ): { ok: true; datos: DatosMedicion } | { ok: false; message: string } {
-  if (!esTipoMedicion(entrada.tipo)) return { ok: false, message: "Elegí qué querés medir." };
+  if (!esTipoRegistrable(entrada.tipo)) return { ok: false, message: "Elegí qué querés medir." };
   const tipo = entrada.tipo;
-  const meta = META_MEDICION[tipo];
+  const metrica = validarMetricaOtra(tipo, entrada.nombreOtra, entrada.unidadOtra);
+  if (!metrica.ok) return metrica;
+  const { nombreOtra, unidadOtra } = metrica;
+  const meta = metaDe({ tipo, nombre_otra: nombreOtra, unidad_otra: unidadOtra });
 
   const entre = (n: number, min: number, max: number) => n >= min && n <= max;
-  const rangoTxt = `${meta.min}–${meta.max} ${meta.unidad}`;
+  const rangoTxt = `${meta.min}–${meta.max} ${meta.unidad}`.trim();
 
   const valor = parsearNumero(entrada.valor);
   if (valor === null) {
@@ -258,6 +318,8 @@ export function validarMedicion(
     ok: true,
     datos: {
       tipo,
+      nombreOtra,
+      unidadOtra,
       valor,
       valorSecundario,
       pulso,
@@ -278,9 +340,29 @@ export function volverSeguro(valor: unknown): string {
   return valor;
 }
 
-export function hrefNuevaMedicion(opciones: { tipo?: TipoMedicion; volver?: string } = {}): string {
+export function hrefNuevoMonitoreo(opciones: { tipo?: TipoRegistrable; nombre?: string | null; volver?: string } = {}): string {
   const q = new URLSearchParams();
   if (opciones.tipo) q.set("tipo", opciones.tipo);
+  if (opciones.nombre) q.set("nombre", opciones.nombre);
+  if (opciones.volver) q.set("volver", opciones.volver);
+  const s = q.toString();
+  return `${RUTA_MONITOREO}/nuevo${s ? `?${s}` : ""}`;
+}
+
+/** Detalle de una métrica; las "Otra" se identifican por nombre. */
+export function hrefDetalleMetrica(m: ConMetrica): string {
+  if (m.tipo !== "otra") return `${RUTA_MONITOREO}/${m.tipo}`;
+  return `${RUTA_MONITOREO}/otra?nombre=${encodeURIComponent(m.nombre_otra?.trim() ?? "")}`;
+}
+
+export function hrefNuevaMedicion(
+  opciones: { tipo?: TipoRegistrable; nombre?: string | null; unidad?: string | null; hora?: string; volver?: string } = {}
+): string {
+  const q = new URLSearchParams();
+  if (opciones.tipo) q.set("tipo", opciones.tipo);
+  if (opciones.nombre) q.set("nombre", opciones.nombre);
+  if (opciones.unidad) q.set("unidad", opciones.unidad);
+  if (opciones.hora) q.set("hora", opciones.hora);
   if (opciones.volver) q.set("volver", opciones.volver);
   const s = q.toString();
   return `${RUTA_MONITOREO}/agregar${s ? `?${s}` : ""}`;

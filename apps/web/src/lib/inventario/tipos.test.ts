@@ -84,3 +84,12 @@ describe("acotarEntero", () => {
     expect(acotarEntero("", 0, 10)).toBe(0);
   });
 });
+
+describe("textoQuedan por forma", () => {
+  it("usa la unidad de cada forma y coma decimal", () => {
+    expect(textoQuedan(30, "jarabe")).toBe("Quedan 30 ml");
+    expect(textoQuedan(12.5, "pastilla")).toBe("Quedan 12,5 pastillas");
+    expect(textoQuedan(1, "inyeccion")).toBe("Queda 1 unidad");
+    expect(textoQuedan(0, "gotas")).toBe("No queda nada");
+  });
+});

@@ -15,7 +15,10 @@ import {
 import {
   AVISO_REFERENCIA,
   ETIQUETA_CONTEXTO,
-  META_MEDICION,
+  metaDe,
+  type TipoRegistrable,
+  hrefDetalleMetrica,
+  hrefNuevoMonitoreo,
   dentroDeRango,
   esTipoMedicion,
   formatearNumero,
@@ -29,19 +32,35 @@ import { cn } from "@/lib/utils";
 import { TopBar } from "../../../top-bar";
 import { BadgeMedicion } from "../componentes";
 import { EliminarMedicionButton } from "../eliminar-medicion-button";
+import { TarjetaPlan } from "../tarjeta-plan";
+import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
+import { esDeLaMetrica } from "@/lib/mediciones/plan";
 
 export default async function MonitoreoDetallePage(props: PageProps<"/app/mi-salud/monitoreo/[tipo]">) {
   await requireUser();
-  const { tipo } = await props.params;
-  if (!esTipoMedicion(tipo)) notFound();
+  const { tipo: pedidoTipo } = await props.params;
+  if (pedidoTipo !== "otra" && !esTipoMedicion(pedidoTipo)) notFound();
+  const tipo: TipoRegistrable = pedidoTipo;
+  const pedido = (await props.searchParams)?.nombre;
+  const nombreOtra = tipo === "otra" ? (Array.isArray(pedido) ? pedido[0] : pedido)?.trim() ?? "" : null;
+  if (tipo === "otra" && !nombreOtra) notFound();
 
   const supabase = await createClient();
   const activo = await obtenerPerfilActivo();
   const puedeEditar = activo.rol === "editar";
-  const meta = META_MEDICION[tipo];
 
-  const historial = await medicionesNucleo.listarPorTipoSeguro(supabase, activo.id, tipo);
-  const resumen = resumirTipo(tipo, historial);
+  const [todas, planes] = await Promise.all([
+    medicionesNucleo.listarPorTipoSeguro(supabase, activo.id, tipo),
+    planesNucleo.listarSeguro(supabase, activo.id),
+  ]);
+  const consulta = { tipo, nombre_otra: nombreOtra };
+  const historial = todas.filter((m) => esDeLaMetrica(m, consulta));
+  const plan = planes.find((p) => esDeLaMetrica(p, consulta)) ?? null;
+  if (tipo === "otra" && historial.length === 0 && !plan) notFound();
+  const unidadOtra = plan?.unidad_otra ?? historial[0]?.unidad_otra ?? null;
+  const meta = metaDe({ tipo, nombre_otra: plan?.nombre_otra ?? historial[0]?.nombre_otra ?? nombreOtra, unidad_otra: unidadOtra });
+  const resumen = resumirTipo(tipo, historial, meta);
+  const volverDetalle = hrefDetalleMetrica(consulta);
   const ultima = resumen.ultima;
 
   const conGrafico = resumen.n >= MINIMO_DETALLE;
@@ -216,9 +235,17 @@ export default async function MonitoreoDetallePage(props: PageProps<"/app/mi-sal
         </>
       )}
 
+      {plan && (
+        <TarjetaPlan
+          plan={plan}
+          puedeEditar={puedeEditar}
+          hrefCambiar={hrefNuevoMonitoreo({ tipo, nombre: nombreOtra, volver: volverDetalle })}
+        />
+      )}
+
       {puedeEditar && (
         <Link
-          href={hrefNuevaMedicion({ tipo, volver: `/app/mi-salud/monitoreo/${tipo}` })}
+          href={hrefNuevaMedicion({ tipo, nombre: nombreOtra, unidad: unidadOtra, volver: volverDetalle })}
           className="flex items-center justify-center gap-2 rounded-full bg-primary p-4 font-heading text-[14.5px] font-extrabold text-primary-foreground shadow-cta-sm"
         >
           <VitaIcon name="plus" size={16} strokeWidth={2.6} />

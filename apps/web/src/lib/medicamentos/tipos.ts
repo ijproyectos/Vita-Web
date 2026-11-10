@@ -1,3 +1,4 @@
+import type { FormaMedicamento } from "./forma";
 export type MomentoDia = "mañana" | "mediodia" | "tarde" | "noche";
 
 import type { IndicacionComida } from "./comidas";
@@ -49,6 +50,12 @@ export type Medicamento = {
   // Migración 023 (pueden faltar mientras no esté aplicada).
   indicado_por?: string | null;
   fecha_inicio?: string | null;
+  // Migración 052 (pueden faltar mientras no esté aplicada).
+  forma?: FormaMedicamento;
+  /** Cantidad de esta toma; null = usa `pastillas_por_toma` del stock. */
+  cantidad_por_toma?: number | null;
+  /** Último día de tratamiento (inclusive) en fecha AR; null = sin fin. */
+  fecha_fin?: string | null;
 };
 
 /** Una toma registrada (fila de `medicamentos_tomas`) para el historial y la semana del detalle. */
@@ -100,7 +107,10 @@ export type DatosNuevoMedicamentoMultiMomento = {
   /** Alta por momento (chat, onboarding): una fila por momento, hora por defecto. */
   momentos?: MomentoDia[];
   /** Alta por toma (formulario V7): una fila por toma, con su hora y su relación con la comida. */
-  tomas?: { hora: string; conComida: ConComida; indicacion?: IndicacionComida | null }[];
+  tomas?: { hora: string; conComida: ConComida; indicacion?: IndicacionComida | null; cantidad?: number | null }[];
+  forma?: string;
+  diasRecurrentes?: string[];
+  fechaFin?: string | null;
   frecuencia?: string | null;
   conComida?: ConComida;
   indicacion?: IndicacionComida | null;
@@ -178,7 +188,7 @@ export function agruparMedicamentos(meds: Medicamento[]): GrupoMedicamentoLista[
 }
 
 /** Una toma del formulario de edición: `id` presente = fila existente; ausente = toma nueva. */
-export type TomaEditada = { id?: string; hora: string; conComida: ConComida; indicacion?: IndicacionComida | null };
+export type TomaEditada = { id?: string; hora: string; conComida: ConComida; cantidad?: number | null; indicacion?: IndicacionComida | null };
 
 export type DatosActualizarGrupo = {
   nombre: string;
@@ -186,5 +196,9 @@ export type DatosActualizarGrupo = {
   unidad: string;
   /** undefined = no tocar la frecuencia descriptiva. */
   frecuencia?: string | null;
+  /** undefined = no tocar. */
+  forma?: string;
+  diasRecurrentes?: string[];
+  fechaFin?: string | null;
   tomas: TomaEditada[];
 };

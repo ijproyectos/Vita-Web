@@ -7,6 +7,7 @@
 // AR (ver `fechaEnAR` en lib/medicamentos/nucleo.ts); por eso "hoy" del
 // calendario es el día AR, igual que en `listarHoy`.
 
+import { vigenteEnFecha } from "@/lib/medicamentos/cuando";
 import { textoDosis, type DiaSemana, type Medicamento, type TomaRegistrada } from "@/lib/medicamentos/tipos";
 
 export const DIAS_CALENDARIO = 35;
@@ -65,6 +66,7 @@ export function esperadosEn(meds: Medicamento[], fecha: string): Medicamento[] {
   return meds.filter(
     (m) =>
       (m.fecha_inicio ?? m.created_at).slice(0, 10) <= fecha &&
+      vigenteEnFecha(m, fecha) &&
       (m.dias_recurrentes.length === 0 || m.dias_recurrentes.includes(dia))
   );
 }

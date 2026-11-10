@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import { useVolver } from "@/lib/navegacion/rastreador";
 import { toast } from "sonner";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
-import { EtiquetaSeccion, FranjaDias, NotaLateral, PillsEspecialidad } from "@/components/vita/campos-turno";
-import { FilaHora, SelectorHora } from "@/components/vita/selector-hora";
+import { CalendarioTurno, CampoEspecialidad, EtiquetaSeccion, NotaLateral, SelectorHoraTurno } from "@/components/vita/campos-turno";
+import { FilaHora } from "@/components/vita/selector-hora";
 import { Interruptor } from "@/components/vita/interruptor";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { crearTurnoAction, type EstadoAccion } from "../rutina/actions";
-import { fechaConOffset } from "@/lib/rutina/formato";
-import { BASE_LLEVAR, SUGERENCIAS_LLEVAR, type ItemLlevar } from "@/lib/turnos/tipos";
+import { credencialDeObraSocial } from "@/lib/turnos/alta";
+import { SUGERENCIAS_LLEVAR, type ItemLlevar } from "@/lib/turnos/tipos";
+
+/** El DNI es el único ítem fijo; la credencial entra como sugerencia. */
+const DNI = "DNI";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
 
@@ -22,10 +25,14 @@ const CLASE_CAMPO =
 export function FormularioAgregarTurno({
   llevarDisponible,
   paraNombre,
+  especialidadesUsadas,
+  obraSocial,
 }: {
   /** La columna `turnos.llevar` (migración 023) existe: si no, se oculta "Qué hay que llevar". */
   llevarDisponible: boolean;
   paraNombre?: string;
+  especialidadesUsadas: string[];
+  obraSocial: string | null;
 }) {
   const router = useRouter();
   const volver = useVolver("/app/rutina");
@@ -33,13 +40,13 @@ export function FormularioAgregarTurno({
   const [profesional, setProfesional] = useState("");
   const [lugar, setLugar] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [fecha, setFecha] = useState(() => fechaConOffset(1));
-  const [hora, setHora] = useState("10:00");
+  const [fecha, setFecha] = useState("");
+  const [hora, setHora] = useState("10:30");
   const [pickerAbierto, setPickerAbierto] = useState(false);
   const [acompanado, setAcompanado] = useState(false);
 
-  // "Qué hay que llevar" (D:2256): ítems base, sugerencias por especialidad y propios.
-  const [baseOff, setBaseOff] = useState<string[]>(() => BASE_LLEVAR.filter(([, , on]) => !on).map(([t]) => t));
+  // "Qué hay que llevar": DNI, sugerencias (credencial y por especialidad) y propios.
+  const [conDni, setConDni] = useState(true);
   const [sugAgregadas, setSugAgregadas] = useState<string[]>([]);
   const [sugOcultas, setSugOcultas] = useState<string[]>([]);
   const [extras, setExtras] = useState<string[]>([]);
@@ -58,20 +65,13 @@ export function FormularioAgregarTurno({
   const formRef = useRef<HTMLFormElement>(null);
   const [ocultoPara, setOcultoPara] = useState<typeof estado | null>(null);
 
-  const sugeridas = SUGERENCIAS_LLEVAR[especialidad] ?? [];
+  const credencial = credencialDeObraSocial(obraSocial);
+  const sugeridas = [...(credencial ? [credencial] : []), ...(SUGERENCIAS_LLEVAR[especialidad] ?? [])];
   const sugeribles = sugeridas.filter((s) => !sugAgregadas.includes(s) && !sugOcultas.includes(s));
-  const filas: { texto: string; etiqueta: string; quitar: () => void }[] = [
-    ...BASE_LLEVAR.filter(([t]) => !baseOff.includes(t)).map(([t, tag]) => ({
-      texto: t,
-      etiqueta: tag,
-      quitar: () => setBaseOff((p) => [...p, t]),
-    })),
-    ...sugAgregadas.filter((s) => sugeridas.includes(s)).map((s) => ({
-      texto: s,
-      etiqueta: "",
-      quitar: () => setSugAgregadas((p) => p.filter((x) => x !== s)),
-    })),
-    ...extras.map((x, i) => ({ texto: x, etiqueta: "", quitar: () => setExtras((p) => p.filter((_, j) => j !== i)) })),
+  const filas: { texto: string }[] = [
+    ...(conDni ? [{ texto: DNI }] : []),
+    ...sugAgregadas.filter((s) => sugeridas.includes(s)).map((texto) => ({ texto })),
+    ...extras.map((texto) => ({ texto })),
   ];
   const llevar: ItemLlevar[] = filas.map((f) => ({ t: f.texto, ok: false }));
 
@@ -82,7 +82,7 @@ export function FormularioAgregarTurno({
     setBorrador("");
   }
 
-  const faltantes = [!especialidad.trim() && "la especialidad", !fecha.trim() && "la fecha"].filter(Boolean) as string[];
+  const faltantes = [!fecha.trim() && "el día del turno"].filter(Boolean) as string[];
   const puedeGuardar = faltantes.length === 0;
 
   return (
@@ -90,16 +90,28 @@ export function FormularioAgregarTurno({
       <div>
         <EtiquetaSeccion text="Especialidad" />
         <div className="mt-3.5">
-          <PillsEspecialidad valor={especialidad} onCambio={setEspecialidad} />
+          <CampoEspecialidad valor={especialidad} onCambio={setEspecialidad} usadas={especialidadesUsadas} />
         </div>
-        <input type="hidden" name="especialidad" value={especialidad} />
+        <input type="hidden" name="especialidad" value={especialidad.trim() || "Turno médico"} />
       </div>
 
       <div>
         <EtiquetaSeccion text="Profesional y lugar" />
         <div className="mt-3.5 flex flex-col gap-[9px]">
           <input name="profesional" value={profesional} onChange={(e) => setProfesional(e.target.value)} placeholder="Dr. / Dra." className={CLASE_CAMPO} />
-          <input name="lugar" value={lugar} onChange={(e) => setLugar(e.target.value)} placeholder="Sanatorio, clínica o centro" className={CLASE_CAMPO} />
+          <div className="flex items-center gap-2">
+            <input name="lugar" value={lugar} onChange={(e) => setLugar(e.target.value)} placeholder="Sanatorio, clínica o centro" className={cn(CLASE_CAMPO, "min-w-0 flex-1")} />
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lugar.trim() || "sanatorio")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Abrir en Google Maps"
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-card px-3.5 py-[15px] text-[13px] font-extrabold text-teal-deep shadow-item"
+            >
+              <VitaIcon name="navigation" size={14} strokeWidth={2.4} />
+              Mapa
+            </a>
+          </div>
           {llevarDisponible && (
             <input name="telefono" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Teléfono del consultorio (opcional)" inputMode="tel" aria-label="Teléfono del consultorio" className={CLASE_CAMPO} />
           )}
@@ -109,7 +121,7 @@ export function FormularioAgregarTurno({
       <div>
         <EtiquetaSeccion text="Fecha y hora" />
         <div className="mt-3.5">
-          <FranjaDias valor={fecha} onCambio={setFecha} />
+          <CalendarioTurno valor={fecha} onCambio={setFecha} />
         </div>
         <div className="mt-3">
           <FilaHora etiqueta="Hora del turno" hora={hora} placeholderRelacion={null} onClick={() => setPickerAbierto(true)} />
@@ -136,17 +148,9 @@ export function FormularioAgregarTurno({
         <div>
           <EtiquetaSeccion text="Qué hay que llevar" />
           <ul className="mt-3.5 flex flex-col gap-2">
-            {BASE_LLEVAR.map(([t, tag]) => (
-              <FilaLlevar
-                key={t}
-                texto={t}
-                etiqueta={tag}
-                activo={!baseOff.includes(t)}
-                alternar={() => setBaseOff((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]))}
-              />
-            ))}
+            <FilaLlevar texto={DNI} etiqueta="Siempre" activo={conDni} alternar={() => setConDni((v) => !v)} />
             {sugAgregadas.filter((s) => sugeridas.includes(s)).map((s) => (
-              <FilaLlevar key={s} texto={s} etiqueta="" activo alternar={() => setSugAgregadas((p) => p.filter((x) => x !== s))} />
+              <FilaLlevar key={s} texto={s} etiqueta="" sub={s === credencial ? "Tenela a mano en el celular" : undefined} activo alternar={() => setSugAgregadas((p) => p.filter((x) => x !== s))} />
             ))}
             {extras.map((x, i) => (
               <FilaLlevar key={`${x}-${i}`} texto={x} etiqueta="" activo alternar={() => setExtras((p) => p.filter((_, j) => j !== i))} />
@@ -155,7 +159,7 @@ export function FormularioAgregarTurno({
 
           {sugeribles.length > 0 && (
             <>
-              <div className="mt-4 text-[12.5px] font-bold text-slate-brand">Vita sugiere para {especialidad.toLowerCase()}</div>
+              <div className="mt-4 text-[12.5px] font-bold text-slate-brand">{especialidad.trim() ? `Vita sugiere para ${especialidad.trim().toLowerCase()}` : "Vita sugiere"}</div>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {sugeribles.map((g) => (
                   <div key={g} className="inline-flex items-center overflow-hidden rounded-full border-[1.5px] border-dashed border-primary bg-primary/[0.06]">
@@ -209,10 +213,9 @@ export function FormularioAgregarTurno({
         </div>
       )}
 
-      <SelectorHora
+      <SelectorHoraTurno
         abierto={pickerAbierto}
         hora={hora}
-        conComidas={false}
         onCerrar={() => setPickerAbierto(false)}
         onConfirmar={(h) => {
           setHora(h);
@@ -263,7 +266,7 @@ export function FormularioAgregarTurno({
   );
 }
 
-function FilaLlevar({ texto, etiqueta, activo, alternar }: { texto: string; etiqueta: string; activo: boolean; alternar: () => void }) {
+function FilaLlevar({ texto, etiqueta, sub, activo, alternar }: { texto: string; etiqueta: string; sub?: string; activo: boolean; alternar: () => void }) {
   return (
     <li>
       <button
@@ -280,7 +283,10 @@ function FilaLlevar({ texto, etiqueta, activo, alternar }: { texto: string; etiq
         >
           <VitaIcon name="check" size={13} strokeWidth={3.4} color="var(--primary-foreground)" className={activo ? "opacity-100" : "opacity-0"} />
         </span>
-        <span className={cn("min-w-0 flex-1 text-[14.5px] font-bold", activo ? "text-foreground" : "text-subtle")}>{texto}</span>
+        <span className="min-w-0 flex-1">
+          <span className={cn("block text-[14.5px] font-bold", activo ? "text-foreground" : "text-subtle")}>{texto}</span>
+          {sub && <span className="mt-0.5 block text-xs font-medium text-subtle">{sub}</span>}
+        </span>
         {etiqueta && <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-subtle">{etiqueta}</span>}
       </button>
     </li>
