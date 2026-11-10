@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   construirCalendario,
@@ -32,13 +31,11 @@ export function HistorialView({
   tomas,
   mediciones,
   hoy,
-  puedeEditar,
 }: {
   meds: Medicamento[];
   tomas: TomaRegistrada[];
   mediciones: MedicionDia[];
   hoy: string;
-  puedeEditar: boolean;
 }) {
   const [elegido, setElegido] = useState(hoy);
 
@@ -52,14 +49,6 @@ export function HistorialView({
         <div className="max-w-[280px] text-balance text-[12.5px] font-medium leading-[1.45] text-subtle">
           Cuando cargues un remedio, acá vas a ver qué días se tomó todo y cuáles no.
         </div>
-        {puedeEditar && (
-          <Link
-            href="/app/agregar-medicamento"
-            className="mt-2 rounded-full bg-primary px-5 py-[11px] text-[13.5px] font-extrabold text-primary-foreground shadow-cta"
-          >
-            Agregar un remedio
-          </Link>
-        )}
       </div>
     );
   }
