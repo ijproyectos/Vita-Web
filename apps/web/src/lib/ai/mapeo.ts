@@ -73,6 +73,11 @@ export function medidoAtDesdeModelo(valor: unknown): string | undefined | "inval
   if (typeof valor !== "string") return "invalida";
   const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})$/.exec(valor.trim());
   if (!m) return "invalida";
-  const iso = `${m[1]}T${m[2]}:00-03:00`;
-  return Number.isNaN(new Date(iso).getTime()) ? "invalida" : iso;
+  const [anio, mes, dia] = m[1].split("-").map(Number);
+  const [hora, minuto] = m[2].split(":").map(Number);
+  // Ida y vuelta: un 30 de febrero no se "corre" a marzo, se rechaza.
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  const fechaReal = fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia;
+  if (!fechaReal || hora > 23 || minuto > 59) return "invalida";
+  return `${m[1]}T${m[2]}:00-03:00`;
 }

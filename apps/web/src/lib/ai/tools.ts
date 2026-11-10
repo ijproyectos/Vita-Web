@@ -350,7 +350,11 @@ async function ejecutarEnDestino(
     case "list_measurements":
       return leer("las mediciones", async () => {
         const limite = acotarLimite(input.limit, 10, 1, 30);
-        const tipo = esTipoMedicion(input.type) || input.type === "otra" ? (input.type as TipoRegistrable) : null;
+        const pedido = input.type;
+        if (pedido !== undefined && pedido !== null && pedido !== "" && !esTipoMedicion(pedido) && pedido !== "otra") {
+          return { error: `No existe el tipo de medición "${limpiarDato(String(pedido))}". Usá uno de la lista o no lo pases.` };
+        }
+        const tipo = esTipoMedicion(pedido) || pedido === "otra" ? (pedido as TipoRegistrable) : null;
         const [lista, planes] = await Promise.all([
           tipo ? mediciones.listarPorTipo(supabase, usuarioId, tipo, limite) : mediciones.listarRecientes(supabase, usuarioId, limite),
           planesMedicion.listarSeguro(supabase, usuarioId),

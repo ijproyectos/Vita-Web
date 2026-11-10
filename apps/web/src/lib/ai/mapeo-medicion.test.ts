@@ -17,6 +17,8 @@ describe("medidoAtDesdeModelo", () => {
     expect(medidoAtDesdeModelo("ayer a la mañana")).toBe("invalida");
     expect(medidoAtDesdeModelo("2026-13-40T99:99")).toBe("invalida");
     expect(medidoAtDesdeModelo(1234)).toBe("invalida");
+    expect(medidoAtDesdeModelo("2026-02-30T09:00")).toBe("invalida");
+    expect(medidoAtDesdeModelo("2026-11-10T24:00")).toBe("invalida");
   });
 });
 
