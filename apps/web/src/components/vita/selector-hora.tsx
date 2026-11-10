@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { ChipsComida, ChipsMomento, PasoHora } from "@/components/vita/hora-momento";
 import { comidaParaMomento, momentoDeToma, SIN_COMIDA, type ComidaToma } from "@/lib/medicamentos/comidas";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
-import { momentoDelDia } from "@/lib/rutina/momento";
+import { horaParaMomento } from "@/lib/rutina/momento";
 import { cn } from "@/lib/utils";
 import { VitaIcon } from "@/lib/vita-icons";
 
@@ -14,7 +14,8 @@ import { VitaIcon } from "@/lib/vita-icons";
 // medición), hora con − / + y Confirmar. El momento es una elección propia:
 // mover la hora no lo cambia (06:30 "En ayunas" sigue siendo de la mañana) y
 // elegir una comida no mueve la hora. Cambiar de momento limpia una comida de
-// otro momento. Las piezas viven en hora-momento.tsx (las comparte la charla).
+// otro momento y lleva la hora a la del momento solo si quedaba lejos
+// (horaParaMomento). Las piezas viven en hora-momento.tsx (las comparte la charla).
 // Devuelve la hora "HH:MM" y la comida elegida (clave + con_comida).
 
 export function SelectorHora({
@@ -67,13 +68,13 @@ function Contenido({
   const [hora, setHora] = useState(horaInicial);
   const [comida, setComida] = useState<ComidaToma>(comidaInicial);
   const [momento, setMomento] = useState<MomentoDia>(() => momentoDeToma(horaInicial, comidaInicial));
-  // Si la persona ya movió la hora, elegir el momento no se la pisa.
-  const [horaTocada, setHoraTocada] = useState(false);
 
+  // La hora se respeta si está en ese momento o cerca (06:30 "En ayunas" con
+  // Mañana); si queda lejos (08:00 con Noche) pasa a la del momento.
   function elegirMomento(m: MomentoDia, horaSugerida: string) {
     setMomento(m);
     setComida((c) => comidaParaMomento(c, m));
-    if (!horaTocada && momentoDelDia(hora) !== m) setHora(horaSugerida);
+    setHora((h) => horaParaMomento(h, m, horaSugerida));
   }
 
   return (
@@ -92,13 +93,7 @@ function Contenido({
       )}
 
       <div className="eyebrow mb-2.5 mt-5 text-subtle">Hora</div>
-      <PasoHora
-        hora={hora}
-        onCambio={(h) => {
-          setHora(h);
-          setHoraTocada(true);
-        }}
-      />
+      <PasoHora hora={hora} onCambio={setHora} />
 
       <button
         type="button"
