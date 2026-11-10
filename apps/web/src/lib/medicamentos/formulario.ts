@@ -53,8 +53,9 @@ export function leerTomas(formData: FormData): ({ hora: string; cantidad?: numbe
 }
 
 /** Campos "¿Cuándo lo toma?" y forma, sin validar: los valida el núcleo. */
-export function leerPlanMedicamento(formData: FormData): { forma: string; diasRecurrentes: string[]; fechaFin: string | null } {
+export function leerPlanMedicamento(formData: FormData): { forma: string; diasRecurrentes: string[]; fechaFin: string | null; droga: string | null } {
   return {
+    droga: String(formData.get("droga") ?? "").trim() || null,
     forma: String(formData.get("forma") ?? "pastilla"),
     diasRecurrentes: formData.getAll("dia").map(String),
     fechaFin: String(formData.get("fechaFin") ?? "") || null,

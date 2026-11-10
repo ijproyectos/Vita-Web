@@ -21,9 +21,21 @@ export function separarNombreDroga(texto: string): NombreYDroga {
   return { nombre, droga };
 }
 
-/** "Forxiga (Dapagliflozina)"; sin droga, el nombre solo. */
-export function nombreConDroga(nombre: string, droga: string | null | undefined): string {
-  const n = nombre.trim();
-  const d = droga?.trim();
-  return d && d.toLowerCase() !== n.toLowerCase() ? `${n} (${d})` : n;
+export const MAX_DROGA = 80;
+
+/**
+ * Nombre y droga listos para guardar. El nombre queda SIN el paréntesis (es
+ * lo que se muestra y se lee siempre); la droga va a su propia columna. Una
+ * droga explícita manda sobre la del paréntesis. `droga` undefined en la
+ * entrada y sin paréntesis = undefined (en una edición: no tocarla).
+ */
+export function normalizarNombreYDroga(
+  nombre: string,
+  droga?: string | null
+): { nombre: string; droga: string | null | undefined } {
+  const separado = separarNombreDroga(nombre);
+  const explicita = typeof droga === "string" ? droga.trim() : "";
+  const final = explicita || separado.droga;
+  if (final) return { nombre: separado.nombre, droga: final.slice(0, MAX_DROGA) };
+  return { nombre: separado.nombre, droga: droga === undefined ? undefined : null };
 }

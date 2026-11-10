@@ -3,13 +3,15 @@
 import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
 import { VitaIcon } from "@/lib/vita-icons";
-import { etiquetaSugerencia, normalizar, sugerirMedicamentos, type Sugerencia } from "@/lib/medicamentos/catalogo";
+import { normalizar, sugerirMedicamentos, type Sugerencia } from "@/lib/medicamentos/catalogo";
 
 // Nombre de medicamento con sugerencias del catálogo local, igual que la
 // especialidad de los turnos (CampoEspecialidad): filtra por cualquier parte
 // del nombre comercial o del genérico, muestra la lista abajo y la persona
-// elige. No completa en línea. Una marca se elige como "Forxiga
-// (Dapagliflozina)" (lo de paréntesis es la droga, ver lib/medicamentos/nombre).
+// elige. No completa en línea. Al elegir una marca el nombre queda "Forxiga"
+// (lo que la persona conoce y se muestra siempre) y la droga se avisa aparte
+// para su propio campo: `onElegir` recibe los dos juntos (un solo cambio de
+// estado; con dos llamadas seguidas la segunda pisaría a la primera).
 // Enter elige la sugerencia marcada (o la primera) y NUNCA envía el
 // formulario, así no se guarda un nombre a medio escribir. El texto libre
 // sigue valiendo para lo que no esté en la lista. Siempre controlado.
@@ -27,9 +29,15 @@ export function CampoMedicamento({
   placeholder,
   variante = "alta",
   ariaLabel,
+  onElegir,
 }: {
   value: string;
   onChange: (valor: string) => void;
+  /**
+   * Al elegir de la lista: el nombre y la droga de esa marca (null si se
+   * eligió el genérico). Si no se pasa, solo se escribe el nombre con `onChange`.
+   */
+  onElegir?: (eleccion: { nombre: string; droga: string | null }) => void;
   name?: string;
   placeholder?: string;
   variante?: Variante;
@@ -42,7 +50,7 @@ export function CampoMedicamento({
 
   const sugerencias = sugerirMedicamentos(value);
   // Ya escrita igual que la única sugerencia: no hace falta la lista.
-  const yaEscrita = sugerencias.length === 1 && normalizar(etiquetaSugerencia(sugerencias[0])) === normalizar(value);
+  const yaEscrita = sugerencias.length === 1 && normalizar(nombreVisible(sugerencias[0])) === normalizar(value);
   const mostrarLista = !elegida && !yaEscrita && sugerencias.length > 0 && (variante === "alta" || enfocado);
   const idOpcion = (i: number) => `${idLista}-op-${i}`;
 
@@ -53,7 +61,8 @@ export function CampoMedicamento({
   }
 
   function elegir(s: Sugerencia) {
-    onChange(etiquetaSugerencia(s));
+    if (onElegir) onElegir({ nombre: nombreVisible(s), droga: s.marca ? s.nombre : null });
+    else onChange(nombreVisible(s));
     setElegida(true);
     setActivo(-1);
   }
@@ -134,7 +143,7 @@ export function CampoMedicamento({
         >
           <VitaIcon name="pill" size={16} color="var(--teal-deep)" className="shrink-0" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-bold">{s.marca ?? s.nombre}</span>
+            <span className="block truncate text-sm font-bold">{nombreVisible(s)}</span>
             {s.marca && <span className="block truncate text-[11.5px] font-medium text-subtle">{s.nombre}</span>}
           </span>
         </li>
@@ -170,4 +179,9 @@ export function CampoMedicamento({
       {lista}
     </div>
   );
+}
+
+/** Lo que queda en el campo al elegir: la marca si se buscó por marca, si no el genérico. */
+function nombreVisible(s: Sugerencia): string {
+  return s.marca ?? s.nombre;
 }

@@ -49,6 +49,8 @@ export type ResumenProfesional = {
   alergias: string[];
   medicamentos: {
     nombre: string;
+    /** Migración 056; ausente o null sin ella. */
+    droga?: string | null;
     dosis: string | null;
     unidad: string;
     hora: string;

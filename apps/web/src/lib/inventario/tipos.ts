@@ -36,13 +36,13 @@ export function claveMedicamento(nombre: string, dosis: string | null | undefine
   return `${nombre.trim().toLowerCase()}|${(dosis ?? "").trim().toLowerCase()}`;
 }
 
-type Candidato = { clave: string; nombre: string; dosis: string | null };
+type Candidato = { clave: string; nombre: string; dosis: string | null; droga?: string | null };
 
 /**
  * A qué medicamento ya cargado corresponde un conteo por foto. Primero la
- * clave exacta; si no, compara el nombre comercial y la droga sin el
- * paréntesis (el blister dice "Forxiga" y la persona guardó "Forxiga
- * (Dapagliflozina)"). Sin dosis solo enlaza si hay UNO solo con ese nombre;
+ * clave exacta; si no, compara el nombre y la droga (su columna o, en
+ * filas viejas, el paréntesis "Forxiga (Dapagliflozina)"): el blister puede
+ * decir "Forxiga" o "Dapagliflozina". Sin dosis solo enlaza si hay UNO solo con ese nombre;
  * con dosis, tiene que coincidir también la dosis.
  */
 export function buscarMedicamentoContado<T extends Candidato>(
@@ -58,7 +58,7 @@ export function buscarMedicamentoContado<T extends Candidato>(
   const nombresBuscados = new Set([buscado.nombre, buscado.droga].filter((x): x is string => !!x).map(norma));
   const mismoNombre = candidatos.filter((c) => {
     const { nombre: n, droga } = separarNombreDroga(c.nombre);
-    return [n, droga].some((x) => x !== null && nombresBuscados.has(norma(x)));
+    return [n, droga, c.droga ?? null].some((x) => x !== null && nombresBuscados.has(norma(x)));
   });
   if (dosis) return mismoNombre.find((c) => norma(c.dosis ?? "") === norma(dosis));
   return mismoNombre.length === 1 ? mismoNombre[0] : undefined;

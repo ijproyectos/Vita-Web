@@ -68,7 +68,13 @@ describe("plan del medicamento", () => {
     fd.append("dia", "lunes");
     fd.append("fechaFin", "2026-11-15");
     expect(leerTomas(fd).map((t) => t.cantidad)).toEqual([0.5, 1]);
-    expect(leerPlanMedicamento(fd)).toEqual({ forma: "pastilla", diasRecurrentes: ["lunes"], fechaFin: "2026-11-15" });
+    expect(leerPlanMedicamento(fd)).toEqual({ droga: null, forma: "pastilla", diasRecurrentes: ["lunes"], fechaFin: "2026-11-15" });
+  });
+
+  it("lee la droga sin espacios de más", () => {
+    const fd = new FormData();
+    fd.append("droga", "  Dapagliflozina ");
+    expect(leerPlanMedicamento(fd).droga).toBe("Dapagliflozina");
   });
 
   it("normalizarForma rechaza lo desconocido", () => {

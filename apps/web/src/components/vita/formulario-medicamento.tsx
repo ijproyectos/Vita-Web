@@ -55,6 +55,7 @@ export function FormularioMedicamento({
 }) {
   const volver = useVolver(volverA);
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
+  const [droga, setDroga] = useState("");
   const [dosisTexto, setDosisTexto] = useState(
     inicial?.dosis ? `${inicial.dosis} ${inicial.unidad}`.trim() : ""
   );
@@ -124,10 +125,25 @@ export function FormularioMedicamento({
             name="nombre"
             value={nombre}
             onChange={setNombre}
+            onElegir={(e) => {
+              setNombre(e.nombre);
+              setDroga(e.droga ?? "");
+            }}
             placeholder="Ibupirac, Metformina…"
             ariaLabel="Nombre del medicamento"
           />
         </div>
+        {/* La droga es un dato aparte: el nombre que la persona conoce es el que se muestra siempre. */}
+        <input
+          name="droga"
+          value={droga}
+          onChange={(e) => setDroga(e.target.value)}
+          placeholder="Droga (opcional)"
+          aria-label="Droga"
+          autoComplete="off"
+          maxLength={80}
+          className="mt-3 w-full rounded-full border border-foreground/10 bg-card px-[18px] py-[13px] text-sm font-semibold outline-none placeholder:font-medium placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40"
+        />
         <div className="mt-3 flex gap-[9px]">
           <input
             value={dosisTexto}

@@ -1,5 +1,4 @@
 import { MEDICAMENTOS_POR_CONDICION } from "@/lib/onboarding/catalogo-condiciones";
-import { nombreConDroga } from "./nombre";
 
 // Catálogo local de medicamentos frecuentes en Argentina para autocompletar el
 // nombre al cargar un remedio. Es solo un listado de nombres (genérico + marcas
@@ -260,14 +259,6 @@ export type Sugerencia = {
 };
 
 export const MINIMO_CARACTERES_SUGERENCIA = 2;
-
-/**
- * Lo que queda escrito al elegir una sugerencia: "Ibupirac (Ibuprofeno)" si
- * coincidió por marca (lo de paréntesis es la droga), o el genérico solo.
- */
-export function etiquetaSugerencia(s: Sugerencia): string {
-  return s.marca ? nombreConDroga(s.marca, s.nombre) : s.nombre;
-}
 
 /**
  * Sugerencias como las especialidades de turnos: filtra por cualquier parte

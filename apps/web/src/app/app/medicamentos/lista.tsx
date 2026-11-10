@@ -47,6 +47,7 @@ export type StockPorFila = Record<string, { stock: number; porToma: number }>;
 type Edicion = {
   grupoId: string;
   nombre: string;
+  droga: string;
   dosis: string;
   forma: FormaMedicamento;
   tomas: TomaForm[];
@@ -66,6 +67,7 @@ function edicionDe(grupo: Grupo, stocks: StockPorFila): Edicion {
   return {
     grupoId: grupo.id,
     nombre: primera.nombre,
+    droga: primera.droga ?? "",
     dosis: textoDosis(primera),
     forma,
     tomas: grupo.filas.map((f) => ({ id: f.id, hora: f.hora_programada.slice(0, 5), conComida: f.con_comida, indicacion: f.indicacion ?? null, cantidad: f.cantidad_por_toma ?? cantidadVieja })),
@@ -80,6 +82,7 @@ function resumenFila(filas: Medicamento[], hoy: string): string {
   const horas = filas.map((f) => f.hora_programada.slice(0, 5)).join(" y ");
   const indicaciones = [...new Set(filas.map((f) => indicacionDeComida(f)).filter((x): x is string => !!x))];
   return [
+    filas[0].droga ?? null,
     tratamientoTerminado(filas, hoy) ? "Terminado" : null,
     textoDosis(filas[0]),
     `${horas} hs`,
@@ -140,6 +143,7 @@ export function ListaMedicamentos({
         grupo.filas.map((f) => f.id),
         {
           nombre: e.nombre,
+          droga: e.droga,
           dosis,
           unidad,
           // La frecuencia es descriptiva: solo se actualiza si cambió la cantidad de tomas.
@@ -326,16 +330,33 @@ function FormEdicion({
     >
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2">
         <CampoPill etiqueta="Nombre">
-          <CampoMedicamento variante="pill" value={edicion.nombre} onChange={(nombre) => onCambio({ ...edicion, nombre })} ariaLabel="Nombre del medicamento" />
+          <CampoMedicamento
+            variante="pill"
+            value={edicion.nombre}
+            onChange={(nombre) => onCambio({ ...edicion, nombre })}
+            onElegir={({ nombre, droga }) => onCambio({ ...edicion, nombre, droga: droga ?? "" })}
+            ariaLabel="Nombre del medicamento"
+          />
         </CampoPill>
         <CampoPill etiqueta="Dosis">
           <input value={edicion.dosis} onChange={(e) => onCambio({ ...edicion, dosis: e.target.value })} placeholder={config.placeholderDosis} className={CLASE_INPUT_PILL} />
         </CampoPill>
       </div>
 
-      <CampoPill etiqueta="Forma">
-        <SelectForma valor={edicion.forma} onCambio={cambiarForma} className={CLASE_INPUT_PILL} />
-      </CampoPill>
+      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2">
+        <CampoPill etiqueta="Droga">
+          <input
+            value={edicion.droga}
+            onChange={(e) => onCambio({ ...edicion, droga: e.target.value })}
+            placeholder="Opcional"
+            maxLength={80}
+            className={CLASE_INPUT_PILL}
+          />
+        </CampoPill>
+        <CampoPill etiqueta="Forma">
+          <SelectForma valor={edicion.forma} onCambio={cambiarForma} className={CLASE_INPUT_PILL} />
+        </CampoPill>
+      </div>
 
       <div className="flex flex-col gap-2">
         <span className="eyebrow pl-1 text-subtle">Horarios</span>

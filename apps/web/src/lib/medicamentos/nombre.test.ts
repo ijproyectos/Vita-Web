@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nombreConDroga, separarNombreDroga } from "./nombre";
+import { normalizarNombreYDroga, separarNombreDroga } from "./nombre";
 
 describe("separarNombreDroga", () => {
   it("separa el nombre comercial de la droga entre paréntesis", () => {
@@ -24,13 +24,22 @@ describe("separarNombreDroga", () => {
   });
 });
 
-describe("nombreConDroga", () => {
-  it("arma 'Marca (Droga)'", () => {
-    expect(nombreConDroga("Forxiga", "Dapagliflozina")).toBe("Forxiga (Dapagliflozina)");
+describe("normalizarNombreYDroga", () => {
+  it("saca la droga del paréntesis y deja el nombre que se muestra", () => {
+    expect(normalizarNombreYDroga("Forxiga (Dapagliflozina)")).toEqual({ nombre: "Forxiga", droga: "Dapagliflozina" });
   });
 
-  it("sin droga, o si es igual al nombre, deja el nombre solo", () => {
-    expect(nombreConDroga("Metformina", null)).toBe("Metformina");
-    expect(nombreConDroga("Metformina", "metformina")).toBe("Metformina");
+  it("una droga explícita manda sobre la del paréntesis", () => {
+    expect(normalizarNombreYDroga("Forxiga (Dapa)", "Dapagliflozina")).toEqual({ nombre: "Forxiga", droga: "Dapagliflozina" });
+  });
+
+  it("sin droga ni paréntesis: undefined si no vino (no tocar), null si vino vacía", () => {
+    expect(normalizarNombreYDroga("Metformina")).toEqual({ nombre: "Metformina", droga: undefined });
+    expect(normalizarNombreYDroga("Metformina", null)).toEqual({ nombre: "Metformina", droga: null });
+    expect(normalizarNombreYDroga("Metformina", "  ")).toEqual({ nombre: "Metformina", droga: null });
+  });
+
+  it("acota el largo de la droga", () => {
+    expect(normalizarNombreYDroga("X", "a".repeat(200)).droga).toHaveLength(80);
   });
 });

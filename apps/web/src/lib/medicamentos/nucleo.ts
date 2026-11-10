@@ -32,6 +32,7 @@ import { vigenteEnFecha } from "./cuando";
 import type { FormaMedicamento } from "./forma";
 import { normalizarCantidad, normalizarDias, normalizarFechaFin, normalizarForma } from "./formulario";
 import { claveMedicamento, separarDosis } from "@/lib/inventario/tipos";
+import { normalizarNombreYDroga } from "./nombre";
 import { momentoDelDia } from "@/lib/rutina/momento";
 
 // Núcleo de lógica de medicamentos, sin acoplarse a Server Actions ni al
@@ -359,6 +360,19 @@ function faltaColumnaPlan(error: { code?: string; message?: string }): boolean {
   return /forma|cantidad_por_toma|fecha_fin/i.test(error.message ?? "") && (error.code === "42703" || error.code === "PGRST204");
 }
 
+// Falta la columna `droga` (migración 056 sin aplicar): se guarda sin ella. Es
+// un dato de referencia (el nombre que se muestra no cambia), así que perderlo
+// mientras tanto es preferible a no poder cargar el remedio.
+function faltaColumnaDroga(error: { code?: string; message?: string }): boolean {
+  return /droga/i.test(error.message ?? "") && (error.code === "42703" || error.code === "PGRST204");
+}
+
+function sinDroga<T extends Record<string, unknown>>(fila: T): Omit<T, "droga"> {
+  const { droga: _droga, ...resto } = fila;
+  void _droga;
+  return resto;
+}
+
 function sinPlan(fila: Record<string, unknown>): Record<string, unknown> {
   const { forma: _f, cantidad_por_toma: _c, fecha_fin: _d, ...resto } = fila;
   void _f;
@@ -448,13 +462,16 @@ export async function verificarHorariosDisponibles(
 export async function agregar(
   supabase: Cliente,
   usuarioId: string,
-  datos: DatosNuevoMedicamento
+  datosCrudos: DatosNuevoMedicamento
 ): Promise<Medicamento> {
+  const { nombre, droga } = normalizarNombreYDroga(datosCrudos.nombre, datosCrudos.droga);
+  const datos = { ...datosCrudos, nombre };
   await verificarHorariosDisponibles(supabase, usuarioId, [datos]);
   const comida = columnasComida(datos);
   const fila: Record<string, unknown> = {
     usuario_id: usuarioId,
-    nombre: datos.nombre,
+    nombre,
+    ...(droga ? { droga } : {}),
     dosis: datos.dosis ?? null,
     unidad: datos.unidad ?? "mg",
     hora_programada: normalizarHoraDuplicados(datos.horaProgramada),
@@ -474,6 +491,17 @@ export async function agregar(
     .single();
   if (error && comida.indicacion && faltaColumnaIndicacion(error)) {
     ({ data, error } = await supabase.from("medicamentos").insert(fila).select().single());
+  }
+  if (error && droga && faltaColumnaDroga(error)) {
+    const sinColumna = sinDroga(fila);
+    ({ data, error } = await supabase
+      .from("medicamentos")
+      .insert(comida.indicacion ? { ...sinColumna, indicacion: comida.indicacion } : sinColumna)
+      .select()
+      .single());
+    if (error && comida.indicacion && faltaColumnaIndicacion(error)) {
+      ({ data, error } = await supabase.from("medicamentos").insert(sinColumna).select().single());
+    }
   }
 
   if (error) {
@@ -508,8 +536,10 @@ function columnaCantidad(
 export async function agregarMultiMomento(
   supabase: Cliente,
   usuarioId: string,
-  datos: DatosNuevoMedicamentoMultiMomento
+  datosCrudos: DatosNuevoMedicamentoMultiMomento
 ): Promise<Medicamento[]> {
+  const { nombre, droga } = normalizarNombreYDroga(datosCrudos.nombre, datosCrudos.droga);
+  const datos = { ...datosCrudos, nombre };
   // Alta por toma (hora propia + comida por fila) o por momento (hora por defecto).
   const plan: { hora: string; momento: MomentoDia; conComida: ConComida; indicacion: IndicacionComida | null; cantidad?: number | null }[] = datos.tomas?.length
     ? datos.tomas.map((t) => {
@@ -531,7 +561,8 @@ export async function agregarMultiMomento(
     // Solo si hay uno: así el insert tampoco depende de que la columna exista.
     ...(inventarioId ? { inventario_id: inventarioId } : {}),
     usuario_id: usuarioId,
-    nombre: datos.nombre,
+    nombre,
+    ...(droga ? { droga } : {}),
     dosis: datos.dosis ?? null,
     unidad: datos.unidad ?? "mg",
     hora_programada: toma.hora,
@@ -547,15 +578,25 @@ export async function agregarMultiMomento(
     notas: datos.notas ?? null,
   }));
 
-  let { data, error } = await supabase.from("medicamentos").insert(filas).select();
-  if (error && filas.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
-    ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinIndicacion)).select());
+  let aInsertar: Record<string, unknown>[] = filas;
+  let { data, error } = await supabase.from("medicamentos").insert(aInsertar).select();
+  if (error && droga && faltaColumnaDroga(error)) {
+    aInsertar = filas.map(sinDroga);
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
+  }
+  if (error && aInsertar.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
+    aInsertar = aInsertar.map(sinIndicacion);
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
   }
   // Sin la migración 052 un alta común sigue andando; una con forma, fin o
   // cantidad especial falla en vez de perder el dato.
   const planComun = forma === "pastilla" && !fechaFin && plan.every((t) => t.cantidad == null || t.cantidad === 1);
   if (error && planComun && faltaColumnaPlan(error)) {
-    ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinPlan)).select());
+    aInsertar = aInsertar.map(sinPlan);
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
+  }
+  if (error && droga && faltaColumnaDroga(error)) {
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar.map(sinDroga)).select());
   }
   if (error) {
     traducirErrorDuplicado(error);
@@ -668,7 +709,7 @@ export async function actualizarGrupo(
   ids: string[],
   datos: DatosActualizarGrupo
 ): Promise<void> {
-  const nombre = datos.nombre.trim();
+  const { nombre, droga } = normalizarNombreYDroga(datos.nombre, datos.droga);
   if (!nombre) throw new Error("El nombre no puede quedar vacío.");
   if (new Set(ids).size !== ids.length) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
   if (datos.tomas.length === 0) throw new Error("Tiene que haber al menos un horario.");
@@ -726,6 +767,8 @@ export async function actualizarGrupo(
   if (dias !== undefined) compartido.dias_recurrentes = dias;
   if (forma !== undefined && (hayColumnas || forma !== "pastilla")) compartido.forma = forma;
   if (fechaFin !== undefined && (hayColumnas || fechaFin)) compartido.fecha_fin = fechaFin;
+  // Sin la migración 056 la fila no trae `droga`: no se manda (ver faltaColumnaDroga).
+  if (droga !== undefined && "droga" in filas[0]) compartido.droga = droga;
   const ahora = new Date().toISOString();
 
   // Primero lo que no puede dejar el grupo a medias: altas y borrados.

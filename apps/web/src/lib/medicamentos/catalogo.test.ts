@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   CATALOGO_MEDICAMENTOS,
-  etiquetaSugerencia,
   normalizar,
   sugerirMedicamentos,
 } from "./catalogo";
@@ -33,7 +32,7 @@ describe("sugerirMedicamentos", () => {
   });
 
   it("encuentra por el principio del genérico y de la marca", () => {
-    expect(sugerirMedicamentos("Ibup").map(etiquetaSugerencia)).toEqual(["Ibupirac (Ibuprofeno)", "Ibuprofeno"]);
+    expect(sugerirMedicamentos("Ibup").map((s) => s.marca ?? s.nombre)).toEqual(["Ibupirac", "Ibuprofeno"]);
   });
 
   it("encuentra por cualquier parte del nombre, como las especialidades", () => {
@@ -57,7 +56,6 @@ describe("sugerirMedicamentos", () => {
     const [s] = sugerirMedicamentos("tafi");
     expect(s.nombre).toBe("Paracetamol");
     expect(s.marca).toBe("Tafirol");
-    expect(etiquetaSugerencia(s)).toBe("Tafirol (Paracetamol)");
   });
 
   it("pone primero los que empiezan con el texto y después los que lo contienen", () => {

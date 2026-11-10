@@ -112,6 +112,11 @@ describe("buscarMedicamentoContado", () => {
     expect(buscarMedicamentoContado([forxiga], "Dapagliflozina", "10")).toBe(forxiga);
   });
 
+  it("encuentra por la columna droga", () => {
+    const conColumna = { ...c("Forxiga", "10"), droga: "Dapagliflozina" };
+    expect(buscarMedicamentoContado([conColumna], "Dapagliflozina", "10")).toBe(conColumna);
+  });
+
   it("con dosis distinta no lo enlaza", () => {
     expect(buscarMedicamentoContado([forxiga], "Forxiga", "5")).toBeUndefined();
   });
