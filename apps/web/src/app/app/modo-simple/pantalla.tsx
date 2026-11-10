@@ -345,7 +345,7 @@ export function Pantalla({
                 <TarjetaMediciones
                   titulo={mediciones.titulo}
                   mediciones={mediciones.items}
-                  hrefDe={(tipo) => hrefNuevaMedicion({ tipo: esTipoMedicion(tipo) ? tipo : undefined, volver: "/app/modo-simple" })}
+                  hrefDe={(tipo) => hrefNuevaMedicion({ tipo: esTipoMedicion(tipo) ? tipo : undefined, volver: "/app/modo-simple", ahora: true })}
                 />
               )}
 

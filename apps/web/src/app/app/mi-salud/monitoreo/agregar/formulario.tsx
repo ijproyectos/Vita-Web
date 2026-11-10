@@ -33,6 +33,7 @@ export function FormularioMedicion({
   otra,
   metricaFija = false,
   ultimoValor,
+  esAhora = false,
 }: {
   tipoInicial: string;
   volver: string;
@@ -42,6 +43,11 @@ export function FormularioMedicion({
   metricaFija?: boolean;
   /** Último valor cargado, como referencia en el campo ("120/80"). */
   ultimoValor?: string | null;
+  /**
+   * Se abrió porque es hora de medir (aviso, Rutina o modo simple): no se
+   * elige fecha ni hora, se guarda con las de ahora (campos vacíos = ahora).
+   */
+  esAhora?: boolean;
 }) {
   const router = useRouter();
   const volverAtras = useVolver(volver);
@@ -207,6 +213,9 @@ export function FormularioMedicion({
         </div>
       )}
 
+      {esAhora ? (
+        <p className="text-[12.5px] font-medium text-subtle">Se guarda con la fecha y hora de ahora.</p>
+      ) : (
       <div>
         <Etiqueta text="Cuándo (opcional)" />
         <div className="flex items-start gap-3">
@@ -235,6 +244,7 @@ export function FormularioMedicion({
         </div>
         <p className="mt-2 text-xs font-medium text-subtle">Si lo dejás vacío, se guarda con la fecha y hora de ahora.</p>
       </div>
+      )}
 
       <div>
         <Etiqueta text="Notas (opcional)" />
