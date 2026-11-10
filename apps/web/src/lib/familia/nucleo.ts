@@ -330,7 +330,7 @@ export async function listarCuidadoresDe(supabase: Cliente, elderId: string): Pr
 }
 
 export type ResultadoInvitacion =
-  | { status: "success"; vinculoId: string; token: string; expiraAt: string }
+  | { status: "success"; vinculoId: string; token: string; expiraAt: string; codigo: string | null }
   | { status: "error"; message: string };
 
 const MENSAJES_INVITACION: Record<string, string> = {
@@ -358,8 +358,9 @@ export async function invitarCuidador(
     p_rol: datos.rol,
   });
   if (!error && Array.isArray(data) && data[0]) {
-    const f = data[0] as { vinculo_id: string; token: string; expira_at: string };
-    return { status: "success", vinculoId: f.vinculo_id, token: f.token, expiraAt: f.expira_at };
+    // Sin la migración 054 no viene `codigo`: se usa el link largo.
+    const f = data[0] as { vinculo_id: string; token: string; expira_at: string; codigo?: string | null };
+    return { status: "success", vinculoId: f.vinculo_id, token: f.token, expiraAt: f.expira_at, codigo: f.codigo ?? null };
   }
   if (rpcInexistente(error)) {
     if (datos.elderId !== usuarioId) {
@@ -370,7 +371,7 @@ export async function invitarCuidador(
         rol: datos.rol,
         relacion: datos.relacion,
       });
-      return { status: "success", vinculoId: v.id, token: v.token, expiraAt: v.expira_at };
+      return { status: "success", vinculoId: v.id, token: v.token, expiraAt: v.expira_at, codigo: null };
     } catch {
       return { status: "error", message: "No pudimos crear la invitación. Probá de nuevo." };
     }

@@ -1,3 +1,6 @@
+import type { Medicion } from "@/lib/mediciones/tipos";
+import type { Monitoreo } from "@/lib/mediciones/plan";
+import { aMonitoreo } from "@/lib/mediciones/planes-nucleo";
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -88,6 +91,9 @@ export type HistorialExportado = {
   stock_pastillas: Omit<Inventario, "usuario_id">[];
   tomas: TomaExportada[];
   turnos: Omit<Turno, "usuario_id">[];
+  mediciones: Omit<Medicion, "usuario_id">[];
+  /** Planes de medición: qué medir y a qué horas. Vacío sin la migración 053. */
+  monitoreos: Omit<Monitoreo, "usuario_id">[];
   estudios: EstudioExportado[];
   cuidadores: CuidadorExportado[];
   personas_que_cuido: { nombre: string }[];
@@ -114,6 +120,14 @@ async function leerTodas<T>(etiqueta: string, consulta: (desde: number, hasta: n
   return filas;
 }
 
+/** Sin la migración 053 no hay planes; cualquier otro error corta el export, como las demás lecturas. */
+async function leerMonitoreos(supabase: Cliente, usuarioId: string): Promise<Monitoreo[]> {
+  const { data, error } = await supabase.from("monitoreos").select("*").eq("usuario_id", usuarioId);
+  if (error?.code === "42P01" || error?.code === "PGRST205") return [];
+  if (error) throw new Error(`No se pudo leer tus monitoreos: ${error.message}`);
+  return (data ?? []).map(aMonitoreo).filter((m): m is Monitoreo => m !== null);
+}
+
 /**
  * Reúne TODOS los datos del usuario en una estructura serializable. Lanza
  * si alguna lectura falla: un export incompleto sin avisar sería peor que
@@ -132,6 +146,8 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
     elders,
     pendientes,
     sesiones,
+    mediciones,
+    monitoreos,
   ] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from("perfiles").select("*").eq("id", usuarioId).maybeSingle(),
@@ -212,6 +228,10 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
         .order("created_at", { ascending: false })
         .range(d, h)
     ),
+    leerTodas<Medicion>("tus mediciones", (d, h) =>
+      supabase.from("mediciones").select("*").eq("usuario_id", usuarioId).order("medido_at", { ascending: false }).range(d, h)
+    ),
+    leerMonitoreos(supabase, usuarioId),
   ]);
 
   if (perfilRes.error) throw new Error(`No se pudo leer tu perfil: ${perfilRes.error.message}`);
@@ -338,6 +358,14 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
     turnos: turnos.map(({ usuario_id: _u, ...t }) => {
       void _u;
       return t;
+    }),
+    mediciones: mediciones.map(({ usuario_id: _u, ...m }) => {
+      void _u;
+      return m;
+    }),
+    monitoreos: monitoreos.map(({ usuario_id: _u, ...m }) => {
+      void _u;
+      return m;
     }),
     // El archivo (foto) no se exporta; tampoco su ruta interna en Storage.
     estudios: estudios.map(({ usuario_id: _u, archivo_path: _a, ...e }) => {

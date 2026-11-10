@@ -19,6 +19,7 @@ export async function GET(request: Request, ctx: RouteContext<"/dev/emails/[plan
           urlInvitacion: `${origen}/cuidar/invitacion/0123456789abcdef0123456789abcdef0123456789abcdef`,
           diasVigencia: 7,
           origen,
+          rol: "ver",
         })
       : plantilla === "codigo"
         ? codigoVinculacion({

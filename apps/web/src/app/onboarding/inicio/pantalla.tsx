@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   AvisoAuth,
@@ -22,6 +23,7 @@ import { reclamarCodigoAction } from "../actions";
 // sexta cifra; con un código que vino precargado (deep link) queda el botón
 // "Continuar" porque no hubo tipeo que lo dispare.
 export function PantallaInicio({ codigoInicial }: { codigoInicial?: string }) {
+  const router = useRouter();
   const [codigo, setCodigo] = useState(codigoInicial ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
@@ -44,6 +46,7 @@ export function PantallaInicio({ codigoInicial }: { codigoInicial?: string }) {
     startTransition(async () => {
       const previa = await verCodigoAction(valor).catch((): EstadoVerCodigo => ({ status: "sinVista" }));
       if (previa.status === "ok") setVistaPrevia(previa.vista);
+      else if (previa.status === "invitacion") router.push(`/c/${valor}`);
       else if (previa.status === "error") {
         setError(previa.mensaje);
         setCodigo("");

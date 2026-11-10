@@ -134,6 +134,10 @@ Planes de "Nuevo monitoreo" (`053_monitoreos.sql`, escrita, NO aplicada). Una fi
 
 RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`lib/notificaciones/medir.ts`, dedupe `medicion_hora`) salvo silencio nocturno o si ya se midió. Si la persona no tiene avisos activos en ningún celular (`push_suscripciones`), también avisa a sus cuidadores Admin (`medicion_persona`). Una medición cuenta para un horario desde 60 min antes de él hasta 60 min antes del siguiente, o el punto medio si están a menos de 2 h (`tramosDeHoy`).
 
+## `codigos_mail_invitacion`
+
+Código de un solo uso a la casilla invitada (`054_invitacion_codigo.sql`, escrita, NO aplicada). Una fila por invitación; solo `service_role`, RLS sin policies. Guarda el HMAC, nunca el código. 10 min, 5 intentos por código y 1 envío por minuto por invitación (`guardar_codigo_mail_invitacion`, `verificar_codigo_mail_invitacion`, `consumir_codigo_mail_invitacion`). Los topes por MAIL, sumando todas sus invitaciones, viven en `limites_mail_invitacion` (solo `service_role`, eventos `envio`/`fallo`, retención 1 día): máx. 5 envíos y 10 verificaciones fallidas por hora; reenviar no los reinicia y, pasado el tope de fallos, se rechaza con el mismo error genérico hasta que corra la ventana. El código se consume recién con la sesión abierta (si otro pedido lo consumió antes, se cierra la sesión). La 054 también agrega `vinculos_cuidador.invitado_por` y usa `codigo` en las invitaciones por mail (con `elder_id` presente).
+
 ## `mediciones`
 
 "Monitoreo activo" de Mi Salud (`022_mediciones.sql`, aplicada 2026-10-22). Una fila = una medición puntual.
