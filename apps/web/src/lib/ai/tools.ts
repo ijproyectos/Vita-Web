@@ -24,7 +24,7 @@ import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
 import { accionPedidoAyuda, textoPedidoAyudaParaModelo } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
-import { esTipoMedicion, validarMedicion, type TipoRegistrable } from "@/lib/mediciones/tipos";
+import { TIPOS_PLAN, esTipoMedicion, validarMedicion, type TipoRegistrable } from "@/lib/mediciones/tipos";
 import * as mediciones from "@/lib/mediciones/nucleo";
 import * as planesMedicion from "@/lib/mediciones/planes-nucleo";
 import * as estudios from "@/lib/estudios/nucleo";
@@ -377,6 +377,10 @@ async function ejecutarEnDestino(
       });
 
     case "add_measurement": {
+      // Solo las métricas que ofrece la app (sin pulso ni saturación).
+      if (!(TIPOS_PLAN as readonly unknown[]).includes(input.type)) {
+        return { contenido: "Solo puedo anotar presión, glucemia, peso o temperatura. No se guardó nada." };
+      }
       const medidoAt = medidoAtDesdeModelo(input.measured_at);
       if (medidoAt === "invalida") {
         return { contenido: "measured_at tiene que ser YYYY-MM-DDTHH:MM (hora de Argentina). No se guardó nada: confirmá el momento con la persona." };
@@ -387,7 +391,6 @@ async function ejecutarEnDestino(
           tipo: input.type,
           valor: input.value,
           valorSecundario: input.secondary_value,
-          pulso: input.pulse,
           contexto: input.glucose_context,
           medidoAt,
           notas: typeof input.notes === "string" ? input.notes : undefined,

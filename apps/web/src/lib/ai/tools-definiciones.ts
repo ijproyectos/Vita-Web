@@ -6,7 +6,7 @@ import { CLAVES_INDICACION, INDICACIONES_COMIDA } from "@/lib/medicamentos/comid
 import { FORMAS } from "@/lib/medicamentos/forma";
 import { MAX_MOTIVO, MINUTOS_ENTRE_PEDIDOS_AYUDA } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { GENEROS, GRUPOS_SANGUINEOS } from "@/lib/perfil/opciones";
-import { CONTEXTOS_GLUCEMIA, TIPOS_MEDICION } from "@/lib/mediciones/tipos";
+import { CONTEXTOS_GLUCEMIA, TIPOS_MEDICION, TIPOS_PLAN } from "@/lib/mediciones/tipos";
 import { CLAVES_PANTALLAS } from "./guia-app";
 import { TOOLS_CON_DESTINO, TOOLS_DE_ESCRITURA } from "./destino";
 
@@ -334,14 +334,13 @@ const TOOLS_BASE: Anthropic.Tool[] = [
   {
     name: "add_measurement",
     description:
-      "Anota una medición que la persona te dice (presión, glucemia, peso, temperatura, saturación o pulso). Sin measured_at se guarda con la fecha y hora de ahora. Repetí el valor en tu respuesta para que la persona lo vea. Para explicar el valor, nunca diagnostiques.",
+      "Anota una medición que la persona te dice (presión, glucemia, peso o temperatura). Sin measured_at se guarda con la fecha y hora de ahora. Repetí el valor en tu respuesta para que la persona lo vea. Para explicar el valor, nunca diagnostiques.",
     input_schema: {
       type: "object",
       properties: {
-        type: { type: "string", enum: [...TIPOS_MEDICION], description: "Qué se midió." },
+        type: { type: "string", enum: [...TIPOS_PLAN], description: "Qué se midió." },
         value: { type: "number", description: "El valor. En presión, la máxima ('13 y 8' = 130)." },
         secondary_value: { type: "number", description: "Solo presión: la mínima ('13 y 8' = 80)." },
-        pulse: { type: "number", description: "Solo presión, opcional: el pulso en lpm." },
         glucose_context: { type: "string", enum: [...CONTEXTOS_GLUCEMIA], description: "Solo glucemia, opcional: en ayunas, después de comer u otro momento." },
         measured_at: { type: "string", description: "Opcional, solo si la persona dice otro momento: fecha y hora de Argentina YYYY-MM-DDTHH:MM (nunca en el futuro)." },
         notes: { type: "string", description: "Opcional: una nota corta que haya dicho la persona." },
