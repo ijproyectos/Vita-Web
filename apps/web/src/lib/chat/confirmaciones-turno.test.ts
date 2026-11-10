@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cambiosTurnoDeInput, snapshotTurnoCoincide, textoExitoTurno, textoPropuestaTurno, tomarSnapshotTurno } from "./confirmaciones-turno";
+import { cambiosTurnoDeInput, turnoQuedaEnElPasado, snapshotTurnoCoincide, textoExitoTurno, textoPropuestaTurno, tomarSnapshotTurno } from "./confirmaciones-turno";
 import type { Turno } from "@/lib/turnos/tipos";
 
 const turno: Turno = {
@@ -42,5 +42,17 @@ describe("textos", () => {
   });
   it("el éxito dice cómo quedó", () => {
     expect(textoExitoTurno("update_appointment", null, tomarSnapshotTurno(turno), { hora: "09:00" })).toContain("a las 09:00");
+  });
+});
+
+describe("turnoQuedaEnElPasado", () => {
+  it("hoy más temprano que ahora ya pasó; más tarde no", () => {
+    expect(turnoQuedaEnElPasado("2026-11-10", "09:00", "2026-11-10", "10:00")).toBe(true);
+    expect(turnoQuedaEnElPasado("2026-11-10", "11:00", "2026-11-10", "10:00")).toBe(false);
+    expect(turnoQuedaEnElPasado("2026-11-09", "23:00", "2026-11-10", "00:10")).toBe(true);
+  });
+
+  it("cambiar solo la hora de un turno de hoy a una que ya pasó se rechaza", () => {
+    expect(cambiosTurnoDeInput({ time: "08:00" }, "2026-11-10", "10:00", { fecha: "2026-11-10", hora: "11:00" })).toHaveProperty("error");
   });
 });

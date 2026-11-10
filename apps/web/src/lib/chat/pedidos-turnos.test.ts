@@ -49,7 +49,7 @@ describe("cambiar o borrar un turno desde el chat", () => {
     } as never);
     const { ctx, consulta } = entorno();
     const r = await ejecutarToolIdempotente("update_appointment", { appointment_id: ID, date: "2000-01-01" }, ctx);
-    expect(r.contenido).toContain("ya pasó");
+    expect(r.contenido).toContain("ya pasaron");
     expect(consulta.upsert).not.toHaveBeenCalled();
     expect(turnos.actualizar).not.toHaveBeenCalled();
   });
@@ -61,5 +61,60 @@ describe("cambiar o borrar un turno desde el chat", () => {
     expect(r.contenido).toMatch(/CONFIRMACI[ÓO]N|requiere la confirmación/);
     expect(turnos.eliminar).not.toHaveBeenCalled();
     expect(turnos.obtenerPorId).not.toHaveBeenCalled();
+  });
+});
+
+describe("ejecutar un turno confirmado", () => {
+  const turno = {
+    id: ID, usuario_id: "propio", especialidad: "Cardiología", fecha: "2099-01-10", hora: "10:30:00", profesional: null, lugar: null,
+    motivo: null, recordatorio: null, acompanado: false, notas: null, created_at: "",
+  };
+  const accion = (tool: string, extra: Record<string, unknown> = {}) => ({
+    tool, input: { appointment_id: ID }, destinoId: "propio", persona: "", sesionId: "sesion",
+    objetivo: { turnoId: ID, snapshotTurno: { id: ID, especialidad: "Cardiología", fecha: "2099-01-10", hora: "10:30" }, texto: "¿Borro…?", ...extra },
+  });
+  const ctxEj = () => ({ supabase: {} as SupabaseClient, usuarioId: "propio", familia: [] });
+
+  it("borra por id y avisa con su tarjeta", async () => {
+    const { ejecutarObjetivo } = await import("./pedidos");
+    vi.mocked(turnos.obtenerPorId).mockResolvedValue(turno as never);
+    const r = await ejecutarObjetivo("delete_appointment", accion("delete_appointment"), ctxEj());
+    expect(turnos.eliminar).toHaveBeenCalledWith(expect.anything(), "propio", ID);
+    expect(r.accionUI).toEqual({ type: "appointment_deleted" });
+    expect(r.textoUsuario).toContain("borré el turno de Cardiología");
+  });
+
+  it("si el turno cambió entre la pregunta y el sí, no toca nada", async () => {
+    const { ejecutarObjetivo } = await import("./pedidos");
+    vi.mocked(turnos.obtenerPorId).mockResolvedValue({ ...turno, hora: "12:00" } as never);
+    const r = await ejecutarObjetivo("delete_appointment", accion("delete_appointment"), ctxEj());
+    expect(turnos.eliminar).not.toHaveBeenCalled();
+    expect(r.accionUI).toBeUndefined();
+    expect(r.codigo).toBe("confirmacion_cambio");
+  });
+
+  it("cambia con los cambios guardados (no con lo que reformule el modelo)", async () => {
+    const { ejecutarObjetivo } = await import("./pedidos");
+    vi.mocked(turnos.obtenerPorId).mockResolvedValue(turno as never);
+    vi.mocked(turnos.actualizar).mockResolvedValue(turno as never);
+    const r = await ejecutarObjetivo("update_appointment", accion("update_appointment", { cambiosTurno: { hora: "09:00" } }), ctxEj());
+    expect(turnos.actualizar).toHaveBeenCalledWith(expect.anything(), "propio", ID, { hora: "09:00" });
+    expect(r.accionUI).toEqual({ type: "appointment_updated" });
+  });
+
+  it("si el núcleo falla (por ejemplo, no borró nada), no informa éxito", async () => {
+    const { ejecutarObjetivo } = await import("./pedidos");
+    vi.mocked(turnos.obtenerPorId).mockResolvedValue(turno as never);
+    vi.mocked(turnos.eliminar).mockRejectedValue(new Error("No se pudo eliminar el turno."));
+    const r = await ejecutarObjetivo("delete_appointment", accion("delete_appointment"), ctxEj());
+    expect(r.accionUI).toBeUndefined();
+    expect(r.codigo).toBe("confirmacion_no_verificada");
+  });
+
+  it("sin permiso de editar a esa persona, no ejecuta", async () => {
+    const { ejecutarObjetivo } = await import("./pedidos");
+    const r = await ejecutarObjetivo("delete_appointment", { ...accion("delete_appointment"), destinoId: "otra" }, ctxEj());
+    expect(turnos.obtenerPorId).not.toHaveBeenCalled();
+    expect(r.codigo).toBe("confirmacion_sin_permiso");
   });
 });

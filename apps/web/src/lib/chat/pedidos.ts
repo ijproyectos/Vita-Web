@@ -40,10 +40,10 @@ import {
   textoExitoTurno,
   textoPropuestaTurno,
   tomarSnapshotTurno,
+  turnoQuedaEnElPasado,
   type ToolTurno,
 } from "@/lib/chat/confirmaciones-turno";
 import * as turnos from "@/lib/turnos/nucleo";
-import { fechaDeHoyISO } from "@/lib/rutina/formato";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 
@@ -132,6 +132,7 @@ const TEXTO_NO_VERIFICADA = "No pude confirmarlo por un problema temporal, así 
 const TEXTO_NADA_PENDIENTE = "No hay nada pendiente de confirmar (ya se confirmó, se canceló o venció). Si querés, pedímelo de nuevo.";
 const TEXTO_SIN_PERMISO = "Ya no tenés permiso para editar a esa persona, así que no cambié nada.";
 const TEXTO_CAMBIO_ENTRE_MEDIO = "Ese medicamento cambió mientras tanto, así que no toqué nada. Pedímelo de nuevo para que lo revise.";
+const TEXTO_TURNO_PASADO = "Ese día y hora ya pasaron, así que no cambié el turno.";
 const TEXTO_TURNO_CAMBIO_ENTRE_MEDIO = "Ese turno cambió o ya no está, así que no toqué nada. Pedímelo de nuevo para que lo revise.";
 
 type ResolucionObjetivo = { ok: true; objetivo: ObjetivoGuardado } | { ok: false; resultado: ResultadoTool };
@@ -243,7 +244,7 @@ async function resolverObjetivoTurno(
   }
   let cambios;
   if (tool === "update_appointment") {
-    const c = cambiosTurnoDeInput(input, fechaDeHoyISO());
+    const c = cambiosTurnoDeInput(input, medicamentos.fechaEnAR(), medicamentos.horaEnAR(), turno);
     if ("error" in c) return { ok: false, resultado: { contenido: `${c.error} No se ejecutó nada.` } };
     cambios = c.datos;
   }
@@ -262,7 +263,8 @@ async function resolverObjetivoTurno(
  * Ejecuta lo CONFIRMADO, por id y con el núcleo (nunca por nombre ni con lo que el modelo
  * reformule): relee el permiso sobre el destino y que la fila siga igual a lo que se mostró.
  */
-async function ejecutarObjetivo(
+/** Exportada solo para los tests de la ejecución confirmada (pedidos-turnos.test.ts). */
+export async function ejecutarObjetivo(
   nombre: string,
   accion: AccionPendiente | null,
   ctx: { supabase: SupabaseClient; usuarioId: string; familia: MiembroFamilia[] }
@@ -286,6 +288,15 @@ async function ejecutarObjetivo(
     try {
       const actual = await turnos.obtenerPorId(ctx.supabase, destinoId, objetivo.turnoId);
       if (!actual || !snapshotTurnoCoincide(objetivo.snapshotTurno, actual)) return falla(TEXTO_TURNO_CAMBIO_ENTRE_MEDIO, "confirmacion_cambio");
+      // Se vuelve a validar al ejecutar: una confirmación tardía no puede dejar el turno en el pasado.
+      const c = objetivo.cambiosTurno;
+      if (
+        c &&
+        (c.fecha || c.hora) &&
+        turnoQuedaEnElPasado(c.fecha ?? actual.fecha, c.hora ?? actual.hora, medicamentos.fechaEnAR(), medicamentos.horaEnAR())
+      ) {
+        return falla(TEXTO_TURNO_PASADO, "confirmacion_conflicto");
+      }
       const texto = textoExitoTurno(toolTurno, persona, objetivo.snapshotTurno, objetivo.cambiosTurno);
       if (toolTurno === "delete_appointment") {
         await turnos.eliminar(ctx.supabase, destinoId, objetivo.turnoId);

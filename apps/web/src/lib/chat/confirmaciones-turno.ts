@@ -28,13 +28,28 @@ const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 const texto = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : undefined);
 
-/** Cambios que pidió el modelo (inglés) a los del núcleo. `hoy` = fecha AR (YYYY-MM-DD). */
-export function cambiosTurnoDeInput(input: Record<string, unknown>, hoy: string): { datos: DatosActualizarTurno } | { error: string } {
+/** true si ese día y hora ya pasaron (hora de Argentina): un turno no puede quedar en el pasado. */
+export function turnoQuedaEnElPasado(fecha: string, hora: string, hoy: string, horaAhora: string): boolean {
+  return fecha < hoy || (fecha === hoy && hhmm(hora) < hhmm(horaAhora));
+}
+
+export const ERROR_TURNO_PASADO = "Ese día y hora ya pasaron: un turno no puede quedar en el pasado. Confirmá la fecha con la persona.";
+
+/**
+ * Cambios que pidió el modelo (inglés) a los del núcleo. `hoy` y `horaAhora` en
+ * hora de Argentina; `actual` = el turno de hoy, para validar una hora sola.
+ */
+export function cambiosTurnoDeInput(
+  input: Record<string, unknown>,
+  hoy: string,
+  horaAhora = "00:00",
+  actual?: Pick<Turno, "fecha" | "hora">
+): { datos: DatosActualizarTurno } | { error: string } {
   const datos: DatosActualizarTurno = {};
   if (input.date !== undefined && input.date !== null && input.date !== "") {
     const fecha = String(input.date).trim();
     if (!FECHA.test(fecha)) return { error: `date inválido: "${fecha}" (formato YYYY-MM-DD).` };
-    if (fecha < hoy) return { error: "Esa fecha ya pasó: un turno no puede quedar en el pasado. Confirmá la fecha con la persona." };
+    if (fecha < hoy) return { error: ERROR_TURNO_PASADO };
     datos.fecha = fecha;
   }
   if (input.time !== undefined && input.time !== null && input.time !== "") {
@@ -49,6 +64,9 @@ export function cambiosTurnoDeInput(input: Record<string, unknown>, hoy: string)
   const notas = texto(input.notes, 300);
   if (notas !== undefined) datos.notas = notas || null;
   if (typeof input.with_company === "boolean") datos.acompanado = input.with_company;
+  if ((datos.fecha || datos.hora) && actual && turnoQuedaEnElPasado(datos.fecha ?? actual.fecha, datos.hora ?? actual.hora, hoy, horaAhora)) {
+    return { error: ERROR_TURNO_PASADO };
+  }
   if (Object.keys(datos).length === 0) {
     return { error: "No indicaste qué cambiar del turno (date, time, professional, place, notes o with_company)." };
   }
