@@ -255,7 +255,7 @@ export function DetalleTurno({
             </button>
           ) : (
             <Link
-              href={`/app/turnos?editar=${turno.id}`}
+              href={`/app/turnos/${turno.id}/editar`}
               className={CLASE_BOTON_SECUNDARIO}
             >
               Editar

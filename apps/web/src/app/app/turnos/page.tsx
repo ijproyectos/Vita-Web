@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
@@ -9,7 +10,8 @@ import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { ListaTurnos } from "./lista";
 
 // Mis turnos (Home → "Ver todos"): próximos turnos agrupados por día.
-// Lápiz y papelera por fila; `?editar=<id>` abre ese turno ya en edición.
+// Lápiz y papelera por fila; `?editar=<id>` (links viejos y del chat) lleva a
+// /app/turnos/[id]/editar, la misma pantalla del alta con el turno cargado.
 export default async function TurnosPage(props: PageProps<"/app/turnos">) {
   await requireUser();
   const supabase = await createClient();
@@ -19,6 +21,7 @@ export default async function TurnosPage(props: PageProps<"/app/turnos">) {
   const pedido = (await props.searchParams)?.editar;
   const editarPedido = Array.isArray(pedido) ? pedido[0] : pedido;
   const editarId = turnos.find((t) => t.id === editarPedido)?.id;
+  if (editarId && activo.rol === "editar") redirect(`/app/turnos/${editarId}/editar`);
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
@@ -39,7 +42,6 @@ export default async function TurnosPage(props: PageProps<"/app/turnos">) {
 
       <ListaTurnos
         turnos={turnos}
-        editarInicial={activo.rol === "editar" ? editarId : undefined}
         puedeEditar={activo.rol === "editar"}
         perfil={activo}
       />

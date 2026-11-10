@@ -155,7 +155,7 @@ function TarjetaAccion({
           </div>
           <BotonesTarjeta>
             {editable && typeof accion.id === "string" && (
-              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos?editar=${accion.id}`} texto="Completar turno" primario grupo />
+              <EnlaceTarjeta alCerrar={alCerrar} href={`/app/turnos/${accion.id}/editar`} texto="Completar turno" primario grupo />
             )}
             {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/rutina" texto="Ver en Rutina" grupo />}
           </BotonesTarjeta>
