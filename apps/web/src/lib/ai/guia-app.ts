@@ -25,6 +25,7 @@ export const PANTALLAS = {
   config_avisos: { ruta: "/app/avisos/configuracion", titulo: "Configurar avisos", descripcion: "elegir qué avisos recibir, la espera y el silencio nocturno" },
   familia: { ruta: "/app/familia", titulo: "Familia", descripcion: "las personas que cuidás y quiénes te cuidan" },
   agregar_familiar: { ruta: "/app/familia/nuevo", titulo: "Agregar familiar", descripcion: "crear el perfil de alguien a quien cuidás" },
+  invitar_cuidador: { ruta: "/app/familia/invitar", titulo: "Invitar a alguien", descripcion: "invitar a un familiar para que te ayude a cuidar (con un código o por mail)" },
   perfil: { ruta: "/app/perfil", titulo: "Perfil", descripcion: "tu cuenta, preferencias y ajustes" },
   editar_perfil: { ruta: "/app/perfil/editar", titulo: "Editar perfil", descripcion: "cambiar tus datos personales y de salud" },
   contacto_emergencia: { ruta: "/app/perfil/contacto-emergencia", titulo: "Contacto de emergencia", descripcion: "cargar o cambiar a quién avisar en una emergencia" },
@@ -36,6 +37,7 @@ export const PANTALLAS = {
   faq: { ruta: "/app/perfil/ayuda/faq", titulo: "Preguntas frecuentes", descripcion: "respuestas a las dudas más comunes" },
   reportar_problema: { ruta: "/app/perfil/ayuda/reportar", titulo: "Reportar un problema", descripcion: "avisarnos si algo no anda bien" },
   modo_simple: { ruta: "/app/modo-simple", titulo: "Modo simple", descripcion: "la pantalla grande y simple de una toma a la vez" },
+  vita_plus: { ruta: "/app/vita-plus", titulo: "vita+", descripcion: "la suscripción vita+: suscribirte, canjear un código o cancelarla" },
 } as const satisfies Record<string, PantallaApp>;
 
 export type ClavePantalla = keyof typeof PANTALLAS;

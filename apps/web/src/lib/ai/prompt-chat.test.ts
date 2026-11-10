@@ -142,3 +142,11 @@ describe("prompt caching del chat", () => {
 it("le pide no repetir en el texto la lista que ya muestra la tarjeta", () => {
   expect(SYSTEM_PROMPT).toContain("No repitas\n  esa lista en el texto");
 });
+
+it("trae la guía de cómo funciona la app en el bloque estático, con las pantallas nuevas", () => {
+  expect(SYSTEM_PROMPT).toContain("Cómo funciona la app");
+  expect(SYSTEM_PROMPT).toContain("- vita_plus: vita+");
+  expect(SYSTEM_PROMPT).toContain("- invitar_cuidador: Invitar a alguien");
+  // Le dice qué todavía no puede hacer, para que mande a la pantalla en vez de inventar.
+  expect(SYSTEM_PROMPT).toContain("Lo que todavía no podés ver ni hacer vos desde el chat");
+});
