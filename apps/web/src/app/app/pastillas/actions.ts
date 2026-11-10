@@ -9,7 +9,7 @@ import { TAMANO_MAXIMO_BYTES, contarPastillasEnFoto, type ConteoPastillas } from
 import {
   PASTILLAS_POR_TOMA_MAXIMO,
   STOCK_MAXIMO,
-  claveMedicamento,
+  buscarMedicamentoContado,
   separarDosis,
 } from "@/lib/inventario/tipos";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
@@ -106,13 +106,7 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
 
       // Un blíster nunca pisa el stock en ml de un jarabe o gotas con el mismo nombre.
       const grupos = (await inventarioNucleo.listarGrupos(supabase, pid)).filter((g) => seCuentaConFoto(g.forma));
-      const clave = claveMedicamento(nombre, dosisValor);
-      let coincidencia = grupos.find((g) => g.clave === clave);
-      if (!coincidencia && !dosisValor) {
-        // Sin dosis: solo se enlaza si el nombre identifica a UN medicamento.
-        const mismoNombre = grupos.filter((g) => claveMedicamento(g.nombre, null).split("|")[0] === clave.split("|")[0]);
-        if (mismoNombre.length === 1) coincidencia = mismoNombre[0];
-      }
+      const coincidencia = buscarMedicamentoContado(grupos, nombre, dosisValor);
 
       if (!coincidencia) {
         const params = new URLSearchParams({

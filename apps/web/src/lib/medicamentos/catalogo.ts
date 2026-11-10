@@ -1,4 +1,5 @@
 import { MEDICAMENTOS_POR_CONDICION } from "@/lib/onboarding/catalogo-condiciones";
+import { nombreConDroga } from "./nombre";
 
 // Catálogo local de medicamentos frecuentes en Argentina para autocompletar el
 // nombre al cargar un remedio. Es solo un listado de nombres (genérico + marcas
@@ -260,9 +261,12 @@ export type Sugerencia = {
 
 export const MINIMO_CARACTERES_SUGERENCIA = 2;
 
-/** Texto de la fila: "Ibupirac (Ibuprofeno)" si coincidió por marca. */
+/**
+ * Lo que queda escrito al elegir una sugerencia: "Ibupirac (Ibuprofeno)" si
+ * coincidió por marca (lo de paréntesis es la droga), o el genérico solo.
+ */
 export function etiquetaSugerencia(s: Sugerencia): string {
-  return s.marca ? `${s.marca} (${s.nombre})` : s.nombre;
+  return s.marca ? nombreConDroga(s.marca, s.nombre) : s.nombre;
 }
 
 /**
@@ -285,18 +289,4 @@ export function sugerirMedicamentos(texto: string, limite = 8): Sugerencia[] {
   const alfabetico = (a: Sugerencia, b: Sugerencia) =>
     (a.marca ?? a.nombre).localeCompare(b.marca ?? b.nombre, "es");
   return [...porNombre.sort(alfabetico), ...porMarca.sort(alfabetico)].slice(0, limite);
-}
-
-/**
- * Si exactamente un nombre genérico del catálogo empieza con el texto, lo
- * devuelve completo ("Ibup" -> "Ibuprofeno"); si no hay uno solo (o ya está
- * completo), null.
- */
-export function completarEnLinea(texto: string): string | null {
-  const q = normalizar(texto);
-  if (q.length < MINIMO_CARACTERES_SUGERENCIA) return null;
-  const candidatos = INDICE.filter((i) => i.nombreN.startsWith(q));
-  if (candidatos.length !== 1) return null;
-  const { entrada, nombreN } = candidatos[0];
-  return nombreN === q ? null : entrada.nombre;
 }

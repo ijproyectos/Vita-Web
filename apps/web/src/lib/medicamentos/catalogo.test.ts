@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   CATALOGO_MEDICAMENTOS,
-  completarEnLinea,
   etiquetaSugerencia,
   normalizar,
   sugerirMedicamentos,
@@ -69,19 +68,5 @@ describe("sugerirMedicamentos", () => {
 
   it("sin coincidencias devuelve vacío", () => {
     expect(sugerirMedicamentos("zzzz")).toEqual([]);
-  });
-});
-
-describe("completarEnLinea", () => {
-  it("completa cuando hay un único nombre", () => {
-    expect(completarEnLinea("Ibup")).toBe("Ibuprofeno");
-    expect(completarEnLinea("losa")).toBe("Losartán");
-  });
-
-  it("no completa con varias coincidencias, sin coincidencias o con el nombre ya completo", () => {
-    expect(completarEnLinea("Ibuprofeno")).toBeNull();
-    expect(completarEnLinea("pa")).toBeNull();
-    expect(completarEnLinea("zzzz")).toBeNull();
-    expect(completarEnLinea("i")).toBeNull();
   });
 });

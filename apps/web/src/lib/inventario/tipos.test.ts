@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acotarEntero, claveMedicamento, esStockBajo, separarDosis, textoQuedan } from "./tipos";
+import { acotarEntero, buscarMedicamentoContado, claveMedicamento, esStockBajo, separarDosis, textoQuedan } from "./tipos";
 
 describe("claveMedicamento", () => {
   it("normaliza mayúsculas y espacios", () => {
@@ -91,5 +91,33 @@ describe("textoQuedan por forma", () => {
     expect(textoQuedan(12.5, "pastilla")).toBe("Quedan 12,5 pastillas");
     expect(textoQuedan(1, "inyeccion")).toBe("Queda 1 unidad");
     expect(textoQuedan(0, "gotas")).toBe("No queda nada");
+  });
+});
+
+describe("buscarMedicamentoContado", () => {
+  const c = (nombre: string, dosis: string | null) => ({ clave: claveMedicamento(nombre, dosis), nombre, dosis });
+  const forxiga = c("Forxiga (Dapagliflozina)", "10");
+  const metformina = c("Metformina", "850");
+
+  it("encuentra por clave exacta", () => {
+    expect(buscarMedicamentoContado([forxiga, metformina], "metformina", "850")).toBe(metformina);
+  });
+
+  it("el blister con el nombre comercial encuentra 'Marca (Droga)'", () => {
+    expect(buscarMedicamentoContado([forxiga, metformina], "Forxiga", "10")).toBe(forxiga);
+    expect(buscarMedicamentoContado([forxiga], "Forxiga", null)).toBe(forxiga);
+  });
+
+  it("también encuentra por la droga", () => {
+    expect(buscarMedicamentoContado([forxiga], "Dapagliflozina", "10")).toBe(forxiga);
+  });
+
+  it("con dosis distinta no lo enlaza", () => {
+    expect(buscarMedicamentoContado([forxiga], "Forxiga", "5")).toBeUndefined();
+  });
+
+  it("sin dosis y dos con el mismo nombre, no adivina", () => {
+    const otra = c("Forxiga", "5");
+    expect(buscarMedicamentoContado([forxiga, otra], "Forxiga", null)).toBeUndefined();
   });
 });

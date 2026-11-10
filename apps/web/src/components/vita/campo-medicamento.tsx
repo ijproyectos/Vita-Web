@@ -1,33 +1,22 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { cn } from "@/lib/utils";
-import {
-  completarEnLinea,
-  etiquetaSugerencia,
-  normalizar,
-  sugerirMedicamentos,
-  type Sugerencia,
-} from "@/lib/medicamentos/catalogo";
+import { etiquetaSugerencia, normalizar, sugerirMedicamentos, type Sugerencia } from "@/lib/medicamentos/catalogo";
 
-// Campo de nombre de medicamento con autocompletado local (catálogo de
-// lib/medicamentos/catalogo). Siempre controlado, nunca guarda nada: solo
-// rellena el texto. El texto libre sigue valiendo para lo que no esté en la
-// lista. Combobox accesible: flechas, Enter, Escape y Tab/→ para aceptar la
-// terminación en línea.
+// Campo de nombre de medicamento con sugerencias del catálogo local
+// (lib/medicamentos/catalogo). Siempre controlado, nunca guarda nada: solo
+// rellena el texto. No completa en línea: al escribir siempre abre la lista y
+// la persona elige. Una marca se guarda como "Forxiga (Dapagliflozina)" (lo de
+// paréntesis es la droga, ver lib/medicamentos/nombre). Enter elige la
+// sugerencia marcada (o la primera) y NUNCA envía el formulario, así no se
+// guarda un nombre a medio escribir. El texto libre sigue valiendo.
 
 type Variante = "alta" | "pill";
 
 const CLASE_INPUT: Record<Variante, string> = {
   alta: "min-w-0 w-full bg-transparent py-3.5 text-[15.5px] font-semibold outline-none placeholder:font-medium placeholder:text-faint",
   pill: "w-full rounded-full border border-foreground/10 bg-canvas/60 px-4 py-[11px] text-sm font-semibold outline-none placeholder:font-medium placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40",
-};
-
-// Mismas métricas que el input, para que el resto en gris caiga justo detrás
-// del texto escrito.
-const CLASE_FANTASMA: Record<Variante, string> = {
-  alta: "py-3.5 text-[15.5px] font-semibold",
-  pill: "border border-transparent px-4 py-[11px] text-sm font-semibold",
 };
 
 export function CampoMedicamento({
@@ -46,32 +35,19 @@ export function CampoMedicamento({
   ariaLabel?: string;
 }) {
   const idLista = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [abierto, setAbierto] = useState(false);
   const [activo, setActivo] = useState(-1);
 
   const sugerencias = sugerirMedicamentos(value);
-  const completado = completarEnLinea(value);
-  const restoFantasma = abierto && completado && activo < 0 ? completado.slice(value.length) : "";
-
-  // Con una sola sugerencia ya cubierta por el texto en línea (o ya escrita
-  // completa) la lista sería redundante.
-  const unica = sugerencias.length === 1 ? sugerencias[0] : null;
-  const listaRedundante =
-    unica !== null && !unica.marca && (completado !== null || normalizar(unica.nombre) === normalizar(value));
-  const mostrarLista = abierto && sugerencias.length > 0 && !listaRedundante;
+  // Ya elegida (el texto es exactamente la única sugerencia): no hace falta la lista.
+  const yaElegida = sugerencias.length === 1 && normalizar(etiquetaSugerencia(sugerencias[0])) === normalizar(value);
+  const mostrarLista = abierto && sugerencias.length > 0 && !yaElegida;
   const idOpcion = (i: number) => `${idLista}-op-${i}`;
 
   function elegir(s: Sugerencia) {
-    onChange(s.nombre);
+    onChange(etiquetaSugerencia(s));
     setAbierto(false);
     setActivo(-1);
-  }
-
-  function aceptarFantasma() {
-    if (!completado) return;
-    onChange(completado);
-    setAbierto(false);
   }
 
   function alTeclear(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -82,26 +58,14 @@ export function CampoMedicamento({
       const n = sugerencias.length;
       setActivo((a) => (e.key === "ArrowDown" ? (a + 1) % n : a <= 0 ? n - 1 : a - 1));
     } else if (e.key === "Enter") {
-      if (mostrarLista && activo >= 0 && sugerencias[activo]) {
-        e.preventDefault();
-        elegir(sugerencias[activo]);
-      }
+      // Enter en el nombre nunca guarda: elige de la lista si está abierta.
+      e.preventDefault();
+      if (mostrarLista) elegir(sugerencias[activo >= 0 ? activo : 0]);
     } else if (e.key === "Escape") {
       if (abierto) {
         e.preventDefault();
         setAbierto(false);
         setActivo(-1);
-      }
-    } else if (e.key === "Tab" && !e.shiftKey) {
-      if (restoFantasma) {
-        e.preventDefault();
-        aceptarFantasma();
-      }
-    } else if (e.key === "ArrowRight") {
-      const el = e.currentTarget;
-      if (restoFantasma && el.selectionStart === value.length && el.selectionEnd === value.length) {
-        e.preventDefault();
-        aceptarFantasma();
       }
     }
   }
@@ -109,7 +73,6 @@ export function CampoMedicamento({
   return (
     <div className="relative min-w-0 flex-1">
       <input
-        ref={inputRef}
         type="text"
         name={name}
         value={value}
@@ -130,24 +93,12 @@ export function CampoMedicamento({
         autoCapitalize="sentences"
         spellCheck={false}
         role="combobox"
-        aria-autocomplete="both"
+        aria-autocomplete="list"
         aria-expanded={mostrarLista}
         aria-controls={mostrarLista ? idLista : undefined}
         aria-activedescendant={mostrarLista && activo >= 0 ? idOpcion(activo) : undefined}
         className={CLASE_INPUT[variante]}
       />
-      {restoFantasma && (
-        <div
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre",
-            CLASE_FANTASMA[variante]
-          )}
-        >
-          <span className="invisible">{value}</span>
-          <span className="text-faint">{restoFantasma}</span>
-        </div>
-      )}
       {mostrarLista && (
         <ul
           id={idLista}
@@ -186,3 +137,4 @@ export function CampoMedicamento({
     </div>
   );
 }
+
