@@ -6,7 +6,6 @@ import { useVolver } from "@/lib/navegacion/rastreador";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EditorTomas } from "@/components/vita/editor-tomas";
 import { CampoMedicamento } from "@/components/vita/campo-medicamento";
-import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { separarDosis } from "@/lib/inventario/tipos";
 import { FilaCuando, FilaStock, HojaCuando, HojaCuantoQueda, SelectForma } from "@/components/vita/campos-medicamento";
@@ -127,8 +126,7 @@ export function FormularioMedicamento({
 
       <div>
         <Etiqueta text="Nombre" />
-        <div className="mt-3.5 flex items-center gap-3 rounded-full bg-card py-1 pl-[18px] pr-1.5 shadow-item">
-          <VitaIcon name="pill" size={18} className="shrink-0 text-subtle" />
+        <div className="mt-3.5">
           <CampoMedicamento
             name="nombre"
             value={nombre}

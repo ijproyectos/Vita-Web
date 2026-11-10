@@ -32,8 +32,19 @@ describe("sugerirMedicamentos", () => {
     expect(sugerirMedicamentos(" p ")).toEqual([]);
   });
 
-  it("encuentra por prefijo del nombre", () => {
-    expect(sugerirMedicamentos("Ibup").map((s) => s.nombre)).toEqual(["Ibuprofeno"]);
+  it("encuentra por el principio del genérico y de la marca", () => {
+    expect(sugerirMedicamentos("Ibup").map(etiquetaSugerencia)).toEqual(["Ibupirac (Ibuprofeno)", "Ibuprofeno"]);
+  });
+
+  it("encuentra por cualquier parte del nombre, como las especialidades", () => {
+    const r = sugerirMedicamentos("gliflo").map((s) => s.nombre);
+    expect(r).toContain("Dapagliflozina");
+    expect(r).toContain("Empagliflozina");
+  });
+
+  it("la marca aparece como marca, con su droga", () => {
+    const [s] = sugerirMedicamentos("forx");
+    expect(s).toMatchObject({ marca: "Forxiga", nombre: "Dapagliflozina" });
   });
 
   it("no distingue acentos ni mayúsculas", () => {
@@ -49,12 +60,11 @@ describe("sugerirMedicamentos", () => {
     expect(etiquetaSugerencia(s)).toBe("Tafirol (Paracetamol)");
   });
 
-  it("pone primero los nombres y después las marcas", () => {
-    const r = sugerirMedicamentos("as", 20);
-    const primeraMarca = r.findIndex((s) => s.marca);
-    const ultimoNombre = r.map((s) => !s.marca).lastIndexOf(true);
-    expect(primeraMarca).toBeGreaterThan(-1);
-    expect(ultimoNombre).toBeLessThan(primeraMarca);
+  it("pone primero los que empiezan con el texto y después los que lo contienen", () => {
+    const r = sugerirMedicamentos("pra", 20).map((s) => normalizar(s.marca ?? s.nombre));
+    const primeraQueContiene = r.findIndex((n) => !n.startsWith("pra"));
+    expect(primeraQueContiene).toBeGreaterThan(0);
+    expect(r.slice(primeraQueContiene).every((n) => !n.startsWith("pra"))).toBe(true);
   });
 
   it("respeta el límite", () => {
