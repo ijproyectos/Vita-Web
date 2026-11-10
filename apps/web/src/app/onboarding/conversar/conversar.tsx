@@ -7,10 +7,8 @@ import type { MedicionesEnCasa, UsoApp } from "@/lib/perfil/tipos";
 import { CLASES_COLOR } from "@/lib/familia/colores";
 import type { ColorPerfil } from "@/lib/familia/tipos";
 import { generarCodigoAccesoAction } from "@/app/cuidar/[elderId]/actions";
-import { cantidadDeTomas, FRECUENCIAS_MEDICAMENTO } from "@/lib/medicamentos/comidas";
-import type { ComidaToma, OpcionComida } from "@/lib/medicamentos/comidas";
-import type { MomentoDia } from "@/lib/medicamentos/tipos";
-import { ETIQUETA_MOMENTO, normalizarHora, ORDEN_MOMENTOS } from "@/lib/rutina/momento";
+import { MOMENTOS_SELECTOR } from "@/lib/medicamentos/comidas";
+import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaISOEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { FilaTurno } from "@/components/vita/fila-turno";
@@ -58,11 +56,18 @@ import {
 import {
   BORRADOR_VACIO,
   CHIPS_UNIDAD,
-  comidasDelMomento,
-  etiquetaDeToma,
-  horaSugeridaSinComida,
+  frecuenciaDeHoras,
+  MAX_HORAS_MED,
+  moverHora,
+  REMEDIOS_RAPIDOS,
+  siguienteHoraMed,
+  textoHoras,
+  textoVeces,
+  tomasDesdeHoras,
   leerDosis,
+  horasDeRemedio,
   lineaDeToma,
+  remediosVisibles,
   tituloMed,
   UNIDAD_POR_CHIP,
   type BorradorMed,
@@ -71,7 +76,7 @@ import {
 // Onboarding conversacional nuevo (reemplaza /onboarding/nombre +
 // /onboarding/chat como camino por defecto — ver pantallas/ingreso /Ingreso1-3.jpeg,
 // la referencia visual/de flujo). El guion viejo (sin IA, por catálogo)
-// sigue existiendo, alcanzable desde "Prefiero un formulario" en el header.
+// sigue existiendo en /onboarding/nombre, pero ya no se ofrece desde la charla.
 //
 // Qué se pregunta lo decide UN estado por persona (`EstadoPersona`, ver
 // lib/onboarding/conversacion.ts): cada respuesta lo actualiza y `avanzar`
@@ -90,13 +95,12 @@ const OPC_CONDICIONES = ["Diabetes", "Hipertensión", "Hipotiroidismo", "Otra"] 
 const OPC_ALERGIAS = ["Penicilina", "Aspirina", "Lactosa", "Otra"] as const;
 const OPC_SOLAS = ["Ninguna", "Saltear"] as const;
 const ESPECIALIDADES = ["Clínico", "Cardiólogo", "Traumatólogo", "Oculista", "Otro"] as const;
-const CHIPS_CANTIDAD = ["1", "2", "3", "4", "5"] as const;
 
-type PasoChips = "med" | "med-dosis" | "med-frecuencia" | "turno" | "turno-otro" | "turno-spec" | "meas";
+type PasoChips = "med" | "med-dosis" | "med-otro" | "turno" | "turno-otro" | "turno-spec" | "meas";
 const OPCIONES_CHIPS: Record<PasoChips, readonly string[]> = {
   med: ["Sí", "No", "Saltear"],
   "med-dosis": ["No sé / Saltear"],
-  "med-frecuencia": FRECUENCIAS_MEDICAMENTO,
+  "med-otro": ["Sí", "Listo", "Corregir"],
   turno: ["Sí", "No", "Saltear"],
   "turno-otro": ["Sí", "No"],
   "turno-spec": ESPECIALIDADES,
@@ -143,16 +147,11 @@ type Vista =
   | { tipo: "nacimiento"; ctx: ContextoNacimiento; partes: PartesFecha; edad: number | null; motivo: MotivoNacimiento; insistio: boolean }
   | { tipo: "edad-confirmar"; ctx: ContextoNacimiento; nac: Nacimiento }
   | { tipo: "consentimiento"; nombre: string; autorizado: boolean }
-  // Remedios: cuántos -> uno por uno (una pregunta por vez) -> revisión de todos -> guardar todos.
-  // `toma` es el índice de la toma que se está definiendo.
-  | { tipo: "med-cantidad" }
+  // Remedios: cuál -> de cuánto -> horas (tarjeta) -> "¿Tomás otro?". "Listo" guarda todos.
   | { tipo: "med-nombre" }
   | { tipo: "med-dosis" }
   | { tipo: "med-unidad"; numero: string }
-  | { tipo: "med-momento"; toma: number }
-  | { tipo: "med-comida"; toma: number; momento: MomentoDia }
-  | { tipo: "med-hora"; toma: number; sugerida: string; comida: ComidaToma; otra: boolean }
-  | { tipo: "med-confirmar" }
+  | { tipo: "med-horas" }
   | { tipo: "med-revision" }
   | { tipo: "handoff-vos" }
   | { tipo: "multi"; paso: "cond" | "alergia"; seleccion: string[] }
@@ -499,49 +498,38 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
   }
 
   // ---- Remedios (persona o "vos") -------------------------------------------
-  // "Sí" -> ¿cuántos? (un número o la lista) -> por cada uno: nombre -> dosis
-  // (-> unidad si vino un número pelado) -> veces por día -> por cada toma:
-  // momento -> comida -> hora -> tarjeta -> revisión de TODOS -> guardar todos.
+  // "Sí" -> cuál (botones, texto o una lista separada por comas) -> de cuánto
+  // -> horas, de un toque -> "¿Tomás otro?". "Listo" guarda todos; "Corregir"
+  // abre la lista para quitar o agregar.
 
   function empezarRemedios() {
-    decir(
-      q(
-        (n) => `¿Cuántos remedios toma ${n}? Tocá un número, o escribime la lista (por ejemplo: Losartán, Metformina).`,
-        "¿Cuántos remedios tomás? Tocá un número, o escribime la lista (por ejemplo: Losartán, Metformina)."
-      )
-    );
-    setVista({ tipo: "med-cantidad" });
+    preguntarNombreRemedio();
   }
 
-  function responderCantidadMeds(texto: string, audioSeg?: number) {
-    agregarBurbujaUsuario(texto, audioSeg);
-    const lectura = leerCantidadRemedios(texto);
-    if (lectura.tipo === "ilegible") {
-      decir("No lo entendí. Tocá un número del 1 al 5, o escribime los nombres separados por coma.");
-      return;
-    }
-    const nueva: ColaMeds = lectura.tipo === "cantidad" ? { total: lectura.total, previos: [] } : { total: lectura.nombres.length, previos: lectura.nombres };
-    setCola(nueva);
-    pedirRemedio(nueva, remedios.length);
+  function preguntarNombreRemedio() {
+    setBorrador(BORRADOR_VACIO);
+    decir(q((n) => `¿Cuál toma ${n}? Tocá uno o escribilo.`, "¿Cuál? Tocá uno o escribilo."));
+    setVista({ tipo: "med-nombre" });
   }
 
-  // Arranca el remedio número `indice` (0-based) de la cola.
+  // Sigue con el próximo de una lista dicha de una vez ("Losartán, Metformina").
   function pedirRemedio(c: ColaMeds, indice: number) {
     const previo = c.previos[indice];
-    const prefijo = c.total > 1 ? `Remedio ${indice + 1} de ${c.total}: ` : "";
-    if (previo) {
-      setBorrador({ ...BORRADOR_VACIO, nombre: previo });
-      decir(`${prefijo}¿de cuánto es el ${previo}? Por ejemplo, 50 mg.`);
-      setVista({ tipo: "med-dosis" });
-      return;
-    }
-    setBorrador(BORRADOR_VACIO);
-    decir(prefijo + q((n) => `¿Cómo se llama el remedio de ${n}?`, "¿Cómo se llama el remedio?"));
-    setVista({ tipo: "med-nombre" });
+    if (!previo) return preguntarNombreRemedio();
+    setBorrador({ ...BORRADOR_VACIO, nombre: previo });
+    decir(`¿De cuánto es el ${previo}? Por ejemplo, 50 mg.`);
+    setVista({ tipo: "med-dosis" });
   }
 
   function responderNombreMed(texto: string, audioSeg?: number) {
     agregarBurbujaUsuario(texto, audioSeg);
+    const lectura = leerCantidadRemedios(texto);
+    if (lectura.tipo !== "ilegible" && lectura.tipo !== "cantidad" && lectura.nombres.length > 1) {
+      const c: ColaMeds = { total: remedios.length + lectura.nombres.length, previos: [...Array<string>(remedios.length).fill(""), ...lectura.nombres] };
+      setCola(c);
+      pedirRemedio(c, remedios.length);
+      return;
+    }
     const t = texto.trim();
     const nombre = t.charAt(0).toUpperCase() + t.slice(1);
     setBorrador((b) => ({ ...b, nombre }));
@@ -549,9 +537,9 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
     setVista({ tipo: "med-dosis" });
   }
 
-  function preguntarFrecuencia() {
-    decir(q((n) => `¿Cuántas veces por día lo toma ${n}?`, "¿Cuántas veces por día lo tomás?"));
-    setVista({ tipo: "chips", paso: "med-frecuencia" });
+  // La pregunta va dentro de la tarjeta de horas.
+  function preguntarHoras() {
+    setVista({ tipo: "med-horas" });
   }
 
   function responderDosisMed(texto: string, audioSeg?: number) {
@@ -567,104 +555,39 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
       return;
     }
     setBorrador((b) => ({ ...b, dosis: lectura.valor, unidad: lectura.unidad }));
-    preguntarFrecuencia();
+    preguntarHoras();
   }
 
   function responderUnidadMed(numero: string, chip: string) {
     agregarBurbujaUsuario(chip);
     setBorrador((b) => ({ ...b, dosis: numero, unidad: UNIDAD_POR_CHIP[chip] ?? "mg" }));
-    preguntarFrecuencia();
+    preguntarHoras();
   }
 
-  function preguntarMomentoToma(toma: number, total: number) {
-    const cual = etiquetaDeToma(toma, total);
-    decir(cual ? `${cual[0].toUpperCase()}${cual.slice(1)}: ¿en qué momento del día?` : "¿En qué momento del día?");
-    setVista({ tipo: "med-momento", toma });
-  }
-
-  function responderFrecuenciaMed(frecuencia: string) {
-    agregarBurbujaUsuario(frecuencia);
-    setBorrador((b) => ({ ...b, frecuencia, tomas: [] }));
-    preguntarMomentoToma(0, cantidadDeTomas(frecuencia));
-  }
-
-  function responderMomentoMed(toma: number, momento: MomentoDia) {
-    agregarBurbujaUsuario(ETIQUETA_MOMENTO[momento]);
-    decir("¿Con qué comida?");
-    setVista({ tipo: "med-comida", toma, momento });
-  }
-
-  function responderComidaMed(toma: number, momento: MomentoDia, opcion: OpcionComida | null) {
-    agregarBurbujaUsuario(opcion?.etiqueta ?? "No importa");
-    // La hora sugerida es aproximada: la que se confirme manda y la indicación queda como se eligió.
-    const sugerida = opcion?.hora ?? horaSugeridaSinComida(momento);
-    decir("¿A qué hora exactamente?");
-    setVista({ tipo: "med-hora", toma, sugerida, comida: { conComida: opcion?.conComida ?? "no-importa", indicacion: opcion?.clave ?? null }, otra: false });
-  }
-
-  function responderHoraMed(v: Extract<Vista, { tipo: "med-hora" }>, hora: string) {
-    const normal = normalizarHora(hora);
-    if (!normal) {
-      toast.error("Esa hora no es válida.");
+  function responderHorasMed(horas: string[]) {
+    agregarBurbujaUsuario(textoHoras(horas));
+    const nueva = agregarItem(remedios, nuevoId(), { ...borrador, frecuencia: frecuenciaDeHoras(horas), tomas: tomasDesdeHoras(horas) });
+    setRemedios(nueva);
+    if (cola && nueva.length < cola.total) {
+      pedirRemedio(cola, nueva.length);
       return;
     }
-    if (borrador.tomas.some((t, i) => i !== v.toma && t.hora === normal)) {
-      toast.error("Esa hora ya la usaste en otra toma. Elegí otra.");
-      return;
-    }
-    agregarBurbujaUsuario(normal);
-    const tomas = [...borrador.tomas.slice(0, v.toma), { hora: normal, ...v.comida }];
-    setBorrador((b) => ({ ...b, tomas }));
-
-    const total = cantidadDeTomas(borrador.frecuencia);
-    if (tomas.length < total) {
-      preguntarMomentoToma(tomas.length, total);
-      return;
-    }
-    decir("Revisá que esté bien:");
-    setVista({ tipo: "med-confirmar" });
+    setCola(null);
+    decir(q((n) => `Anotado. ¿${n} toma otro?`, "Anotado. ¿Tomás otro?"));
+    setVista({ tipo: "chips", paso: "med-otro" });
   }
 
   const etiquetaPara = esPersona ? nombrePersona ?? "la persona que cuidás" : "vos";
 
-  function editarMedicamento() {
-    agregarTarjeta(<TarjetaConfirmarMed borrador={borrador} etiquetaPara={etiquetaPara} congelada="editado" />);
-    agregarBurbujaUsuario("Editar");
-    decir("Dale, lo cargamos de nuevo.");
-    pedirRemedio(cola ?? { total: remedios.length + 1, previos: [] }, remedios.length);
-  }
-
-  // "Listo" en la tarjeta de UN remedio: pasa a la lista. Si faltan según la
-  // cantidad dicha se sigue con el próximo; si no, se revisan todos juntos.
-  function confirmarRemedio() {
-    agregarTarjeta(<TarjetaConfirmarMed borrador={borrador} etiquetaPara={etiquetaPara} congelada="anotado" />);
-    agregarBurbujaUsuario("Listo");
-    const nueva = agregarItem(remedios, nuevoId(), borrador);
-    setRemedios(nueva);
-    const c = cola ?? { total: nueva.length, previos: [] };
-    if (nueva.length < c.total) {
-      pedirRemedio(c, nueva.length);
-      return;
-    }
-    if (!avisoPastillasDicho.current) {
-      avisoPastillasDicho.current = true;
-      decir("Si querés llevar la cuenta de cuántas pastillas quedan, después lo podés hacer desde Mis pastillas: le sacás una foto al blíster y las cuento yo.");
-    }
-    decir(nueva.length > 1 ? "Estos son todos los remedios. Podés quitar alguno o agregar otro antes de guardar:" : "Revisá la lista. Si falta alguno, agregalo antes de guardar:");
-    setVista({ tipo: "med-revision" });
-  }
-
   function agregarOtroRemedio() {
     agregarBurbujaUsuario("Agregar otro");
-    const c: ColaMeds = { total: remedios.length + 1, previos: [] };
-    setCola(c);
-    pedirRemedio(c, remedios.length);
+    preguntarNombreRemedio();
   }
 
   // Un doble toque en "Guardar" no puede crear los remedios dos veces.
   const guardandoMed = useRef(false);
 
-  async function guardarTodosRemedios() {
+  async function guardarTodosRemedios(desdeRevision = true) {
     if (guardandoMed.current) return;
     if (esPersona && !personaId) {
       toast.error("No encontramos el perfil de la persona. Recargá la página.");
@@ -701,10 +624,15 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
     if (fallaron.length > 0) {
       // Nada se descarta en silencio: los que fallaron quedan en la lista con su error para reintentar o quitar.
       toast.error(`No se pudo guardar: ${fallaron.map((i) => i.datos.nombre).join(", ")}.`);
+      setVista({ tipo: "med-revision" });
       return;
     }
     agregarTarjeta(<TarjetaRevisionRemedios items={lista} etiquetaPara={etiquetaPara} congelada />);
-    agregarBurbujaUsuario(lista.length > 0 ? "Guardar todo" : "Seguir sin remedios");
+    if (desdeRevision) agregarBurbujaUsuario(lista.length > 0 ? "Guardar todo" : "Seguir sin remedios");
+    if (lista.length > 0 && !avisoPastillasDicho.current) {
+      avisoPastillasDicho.current = true;
+      decir("Si querés llevar la cuenta de cuántas pastillas quedan, después lo podés hacer desde Mis pastillas: le sacás una foto al blister.");
+    }
     actualizarEstado(clave, { remediosRespondido: true });
     setRemedios([]);
     setCola(null);
@@ -844,10 +772,14 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
       case "med-dosis":
         // "No sé / Saltear": el remedio queda sin dosis.
         setBorrador((b) => ({ ...b, dosis: null, unidad: "mg" }));
-        preguntarFrecuencia();
+        preguntarHoras();
         break;
-      case "med-frecuencia":
-        responderFrecuenciaMed(valor);
+      case "med-otro":
+        if (valor === "Sí") preguntarNombreRemedio();
+        else if (valor === "Corregir") {
+          decir("Podés quitar alguno o agregar otro antes de guardar:");
+          setVista({ tipo: "med-revision" });
+        } else void guardarTodosRemedios(false);
         break;
       case "turno":
         if (valor === "Sí") {
@@ -1014,7 +946,6 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
   function enviarDesdeCampo(texto: string, audioSeg?: number) {
     if (vista.tipo === "nombre-edad") void responderNombreNacimiento(vista.relacion, texto, audioSeg);
     else if (vista.tipo === "nacimiento") void responderNacimiento(vista, texto, audioSeg);
-    else if (vista.tipo === "med-cantidad") responderCantidadMeds(texto, audioSeg);
     else if (vista.tipo === "med-nombre") responderNombreMed(texto, audioSeg);
     else if (vista.tipo === "med-dosis") responderDosisMed(texto, audioSeg);
     else if (vista.tipo === "turno-spec-texto") responderEspecialidad(texto);
@@ -1029,9 +960,11 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
           antes de seguir, como en el flujo original). */}
       <EncabezadoConversar
         tabs={tabs}
-        linkFormulario="/onboarding/nombre"
         escribiendo={escribiendo}
-        onTerminar={hayAvance && vista.tipo !== "fin" ? terminarDespues : undefined}
+        hayAvance={hayAvance}
+        onTerminar={() => {
+          if (vista.tipo !== "fin") void terminarDespues();
+        }}
       />
 
       <div ref={scrollRef} className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-3.5 pt-[18px]">
@@ -1102,10 +1035,10 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
           </div>
         )}
 
-        {!escribiendo && vista.tipo === "med-cantidad" && (
+        {!escribiendo && vista.tipo === "med-nombre" && (
           <div className="flex flex-wrap gap-1.5 pl-[46px]">
-            {CHIPS_CANTIDAD.map((c) => (
-              <ChipBoton key={c} texto={c} onClick={() => responderCantidadMeds(c)} />
+            {REMEDIOS_RAPIDOS.map((c) => (
+              <ChipBoton key={c} texto={c} onClick={() => responderNombreMed(c)} />
             ))}
           </div>
         )}
@@ -1124,36 +1057,9 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
           </div>
         )}
 
-        {!escribiendo && vista.tipo === "med-momento" && (
-          <div className="flex flex-wrap gap-1.5 pl-[46px]">
-            {ORDEN_MOMENTOS.map((m) => (
-              <ChipBoton key={m} texto={ETIQUETA_MOMENTO[m]} onClick={() => responderMomentoMed(vista.toma, m)} />
-            ))}
-          </div>
-        )}
-
-        {!escribiendo && vista.tipo === "med-comida" && (
-          <div className="flex flex-wrap gap-1.5 pl-[46px]">
-            {comidasDelMomento(vista.momento).map((c) => (
-              <ChipBoton key={c.clave} texto={c.etiqueta} onClick={() => responderComidaMed(vista.toma, vista.momento, c)} />
-            ))}
-            <ChipBoton texto="No importa" onClick={() => responderComidaMed(vista.toma, vista.momento, null)} />
-          </div>
-        )}
-
-        {!escribiendo && vista.tipo === "med-hora" && (
-          <div className="flex flex-col gap-2 pl-[46px]">
-            <div className="flex flex-wrap gap-1.5">
-              <ChipBoton texto={`${vista.sugerida}, está bien`} onClick={() => responderHoraMed(vista, vista.sugerida)} />
-              {!vista.otra && <ChipBoton texto="Otra hora" onClick={() => setVista({ ...vista, otra: true })} />}
-            </div>
-            {vista.otra && <HoraOtra inicial={vista.sugerida} onConfirmar={(h) => responderHoraMed(vista, h)} />}
-          </div>
-        )}
-
-        {!escribiendo && vista.tipo === "med-confirmar" && (
+        {!escribiendo && vista.tipo === "med-horas" && (
           <div className="pl-[46px]">
-            <TarjetaConfirmarMed borrador={borrador} etiquetaPara={etiquetaPara} onEditar={editarMedicamento} onGuardar={confirmarRemedio} />
+            <TarjetaHorasMed onListo={responderHorasMed} />
           </div>
         )}
 
@@ -1272,8 +1178,6 @@ function placeholderDelPaso(vista: Vista): string | null {
       return "Nombre y fecha de nacimiento…";
     case "nacimiento":
       return "Ej: 12/3/1950";
-    case "med-cantidad":
-      return "Ej: 3, o Losartán y Metformina";
     case "med-nombre":
       return "Ej: Losartán";
     case "med-dosis":
@@ -1377,71 +1281,94 @@ function MarcaCongelada({ texto }: { texto: string }) {
   );
 }
 
-// Hora exacta distinta de la sugerida: campo nativo controlado + "Listo".
-function HoraOtra({ inicial, onConfirmar }: { inicial: string; onConfirmar: (hora: string) => void }) {
-  const [hora, setHora] = useState(inicial);
+// Las horas del remedio, todo dentro de la tarjeta: momento del día, hora con
+// − / + y más horarios. Cuántos haya es cuántas veces por día lo toma.
+function TarjetaHorasMed({ onListo }: { onListo: (horas: string[]) => void }) {
+  const [horas, setHoras] = useState<string[]>([MOMENTOS_SELECTOR[0].hora]);
+  const [activa, setActiva] = useState(0);
+  const raiz = useRef<HTMLDivElement>(null);
+  // La tarjeta crece al sumar horarios: "Listo" no puede quedar tapado por la barra de abajo.
+  useEffect(() => {
+    raiz.current?.scrollIntoView({ block: "end" });
+  }, [horas.length]);
+
+  const hora = horas[activa];
+  const momento = momentoDelDia(hora);
+  const repetidas = new Set(horas).size !== horas.length;
+  const cambiar = (nueva: string) => setHoras((h) => h.map((x, i) => (i === activa ? nueva : x)));
+
+  function agregar() {
+    setHoras((h) => [...h, siguienteHoraMed(h)]);
+    setActiva(horas.length);
+  }
+
+  function quitar(i: number) {
+    setHoras((h) => h.filter((_, k) => k !== i));
+    setActiva((a) => (a >= i && a > 0 ? a - 1 : a));
+  }
 
   return (
-    <div className="flex items-center gap-2 rounded-[var(--radius-card)] bg-card p-3 shadow-card">
-      <input
-        type="time"
-        value={hora}
-        onChange={(e) => setHora(e.target.value)}
-        aria-label="Hora de la toma"
-        className="flex-1 rounded-[14px] bg-secondary px-3 py-2 text-[13px] font-semibold outline-none"
-      />
-      <button
-        type="button"
-        disabled={!hora}
-        onClick={() => onConfirmar(hora)}
-        className="rounded-full bg-primary px-4 py-2 text-[12.5px] font-bold text-primary-foreground disabled:opacity-50"
-      >
-        Listo
-      </button>
-    </div>
-  );
-}
+    <div ref={raiz} className="flex flex-col rounded-[20px] bg-card p-3.5 shadow-card">
+      <div className="font-heading text-[18px] font-extrabold tracking-[-0.02em]">¿A qué hora?</div>
 
-
-// Confirmación de UN remedio armado a pura pregunta: "Losartán 50 mg" y una
-// línea por toma ("08:00 · Con el desayuno"). Editar vuelve a cargar este remedio.
-function TarjetaConfirmarMed({
-  borrador,
-  etiquetaPara,
-  onEditar,
-  onGuardar,
-  congelada,
-}: {
-  borrador: BorradorMed;
-  etiquetaPara: string;
-  onEditar?: () => void;
-  onGuardar?: () => void;
-  // Ya resuelta: queda en el historial sin botones y con el sello de lo que pasó.
-  congelada?: "anotado" | "editado";
-}) {
-  return (
-    <div className="flex flex-col gap-2.5 rounded-[20px] bg-card p-3.5 shadow-card">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Para: {etiquetaPara}</div>
-      <div className="break-words font-heading text-[19px] font-extrabold">{tituloMed(borrador)}</div>
-      <div className="flex flex-col gap-1.5">
-        {borrador.tomas.map((t) => (
-          <span key={t.hora} className="rounded-full bg-secondary px-3 py-1.5 text-[12.5px] font-semibold">
-            {lineaDeToma(t)}
-          </span>
-        ))}
-      </div>
-      {congelada ? (
-        <MarcaCongelada texto={congelada === "anotado" ? "Anotado" : "Se vuelve a cargar"} />
-      ) : (
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onEditar} className="flex-1 rounded-full bg-secondary py-2 text-[12.5px] font-semibold">
-            Editar
-          </button>
-          <button type="button" onClick={onGuardar} className="flex-1 rounded-full bg-primary py-2 text-[12.5px] font-bold text-primary-foreground">
-            Listo
-          </button>
+      {horas.length > 1 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {horas.map((h, i) => (
+            <span key={i} className={cn("inline-flex items-center rounded-full text-[13px] font-extrabold tabular-nums", i === activa ? "bg-primary text-primary-foreground" : "bg-secondary text-slate-brand")}>
+              <button type="button" aria-pressed={i === activa} onClick={() => setActiva(i)} className="py-1.5 pl-3 pr-1">
+                {h}
+              </button>
+              <button type="button" aria-label={`Quitar las ${h}`} onClick={() => quitar(i)} className="py-1.5 pl-1 pr-2.5">
+                <VitaIcon name="close" size={11} strokeWidth={3} />
+              </button>
+            </span>
+          ))}
         </div>
       )}
+
+      <div className="eyebrow mb-2 mt-3.5 text-subtle">Momento del día</div>
+      <div className="flex gap-1.5">
+        {MOMENTOS_SELECTOR.map((m) => (
+          <button
+            key={m.momento}
+            type="button"
+            aria-pressed={momento === m.momento}
+            onClick={() => cambiar(m.hora)}
+            className={cn("flex-1 rounded-[12px] py-2.5 text-[12px] font-bold transition-colors motion-reduce:transition-none", momento === m.momento ? "bg-ink text-background" : "bg-secondary text-slate-brand")}
+          >
+            {m.etiqueta}
+          </button>
+        ))}
+      </div>
+
+      <div className="eyebrow mb-2 mt-3.5 text-subtle">Hora</div>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => cambiar(moverHora(hora, -30))} aria-label="30 minutos menos" className="h-[52px] w-12 rounded-[var(--radius-item)] bg-secondary text-2xl font-bold text-slate-brand active:scale-95 motion-reduce:transform-none">
+          −
+        </button>
+        <div aria-live="polite" className="flex h-[52px] flex-1 items-center justify-center rounded-[var(--radius-item)] bg-secondary font-heading text-[26px] font-bold tabular-nums tracking-[-0.03em]">
+          {hora}
+        </div>
+        <button type="button" onClick={() => cambiar(moverHora(hora, 30))} aria-label="30 minutos más" className="h-[52px] w-12 rounded-[var(--radius-item)] bg-secondary text-2xl font-bold text-slate-brand active:scale-95 motion-reduce:transform-none">
+          +
+        </button>
+      </div>
+
+      {horas.length < MAX_HORAS_MED && (
+        <button type="button" onClick={agregar} className="mt-2.5 flex items-center justify-center gap-1.5 rounded-[14px] border-[1.5px] border-dashed border-primary/45 py-2.5 text-[13px] font-extrabold text-teal-deep active:scale-[0.98] motion-reduce:transform-none">
+          <VitaIcon name="plus" size={13} strokeWidth={2.8} />
+          Agregar otro horario
+        </button>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className={cn("text-[12.5px] font-semibold", repetidas ? "text-destructive" : "text-subtle")} aria-live="polite">
+          {repetidas ? "Hay dos a la misma hora" : textoVeces(horas.length)}
+        </span>
+        <button type="button" disabled={repetidas} onClick={() => onListo([...horas].sort())} className="rounded-full bg-primary px-6 py-2.5 text-[13.5px] font-extrabold text-primary-foreground shadow-cta-sm disabled:bg-secondary disabled:text-subtle disabled:shadow-none">
+          Listo
+        </button>
+      </div>
     </div>
   );
 }
@@ -1617,7 +1544,7 @@ function subPersona(relacion: string | null, nacimiento: Nacimiento | null): str
 // la de la persona a cargo. Los remedios y los turnos se apilan debajo de su
 // título (uno por bloque), no en una columna angosta a la derecha: con varios
 // se leen enteros y envuelven.
-function TarjetaResumenPropia({
+export function TarjetaResumenPropia({
   resumen,
   titulo = "Tu perfil",
   sub = "Vos",
@@ -1661,35 +1588,47 @@ function TarjetaResumenPropia({
         {filas.slice(0, 2).map(([k, v]) => (
           <FilaResumen key={k} etiqueta={k} lineas={v} />
         ))}
-        <div className="flex flex-col gap-2 border-b border-line-soft py-[9px]">
-          <span className="text-[13px] font-semibold text-slate-brand">Remedios</span>
-          {resumen.meds.length === 0 ? (
-            <span className="text-[13px] font-bold text-subtle">Sin cargar</span>
-          ) : (
-            resumen.meds.map((m, i) => (
-              <div key={`${m.titulo}-${i}`} className="flex flex-col gap-0.5 rounded-[var(--radius-item)] bg-secondary px-3 py-2">
-                <span className="break-words text-[13.5px] font-extrabold">{m.titulo}</span>
-                {m.tomas.map((t) => (
-                  <span key={t} className="break-words text-[12.5px] font-semibold text-slate-brand">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            ))
-          )}
-        </div>
-        <div className="flex flex-col gap-2 border-b border-line-soft py-[9px]">
-          <span className="text-[13px] font-semibold text-slate-brand">Turnos</span>
-          {resumen.turnos.length === 0 ? (
-            <span className="text-[13px] font-bold text-subtle">Sin cargar</span>
-          ) : (
-            resumen.turnos.map((t, i) => <FilaTurno key={`${t.fecha}-${t.hora}-${i}`} turno={t} anioActual={anioActual} />)
-          )}
-        </div>
+        <RemediosResumen meds={resumen.meds} />
+        {resumen.turnos.length === 0 ? (
+          <FilaResumen etiqueta="Turnos" lineas={[]} />
+        ) : (
+          <div className="flex flex-col gap-2 border-b border-line-soft py-[9px]">
+            <span className="text-[13px] font-semibold text-slate-brand">Turnos · {resumen.turnos.length}</span>
+            {resumen.turnos.map((t, i) => (
+              <FilaTurno key={`${t.fecha}-${t.hora}-${i}`} turno={t} anioActual={anioActual} />
+            ))}
+          </div>
+        )}
         {filas.slice(2).map(([k, v]) => (
           <FilaResumen key={k} etiqueta={k} lineas={v} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// Una línea por remedio: nombre a la izquierda y horas a la derecha. Con muchos
+// se muestran los primeros y el resto se abre, para que la tarjeta se pueda leer.
+function RemediosResumen({ meds }: { meds: RemedioResumen[] }) {
+  const [abierto, setAbierto] = useState(false);
+  if (meds.length === 0) return <FilaResumen etiqueta="Remedios" lineas={[]} />;
+  const { visibles, ocultos } = remediosVisibles(meds, abierto);
+  return (
+    <div className="flex flex-col border-b border-line-soft py-[9px]">
+      <span className="text-[13px] font-semibold text-slate-brand">Remedios · {meds.length}</span>
+      <ul className="mt-1 flex flex-col">
+        {visibles.map((m, i) => (
+          <li key={`${m.titulo}-${i}`} className="flex items-baseline justify-between gap-3 border-t border-line-soft py-[7px] first:border-t-0">
+            <span className="min-w-0 break-words text-[13.5px] font-bold">{m.titulo}</span>
+            <span className="shrink-0 text-right text-[12.5px] font-semibold tabular-nums text-slate-brand">{horasDeRemedio(m.tomas)}</span>
+          </li>
+        ))}
+      </ul>
+      {ocultos > 0 && (
+        <button type="button" onClick={() => setAbierto(true)} className="mt-1 self-start py-1 text-[13px] font-bold text-teal-deep">
+          Ver {ocultos} más
+        </button>
+      )}
     </div>
   );
 }

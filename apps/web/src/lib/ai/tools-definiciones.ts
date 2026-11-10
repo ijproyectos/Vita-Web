@@ -197,13 +197,13 @@ const TOOLS_BASE: Anthropic.Tool[] = [
   {
     name: "show_today_medications",
     description:
-      "No consulta datos — le indica a la interfaz que muestre el widget de medicamentos de hoy. Usar después de que el usuario pida ver sus medicamentos de hoy.",
+      "Le muestra al usuario una tarjeta con los medicamentos de hoy: nombre, dosis, hora y si ya los tomó. Usar cuando pida ver sus medicamentos de hoy o qué le toca. No repetir esa lista en el texto.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "show_all_medications",
     description:
-      "No consulta datos — le indica a la interfaz que muestre el widget con todos los medicamentos. Usar cuando el usuario pida ver la lista completa.",
+      "Le muestra al usuario una tarjeta con todos sus medicamentos: nombre, dosis y horarios. Usar cuando pida ver la lista completa. No repetir esa lista en el texto.",
     input_schema: { type: "object", properties: {} },
   },
   {

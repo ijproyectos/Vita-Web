@@ -28,6 +28,18 @@ export function urlCodigo(origen: string, codigo: string): string {
   return valido ? `${base}${rutaCodigo(valido)}` : `${base}/login`;
 }
 
+/** Link de una invitación de cuidador: el corto si tiene código; si no (sin la migración 054), el largo. */
+export function urlDeInvitacion(origen: string, inv: { token: string; codigo?: string | null }): string {
+  return inv.codigo ? urlCodigo(origen, inv.codigo) : `${origen.replace(/\/+$/, "")}/cuidar/invitacion/${inv.token}`;
+}
+
+/** WhatsApp de una invitación de cuidador: link + código de respaldo + con qué mail entrar. */
+export function mensajeInvitacionCuidador(args: { persona: string | null; url: string; codigo?: string | null; email: string }): string {
+  const respaldo = args.codigo ? ` Tocá el link o entrá con el código ${args.codigo}.` : " Tocá el link.";
+  const quien = args.persona ? `a cuidar a ${args.persona}` : "a cuidarme";
+  return `Te invité ${quien} en vita.${respaldo} Usá tu mail ${args.email}. ${args.url}`;
+}
+
 /** WhatsApp / copiar del código de acceso ("Que use su celular", charla de onboarding). */
 export function mensajeCodigoAcceso(args: { codigo: string; origen: string; minutos?: number }): string {
   const minutos = args.minutos ?? MINUTOS_VIGENCIA_CODIGO_ACCESO;

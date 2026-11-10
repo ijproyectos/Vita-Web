@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { armarPagina, elegirSesionActiva, inicioVentanaChat, TAMANO_PAGINA_CHAT } from "./hilo";
 import type { MensajeChat, RolMensaje } from "./tipos";
+import { contenidoSinTarjetas, type Tarjeta } from "./tarjetas";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts: funciones puras
 // (supabase, usuarioId, ...) => resultado, sin acoplarse a la ruta de API
@@ -45,15 +46,21 @@ export async function listarHilo(
   opciones: { antesDe?: string; limite?: number; ahoraMs?: number } = {}
 ): Promise<{ mensajes: MensajeChat[]; hayMas: boolean }> {
   const limite = Math.max(1, Math.min(opciones.limite ?? TAMANO_PAGINA_CHAT, 100));
-  let q = supabase
-    .from("mensajes_chat")
-    .select("id, sesion_id, role, contenido, created_at")
-    .eq("usuario_id", usuarioId)
-    .gte("created_at", inicioVentanaChat(opciones.ahoraMs ?? Date.now()));
-  if (opciones.antesDe) q = q.lt("created_at", opciones.antesDe);
-  const { data, error } = await q.order("created_at", { ascending: false }).limit(limite + 1);
+  const consulta = (columnas: string) => {
+    let q = supabase
+      .from("mensajes_chat")
+      .select(columnas)
+      .eq("usuario_id", usuarioId)
+      .gte("created_at", inicioVentanaChat(opciones.ahoraMs ?? Date.now()));
+    if (opciones.antesDe) q = q.lt("created_at", opciones.antesDe);
+    return q.order("created_at", { ascending: false }).limit(limite + 1);
+  };
+  const base = "id, sesion_id, role, contenido, created_at";
+  let { data, error } = await consulta(`${base}, tarjetas`);
+  // Sin la migración 055 el historial se lee igual, sin tarjetas.
+  if (faltaColumnaTarjetas(error)) ({ data, error } = await consulta(base));
   if (error) throw new Error(`No se pudieron leer los mensajes: ${error.message}`);
-  return armarPagina((data ?? []) as MensajeChat[], limite);
+  return armarPagina((data ?? []) as unknown as MensajeChat[], limite);
 }
 
 /** Cola del hilo que se le manda al modelo: los últimos `limite` mensajes (7 días) de la persona, cronológicos. */
@@ -62,18 +69,22 @@ export async function listarCola(supabase: Cliente, usuarioId: string, limite: n
   return mensajes;
 }
 
+function faltaColumnaTarjetas(error: { code?: string; message?: string } | null): boolean {
+  return !!error && (error.code === "42703" || error.code === "PGRST204") && /tarjetas/.test(error.message ?? "");
+}
+
 export async function guardarMensaje(
   supabase: Cliente,
   usuarioId: string,
   sesionId: string,
   role: RolMensaje,
-  contenido: string
+  contenido: string,
+  tarjetas: Tarjeta[] = []
 ): Promise<string | null> {
-  const { data: fila, error } = await supabase
-    .from("mensajes_chat")
-    .insert({ usuario_id: usuarioId, sesion_id: sesionId, role, contenido })
-    .select("id")
-    .single();
+  const insertar = (fila: Record<string, unknown>) =>
+    supabase.from("mensajes_chat").insert({ usuario_id: usuarioId, sesion_id: sesionId, role, ...fila }).select("id").single();
+  let { data: fila, error } = await insertar(tarjetas.length ? { contenido, tarjetas } : { contenido });
+  if (tarjetas.length && faltaColumnaTarjetas(error)) ({ data: fila, error } = await insertar({ contenido: contenidoSinTarjetas(contenido, tarjetas) }));
 
   if (error) throw new Error(`No se pudo guardar el mensaje: ${error.message}`);
 

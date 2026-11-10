@@ -1,3 +1,4 @@
+import { ETIQUETA_CONTEXTO, formatearValor, metaDe } from "@/lib/mediciones/tipos";
 import { cantidadStock } from "@/lib/medicamentos/forma";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
@@ -200,6 +201,40 @@ function Reporte({ h }: { h: HistorialExportado }) {
           ))
         )}
       </Seccion>
+
+      <Seccion titulo="Mediciones" cantidad={h.mediciones.length}>
+        {h.mediciones.length === 0 ? (
+          <Vacio />
+        ) : (
+          h.mediciones.map((m) => (
+            <Tarjeta key={m.id}>
+              <div className="text-sm font-semibold">
+                {metaDe(m).nombre} · {formatearValor(m)} {metaDe(m).unidad}
+              </div>
+              <div className="mt-1 text-[12.5px] text-muted-foreground">
+                {fechaHora(m.medido_at)}
+                {m.pulso != null ? ` · Pulso ${m.pulso} lpm` : ""}
+                {m.contexto ? ` · ${ETIQUETA_CONTEXTO[m.contexto]}` : ""}
+              </div>
+              {m.notas && <div className="mt-1 text-[12.5px]">{m.notas}</div>}
+            </Tarjeta>
+          ))
+        )}
+      </Seccion>
+
+      {h.monitoreos.length > 0 && (
+        <Seccion titulo="Monitoreos" cantidad={h.monitoreos.length}>
+          {h.monitoreos.map((m) => (
+            <Tarjeta key={m.id}>
+              <div className="text-sm font-semibold">{metaDe(m).nombre}</div>
+              <div className="mt-1 text-[12.5px] text-muted-foreground">
+                {m.horarios.map((x) => x.hora).join(" · ")}
+                {m.fecha_fin ? ` · hasta el ${fechaSimple(m.fecha_fin)}` : ""}
+              </div>
+            </Tarjeta>
+          ))}
+        </Seccion>
+      )}
 
       <Seccion titulo="Estudios médicos" cantidad={h.estudios.length}>
         {h.estudios.length === 0 ? (

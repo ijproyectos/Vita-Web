@@ -134,6 +134,10 @@ Planes de "Nuevo monitoreo" (`053_monitoreos.sql`, escrita, NO aplicada). Una fi
 
 RLS igual que `mediciones`. El cron `dosis-vencidas` manda "Hora de medir…" (`lib/notificaciones/medir.ts`, dedupe `medicion_hora`) salvo silencio nocturno o si ya se midió. Si la persona no tiene avisos activos en ningún celular (`push_suscripciones`), también avisa a sus cuidadores Admin (`medicion_persona`). Una medición cuenta para un horario desde 60 min antes de él hasta 60 min antes del siguiente, o el punto medio si están a menos de 2 h (`tramosDeHoy`).
 
+## `codigos_mail_invitacion`
+
+Código de un solo uso a la casilla invitada (`054_invitacion_codigo.sql`, escrita, NO aplicada). Una fila por invitación; solo `service_role`, RLS sin policies. Guarda el HMAC, nunca el código. 10 min, 5 intentos por código y 1 envío por minuto por invitación (`guardar_codigo_mail_invitacion`, `verificar_codigo_mail_invitacion`, `consumir_codigo_mail_invitacion`). Los topes por MAIL, sumando todas sus invitaciones, viven en `limites_mail_invitacion` (solo `service_role`, eventos `envio`/`fallo`, retención 1 día): máx. 5 envíos y 10 verificaciones fallidas por hora; reenviar no los reinicia y, pasado el tope de fallos, se rechaza con el mismo error genérico hasta que corra la ventana. El código se consume recién con la sesión abierta (si otro pedido lo consumió antes, se cierra la sesión). La 054 también agrega `vinculos_cuidador.invitado_por` y usa `codigo` en las invitaciones por mail (con `elder_id` presente).
+
 ## `mediciones`
 
 "Monitoreo activo" de Mi Salud (`022_mediciones.sql`, aplicada 2026-10-22). Una fila = una medición puntual.
@@ -473,6 +477,7 @@ Migración 036 (escrita, NO aplicada; aditiva sobre 013). Agrega a `uso_ia_diari
 ## Memoria de vita (migraciones 038-040, fase 2)
 
 - `memorias` (038): un recuerdo por fila. `usuario_id` dueño (cascade con la cuenta), `sobre_tipo` (`yo`/`familiar`/`otro`) + `sobre_perfil_id`/`sobre_nombre`, `clave` (tema estable), `texto` (null si borrado), `tipo` (`estable`/`pasajero`, el pasajero vence a los 3 días), `estado` (`vigente`/`reemplazado`/`borrado`), `corrige_id`, `origen` (`chat`/`usuario`), `mensaje_origen_id` (sin FK). Un solo vigente por (dueño, sobre quién, clave). RLS owner-only: ningún cuidador la ve.
+- `mensajes_chat.tarjetas` jsonb (055, escrita, NO aplicada): las tarjetas de vita de ese mensaje, para seguir viéndolas al reabrir el chat. Null si no tiene. Sin la columna el chat anda igual y las tarjetas se ven solo en el momento.
 - `mensajes_chat.excluido_memoria` + `busqueda` (tsvector GIN) (038): un mensaje excluido sigue visible en el chat pero `buscar_memoria` nunca lo encuentra.
 - `perfiles.memoria_activa` (default true) / `memoria_aviso_visto_at` (038).
 - RPC `guardar_memoria`, `deshacer_memoria`, `buscar_memoria`, `sumar_uso_memorias` (039) y `olvidar_memoria`, `olvidar_todo_memoria`, `borrar_recuerdos_de_sesiones_hasta` (040): todas SECURITY INVOKER, `authenticated`. `olvidar_todo_memoria` deja todos los recuerdos borrados sin texto Y marca todos los mensajes del usuario como `excluido_memoria`. "Borrar historial" llama a `borrar_recuerdos_de_sesiones_hasta` antes de borrar las sesiones.
