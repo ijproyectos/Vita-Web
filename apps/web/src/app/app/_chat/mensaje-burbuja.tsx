@@ -165,6 +165,19 @@ function TarjetaAccion({
       return <TarjetaHoy items={leerItemsHoy(accion.items)} persona={persona} editable={editable} alCerrar={alCerrar} guardadoEn={guardadoEn} />;
     case "show_all_medications":
       return <TarjetaRemedios items={leerItemsRemedios(accion.items)} persona={persona} editable={editable} alCerrar={alCerrar} />;
+    case "measurement_added":
+      return (
+        <div className={base}>
+          <CabeceraTarjeta icon="activity" texto={persona ? `Medición anotada a ${persona}` : "Medición anotada"} />
+          <div className="mt-2.5 rounded-[var(--radius-item)] bg-secondary px-3.5 py-3">
+            <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">{String(accion.name)}</div>
+            <div className="mt-0.5 text-xs font-medium text-subtle">{String(accion.value)}</div>
+          </div>
+          <BotonesTarjeta>
+            {editable && <EnlaceTarjeta alCerrar={alCerrar} href="/app/mi-salud/monitoreo" texto="Ver monitoreo" grupo />}
+          </BotonesTarjeta>
+        </div>
+      );
     case "medication_taken":
       return (
         <div className={cn(base, "flex items-center gap-2.5 py-3")}>

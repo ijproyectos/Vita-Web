@@ -29,6 +29,7 @@ import * as mediciones from "@/lib/mediciones/nucleo";
 import * as planesMedicion from "@/lib/mediciones/planes-nucleo";
 import * as estudios from "@/lib/estudios/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import { medidoAtDesdeModelo } from "./mapeo";
 import { acotarLimite, adherenciaParaModelo, estudioParaModelo, medicionParaModelo, monitoreoParaModelo, stockParaModelo, turnoParaModelo } from "./lecturas";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 import { ejecutarResolverContradiccion, ejecutarToolMemoria, NOMBRE_TOOL_RESOLVER_CONTRADICCION, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
@@ -322,6 +323,32 @@ async function ejecutarEnDestino(
         const dias = acotarLimite(input.days, 7, 1, 30);
         return adherenciaParaModelo(await medicamentos.calcularAdherencia(supabase, usuarioId, dias), dias);
       });
+
+    case "add_measurement": {
+      const medidoAt = medidoAtDesdeModelo(input.measured_at);
+      if (medidoAt === "invalida") {
+        return { contenido: "measured_at tiene que ser YYYY-MM-DDTHH:MM (hora de Argentina). No se guardó nada: confirmá el momento con la persona." };
+      }
+      let medicion;
+      try {
+        medicion = await mediciones.agregar(supabase, usuarioId, {
+          tipo: input.type,
+          valor: input.value,
+          valorSecundario: input.secondary_value,
+          pulso: input.pulse,
+          contexto: input.glucose_context,
+          medidoAt,
+          notas: typeof input.notes === "string" ? input.notes : undefined,
+        });
+      } catch (e) {
+        return { contenido: `No se guardó la medición: ${e instanceof Error ? e.message : "error"} Pedile que revise el valor.` };
+      }
+      const vista = medicionParaModelo(medicion);
+      return {
+        contenido: JSON.stringify(vista),
+        accionUI: { type: "measurement_added", name: vista.name, value: vista.value, measured_at: vista.measured_at },
+      };
+    }
 
     case "update_health_profile": {
       const cambios: CambiosPerfil = {};

@@ -18,6 +18,7 @@ const GUARDABLES = new Set([
   "profile_updated",
   "condition_added",
   "allergy_added",
+  "measurement_added",
 ]);
 
 const AGRUPABLES = new Set(["medication_added", "appointment_added", "medication_taken"]);

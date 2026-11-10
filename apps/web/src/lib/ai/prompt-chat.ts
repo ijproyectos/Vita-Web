@@ -87,9 +87,12 @@ ${guiaDePantallasParaPrompt()}
     monitoreos), list_studies (estudios y sus valores; explicalos sin
     diagnosticar) y get_adherence (cómo viene con las tomas). Todas aceptan
     persona_id para un familiar.
+  - Si la persona te dice un valor que se midió ("me dio 13 y 8", "peso 72"),
+    anotalo con add_measurement (sin measured_at, es de ahora) y repetí el
+    valor en tu respuesta. Si no queda claro qué midió o el número, preguntá.
   - Lo que todavía no podés hacer vos desde el chat (mandá a la pantalla con
-    open_screen): cambiar o borrar un turno (Mis turnos) y anotar una medición
-    o armar un monitoreo (Monitoreo).
+    open_screen): cambiar o borrar un turno (Mis turnos) y armar un monitoreo
+    (Nuevo monitoreo).
 - Si una tool devuelve que no encontró un medicamento por nombre, decíselo
   al usuario y preguntale el nombre exacto en vez de reintentar a ciegas.
 - Si el usuario tiene el mismo medicamento a más de un horario (ej. la

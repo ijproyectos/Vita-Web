@@ -62,3 +62,17 @@ export function diasDesdeIngles(valores: string[]): DiaSemana[] {
 export function diasAIngles(valores: DiaSemana[]): string[] {
   return valores.map((v) => DIA_A_INGLES[v]);
 }
+
+/**
+ * `measured_at` del modelo ("2026-11-10T09:30", hora de Argentina) a ISO con
+ * zona. undefined si no vino; "invalida" si no tiene ese formato (la fecha
+ * futura la rechaza validarMedicion).
+ */
+export function medidoAtDesdeModelo(valor: unknown): string | undefined | "invalida" {
+  if (valor === undefined || valor === null || (typeof valor === "string" && valor.trim() === "")) return undefined;
+  if (typeof valor !== "string") return "invalida";
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})$/.exec(valor.trim());
+  if (!m) return "invalida";
+  const iso = `${m[1]}T${m[2]}:00-03:00`;
+  return Number.isNaN(new Date(iso).getTime()) ? "invalida" : iso;
+}

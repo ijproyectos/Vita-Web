@@ -14,6 +14,7 @@ export const TOOLS_DE_ESCRITURA = new Set([
   "update_health_profile",
   "add_condition",
   "add_allergy",
+  "add_measurement",
 ]);
 
 // Escrituras CLÍNICAS o destructivas: sobre otra persona, la confirmación tiene

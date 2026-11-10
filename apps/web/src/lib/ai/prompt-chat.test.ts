@@ -99,6 +99,7 @@ describe("prompt caching del chat", () => {
         "list_measurements",
         "list_studies",
         "get_adherence",
+        "add_measurement",
         "recordar",
         "buscar_memoria",
         "resolver_contradiccion",
