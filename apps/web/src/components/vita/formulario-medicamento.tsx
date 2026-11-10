@@ -127,7 +127,8 @@ export function FormularioMedicamento({
             onChange={setNombre}
             onElegir={(e) => {
               setNombre(e.nombre);
-              setDroga(e.droga ?? "");
+              // Escribir la marca no pisa una droga que la persona ya escribió.
+              if (e.origen === "lista" || !droga.trim()) setDroga(e.droga ?? "");
             }}
             placeholder="Ibupirac, Metformina…"
             ariaLabel="Nombre del medicamento"

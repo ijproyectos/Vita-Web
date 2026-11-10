@@ -17,6 +17,9 @@ export function leerTurnoDelFormulario(formData: FormData): LecturaTurno {
   if (!especialidad || !fecha || !hora) {
     return { ok: false, message: "Especialidad, fecha y hora son obligatorios." };
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) {
+    return { ok: false, message: "Revisá el día y la hora del turno." };
+  }
 
   const telefonoCrudo = formData.get("telefono");
   const tel = typeof telefonoCrudo === "string" ? validarTelefono(telefonoCrudo) : null;

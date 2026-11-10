@@ -28,7 +28,8 @@ export function MapaLugar({ lugar, direccion }: { lugar: string; direccion?: str
         title={`Mapa de ${mostrada}`}
         src={urlMapaEmbebido(mostrada, CLAVE)}
         loading="lazy"
-        referrerPolicy="no-referrer"
+        // Solo el dominio (no la página): una clave de Google restringida a vita lo necesita.
+        referrerPolicy="strict-origin-when-cross-origin"
         className="block h-[180px] w-full border-0"
       />
       <p className="px-3.5 py-2.5 text-[12px] font-medium text-subtle">¿Es acá? Si no, escribí la dirección completa.</p>

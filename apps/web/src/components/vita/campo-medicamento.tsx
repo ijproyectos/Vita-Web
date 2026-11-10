@@ -34,10 +34,11 @@ export function CampoMedicamento({
   value: string;
   onChange: (valor: string) => void;
   /**
-   * Al elegir de la lista: el nombre y la droga de esa marca (null si se
-   * eligió el genérico). Si no se pasa, solo se escribe el nombre con `onChange`.
+   * Al elegir de la lista (o escribir la marca exacta): el nombre y la droga
+   * de esa marca (null si se eligió el genérico). Con origen "escrita" quien
+   * llama no debería pisar una droga ya cargada. Sin esto, solo `onChange`.
    */
-  onElegir?: (eleccion: { nombre: string; droga: string | null }) => void;
+  onElegir?: (eleccion: { nombre: string; droga: string | null; origen: "lista" | "escrita" }) => void;
   name?: string;
   placeholder?: string;
   variante?: Variante;
@@ -58,14 +59,14 @@ export function CampoMedicamento({
     // Escribió la marca exacta ("Forxiga") sin tocar la lista: cuenta como elegirla,
     // así la droga también se completa.
     const exacta = sugerirMedicamentos(valor).find((s) => s.marca && normalizar(s.marca) === normalizar(valor));
-    if (exacta && onElegir) onElegir({ nombre: valor, droga: exacta.nombre });
+    if (exacta && onElegir) onElegir({ nombre: valor, droga: exacta.nombre, origen: "escrita" });
     else onChange(valor);
     setElegida(false);
     setActivo(-1);
   }
 
   function elegir(s: Sugerencia) {
-    if (onElegir) onElegir({ nombre: nombreVisible(s), droga: s.marca ? s.nombre : null });
+    if (onElegir) onElegir({ nombre: nombreVisible(s), droga: s.marca ? s.nombre : null, origen: "lista" });
     else onChange(nombreVisible(s));
     setElegida(true);
     setActivo(-1);

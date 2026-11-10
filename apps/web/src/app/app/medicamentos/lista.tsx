@@ -334,7 +334,9 @@ function FormEdicion({
             variante="pill"
             value={edicion.nombre}
             onChange={(nombre) => onCambio({ ...edicion, nombre })}
-            onElegir={({ nombre, droga }) => onCambio({ ...edicion, nombre, droga: droga ?? "" })}
+            onElegir={({ nombre, droga, origen }) =>
+              onCambio({ ...edicion, nombre, droga: origen === "lista" || !edicion.droga.trim() ? (droga ?? "") : edicion.droga })
+            }
             ariaLabel="Nombre del medicamento"
           />
         </CampoPill>

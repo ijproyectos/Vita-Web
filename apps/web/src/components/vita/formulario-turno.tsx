@@ -68,7 +68,7 @@ export function FormularioTurno({
 
   // "Qué hay que llevar": DNI, sugerencias (credencial y por especialidad) y propios.
   // En una edición arranca con lo guardado y conserva lo que ya estaba tildado.
-  const [inicioLlevar] = useState(() => repartirLlevar(turno?.llevar ?? null, sugerenciasPara(turno?.especialidad ?? "", credencial)));
+  const [inicioLlevar] = useState(() => repartirLlevar(turno?.llevar ?? null));
   const [conDni, setConDni] = useState(inicioLlevar.conDni);
   const [sugAgregadas, setSugAgregadas] = useState<string[]>(inicioLlevar.sugeridas);
   const [sugOcultas, setSugOcultas] = useState<string[]>([]);
@@ -86,7 +86,7 @@ export function FormularioTurno({
   const [ocultoPara, setOcultoPara] = useState<typeof estado | null>(null);
 
   const sugeridas = sugerenciasPara(especialidad, credencial);
-  const sugeribles = sugeridas.filter((s) => !sugAgregadas.includes(s) && !sugOcultas.includes(s));
+  const sugeribles = sugeridas.filter((s) => !sugAgregadas.includes(s) && !sugOcultas.includes(s) && !extras.includes(s));
   const filas: { texto: string }[] = [
     ...(conDni ? [{ texto: DNI }] : []),
     ...sugAgregadas.filter((s) => sugeridas.includes(s)).map((texto) => ({ texto })),
@@ -318,14 +318,17 @@ function sugerenciasPara(especialidad: string, credencial: string | null): strin
   return [...(credencial ? [credencial] : []), ...(SUGERENCIAS_LLEVAR[especialidad] ?? [])];
 }
 
-/** Reparte lo guardado en "qué llevar" entre DNI, sugerencias y propios (y recuerda lo tildado). */
-function repartirLlevar(guardado: ItemLlevar[] | null, sugeridas: string[]) {
+/**
+ * Reparte lo guardado en "qué llevar": el DNI aparte y todo lo demás como
+ * propio, así sobrevive aunque cambie la especialidad (y recuerda lo tildado).
+ */
+export function repartirLlevar(guardado: ItemLlevar[] | null) {
   if (!guardado) return { conDni: true, sugeridas: [] as string[], extras: [] as string[], tildados: new Set<string>() };
   const textos = guardado.map((i) => i.t);
   return {
     conDni: textos.includes(DNI),
-    sugeridas: textos.filter((t) => t !== DNI && sugeridas.includes(t)),
-    extras: textos.filter((t) => t !== DNI && !sugeridas.includes(t)),
+    sugeridas: [] as string[],
+    extras: textos.filter((t) => t !== DNI),
     tildados: new Set(guardado.filter((i) => i.ok).map((i) => i.t)),
   };
 }

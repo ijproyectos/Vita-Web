@@ -31,6 +31,11 @@ describe("leerTurnoDelFormulario", () => {
     expect(con.ok && con.datos).toMatchObject({ direccion: "Av. Cabildo 2450", telefono: null, llevar: [{ t: "DNI", ok: true }] });
   });
 
+  it("rechaza una fecha o una hora mal formadas", () => {
+    expect(leerTurnoDelFormulario(form({ especialidad: "Clínica", fecha: "20/11/2026", hora: "10:30" })).ok).toBe(false);
+    expect(leerTurnoDelFormulario(form({ especialidad: "Clínica", fecha: "2026-11-20", hora: "25:00" })).ok).toBe(false);
+  });
+
   it("rechaza un teléfono incompleto", () => {
     const r = leerTurnoDelFormulario(form({ especialidad: "Clínica", fecha: "2026-11-20", hora: "10:30", telefono: "12" }));
     expect(r.ok).toBe(false);
