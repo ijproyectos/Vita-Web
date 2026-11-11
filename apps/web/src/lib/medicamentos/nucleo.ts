@@ -995,6 +995,22 @@ export async function marcarTomado(
   }
 
   if (huboCambio) await moverStock(supabase, medicamentoId, tomado ? -1 : 1);
+
+  // Tomarla borra un "No la tomé" previo: si después se desmarca ("Me equivoqué")
+  // tiene que volver a pendiente, no a salteada. Aparte y sin lanzar: sin la
+  // migración 057 la columna no existe y no pasa nada.
+  if (tomado && huboCambio) {
+    try {
+      await supabase
+        .from("medicamentos_tomas")
+        .update({ omitida_at: null })
+        .eq("medicamento_id", medicamentoId)
+        .eq("fecha", fecha)
+        .not("omitida_at", "is", null);
+    } catch {
+      /* best-effort */
+    }
+  }
 }
 
 /**
