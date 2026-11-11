@@ -4,6 +4,7 @@ import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { cn } from "@/lib/utils";
 import { horaCorta } from "@/lib/notificaciones/mensajes";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
+import { ETIQUETA_MOMENTO, ORDEN_MOMENTOS, momentoDelDia } from "@/lib/rutina/momento";
 import type { MedicionSimple, TurnoSimple } from "@/lib/modo-simple/tipos";
 import type { EstadoFilaHoy, FilaHoy } from "@/lib/modo-simple/seleccion";
 
@@ -309,9 +310,11 @@ export function TarjetaSiguientes({ siguientes, titulo = "Después" }: { siguien
   );
 }
 
-// Lista "Hoy" (rediseño 2026-11-10, como la Rutina del modo normal): todas las
-// tomas del día con su estado. Tocar un renglón abre lo que se puede hacer con
-// esa pastilla (tomarla, decir que no, deshacer).
+// Lista "Hoy" (rediseño 2026-11-10): con la misma forma que la Rutina del modo
+// normal (momentos del día, tarjeta por pastilla, círculo de check), pero más
+// grande, solo con los momentos que tienen algo y con el estado escrito ("Se
+// pasó" no se entiende con un ícono). Tocar la tarjeta o el círculo abre la
+// hoja de esa pastilla (nunca marca directo: evita toques sin querer).
 const ESTADO_FILA: Record<EstadoFilaHoy, { texto: string; clase: string }> = {
   tomada: { texto: "Tomada", clase: "text-teal-deep" },
   omitida: { texto: "No la tomaste", clase: "text-slate-brand" },
@@ -320,34 +323,97 @@ const ESTADO_FILA: Record<EstadoFilaHoy, { texto: string; clase: string }> = {
   "mas-tarde": { texto: "Más tarde", clase: "text-subtle" },
 };
 
+const TINTES_PASTILLA = [
+  { tinte: "bg-chip-teal-bg text-chip-teal-ink", punto: "bg-chip-teal-ink" },
+  { tinte: "bg-chip-violet-bg text-chip-violet-ink", punto: "bg-chip-violet-ink" },
+  { tinte: "bg-chip-amber-bg text-chip-amber-ink", punto: "bg-chip-amber-ink" },
+  { tinte: "bg-chip-rose-bg text-chip-rose-ink", punto: "bg-chip-rose-ink" },
+] as const;
+
+const ICONO_FRANJA: Record<MomentoDia, string> = { "mañana": "sunrise", mediodia: "sun", tarde: "sunset", noche: "moon" };
+
 export function TarjetaHoy({ filas, onTocar }: { filas: FilaHoy[]; onTocar: (fila: FilaHoy) => void }) {
+  const franjas = ORDEN_MOMENTOS.map((momento) => ({
+    momento,
+    items: filas.map((f, indice) => ({ f, indice })).filter(({ f }) => momentoDelDia(f.hora) === momento),
+  })).filter((g) => g.items.length > 0);
+
   return (
-    <section>
-      <h2 className="eyebrow px-1 pb-2 text-subtle">Hoy</h2>
-      <ul className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-card">
-        {filas.map((f) => {
-          const e = ESTADO_FILA[f.estado];
-          const apagada = f.estado === "tomada" || f.estado === "omitida";
-          return (
-            <li key={f.id} className="[&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
-              <button
-                type="button"
-                onClick={() => onTocar(f)}
-                className={cn("flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left active:bg-secondary", apagada && "bg-secondary/40")}
-              >
-                <span className="w-[62px] shrink-0 font-heading text-[19px] font-extrabold tabular-nums">{horaCorta(f.hora)}</span>
-                <span className={cn("line-clamp-2 min-w-0 flex-1 font-heading text-[19px] font-extrabold leading-tight tracking-[-0.02em]", apagada && "text-slate-brand")}>
-                  {f.nombre}
-                </span>
-                <span className={cn("flex shrink-0 items-center gap-1 text-[15px] font-bold", e.clase)}>
-                  {f.estado === "tomada" && <VitaIcon name="check" size={18} strokeWidth={3} />}
-                  {e.texto}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+    <section className="flex flex-col gap-5">
+      {franjas.map(({ momento, items }) => (
+        <div key={momento}>
+          <div className="flex items-center gap-3 pb-3 pl-0.5">
+            <div className="flex size-11 items-center justify-center rounded-[var(--radius-tile)] bg-card text-slate-brand shadow-item">
+              <VitaIcon name={ICONO_FRANJA[momento]} size={22} />
+            </div>
+            <div>
+              <div className="font-heading text-[21px] font-extrabold tracking-[-0.02em]">{ETIQUETA_MOMENTO[momento]}</div>
+              <div className="text-[14px] font-semibold text-subtle">
+                {items.length} {items.length === 1 ? "pastilla" : "pastillas"}
+              </div>
+            </div>
+          </div>
+          <ul className="relative flex flex-col gap-2.5 pl-[18px]">
+            <span aria-hidden className="absolute inset-y-4 left-[5px] w-0.5 rounded-full bg-border" />
+            {items.map(({ f, indice }) => {
+              const color = TINTES_PASTILLA[indice % TINTES_PASTILLA.length];
+              const e = ESTADO_FILA[f.estado];
+              const tomada = f.estado === "tomada";
+              const omitida = f.estado === "omitida";
+              return (
+                <li key={f.id} className="relative">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute -left-[18px] top-1/2 size-3 -translate-y-1/2 rounded-full",
+                      tomada ? cn(color.punto, "shadow-[0_0_0_3px_var(--canvas)]") : "bg-card ring-2 ring-border"
+                    )}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onTocar(f)}
+                    aria-label={`${f.nombre}, ${horaCorta(f.hora)}, ${e.texto}`}
+                    className={cn(
+                      "flex w-full items-center gap-3.5 rounded-[var(--radius-item)] bg-card p-3.5 text-left shadow-item transition-transform active:scale-[0.99] motion-reduce:transition-none",
+                      f.estado === "ahora" && "ring-2 ring-primary/40",
+                      f.estado === "se-paso" && "ring-2 ring-aviso/50"
+                    )}
+                  >
+                    <span className={cn("flex size-12 shrink-0 items-center justify-center rounded-[15px]", color.tinte)}>
+                      <VitaIcon name="pill" size={22} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={cn(
+                          "line-clamp-2 font-heading text-[20px] font-extrabold leading-tight tracking-[-0.02em]",
+                          tomada && "text-slate-brand line-through decoration-2",
+                          omitida && "text-slate-brand"
+                        )}
+                      >
+                        {f.nombre}
+                      </span>
+                      <span className="mt-0.5 block text-[15px] font-semibold">
+                        <span className="text-subtle">{horaCorta(f.hora)} hs · </span>
+                        <span className={e.clase}>{e.texto}</span>
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex size-10 shrink-0 items-center justify-center rounded-full",
+                        tomada ? "bg-primary text-primary-foreground shadow-[0_4px_10px_color-mix(in_srgb,var(--primary)_35%,transparent)]" : "bg-muted text-transparent",
+                        omitida && "text-slate-brand"
+                      )}
+                    >
+                      <VitaIcon name={omitida ? "close" : "check"} size={omitida ? 16 : 20} strokeWidth={3} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }
