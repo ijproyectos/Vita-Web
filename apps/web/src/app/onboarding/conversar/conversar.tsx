@@ -631,7 +631,7 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
     if (desdeRevision) agregarBurbujaUsuario(lista.length > 0 ? "Guardar todo" : "Seguir sin remedios");
     if (lista.length > 0 && !avisoPastillasDicho.current) {
       avisoPastillasDicho.current = true;
-      decir("Si querés llevar la cuenta de cuántas pastillas quedan, después lo podés hacer desde Mis pastillas: le sacás una foto al blister.");
+      decir("Si querés llevar la cuenta de cuántas pastillas quedan, después lo podés hacer desde Mis medicamentos: le sacás una foto al blister.");
     }
     actualizarEstado(clave, { remediosRespondido: true });
     setRemedios([]);
@@ -917,6 +917,7 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
   async function terminarTodo(tarjeta?: ReactNode) {
     const r = await finalizarOnboardingAction();
     if (r?.status === "error") {
+      setTerminando(false);
       toast.error("No pudimos guardar. Probá de nuevo.");
       return;
     }
@@ -925,7 +926,10 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
   }
 
   // "Terminar después" (V7 `skipChat`): cierra con lo que ya se guardó.
+  // Guardar y abrir la pantalla siguiente tarda: el botón queda en "Guardando…".
+  const [terminando, setTerminando] = useState(false);
   async function terminarDespues() {
+    setTerminando(true);
     await terminarTodo();
   }
   const tabs = dosTabs
@@ -962,8 +966,9 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
         tabs={tabs}
         escribiendo={escribiendo}
         hayAvance={hayAvance}
+        terminando={terminando}
         onTerminar={() => {
-          if (vista.tipo !== "fin") void terminarDespues();
+          if (vista.tipo !== "fin" && !terminando) void terminarDespues();
         }}
       />
 

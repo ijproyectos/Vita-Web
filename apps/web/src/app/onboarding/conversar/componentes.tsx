@@ -158,12 +158,15 @@ export function EncabezadoConversar({
   tabs,
   escribiendo,
   hayAvance,
+  terminando = false,
   onTerminar,
 }: {
   tabs: { label: string; estado: EstadoTab; color: ColorTab }[];
   escribiendo: boolean;
   /** Ya hay algo guardado: el botón dice "Terminar después" en vez de "Saltar". */
   hayAvance: boolean;
+  /** Ya se tocó: guardar y pasar de pantalla tarda, así que se avisa y no se repite. */
+  terminando?: boolean;
   onTerminar: () => void;
 }) {
   return (
@@ -178,8 +181,14 @@ export function EncabezadoConversar({
           </div>
           <div className="mt-[5px] text-xs font-semibold text-subtle">{escribiendo ? "Escribiendo…" : "Armando tu perfil"}</div>
         </div>
-        <button type="button" onClick={onTerminar} className="shrink-0 rounded-full bg-canvas px-3.5 py-[9px] text-[13px] font-bold text-slate-brand">
-          {hayAvance ? "Terminar después" : "Saltar"}
+        <button
+          type="button"
+          onClick={onTerminar}
+          disabled={terminando}
+          aria-busy={terminando}
+          className="shrink-0 rounded-full bg-canvas px-3.5 py-[9px] text-[13px] font-bold text-slate-brand disabled:opacity-60"
+        >
+          {terminando ? "Guardando…" : hayAvance ? "Terminar después" : "Saltar"}
         </button>
       </div>
 
