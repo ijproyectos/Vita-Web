@@ -12,7 +12,9 @@ import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { FilaCuidador } from "@/components/vita/fila-cuidador";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../../top-bar";
-import { AccionesMiembro, EditarMiembro } from "./acciones";
+import { AccionesMiembro } from "./acciones";
+import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
+import { resumenPrefsModoSimple } from "@/lib/modo-simple/resumen-prefs";
 import { HoyPendientes } from "./hoy-pendientes";
 import { resumenHoy } from "@/lib/familia/pendientes-hoy";
 
@@ -30,11 +32,12 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
   const puedeEditar = miembro.rol === "editar";
   const primerNombre = miembro.nombre.split(" ")[0];
 
-  const [perfil, nRemedios, miNombre, dosisHoy] = await Promise.all([
+  const [perfil, nRemedios, miNombre, dosisHoy, prefsSimple] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, id).catch(() => null),
     medicamentosNucleo.contarRemediosDistintos(supabase, id).catch(() => 0),
     perfilNucleo.obtenerNombre(supabase, usuario.id),
     medicamentosNucleo.listarHoy(supabase, id).catch(() => []),
+    obtenerPrefs(supabase, id),
   ]);
   // "No la tomé" del modo simple (057): sin la migración el set viene vacío.
   const omitidas = await medicamentosNucleo.idsOmitidas(supabase, dosisHoy.map((m) => m.id), medicamentosNucleo.fechaEnAR());
@@ -70,9 +73,6 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
           <div className="mt-0.5 truncate text-[12px] font-medium text-subtle">{meta}</div>
         </div>
       </div>
-
-      {/* Propio de la app (no está en el diseño): cambia el perfil activo. */}
-      <AccionesMiembro elderId={miembro.id} vinculoId={miembro.vinculoId} nombre={primerNombre} soloVerRutina />
 
       {(hoy.pendientes.length > 0 || hoy.noTomadas.length > 0) && (
         <HoyPendientes
@@ -128,7 +128,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">Su modo simple</span>
-            <span className="mt-0.5 block text-[11.5px] font-medium text-subtle">Cómo lo ve {primerNombre} en su celular</span>
+            <span className="mt-0.5 block text-[11.5px] font-medium text-subtle">{resumenPrefsModoSimple(prefsSimple)}</span>
           </span>
           <VitaIcon name="chevron-right" size={17} className="shrink-0 text-faint" />
         </Link>
@@ -186,10 +186,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
         )}
       </section>
 
-      {/* Propio de la app (no está en el diseño): nombre y color del perfil. */}
-      {puedeEditar ? (
-        <EditarMiembro elderId={miembro.id} nombreInicial={miembro.nombre} colorInicial={color} />
-      ) : (
+      {!puedeEditar && (
         <div className="rounded-[20px] bg-card p-[18px] text-[13px] font-medium leading-[1.45] text-subtle shadow-card">
           Tenés permiso de <b className="text-foreground">Lector</b>: ves sus remedios, turnos y salud, pero no podés
           cambiar nada. El permiso lo decide {primerNombre} desde su cuenta.
