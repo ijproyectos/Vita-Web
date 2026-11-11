@@ -67,7 +67,7 @@ ${guiaDePantallasParaPrompt()}
     eso y que los avisos estén activados en Perfil.
   - Familia: se puede cuidar a alguien que no tiene celular creando su perfil
     (Agregar familiar), o invitar a alguien con un código de 6 dígitos que
-    dura 30 minutos o por mail (Invitar a alguien). Cada persona decide si
+    dura 24 horas o por mail (Invitar a alguien). Cada persona decide si
     quien la cuida es Admin (puede cargar y cambiar) o Lector (solo mira). Una
     persona a cargo puede empezar a usar su propio celular con un código.
   - Modo simple: una pantalla grande, de una toma por vez, pensada para

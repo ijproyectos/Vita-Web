@@ -26,7 +26,21 @@ describe("urlCodigo y mensajes", () => {
     const t = mensajeCodigoAcceso({ codigo: "482916", origen: "https://x.com" });
     expect(t).toContain("https://x.com/c/482916");
     expect(t).toContain("482916");
-    expect(t).toContain("30 minutos");
+    expect(t).toContain("24 horas");
     expect(t).not.toContain("/login");
+  });
+});
+
+describe("duración del código", async () => {
+  const { textoDuracion, textoRestante, MINUTOS_VIGENCIA_CODIGO_ACCESO } = await import("./tipos");
+  it("el código de acceso dura 24 horas", () => {
+    expect(MINUTOS_VIGENCIA_CODIGO_ACCESO).toBe(1440);
+    expect(textoDuracion(MINUTOS_VIGENCIA_CODIGO_ACCESO)).toBe("24 horas");
+  });
+  it("lo que falta se dice en minutos o en horas, redondeando hacia arriba", () => {
+    expect(textoRestante(30_000)).toBe("1 minuto");
+    expect(textoRestante(12 * 60_000)).toBe("12 minutos");
+    expect(textoRestante(61 * 60_000)).toBe("2 horas");
+    expect(textoRestante(23.5 * 3_600_000)).toBe("24 horas");
   });
 });

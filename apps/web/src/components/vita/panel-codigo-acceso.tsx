@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { textoRestante } from "@/lib/acceso-codigo/tipos";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { mensajeCodigoAcceso } from "@/lib/acceso-codigo/enlace";
@@ -31,7 +32,6 @@ export function PanelCodigoAcceso({
 
   const restanteMs = new Date(expiraAt).getTime() - ahora;
   const vencido = restanteMs <= 0;
-  const minutos = Math.max(1, Math.ceil(restanteMs / 60000));
 
   function mensaje() {
     return mensajeCodigoAcceso({ codigo, origen: window.location.origin });
@@ -110,7 +110,7 @@ export function PanelCodigoAcceso({
             Se lo leo por teléfono
           </button>
           <p className="mt-3 text-[11.5px] font-medium text-subtle">
-            Vence en {minutos} {minutos === 1 ? "minuto" : "minutos"} y sirve una sola vez.
+            Vence en {textoRestante(restanteMs)} y sirve una sola vez.
           </p>
           {onGenerarOtro && (
             <button

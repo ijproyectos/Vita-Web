@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { PanelCodigoAcceso } from "@/components/vita/panel-codigo-acceso";
-import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
+import { MINUTOS_VIGENCIA_CODIGO_ACCESO, textoDuracion } from "@/lib/acceso-codigo/tipos";
 import { generarCodigoAccesoAction } from "@/app/cuidar/[elderId]/actions";
 import { cambiarPerfilActivoAction, estadoConexionAction } from "../../actions";
 
@@ -145,7 +145,7 @@ export function ConectarCelular({ personaId, nombre, yaConectado }: { personaId:
       )}
 
       <p className="px-1 text-pretty text-[12px] font-medium leading-[1.45] text-subtle">
-        El código vence en {MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos y sirve una sola vez.
+        El código vence en {textoDuracion(MINUTOS_VIGENCIA_CODIGO_ACCESO)} y sirve una sola vez.
         {!yaConectado && ` Cuando ${nombre} entre, te lo mostramos acá.`}
       </p>
     </>
