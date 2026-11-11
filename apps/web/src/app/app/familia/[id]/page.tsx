@@ -12,7 +12,7 @@ import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { FilaCuidador } from "@/components/vita/fila-cuidador";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../../top-bar";
-import { AccionesMiembro } from "./acciones";
+import { AccionesMiembro, EditarMiembro } from "./acciones";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
 import { resumenPrefsModoSimple } from "@/lib/modo-simple/resumen-prefs";
 import { HoyPendientes } from "./hoy-pendientes";
@@ -186,7 +186,10 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
         )}
       </section>
 
-      {!puedeEditar && (
+      {/* Propio de la app (no está en el diseño): sin esto no hay forma de cambiar nombre y color. */}
+      {puedeEditar ? (
+        <EditarMiembro elderId={miembro.id} nombreInicial={miembro.nombre} colorInicial={color} />
+      ) : (
         <div className="rounded-[20px] bg-card p-[18px] text-[13px] font-medium leading-[1.45] text-subtle shadow-card">
           Tenés permiso de <b className="text-foreground">Lector</b>: ves sus remedios, turnos y salud, pero no podés
           cambiar nada. El permiso lo decide {primerNombre} desde su cuenta.
