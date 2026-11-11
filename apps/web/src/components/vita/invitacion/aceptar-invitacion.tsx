@@ -1,12 +1,18 @@
+"use client";
+
+import { useState } from "react";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
+import { VitaIcon } from "@/lib/vita-icons";
+import { cn } from "@/lib/utils";
 import { BotonCta } from "@/components/vita/auth-ui";
 import type { RolVinculo } from "@/lib/familia/tipos";
 import { avisosDeCuidador } from "@/lib/notificaciones/avisos-cuidador";
 import { FilaPermiso, PantallaInvitada, etiquetaRol } from "./piezas";
 
 // B4 · "Vas a cuidar a X": qué puede hacer según el rol y qué avisos le llegan.
-// "Empezar" abre la pregunta de notificaciones del sistema y, responda lo que
-// responda, sigue el flujo: esa pregunta es la que decide, no hay otro paso.
+// Hay que marcar "Acepto recibir estos avisos…" (obligatorio, como el diseño)
+// para que se habilite "Aceptar y empezar". Ese toque abre la pregunta de
+// notificaciones del sistema y, responda lo que responda, sigue el flujo.
 export function AceptarInvitacion({
   nombre,
   persona,
@@ -22,6 +28,7 @@ export function AceptarInvitacion({
   esPerfilGestionado?: boolean;
   onEmpezar?: () => void;
 }) {
+  const [acepto, setAcepto] = useState(false);
   const saludo = nombre?.trim();
   const admin = rol === "editar";
   return (
@@ -59,9 +66,27 @@ export function AceptarInvitacion({
           </ul>
         </div>
       </div>
-      <div className="mt-5 flex flex-col">
-        <BotonCta type="button" grande onClick={onEmpezar}>
-          Empezar
+      <div className="mt-5 flex flex-col gap-3.5">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={acepto}
+          onClick={() => setAcepto((v) => !v)}
+          className="flex items-start gap-3 px-1 text-left"
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[8px] border-2 transition-colors",
+              acepto ? "border-primary bg-primary text-primary-foreground" : "border-faint bg-card text-transparent"
+            )}
+          >
+            <VitaIcon name="check" size={15} strokeWidth={3} />
+          </span>
+          <span className="text-[15px] font-semibold leading-[1.4]">Acepto recibir estos avisos sobre {persona} en mi celular</span>
+        </button>
+        <BotonCta type="button" grande onClick={onEmpezar} habilitado={acepto}>
+          Aceptar y empezar
         </BotonCta>
       </div>
     </PantallaInvitada>
