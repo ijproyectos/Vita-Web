@@ -113,7 +113,7 @@ export async function detectarDosisVencidas(
   const elderIds = [...new Set(candidatos.map((m) => m.usuario_id))];
   const { data: vinculos, error: errorVinculos } = await admin
     .from("vinculos_cuidador")
-    .select("elder_id, cuidador_id")
+    .select("elder_id, cuidador_id, rol")
     .eq("estado", "aceptado")
     .in("elder_id", elderIds);
 
@@ -122,10 +122,12 @@ export async function detectarDosisVencidas(
   }
 
   const cuidadoresPorElder = new Map<string, string[]>();
-  for (const v of (vinculos ?? []) as { elder_id: string; cuidador_id: string }[]) {
+  const rolPorVinculo = new Map<string, "editar" | "ver">();
+  for (const v of (vinculos ?? []) as { elder_id: string; cuidador_id: string; rol?: string | null }[]) {
     const lista = cuidadoresPorElder.get(v.elder_id) ?? [];
     lista.push(v.cuidador_id);
     cuidadoresPorElder.set(v.elder_id, lista);
+    rolPorVinculo.set(`${v.elder_id}|${v.cuidador_id}`, v.rol === "ver" ? "ver" : "editar");
   }
 
   const conCuidadores = candidatos.filter((m) => cuidadoresPorElder.has(m.usuario_id));
@@ -201,6 +203,7 @@ export async function detectarDosisVencidas(
       fechaAR: m.fechaAR,
       elderNombre: nombrePorElder.get(m.usuario_id) ?? "Tu familiar",
       cuidadorIds,
+      rolPorCuidador: Object.fromEntries(cuidadorIds.map((id) => [id, rolPorVinculo.get(`${m.usuario_id}|${id}`) ?? "editar"])),
       destinatarios: cuidadorIds
         .map((id) => emailPorCuidador.get(id))
         .filter((email): email is string => Boolean(email)),

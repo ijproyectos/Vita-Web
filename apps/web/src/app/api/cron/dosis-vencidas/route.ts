@@ -117,12 +117,13 @@ export async function POST(request: Request) {
 
     // Canal 1 — push a cada cuidador aceptado (funciona sin Resend) + el aviso
     // en su centro de notificaciones (/app/avisos), que no depende del push.
-    const payload = payloadDosisVencida(dosis);
     let enviadosPush = 0;
     let fallidosPush = 0;
     let suscripciones = 0;
     let enFeed = 0;
     for (const cuidadorId of dosis.cuidadorIds) {
+      // Admin: la ficha de la persona (Hoy, Recordarle); Lector: su vista de solo mirar.
+      const payload = payloadDosisVencida({ ...dosis, rolDestino: dosis.rolPorCuidador[cuidadorId] });
       const r = await entregarAviso(
         admin,
         cuidadorId,

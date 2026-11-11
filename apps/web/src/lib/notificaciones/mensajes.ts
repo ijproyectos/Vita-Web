@@ -28,11 +28,12 @@ export function payloadDosisVencida(d: {
   nombre: string;
   horaProgramada: string;
   fechaAR: string;
+  rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   return {
     title: "vita",
     body: `${d.elderNombre} todavía no tomó su ${d.nombre} de las ${horaCorta(d.horaProgramada)}`,
-    url: `/cuidar/${d.elderId}`,
+    url: urlFichaPersona(d.elderId, d.rolDestino),
     tag: `dosis-vencida-${d.medicamentoId}-${d.fechaAR}`,
   };
 }
@@ -139,11 +140,12 @@ export function payloadDosisResuelta(d: {
   medicamentoId: string;
   nombre: string;
   fechaAR: string;
+  rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   return {
     title: "vita",
     body: `${d.elderNombre} ya tomó su ${d.nombre}`,
-    url: `/cuidar/${d.elderId}`,
+    url: urlFichaPersona(d.elderId, d.rolDestino),
     // Es el tag de payloadDosisVencida: reemplaza la alerta en vez de sumar.
     tag: `dosis-vencida-${d.medicamentoId}-${d.fechaAR}`,
   };

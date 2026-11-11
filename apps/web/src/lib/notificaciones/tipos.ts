@@ -22,6 +22,8 @@ export type DosisVencida = {
   elderNombre: string;
   /** Cuidadores `aceptado` del elder — destinatarios de la alerta push. */
   cuidadorIds: string[];
+  /** Rol de cada cuidador sobre el elder: decide a dónde lleva el aviso (ficha o /app). */
+  rolPorCuidador: Record<string, "editar" | "ver">;
   /** Emails de esos cuidadores; solo se resuelven si hay RESEND_API_KEY. */
   destinatarios: string[];
 };

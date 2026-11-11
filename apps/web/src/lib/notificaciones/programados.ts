@@ -384,10 +384,12 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
 
     const { data: vinculos } = await admin
       .from("vinculos_cuidador")
-      .select("cuidador_id")
+      .select("cuidador_id, rol")
       .eq("estado", "aceptado")
       .eq("elder_id", m.usuario_id);
-    const todos = ((vinculos ?? []) as { cuidador_id: string | null }[])
+    const filasVinculo = (vinculos ?? []) as { cuidador_id: string | null; rol?: string | null }[];
+    const rolDe = new Map(filasVinculo.map((v) => [v.cuidador_id, v.rol === "ver" ? ("ver" as const) : ("editar" as const)]));
+    const todos = filasVinculo
       .map((v) => v.cuidador_id)
       .filter((id): id is string => Boolean(id));
     // Quien apagó "Si no confirma una toma" tampoco recibe el "ya tomó".
@@ -397,14 +399,15 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
 
     const { data: perfil } = await admin.from("perfiles").select("nombre").eq("id", m.usuario_id).maybeSingle();
     const elderNombre = (perfil as { nombre: string | null } | null)?.nombre?.trim().split(/\s+/)[0] || "Tu familiar";
-    const payload = payloadDosisResuelta({
-      elderNombre,
-      elderId: m.usuario_id,
-      medicamentoId: m.id,
-      nombre: m.nombre,
-      fechaAR: a.fecha,
-    });
     for (const cuidadorId of cuidadorIds) {
+      const payload = payloadDosisResuelta({
+        elderNombre,
+        elderId: m.usuario_id,
+        medicamentoId: m.id,
+        nombre: m.nombre,
+        fechaAR: a.fecha,
+        rolDestino: rolDe.get(cuidadorId),
+      });
       await entregarAviso(
         admin,
         cuidadorId,
