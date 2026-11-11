@@ -244,7 +244,7 @@ export function ConfigurarModoSimple({
                     className="flex items-center gap-[7px] self-start rounded-full bg-chip-teal-bg px-3.5 py-[9px] text-[12.5px] font-extrabold text-teal-deep disabled:opacity-60"
                   >
                     <VitaIcon name="volume" size={15} strokeWidth={2.3} />
-                    {probando ? "Sonando…" : "Probar la voz"}
+                    {probando ? "Sonando…" : "Probar voz"}
                   </button>
                 </div>
               ) : undefined
