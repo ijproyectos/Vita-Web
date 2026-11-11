@@ -1054,24 +1054,31 @@ export async function marcarNoTomada(
 }
 
 /**
- * Ids de medicamento con "No la tomé" en `fecha` (AR). Nunca lanza: sin la
- * migración 057 o ante un error devuelve vacío (se comporta como antes).
+ * "No la tomé" (057) en varias fechas AR, como claves `medicamentoId|fecha`.
+ * Nunca lanza: sin la migración o ante un error devuelve vacío (se comporta
+ * como antes). Única lectura de `omitida_at`.
  */
-export async function idsOmitidas(supabase: Cliente, medicamentoIds: string[], fecha: string): Promise<Set<string>> {
-  if (medicamentoIds.length === 0) return new Set();
+export async function omitidasPorFecha(supabase: Cliente, medicamentoIds: string[], fechas: string[]): Promise<Set<string>> {
+  if (medicamentoIds.length === 0 || fechas.length === 0) return new Set();
   try {
     const { data, error } = await supabase
       .from("medicamentos_tomas")
-      .select("medicamento_id")
-      .eq("fecha", fecha)
+      .select("medicamento_id, fecha")
+      .in("fecha", fechas)
       .eq("tomado", false)
       .not("omitida_at", "is", null)
       .in("medicamento_id", medicamentoIds);
     if (error) return new Set();
-    return new Set((data ?? []).map((t) => t.medicamento_id as string));
+    return new Set(((data ?? []) as { medicamento_id: string; fecha: string }[]).map((t) => `${t.medicamento_id}|${t.fecha}`));
   } catch {
     return new Set();
   }
+}
+
+/** Ids de medicamento con "No la tomé" en `fecha` (AR). Nunca lanza (ver `omitidasPorFecha`). */
+export async function idsOmitidas(supabase: Cliente, medicamentoIds: string[], fecha: string): Promise<Set<string>> {
+  const claves = await omitidasPorFecha(supabase, medicamentoIds, [fecha]);
+  return new Set([...claves].map((c) => c.slice(0, c.lastIndexOf("|"))));
 }
 
 /**
