@@ -38,6 +38,7 @@ import {
   type EstadoSuscripcion,
   type EstadoVitaPlus,
   type PlanVitaPlus,
+  type MotivoBaja,
 } from "./planes";
 
 type Cliente = SupabaseClient;
@@ -256,7 +257,11 @@ export type ResultadoCancelar = { ok: true } | { ok: false; mensaje: string; htt
  * Cancela TODAS las suscripciones no canceladas de la persona en Mercado Pago (corta los cobros futuros). La
  * vigencia ya pagada no se toca: sigue hasta su vencimiento.
  */
-export async function cancelarSuscripcionVitaPlus(supabase: Cliente, usuarioId: string): Promise<ResultadoCancelar> {
+export async function cancelarSuscripcionVitaPlus(
+  supabase: Cliente,
+  usuarioId: string,
+  motivo: MotivoBaja | null = null
+): Promise<ResultadoCancelar> {
   const token = process.env.MP_ACCESS_TOKEN?.trim();
   if (!token) return { ok: false, mensaje: "vita+ todavía no está disponible.", http: 503 };
 
@@ -292,6 +297,11 @@ export async function cancelarSuscripcionVitaPlus(supabase: Cliente, usuarioId: 
       p_estado: "cancelled",
     });
     if (errorEstado) return { ok: false, mensaje: "No pudimos cancelar tu suscripción. Probá de nuevo.", http: 500 };
+  }
+  // Motivo opcional (migración 059). Mejor esfuerzo: sin la tabla o si falla, la baja ya quedó hecha.
+  if (motivo) {
+    const { error: errorMotivo } = await admin.from("vita_plus_motivos_baja").insert({ usuario_id: usuarioId, motivo });
+    if (errorMotivo) console.warn("[vita-plus] motivo de baja no guardado:", errorMotivo.code ?? errorMotivo.message);
   }
   return { ok: true };
 }
