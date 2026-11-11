@@ -24,7 +24,6 @@ describe("normalizarRuta", () => {
   it("no toca los segmentos estaticos que cuelgan de una base dinamica", () => {
     expect(normalizarRuta("/app/familia/nuevo")).toBe("/app/familia/nuevo");
     expect(normalizarRuta("/app/familia/invitar")).toBe("/app/familia/invitar");
-    expect(normalizarRuta("/cuidar/sin-vinculos")).toBe("/cuidar/sin-vinculos");
     expect(normalizarRuta("/cuidar/invitacion/abc123def456ghi789jkl0mnopq")).toBe("/cuidar/invitacion/[token]");
   });
   it("cualquier id suelto con forma de identificador se oculta", () => {

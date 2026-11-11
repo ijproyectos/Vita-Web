@@ -11,13 +11,9 @@ import { AlertaDosisPopup } from "./alerta-dosis-popup";
 // BottomNav, ni el FAB de vita — ninguno de los tres tiene sentido en un
 // modo de solo lectura sobre datos ajenos.
 //
-// A propósito solo valida sesión acá (`requireUser`), no `requireCuidador`
-// (que redirige a `/cuidar/sin-vinculos` si no hay vínculos): esa página
-// vive bajo este mismo layout, así que llamar `requireCuidador` acá
-// produciría un loop de redirects. Cada página hija (`/cuidar`,
-// `/cuidar/[elderId]`) llama `requireCuidador` por su cuenta — acá se
-// llama `listarElders` directo (sin el redirect) solo para calcular el
-// popup de alerta, que se muestra en todo el árbol `/cuidar/*`.
+// Solo valida sesión (`requireUser`), no `requireCuidador`: la invitación
+// (`/cuidar/invitacion/[token]`) la abre alguien que todavía no cuida a nadie.
+// `listarElders` va directo (sin redirect) solo para el popup de alerta.
 export default async function CuidarLayout({ children }: LayoutProps<"/cuidar">) {
   const usuario = await requireUser();
   await requireNoSuspendida();
