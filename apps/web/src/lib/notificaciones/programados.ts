@@ -384,11 +384,12 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
 
     const { data: vinculos } = await admin
       .from("vinculos_cuidador")
-      .select("cuidador_id, rol")
+      .select("cuidador_id, rol, relacion")
       .eq("estado", "aceptado")
       .eq("elder_id", m.usuario_id);
-    const filasVinculo = (vinculos ?? []) as { cuidador_id: string | null; rol?: string | null }[];
+    const filasVinculo = (vinculos ?? []) as { cuidador_id: string | null; rol?: string | null; relacion?: string | null }[];
     const rolDe = new Map(filasVinculo.map((v) => [v.cuidador_id, v.rol === "ver" ? ("ver" as const) : ("editar" as const)]));
+    const relacionDe = new Map(filasVinculo.map((v) => [v.cuidador_id, v.relacion ?? null]));
     const todos = filasVinculo
       .map((v) => v.cuidador_id)
       .filter((id): id is string => Boolean(id));
@@ -407,11 +408,12 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
         nombre: m.nombre,
         fechaAR: a.fecha,
         rolDestino: rolDe.get(cuidadorId),
+        relacion: relacionDe.get(cuidadorId),
       });
       await entregarAviso(
         admin,
         cuidadorId,
-        { tipo: "dosis_resuelta_cuidador", titulo: payload.body, cuerpo: `Era a las ${horaCorta(m.hora_programada)}`, url: payload.url, personaId: m.usuario_id, datos: { elderId: m.usuario_id, medicamentoId: m.id } },
+        { tipo: "dosis_resuelta_cuidador", titulo: payload.title, cuerpo: `Era a las ${horaCorta(m.hora_programada)}`, url: payload.url, personaId: m.usuario_id, datos: { elderId: m.usuario_id, medicamentoId: m.id } },
         payload
       );
     }
@@ -473,16 +475,18 @@ async function procesarCumpleanos(admin: Cliente, hoyAR: string, horaAR: string,
 
   const { data: vinculosData, error: errorVinculos } = await admin
     .from("vinculos_cuidador")
-    .select("elder_id, cuidador_id, rol")
+    .select("elder_id, cuidador_id, rol, relacion")
     .eq("estado", "aceptado")
     .in("elder_id", cumpleaneros.map((c) => c.id));
   if (errorVinculos) throw new Error(`No se pudieron leer los vínculos: ${errorVinculos.message}`);
   const cuidadoresDe = new Map<string, string[]>();
   const rolDe = new Map<string, "editar" | "ver">();
-  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null; rol: string | null }[]) {
+  const relacionDe = new Map<string, string | null>();
+  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null; rol: string | null; relacion?: string | null }[]) {
     if (!v.cuidador_id) continue;
     cuidadoresDe.set(v.elder_id, [...(cuidadoresDe.get(v.elder_id) ?? []), v.cuidador_id]);
     rolDe.set(`${v.elder_id}:${v.cuidador_id}`, v.rol === "ver" ? "ver" : "editar");
+    relacionDe.set(`${v.elder_id}:${v.cuidador_id}`, v.relacion ?? null);
   }
 
   const idsConPrefs = [...new Set([...cumpleaneros.map((c) => c.id), ...[...cuidadoresDe.values()].flat()])];
@@ -502,7 +506,7 @@ async function procesarCumpleanos(admin: Cliente, hoyAR: string, horaAR: string,
     for (const cuidadorId of cuidadoresDe.get(c.id) ?? []) {
       if (!cuidadorRecibeCumple(prefsDe(cuidadorId), silenciado(cuidadorId))) continue;
       if (!(await reclamarEnvio(admin, "cumpleanos_persona", refDeterminista(c.id, cuidadorId), hoyAR, cuidadorId))) continue;
-      const payload = payloadCumpleanosPersona({ personaId: c.id, personaNombre: nombre || "Tu familiar", edad: c.cumple, fechaAR: hoyAR, rolDestino: rolDe.get(`${c.id}:${cuidadorId}`) });
+      const payload = payloadCumpleanosPersona({ personaId: c.id, personaNombre: nombre || "Tu familiar", edad: c.cumple, fechaAR: hoyAR, rolDestino: rolDe.get(`${c.id}:${cuidadorId}`), relacion: relacionDe.get(`${c.id}:${cuidadorId}`) });
       await entregarAviso(
         admin,
         cuidadorId,
@@ -551,15 +555,15 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
 
   const { data: vinculosData, error: errorVinculos } = await admin
     .from("vinculos_cuidador")
-    .select("elder_id, cuidador_id, rol")
+    .select("elder_id, cuidador_id, rol, relacion")
     .eq("estado", "aceptado")
     .in("elder_id", personaIds);
   if (errorVinculos) throw new Error(`No se pudieron leer los vínculos: ${errorVinculos.message}`);
-  const cuidadoresDe = new Map<string, { cuidadorId: string; rol: RolCuidador }[]>();
-  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null; rol: string | null }[]) {
+  const cuidadoresDe = new Map<string, { cuidadorId: string; rol: RolCuidador; relacion: string | null }[]>();
+  for (const v of (vinculosData ?? []) as { elder_id: string; cuidador_id: string | null; rol: string | null; relacion?: string | null }[]) {
     if (!v.cuidador_id) continue;
     const l = cuidadoresDe.get(v.elder_id) ?? [];
-    l.push({ cuidadorId: v.cuidador_id, rol: v.rol === "ver" ? "ver" : "editar" });
+    l.push({ cuidadorId: v.cuidador_id, rol: v.rol === "ver" ? "ver" : "editar", relacion: v.relacion ?? null });
     cuidadoresDe.set(v.elder_id, l);
   }
   if (cuidadoresDe.size === 0) return;
@@ -603,6 +607,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           noTomadas,
           fechaAR: hoyAR,
           rolDestino: cu.rol,
+          relacion: cu.relacion,
         });
         await entregarAviso(
           admin,
@@ -638,6 +643,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           hora: t.hora,
           llevar: t.llevar,
           rolDestino: cu.rol,
+          relacion: cu.relacion,
         });
         await entregarAviso(
           admin,
@@ -658,6 +664,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         hora: t.hora,
         llevar: t.llevar,
         rolDestino: cu.rol,
+        relacion: cu.relacion,
       });
       await entregarAviso(
         admin,
@@ -684,6 +691,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         fechaAR: hoyAR,
         forma: i.forma,
         rolDestino: cu.rol,
+        relacion: cu.relacion,
       });
       await entregarAviso(
         admin,

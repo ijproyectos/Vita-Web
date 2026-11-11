@@ -24,6 +24,10 @@ export type DosisVencida = {
   cuidadorIds: string[];
   /** Rol de cada cuidador sobre el elder: decide a dónde lleva el aviso (ficha o /app). */
   rolPorCuidador: Record<string, "editar" | "ver">;
+  /** Relación que cargó cada cuidador en su vínculo ("Mamá"), para nombrarla en el aviso. */
+  relacionPorCuidador?: Record<string, string | null>;
+  /** Avisos que ya le llegaron a la persona por esta toma (a la hora, segundo, pospuesta). */
+  avisosEnviados?: number;
   /** Emails de esos cuidadores; solo se resuelven si hay RESEND_API_KEY. */
   destinatarios: string[];
 };

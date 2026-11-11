@@ -123,11 +123,15 @@ export async function POST(request: Request) {
     let enFeed = 0;
     for (const cuidadorId of dosis.cuidadorIds) {
       // Admin: la ficha de la persona (Hoy, Recordarle); Lector: su vista de solo mirar.
-      const payload = payloadDosisVencida({ ...dosis, rolDestino: dosis.rolPorCuidador[cuidadorId] });
+      const payload = payloadDosisVencida({
+        ...dosis,
+        rolDestino: dosis.rolPorCuidador[cuidadorId],
+        relacion: dosis.relacionPorCuidador?.[cuidadorId],
+      });
       const r = await entregarAviso(
         admin,
         cuidadorId,
-        { tipo: "dosis_vencida_cuidador", titulo: payload.body, url: payload.url, personaId: dosis.elderId, datos: { elderId: dosis.elderId, medicamentoId: dosis.medicamentoId } },
+        { tipo: "dosis_vencida_cuidador", titulo: payload.title, cuerpo: payload.body, url: payload.url, personaId: dosis.elderId, datos: { elderId: dosis.elderId, medicamentoId: dosis.medicamentoId } },
         payload
       );
       enviadosPush += r.push.enviados;
