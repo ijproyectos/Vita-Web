@@ -1,4 +1,4 @@
-// Tipos del dominio "Compartir con profesional" — ver
+// Tipos del dominio "Para tu médico" — ver
 // supabase/migrations/015_enlaces_profesional.sql. Sin lógica de servidor
 // para poder importarlos desde componentes cliente.
 

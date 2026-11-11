@@ -1,26 +1,18 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/dal";
 import { rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
-import { obtenerOpcionesPerfil, obtenerPerfilActivo, rolSobre } from "@/lib/familia/perfil-activo";
+import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { TopBar } from "../../top-bar";
 import { FilaNav, Grupo, Tile } from "../filas";
-import { AccionesDatos, type PersonaDatos } from "./acciones-datos";
+import { AccionesDatos } from "./acciones-datos";
+import { personasConDatos } from "./personas";
 
-// Privacidad y datos (V7): qué guarda vita, descargar los datos (PDF o archivo
-// completo), borrar historial viejo y los atajos legales y de compartir.
+// Privacidad y datos (V7): qué guarda vita, descargar los datos (archivo
+// completo), borrar historial viejo, "Para tu médico" y los legales.
 export default async function PrivacidadPage() {
-  const usuario = await requireUser();
+  await requireUser();
   const activo = await obtenerPerfilActivo();
-  const opciones = await obtenerOpcionesPerfil();
-
-  // "De quién": uno mismo y las personas que cuidás con permiso Admin (un
-  // Lector no descarga lo de otro, igual que en el diseño).
-  const personas: PersonaDatos[] = [];
-  for (const o of opciones) {
-    if (o.esPropio) personas.push({ id: o.id, etiqueta: "Mis datos", nombre: o.nombre, esPropio: true });
-    else if ((await rolSobre(o.id)) === "editar") personas.push({ id: o.id, etiqueta: o.nombre, nombre: o.nombre, esPropio: false });
-  }
-  if (!personas.some((p) => p.esPropio)) personas.unshift({ id: usuario.id, etiqueta: "Mis datos", nombre: "vos", esPropio: true });
+  const personas = await personasConDatos();
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
@@ -56,9 +48,9 @@ export default async function PrivacidadPage() {
 
       <Grupo titulo="Compartir y legal">
         <FilaNav
-          icon="upload"
-          label="Compartir con profesional"
-          sub="Link temporal para tu médico"
+          icon="stethoscope"
+          label="Para tu médico"
+          sub="Tu resumen de salud en PDF o con un link"
           href="/app/perfil/compartir"
         />
         <FilaNav icon="lock" label="Política de privacidad" sub="Qué usa vita de tu información" href="/legal/privacidad" />

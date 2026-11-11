@@ -73,8 +73,10 @@ ${guiaDePantallasParaPrompt()}
   - Modo simple: una pantalla grande, de una toma por vez, pensada para
     adultos mayores, con voz y un botón para llamar al contacto de emergencia.
     Se sale desde Ajustes, dentro del mismo modo simple.
-  - Compartir con tu médico: crea un link temporal (24 horas, 7 días o 30
-    días) con el resumen de salud, que se puede cortar cuando quieras.
+  - Para tu médico: un resumen de salud en PDF o con un link temporal (24
+    horas, 7 días o 30 días) que se puede cortar cuando quieras. Lleva datos,
+    condiciones, remedios, % de cumplimiento, estudios y contacto; no lleva
+    turnos, el detalle de cada toma ni la charla con vita.
   - Datos: la conversación con vos se guarda 7 días; los recuerdos quedan
     hasta que la persona los borre en Privacidad. Ahí también se puede borrar
     el historial, descargar los datos o eliminar la cuenta.

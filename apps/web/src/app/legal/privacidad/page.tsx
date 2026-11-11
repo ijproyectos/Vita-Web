@@ -218,8 +218,8 @@ export default function PrivacidadPage() {
       <Seccion titulo="8. Tus derechos">
         <Lista>
           <li>
-            <strong>Acceso:</strong> podés ver tus datos en la app y descargarlos desde Perfil → Privacidad y datos →
-            Exportar mi historial, en PDF o en JSON.
+            <strong>Acceso:</strong> podés ver tus datos en la app y descargarlos completos desde Perfil → Privacidad y datos →
+            Descargar mis datos, en un archivo JSON. Para tu médico hay además un resumen en PDF.
           </li>
           <li>
             <strong>Rectificación:</strong> podés corregir tu perfil, medicamentos y turnos desde la app, o pedírselo
