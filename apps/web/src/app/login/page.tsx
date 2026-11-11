@@ -10,6 +10,7 @@ export default async function LoginPage(props: PageProps<"/login">) {
   // Solo rutas internas: el `next` llega por URL y termina en location.assign.
   const next = destinoSeguro(Array.isArray(nextParam) ? nextParam[0] : nextParam);
   const cuentaEliminada = searchParams?.cuenta === "eliminada";
+  const modoSimple = searchParams?.modo === "simple";
 
-  return <LoginForm next={next} cuentaEliminada={cuentaEliminada} />;
+  return <LoginForm next={next} cuentaEliminada={cuentaEliminada} modoSimple={modoSimple} />;
 }

@@ -84,6 +84,23 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Sesión cerrada en un celular que estaba en modo simple (la cookie sobrevive: solo "Cerrar sesión" la borra):
+  // en vez de la Bienvenida, que no sabría usar, la persona ve directo "Pedile a tu familiar un código".
+  if (
+    !user &&
+    request.cookies.get(COOKIE_MODO_SIMPLE)?.value &&
+    !esPrecarga &&
+    (request.method === "GET" || request.method === "HEAD") &&
+    (ruta === "/app" || ruta.startsWith("/app/"))
+  ) {
+    const destino = request.nextUrl.clone();
+    destino.pathname = "/login";
+    destino.search = "?modo=simple";
+    const redireccion = NextResponse.redirect(destino);
+    response.cookies.getAll().forEach((c) => redireccion.cookies.set(c));
+    return redireccion;
+  }
+
   return response;
 }
 
