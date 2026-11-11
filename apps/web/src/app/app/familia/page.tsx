@@ -145,16 +145,8 @@ export default async function FamiliaPage() {
           <VitaIcon name="user-plus" size={16} />
           Crear un perfil
         </Link>
-        <Link
-          href="/onboarding/vincular-cuidado"
-          className="flex items-center justify-center gap-2 rounded-full bg-card py-[14px] font-heading text-sm font-extrabold text-teal-deep shadow-item"
-        >
-          <VitaIcon name="link" size={16} />
-          Vincular con un código
-        </Link>
         <p className="px-1 pt-1 text-pretty text-[11.5px] font-medium leading-[1.45] text-subtle">
-          Creá un perfil si la persona no usa celular: llevás sus remedios desde tu app. Si tiene celular, vinculate con un
-          código.
+          Creá un perfil y llevás sus remedios desde tu app. Si tiene celular, conectalo después desde su perfil a cargo.
         </p>
       </div>
     </div>

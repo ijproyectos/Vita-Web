@@ -45,8 +45,3 @@ export function mensajeCodigoAcceso(args: { codigo: string; origen: string; minu
   const minutos = args.minutos ?? MINUTOS_VIGENCIA_CODIGO_ACCESO;
   return `Tu código para entrar a vita: ${args.codigo}. Tocá este link y entrás directo, con el código ya escrito: ${urlCodigo(args.origen, args.codigo)}. Vence en ${minutos} minutos y sirve una sola vez.`;
 }
-
-/** WhatsApp del código de vínculo que genera quien cuida (/onboarding/vincular-cuidado). */
-export function mensajeInvitacionVinculo(args: { codigo: string; origen: string }): string {
-  return `Te invito a usar vita para ayudarme con tu salud. Tu código es ${args.codigo}. Tocá este link y entrás directo, con el código ya escrito: ${urlCodigo(args.origen, args.codigo)}`;
-}

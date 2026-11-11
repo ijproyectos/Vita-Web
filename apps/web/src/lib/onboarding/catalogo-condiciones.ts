@@ -1,6 +1,5 @@
-// Catálogo de referencia condición → medicamentos comunes, usado por el
-// paso de condiciones (multi-select) de la encuesta de onboarding
-// (app/onboarding/chat/encuesta.tsx) para sugerir medicamentos ya
+// Catálogo de referencia condición → medicamentos comunes, usado por el alta
+// de perfiles y el catálogo de medicamentos para sugerir medicamentos ya
 // indicados por un profesional, nunca para recomendar ni prescribir —
 // DISCLAIMER_CATALOGO se muestra siempre que se presenta esta lista.
 //
