@@ -128,7 +128,6 @@ export async function guardarInventarioAction(_prev: EstadoGuardado, formData: F
 
   revalidatePath("/app");
   revalidatePath("/app/rutina");
-  revalidatePath("/app/pastillas");
   revalidatePath("/app/mi-salud");
   return { status: "success" };
 }

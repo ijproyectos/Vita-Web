@@ -3,7 +3,7 @@
 import type { PayloadPush } from "./push";
 import { fechaHoraTurnoTexto } from "./turno-acompanado-logica";
 import { textoLlevarAviso } from "@/lib/turnos/tipos";
-import { cantidadStock, seCuentaConFoto } from "@/lib/medicamentos/forma";
+import { cantidadStock } from "@/lib/medicamentos/forma";
 
 /**
  * Destino de un aviso sobre otra persona. La ficha (`/app/familia/<id>`) es de
@@ -215,7 +215,7 @@ export function payloadStockBajo(s: { inventarioId: string; nombre: string; stoc
   return {
     title: titulo,
     body: "Para que lo pidas a tiempo.",
-    url: seCuentaConFoto(s.forma) ? "/app/pastillas" : "/app/medicamentos",
+    url: "/app/medicamentos",
     tag: `stock-${s.inventarioId}-${s.fechaAR}`,
   };
 }

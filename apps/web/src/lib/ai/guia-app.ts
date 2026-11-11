@@ -8,7 +8,7 @@ export type PantallaApp = { ruta: string; titulo: string; descripcion: string };
 export const PANTALLAS = {
   inicio: { ruta: "/app", titulo: "Inicio", descripcion: "el resumen de tu día: progreso, medicamentos y turnos próximos" },
   rutina: { ruta: "/app/rutina", titulo: "Rutina", descripcion: "tus tomas y turnos del día, los próximos y el historial" },
-  medicamentos: { ruta: "/app/medicamentos", titulo: "Mis medicamentos", descripcion: "ver, editar o borrar tus medicamentos" },
+  medicamentos: { ruta: "/app/medicamentos", titulo: "Mis medicamentos", descripcion: "ver, editar o borrar tus medicamentos y cuántas pastillas quedan" },
   agregar_medicamento: { ruta: "/app/agregar-medicamento", titulo: "Agregar medicamento", descripcion: "cargar un medicamento nuevo con sus horarios" },
   turnos: { ruta: "/app/turnos", titulo: "Mis turnos", descripcion: "ver, editar o borrar tus turnos médicos" },
   agregar_turno: { ruta: "/app/agregar-turno", titulo: "Agregar turno", descripcion: "agendar un turno médico nuevo" },
@@ -19,7 +19,6 @@ export const PANTALLAS = {
   agregar_medicion: { ruta: "/app/mi-salud/monitoreo/agregar", titulo: "Agregar medición", descripcion: "cargar una medición nueva" },
   condiciones: { ruta: "/app/condiciones", titulo: "Mis condiciones", descripcion: "ver y editar tus condiciones y alergias" },
   resumen_salud: { ruta: "/app/resumen-salud", titulo: "Resumen de salud", descripcion: "tu perfil médico: datos básicos, condiciones y alergias" },
-  pastillas: { ruta: "/app/pastillas", titulo: "Mis pastillas", descripcion: "el stock que te queda de cada medicamento" },
   contar_pastillas: { ruta: "/app/pastillas/contar", titulo: "Contar pastillas", descripcion: "sacarle una foto al blíster para contar y controlar el stock" },
   avisos: { ruta: "/app/avisos", titulo: "Avisos", descripcion: "el centro de avisos y recordatorios" },
   config_avisos: { ruta: "/app/avisos/configuracion", titulo: "Configurar avisos", descripcion: "elegir qué avisos recibir, la espera y el silencio nocturno" },

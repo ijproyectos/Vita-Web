@@ -28,7 +28,6 @@ function revalidar() {
   revalidatePath("/app");
   revalidatePath("/app/rutina");
   revalidatePath("/app/medicamentos");
-  revalidatePath("/app/pastillas");
   revalidatePath("/app/modo-simple");
 }
 

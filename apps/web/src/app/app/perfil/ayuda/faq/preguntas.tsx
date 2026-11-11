@@ -26,8 +26,8 @@ const GRUPOS: { titulo: string; items: Pregunta[] }[] = [
       },
       {
         q: "¿Cómo sé cuántas pastillas me quedan?",
-        a: "En Mis medicamentos tocá la cámara del remedio (o “Contar pastillas con foto” al agregarlo) y sacale una foto al blister. Voy contando las tomas y te aviso antes de que se termine.",
-        link: { texto: "Mis pastillas", href: "/app/pastillas" },
+        a: "En Mis medicamentos tocá la cámara del remedio y sacale una foto al blister. Voy contando las tomas y te aviso antes de que se termine.",
+        link: { texto: "Mis medicamentos", href: "/app/medicamentos" },
       },
       {
         q: "No me llegan los avisos",

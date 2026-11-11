@@ -41,7 +41,7 @@ export function FlujoContar({
   opciones,
   inicialId,
   nombreInicial = "",
-  volverA = "/app/pastillas",
+  volverA = "/app/medicamentos",
 }: {
   opciones: OpcionMedicamento[];
   inicialId: string;
