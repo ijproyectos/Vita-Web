@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ErrorMedicamentoAmbiguo, resolverMedicamento } from "./resolucion";
+import { fechaEnAR } from "@/lib/tiempo-ar";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ConComida,
@@ -91,14 +92,7 @@ function diaDeHoy(): DiaSemana {
  * UTC) y también los recordatorios y el dedupe de alertas push, que no deben
  * duplicarse ni perderse al cruzar la medianoche UTC (21:00 AR).
  */
-export function fechaEnAR(fecha: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(fecha);
-}
+export { fechaEnAR } from "@/lib/tiempo-ar";
 
 function fechaDeHoy(): string {
   return fechaEnAR();

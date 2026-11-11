@@ -10,6 +10,7 @@ import { medicionesParaMostrar, proximoGrupoPendiente, proximoTurnoParaCharla, t
 import { filasHoy } from "@/lib/modo-simple/seleccion";
 import type { PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { Pantalla } from "./pantalla";
+import { conRespaldo } from "@/lib/con-respaldo";
 
 // Mismo margen de gracia que va a usar el cron de dosis vencidas (PR5,
 // `detectarDosisVencidas(admin, ahora, graciaMin=30)` en el diseño) — acá
@@ -20,35 +21,23 @@ import { Pantalla } from "./pantalla";
 // de ahí en vez de repetirla acá.
 const GRACIA_MIN = 30;
 
-/**
- * Lo accesorio (perfil, turno, mediciones, recordatorios) nunca tumba la
- * pantalla: si falla, esa parte no se muestra y las pastillas siguen. Solo las
- * tomas de hoy son esenciales (sin ellas no hay qué mostrar y va al error).
- */
-async function opcional<T>(promesa: Promise<T>, respaldo: T, que: string): Promise<T> {
-  try {
-    return await promesa;
-  } catch (e) {
-    console.error(`[modo-simple] no se pudo leer ${que}`, e);
-    return respaldo;
-  }
-}
-
+// Lo accesorio (perfil, turno, mediciones, recordatorios) nunca tumba la pantalla: si falla,
+// esa parte no se muestra y las pastillas siguen. Solo las tomas de hoy son esenciales.
 export default async function ModoSimplePage() {
   const usuario = await requireUser();
   const supabase = await createClient();
 
   const [hoy, perfil, config] = await Promise.all([
     medicamentos.listarHoy(supabase, usuario.id),
-    opcional(obtenerPerfilCacheado(usuario.id), null, "el perfil"),
+    conRespaldo(obtenerPerfilCacheado(usuario.id), null, "el perfil"),
     obtenerPrefs(supabase, usuario.id),
   ]);
   const ahoraHHMM = medicamentos.horaEnAR();
   const [turno, mediciones, turnoProximo] = await Promise.all([
-    config.ver_turnos ? opcional(turnoParaMostrar(supabase, usuario.id), null, "el turno") : null,
-    config.ver_mediciones ? opcional(medicionesParaMostrar(supabase, usuario.id), null, "las mediciones") : null,
+    config.ver_turnos ? conRespaldo(turnoParaMostrar(supabase, usuario.id), null, "el turno") : null,
+    config.ver_mediciones ? conRespaldo(medicionesParaMostrar(supabase, usuario.id), null, "las mediciones") : null,
     // Solo para la respuesta hablada de la charla: sin "ver turnos" no se menciona ninguno.
-    config.ver_turnos ? opcional(proximoTurnoParaCharla(supabase, usuario.id, ahoraHHMM), null, "el próximo turno") : null,
+    config.ver_turnos ? conRespaldo(proximoTurnoParaCharla(supabase, usuario.id, ahoraHHMM), null, "el próximo turno") : null,
   ]);
   // "No la tomé" (057): esas dosis ya no se piden. Sin la migración, el set viene vacío.
   const omitidasHoy = await medicamentos.idsOmitidas(supabase, hoy.map((m) => m.id), medicamentos.fechaEnAR());
@@ -90,7 +79,7 @@ export default async function ModoSimplePage() {
   const vencida = deAyer.length > 0 || (primera ? medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN) : false);
   // Los recordatorios del familiar son de las dosis de hoy: con una de ayer en pantalla no se muestran.
   const recordatorios =
-    !fechaDosis && enGrupo.length ? await opcional(listarRecordatoriosPendientes(supabase, usuario.id, pendienteHoy.enGrupo), [], "los recordatorios") : [];
+    !fechaDosis && enGrupo.length ? await conRespaldo(listarRecordatoriosPendientes(supabase, usuario.id, pendienteHoy.enGrupo), [], "los recordatorios") : [];
 
   return (
     <Pantalla

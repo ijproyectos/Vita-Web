@@ -2,6 +2,7 @@
 // los datos ya cargados. Voseo rioplatense, 1-2 frases cortas, horas en palabras;
 // el detalle del día va aparte, como lista en pantalla (`listaDelDia`).
 import { diasEntre, horaEnPalabras } from "./formato";
+import { minutosDelDia } from "@/lib/tiempo-ar";
 
 export type MedHoy = { nombre: string; hora_programada: string; tomado: boolean };
 
@@ -32,10 +33,6 @@ function normalizarHora(valor: string | null | undefined): string | null {
   return `${String(h).padStart(2, "0")}:${m[2]}`;
 }
 
-function aMinutos(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
 
 function minuscula(texto: string): string {
   return texto.charAt(0).toLowerCase() + texto.slice(1);
@@ -77,7 +74,7 @@ function agruparPorHora(meds: MedHoy[]): Grupo[] {
   return [...mapa.values()].sort((a, b) => {
     if (a.hora === null) return b.hora === null ? 0 : 1;
     if (b.hora === null) return -1;
-    return aMinutos(a.hora) - aMinutos(b.hora);
+    return minutosDelDia(a.hora) - minutosDelDia(b.hora);
   });
 }
 
@@ -85,7 +82,7 @@ function agruparPorHora(meds: MedHoy[]): Grupo[] {
 export function respuestaYaTome(meds: MedHoy[], ahoraHHMM: string): string {
   if (meds.length === 0) return "Hoy no tenés pastillas cargadas.";
   const ahora = normalizarHora(ahoraHHMM);
-  const ahoraMin = ahora ? aMinutos(ahora) : null;
+  const ahoraMin = ahora ? minutosDelDia(ahora) : null;
 
   const pendientes = meds.filter((m) => !m.tomado);
   if (pendientes.length === 0) return "Sí. Ya tomaste todas las pastillas de hoy. Muy bien.";
@@ -93,7 +90,7 @@ export function respuestaYaTome(meds: MedHoy[], ahoraHHMM: string): string {
   // Pendientes que ya les tocaba (o de hora ilegible, que no podemos dar por futuras).
   const vencidas = pendientes.filter((m) => {
     const h = normalizarHora(m.hora_programada);
-    return h === null || ahoraMin === null || aMinutos(h) <= ahoraMin;
+    return h === null || ahoraMin === null || minutosDelDia(h) <= ahoraMin;
   });
 
   if (vencidas.length > 0) {
@@ -138,7 +135,7 @@ export function listaDelDia(meds: MedHoy[]): FilaDelDia[] {
     .sort((a, b) => {
       if (a.hora === null) return b.hora === null ? 0 : 1;
       if (b.hora === null) return -1;
-      return aMinutos(a.hora) - aMinutos(b.hora);
+      return minutosDelDia(a.hora) - minutosDelDia(b.hora);
     });
 }
 

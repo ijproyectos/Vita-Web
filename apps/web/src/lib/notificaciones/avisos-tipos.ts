@@ -1,6 +1,7 @@
 // Tipos y helpers puros de Avisos (centro de notificaciones + preferencias).
 // Sin `server-only` a propósito: los componentes de cliente (config, lista)
 // importan de acá las mismas reglas que usa el cron.
+import { minutosDelDia } from "@/lib/tiempo-ar";
 
 export type TipoAviso =
   | "dosis"
@@ -118,10 +119,6 @@ export function recortarHora(valor: string | null | undefined): string | null {
   return valor.slice(0, 5);
 }
 
-function aMinutos(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
 
 /**
  * ¿`ahoraHHMM` (hora AR) cae dentro del silencio nocturno? El rango puede
@@ -132,14 +129,14 @@ export function enSilencioNocturno(
   ahoraHHMM: string
 ): boolean {
   if (!prefs.silencio_desde || !prefs.silencio_hasta) return false;
-  const desde = aMinutos(prefs.silencio_desde);
-  const hasta = aMinutos(prefs.silencio_hasta);
-  const ahora = aMinutos(ahoraHHMM);
+  const desde = minutosDelDia(prefs.silencio_desde);
+  const hasta = minutosDelDia(prefs.silencio_hasta);
+  const ahora = minutosDelDia(ahoraHHMM);
   if (desde === hasta) return false;
   return desde < hasta ? ahora >= desde && ahora < hasta : ahora >= desde || ahora < hasta;
 }
 
 /** Minutos transcurridos desde `programadaHHMM` hasta `ahoraHHMM`, módulo 24 h. */
 export function minutosDesde(programadaHHMM: string, ahoraHHMM: string): number {
-  return (aMinutos(ahoraHHMM) - aMinutos(programadaHHMM) + 1440) % 1440;
+  return (minutosDelDia(ahoraHHMM) - minutosDelDia(programadaHHMM) + 1440) % 1440;
 }

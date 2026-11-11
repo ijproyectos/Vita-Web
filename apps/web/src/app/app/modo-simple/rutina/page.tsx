@@ -5,17 +5,11 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { filasHoy, proximoGrupoPendiente } from "@/lib/modo-simple/seleccion";
 import { VitaIcon } from "@/lib/vita-icons";
 import { ListaHoyInteractiva } from "../lista-hoy";
+import { conRespaldo } from "@/lib/con-respaldo";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
 import { medicionesParaMostrar, turnoParaMostrar } from "@/lib/modo-simple/datos";
 import { TarjetaMedicionesEnlace, TarjetaTurno } from "./tarjetas";
 
-async function opcional<T>(promesa: Promise<T>, respaldo: T): Promise<T> {
-  try {
-    return await promesa;
-  } catch {
-    return respaldo;
-  }
-}
 
 // "Tu rutina de hoy" del modo simple: todas las tomas del día con su estado,
 // con la forma de la Rutina del modo normal. Se llega desde "Ver rutina
@@ -35,8 +29,8 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
   // Lo mismo que la pantalla principal muestra de turnos y mediciones (y con la misma configuración).
   const config = await obtenerPrefs(supabase, usuario.id);
   const [turno, mediciones] = await Promise.all([
-    config.ver_turnos ? opcional(turnoParaMostrar(supabase, usuario.id), null) : null,
-    config.ver_mediciones ? opcional(medicionesParaMostrar(supabase, usuario.id), null) : null,
+    config.ver_turnos ? conRespaldo(turnoParaMostrar(supabase, usuario.id), null) : null,
+    config.ver_mediciones ? conRespaldo(medicionesParaMostrar(supabase, usuario.id), null) : null,
   ]);
 
   return (
