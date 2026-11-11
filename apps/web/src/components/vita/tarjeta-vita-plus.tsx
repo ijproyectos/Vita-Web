@@ -7,8 +7,11 @@ import { VMark } from "./v-mark";
 
 // Tarjeta de vita+ en Perfil y Familia (V7, variante clara). Sin suscripción invita a probarlo; con vita+
 // vigente muestra "Sos vita+ · hasta <fecha>". Ambas llevan a la pantalla de vita+ (donde se cancela).
-export async function TarjetaVitaPlus() {
+// En Familia (`familia`) es la del diseño: "Sumar cuidadores es parte de vita+", solo sin vita+ (sin la
+// "prueba gratis de 7 días" del diseño: no existe). `nombre`: la primera persona a cargo.
+export async function TarjetaVitaPlus({ familia = false, nombre }: { familia?: boolean; nombre?: string | null } = {}) {
   const estado = await obtenerEstadoVitaPlus(await createClient());
+  if (familia && estado.activo) return null;
   const hasta = estado.activo && !estado.permanente && estado.venceAt ? fechaLarga(estado.venceAt) : null;
   return (
     <Link
@@ -19,12 +22,16 @@ export async function TarjetaVitaPlus() {
       <span aria-hidden className="absolute -bottom-[30px] right-[30px] size-[60px] rounded-full bg-amber/[0.16]" />
       <VMark size={48} className="relative shrink-0" />
       <span className="relative min-w-0 flex-1">
-        <span className="block font-heading text-lg font-extrabold tracking-[-0.02em]">
-          {estado.activo ? "Sos vita" : "Probá vita"}
+        <span className={familia ? "block font-heading text-[16px] font-extrabold tracking-[-0.02em]" : "block font-heading text-lg font-extrabold tracking-[-0.02em]"}>
+          {familia ? "Sumar cuidadores es parte de vita" : estado.activo ? "Sos vita" : "Probá vita"}
           <span className="text-aviso">+</span>
         </span>
         <span className="mt-[3px] block text-pretty text-[12.5px] font-medium leading-[1.4] text-slate-brand">
-          {estado.activo
+          {familia
+            ? nombre
+              ? `Cuidá a ${nombre} con tu familia.`
+              : "Cuidá a los tuyos con tu familia."
+            : estado.activo
             ? estado.permanente
               ? "Sin vencimiento."
               : `${hasta ? `Hasta ${hasta} · ` : ""}${estado.renueva ? "se renueva solo" : "no se renueva"}. Tocá para administrarla.`
