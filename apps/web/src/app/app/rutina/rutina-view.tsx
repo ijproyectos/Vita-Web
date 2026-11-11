@@ -215,7 +215,7 @@ export function RutinaView({
       )}
 
       {vista === "historial" && (
-        <HistorialView meds={todosLosMeds} tomas={tomas} mediciones={medicionesDia} hoy={hoy} />
+        <HistorialView meds={todosLosMeds} tomas={tomas} mediciones={medicionesDia} hoy={hoy} puedeEditar={puedeEditar} />
       )}
 
       {puedeEditar && (
