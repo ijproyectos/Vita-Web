@@ -88,6 +88,8 @@ export default async function HomePage(props: PageProps<"/app">) {
   // Dosis de hoy que ya pasaron de hora sin marcar.
   const ahora = medicamentos.horaEnAR();
   const deAyer = await medicamentos.listarVencidasDeAyer(supabase, pid);
+  // "No la tomé" (057) no es una dosis vencida sin confirmar.
+  const omitidasHoy = await medicamentos.idsOmitidas(supabase, medsHoy.map((m) => m.id), medicamentos.fechaEnAR());
   const vencidas: DosisVencida[] = [
     // Hasta las 00:30 AR, las de ayer que quedaron sin tomar van primero.
     ...[...deAyer]
@@ -95,7 +97,7 @@ export default async function HomePage(props: PageProps<"/app">) {
       .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5), deAyer: true, fecha: medicamentos.fechaAyerEnAR() })),
     ...[...medsHoy]
       .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
-      .filter((m) => !m.tomado && medicamentos.esDosisVencida(m.hora_programada, ahora, 0))
+      .filter((m) => !m.tomado && !omitidasHoy.has(m.id) && medicamentos.esDosisVencida(m.hora_programada, ahora, 0))
       .map((m) => ({ id: m.id, nombre: m.nombre, dosis: textoDosis(m), hora: m.hora_programada.slice(0, 5) })),
   ];
 
