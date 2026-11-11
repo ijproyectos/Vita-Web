@@ -55,6 +55,8 @@ import { createClient } from "@supabase/supabase-js";
  * suscripción; (2) crear y cancelar la suscripción desde `/api/vita-plus`, DESPUÉS de autenticar la sesión: el
  * `usuario_id` sale de ella, el precio y la cotización los calcula el servidor (el cliente solo manda la clave del
  * plan) y las RPC de escritura de la 044 las ejecuta solo service_role. Nunca devuelve ids ni datos de Mercado Pago.
+ * Al dar de baja, guarda además el motivo opcional (`vita_plus_motivos_baja`, migración 059: lista cerrada, sin texto
+ * libre) para el `usuario_id` de la sesión, después de cancelar con éxito.
  *
  * Panel de administración `/adminvita` (decisión del dueño 2026-11-01; `lib/admin/datos.ts`): lectura de métricas de TODA la
  * base para los administradores de `ADMIN_EMAILS` (3 personas), y escritura de la auditoría `admin_accesos`. El cliente se crea

@@ -8,10 +8,12 @@ vi.mock("@/lib/familia/perfil-activo", () => ({ rolSobre: vi.fn() }));
 vi.mock("@/lib/mediciones/nucleo", () => ({ agregar: vi.fn() }));
 vi.mock("./nucleo", () => ({ actualizarPrefs: vi.fn() }));
 vi.mock("@/lib/notificaciones/pedido-ayuda", () => ({ pedirAyudaAFamilia: vi.fn() }));
+vi.mock("@/lib/suspensiones/guardia", () => ({ estaSuspendida: vi.fn() }));
 
 const { requireUser } = await import("@/lib/dal");
 const { createClient } = await import("@/lib/supabase/server");
 const { pedirAyudaAFamilia } = await import("@/lib/notificaciones/pedido-ayuda");
+const { estaSuspendida } = await import("@/lib/suspensiones/guardia");
 const { pedirAyudaSimpleAction } = await import("./actions");
 
 const getUser = vi.fn();
@@ -22,6 +24,7 @@ beforeEach(() => {
   getUser.mockReset().mockResolvedValue({ data: { user: { id: "u-logueado" } }, error: null });
   vi.mocked(createClient).mockReset().mockResolvedValue(supabase as never);
   vi.mocked(pedirAyudaAFamilia).mockReset();
+  vi.mocked(estaSuspendida).mockReset().mockResolvedValue(false);
 });
 
 describe("pedirAyudaSimpleAction (botón Ayuda del modo simple)", () => {
@@ -38,6 +41,12 @@ describe("pedirAyudaSimpleAction (botón Ayuda del modo simple)", () => {
     getUser.mockResolvedValue({ data: { user: null }, error: null });
     await expect(pedirAyudaSimpleAction()).resolves.toEqual({ status: "no-avisado", razon: "error" });
     expect(requireUser).not.toHaveBeenCalled();
+    expect(pedirAyudaAFamilia).not.toHaveBeenCalled();
+  });
+
+  it("una cuenta suspendida no avisa", async () => {
+    vi.mocked(estaSuspendida).mockResolvedValue(true);
+    await expect(pedirAyudaSimpleAction()).resolves.toEqual({ status: "no-avisado", razon: "error" });
     expect(pedirAyudaAFamilia).not.toHaveBeenCalled();
   });
 

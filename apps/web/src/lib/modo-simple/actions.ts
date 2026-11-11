@@ -7,6 +7,7 @@ import { rolSobre } from "@/lib/familia/perfil-activo";
 import { agregar as agregarMedicion } from "@/lib/mediciones/nucleo";
 import { validarMedicion } from "@/lib/mediciones/tipos";
 import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
+import { estaSuspendida } from "@/lib/suspensiones/guardia";
 import { actualizarPrefs } from "./nucleo";
 import { CLAVES_BOOLEANAS_MS, esMinutosPosponer, type ParcheModoSimple } from "./tipos";
 
@@ -110,6 +111,8 @@ export async function pedirAyudaSimpleAction(): Promise<ResultadoAyudaSimple> {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) return { status: "no-avisado", razon: "error" };
+    // Igual que /api/chat: una cuenta suspendida no manda avisos (la pantalla ofrece llamar).
+    if (await estaSuspendida()) return { status: "no-avisado", razon: "error" };
     const r = await pedirAyudaAFamilia(supabase, data.user.id, MOTIVO_BOTON_AYUDA);
     if (r.status === "enviado" || r.status === "repetido") return { status: "avisado", nombres: r.nombres };
     if (r.status === "sin-cuidadores" || r.status === "tope") return { status: "no-avisado", razon: r.status };

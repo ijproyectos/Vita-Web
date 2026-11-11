@@ -8,6 +8,7 @@ vi.mock("@/lib/familia/perfil-activo", () => ({ rolSobre: vi.fn() }));
 vi.mock("@/lib/mediciones/nucleo", () => ({ agregar: vi.fn() }));
 vi.mock("./nucleo", () => ({ actualizarPrefs: vi.fn() }));
 vi.mock("@/lib/notificaciones/pedido-ayuda", () => ({ pedirAyudaAFamilia: vi.fn() }));
+vi.mock("@/lib/suspensiones/guardia", () => ({ estaSuspendida: vi.fn() }));
 
 const { requireUser } = await import("@/lib/dal");
 const { createClient } = await import("@/lib/supabase/server");
