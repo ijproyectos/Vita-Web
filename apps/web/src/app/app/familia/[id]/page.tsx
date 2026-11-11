@@ -6,7 +6,7 @@ import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import { colorPorDefecto } from "@/lib/familia/colores";
-import { edadTexto } from "@/lib/perfil/formato";
+import { edadTexto, frasePorAhoraSoloVos } from "@/lib/perfil/formato";
 import { cn } from "@/lib/utils";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { FilaCuidador } from "@/components/vita/fila-cuidador";
@@ -32,12 +32,13 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
   const puedeEditar = miembro.rol === "editar";
   const primerNombre = miembro.nombre.split(" ")[0];
 
-  const [perfil, nRemedios, miNombre, dosisHoy, prefsSimple] = await Promise.all([
+  const [perfil, nRemedios, miNombre, dosisHoy, prefsSimple, miPerfil] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, id).catch(() => null),
     medicamentosNucleo.contarRemediosDistintos(supabase, id).catch(() => 0),
     perfilNucleo.obtenerNombre(supabase, usuario.id),
     medicamentosNucleo.listarHoy(supabase, id).catch(() => []),
     obtenerPrefs(supabase, id),
+    perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null),
   ]);
   // "No la tomé" del modo simple (057): sin la migración el set viene vacío.
   const omitidas = await medicamentosNucleo.idsOmitidas(supabase, dosisHoy.map((m) => m.id), medicamentosNucleo.fechaEnAR());
@@ -150,7 +151,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
                 {emergencia ? emergenciaSub : "A quien llama el botón Ayuda de su modo simple."}
               </span>
             </span>
-            <span className="shrink-0 text-[12.5px] font-extrabold text-teal-deep">{emergencia ? "Editar" : "Agregar"}</span>
+            <span className="shrink-0 rounded-full bg-primary/10 px-3.5 py-[9px] text-[12.5px] font-extrabold text-teal-deep">{emergencia ? "Editar" : "Agregar"}</span>
           </Link>
         </section>
       )}
@@ -172,7 +173,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
         </ul>
         {cuidadores.length <= 1 && puedeInvitar && (
           <p className="px-1.5 pt-2.5 text-pretty text-[12px] font-medium leading-[1.5] text-subtle">
-            Por ahora solo estás vos. Invitá a alguien para que también reciba los avisos.
+            {frasePorAhoraSoloVos(miPerfil?.genero)}
           </p>
         )}
         {puedeInvitar && (

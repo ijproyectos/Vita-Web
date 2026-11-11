@@ -4,6 +4,7 @@ import { esVistaSoloMirar, rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
 import { createClient } from "@/lib/supabase/server";
 import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { frasePorAhoraSoloVos } from "@/lib/perfil/formato";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { colorPorDefecto } from "@/lib/familia/colores";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
@@ -35,6 +36,8 @@ export default async function FamiliaPage() {
   const soloYo = cuidadores.length === 1 && cuidadores[0].esYo;
   const nadie = cuidadores.length === 0;
   const puedeInvitar = activo.esPropio || (completa && cuidadores.some((c) => c.puedeGestionar));
+  // "Por ahora sos la única/el único…" según el género de quien mira (solo hace falta mirando a otra persona).
+  const miGenero = soloYo && !activo.esPropio ? (await perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null))?.genero : null;
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
@@ -127,7 +130,7 @@ export default async function FamiliaPage() {
           <p className="px-1 pt-2.5 text-pretty text-[12.5px] font-medium leading-[1.45] text-subtle">
             {activo.esPropio
               ? "Invitá a alguien para que vea tus remedios y reciba tus avisos."
-              : "Por ahora solo estás vos. Invitá a alguien para que también reciba los avisos."}
+              : frasePorAhoraSoloVos(miGenero)}
           </p>
         )}
       </section>
