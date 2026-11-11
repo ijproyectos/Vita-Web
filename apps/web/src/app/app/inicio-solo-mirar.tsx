@@ -21,6 +21,7 @@ import { RespaldoSoloMirar } from "./respaldo-solo-mirar";
 
 const CLASES_ESTADO: Record<EstadoToma, string> = {
   tomada: "bg-persona-1-tint text-teal-deep",
+  omitida: "bg-secondary text-slate-brand",
   "sin-confirmar": "bg-aviso-tint text-aviso-ink",
   "mas-tarde": "bg-secondary text-slate-brand",
 };
@@ -54,6 +55,8 @@ export async function InicioSoloMirar({
   });
   if (!lecturas) return <RespaldoSoloMirar key={pid} fallo />;
   const [perfil, miPerfil, medsHoy, deAyer, turnos, cuidadores, familia] = lecturas;
+  // "No la tomé" (057): se muestra aparte, nunca como sin confirmar. Nunca lanza.
+  const omitidasHoy = await medicamentos.idsOmitidas(supabase, medsHoy.map((m) => m.id), medicamentos.fechaEnAR());
 
   const nombre = nombreEnFrase(activo.nombre);
   const admin = unicoAdmin(cuidadores);
@@ -68,7 +71,7 @@ export async function InicioSoloMirar({
     tomado,
   });
   const filas = filasTomas(
-    medsHoy.map((m) => ({ ...aTomas(m, m.tomado), dosis: textoDosis(m) })),
+    medsHoy.map((m) => ({ ...aTomas(m, m.tomado), omitida: omitidasHoy.has(m.id), dosis: textoDosis(m) })),
     deAyer.map((m) => ({ ...aTomas(m, false), dosis: textoDosis(m) })),
     medicamentos.horaEnAR()
   );

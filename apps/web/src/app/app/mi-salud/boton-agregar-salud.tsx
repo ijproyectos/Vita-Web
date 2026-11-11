@@ -18,7 +18,7 @@ export function BotonAgregarSalud({ nombrePersona }: { nombrePersona?: string | 
       >
         <VitaIcon name="plus" size={20} strokeWidth={2} />
       </button>
-      <AgregarSheet open={abierto} onOpenChange={setAbierto} tipo="salud" nombrePersona={nombrePersona} />
+      <AgregarSheet open={abierto} onOpenChange={setAbierto} nombrePersona={nombrePersona} />
     </>
   );
 }

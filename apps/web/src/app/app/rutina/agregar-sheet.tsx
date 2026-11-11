@@ -1,34 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { hrefNuevoMonitoreo } from "@/lib/mediciones/tipos";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VMark } from "@/components/vita/v-mark";
 import { useChatOverlay } from "@/lib/chat/overlay-context";
 
-// "Agregar a tu rutina" (V7 ADD SHEET): medicamento, turno, medición o
-// pedírselo a vita. Con `tipo="salud"` (el "+" de Mi Salud) ofrece estudio y
-// vita. "Contar pastillas" es app-only y se conserva en la rutina.
+// "Agregar a tu salud" (el "+" de Mi Salud): ofrece estudio o pedírselo a vita.
+// Medicamento, turno y monitoreo se agregan desde la Rutina.
 export function AgregarSheet({
   open,
   onOpenChange,
-  tipo = "rutina",
   nombrePersona,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  tipo?: "rutina" | "salud";
   /** Primer nombre cuando el perfil activo es otra persona. */
   nombrePersona?: string | null;
 }) {
   const { abrir } = useChatOverlay();
-  const pathname = usePathname();
-  const titulo =
-    tipo === "salud"
-      ? nombrePersona ? `Agregar a la salud de ${nombrePersona}` : "Agregar a tu salud"
-      : nombrePersona ? `Agregar a la rutina de ${nombrePersona}` : "Agregar a tu rutina";
+  const titulo = nombrePersona ? `Agregar a la salud de ${nombrePersona}` : "Agregar a tu salud";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -37,47 +28,13 @@ export function AgregarSheet({
         <SheetTitle className="px-1 font-heading text-lg font-extrabold tracking-[-0.02em]">{titulo}</SheetTitle>
         <SheetDescription className="px-1 pb-3.5 pt-1 text-[12.5px] font-medium text-subtle">¿Qué querés guardar hoy?</SheetDescription>
         <div className="flex flex-col gap-[9px]">
-          {tipo === "rutina" && (
-            <>
-              <Opcion
-                icon="pill"
-                tinte="bg-chip-teal-bg text-chip-teal-ink"
-                titulo="Medicamento"
-                sub="Dosis, frecuencia y horarios"
-                href="/app/agregar-medicamento"
-              />
-              <Opcion
-                icon="stethoscope"
-                tinte="bg-chip-amber-bg text-chip-amber-ink"
-                titulo="Turno médico"
-                sub="Especialidad, profesional, fecha"
-                href="/app/agregar-turno"
-              />
-              <Opcion
-                icon="chart"
-                tinte="bg-chip-violet-bg text-chip-violet-ink"
-                titulo="Monitoreo"
-                sub="Qué medir, horarios y avisos"
-                href={hrefNuevoMonitoreo({ volver: pathname })}
-              />
-              <Opcion
-                icon="camera"
-                tinte="bg-chip-teal-bg text-chip-teal-ink"
-                titulo="Contar pastillas"
-                sub="Foto del blister y control de stock"
-                href="/app/pastillas/contar"
-              />
-            </>
-          )}
-          {tipo === "salud" && (
-            <Opcion
-              icon="doc"
-              tinte="bg-chip-amber-bg text-chip-amber-ink"
-              titulo="Estudio"
-              sub="Foto o PDF del resultado"
-              href="/app/mi-salud/agregar-estudio"
-            />
-          )}
+          <Opcion
+            icon="doc"
+            tinte="bg-chip-amber-bg text-chip-amber-ink"
+            titulo="Estudio"
+            sub="Foto o PDF del resultado"
+            href="/app/mi-salud/agregar-estudio"
+          />
           <button
             type="button"
             onClick={() => {

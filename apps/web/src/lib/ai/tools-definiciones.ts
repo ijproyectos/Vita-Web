@@ -251,6 +251,11 @@ const TOOLS_BASE: Anthropic.Tool[] = [
       required: ["mood"],
     },
   },
+];
+
+// Tools agregadas después de las de arriba. Van AL FINAL de `TOOLS` (después de la memoria y de
+// `resolver_contradiccion`): el orden de TOOLS es parte del prefijo cacheado del prompt, nunca se reordena.
+const TOOLS_NUEVAS_BASE: Anthropic.Tool[] = [
   // Lecturas (punto 2 del plan del agente): solo leen, aceptan persona_id y no piden confirmación.
   {
     name: "list_upcoming_appointments",
@@ -353,7 +358,6 @@ const TOOLS_BASE: Anthropic.Tool[] = [
       required: ["type", "value"],
     },
   },
-
 ];
 
 const PROPIEDAD_PERSONA = {
@@ -369,7 +373,7 @@ const PROPIEDAD_CONFIRMADO = {
 } as const;
 
 // Suma `persona_id` (y `confirmado` en las de escritura) a las tools con destino.
-const TOOLS_CON_PERSONA: Anthropic.Tool[] = TOOLS_BASE.map((t) => {
+const conPersona = (t: Anthropic.Tool): Anthropic.Tool => {
   if (!TOOLS_CON_DESTINO.has(t.name)) return t;
   const schema = t.input_schema as { properties?: Record<string, unknown> };
   return {
@@ -383,7 +387,9 @@ const TOOLS_CON_PERSONA: Anthropic.Tool[] = TOOLS_BASE.map((t) => {
       },
     },
   };
-});
+};
+const TOOLS_CON_PERSONA: Anthropic.Tool[] = TOOLS_BASE.map(conPersona);
+const TOOLS_NUEVAS: Anthropic.Tool[] = TOOLS_NUEVAS_BASE.map(conPersona);
 
 // Memoria de vita (fase 2). Actúan SIEMPRE sobre la cuenta logueada (no aceptan `persona_id`) y no existen en el
 // modo simple. Van al FINAL de TOOLS: el orden del array es parte del prefijo cacheado, así que nunca se reordena.
@@ -444,7 +450,7 @@ const TOOL_RESOLVER_CONTRADICCION: Anthropic.Tool = {
   },
 };
 
-export const TOOLS: Anthropic.Tool[] = [...TOOLS_CON_PERSONA, ...TOOLS_MEMORIA, TOOL_RESOLVER_CONTRADICCION];
+export const TOOLS: Anthropic.Tool[] = [...TOOLS_CON_PERSONA, ...TOOLS_MEMORIA, TOOL_RESOLVER_CONTRADICCION, ...TOOLS_NUEVAS];
 
 // Tools que SOLO existen en el chat de modo simple (`modo: "simple"` en /api/chat). No están en TOOLS: en el
 // modo normal no se ofrecen ni se ejecutan (ver lib/ai/modo-simple.ts).

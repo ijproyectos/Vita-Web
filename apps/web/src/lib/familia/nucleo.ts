@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DOMINIO_CUENTA_POR_CODIGO } from "@/lib/acceso-codigo/tipos";
 import type { Condicion } from "@/lib/perfil/tipos";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
-import { aplicaHoy, esDosisVencida, fechaAyerEnAR, fechaEnAR, filtrarDosisDeAyerVencidas, FIN_VENTANA_MEDIANOCHE, horaEnAR } from "@/lib/medicamentos/nucleo";
+import { aplicaHoy, esDosisVencida, fechaAyerEnAR, fechaEnAR, filtrarDosisDeAyerVencidas, FIN_VENTANA_MEDIANOCHE, horaEnAR, omitidasPorFecha } from "@/lib/medicamentos/nucleo";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
 import {
   SIN_NOMBRE,
@@ -82,11 +82,15 @@ export async function estadoHoyPorPerfil(supabase: Cliente, ids: string[]): Prom
     ]);
     if (meds.error || tomas.error) return salida;
     const tomadas = new Set((tomas.data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string));
+    // "No la tomé" (057): no cuenta como tomada ni como vencida. Nunca lanza.
+    const omitidasHoy = await omitidasPorFecha(supabase, ((meds.data ?? []) as Medicamento[]).map((m) => m.id), [fechaEnAR()]);
+    const omitida = (m: Medicamento) => omitidasHoy.has(`${m.id}|${fechaEnAR()}`);
     const ahora = horaEnAR();
     // Ventana de medianoche: hasta las 00:30 AR cuentan también las dosis de
     // ayer sin tomar (la toma de ayer está en la fecha AR de ayer).
     // null = no se pudo leer ayer: sin dosis de ayer (como listarVencidasDeAyer), nunca falsas alarmas.
     let tomadasAyer: Set<string> | null = null;
+    let idsOmitidasAyer: string[] = [];
     if (ahora < FIN_VENTANA_MEDIANOCHE) {
       const { data, error } = await supabase
         .from("medicamentos_tomas")
@@ -94,6 +98,8 @@ export async function estadoHoyPorPerfil(supabase: Cliente, ids: string[]): Prom
         .in("usuario_id", ids)
         .eq("fecha", fechaAyerEnAR());
       if (!error) {
+        const claves = await omitidasPorFecha(supabase, ((meds.data ?? []) as Medicamento[]).map((m) => m.id), [fechaAyerEnAR()]);
+        idsOmitidasAyer = [...claves].map((c) => c.slice(0, c.lastIndexOf("|")));
         tomadasAyer = new Set((data ?? []).filter((t) => t.tomado).map((t) => t.medicamento_id as string));
       }
     }
@@ -104,13 +110,13 @@ export async function estadoHoyPorPerfil(supabase: Cliente, ids: string[]): Prom
       const deAyer = tomadasAyer
         ? filtrarDosisDeAyerVencidas(
             ((meds.data ?? []) as Medicamento[]).filter((m) => m.usuario_id === id),
-            tomadasAyer,
+            new Set([...tomadasAyer, ...idsOmitidasAyer]),
             new Date(),
             0
           ).sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
         : [];
       const vencida =
-        deAyer[0] ?? deHoy.find((m) => !tomadas.has(m.id) && esDosisVencida(m.hora_programada, ahora, 0));
+        deAyer[0] ?? deHoy.find((m) => !tomadas.has(m.id) && !omitida(m) && esDosisVencida(m.hora_programada, ahora, 0));
       salida.set(id, {
         tomadas: deHoy.filter((m) => tomadas.has(m.id)).length,
         total: deHoy.length,

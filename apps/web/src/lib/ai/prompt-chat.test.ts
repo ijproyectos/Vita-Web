@@ -49,9 +49,9 @@ describe("prompt caching del chat", () => {
     // ~4 caracteres por token en español: con holgura, el prefijo es mucho mayor que 1024 tokens.
     expect(prefijoCacheado(ctx(1)).length / 4).toBeGreaterThan(1024);
   });
-  it("las tools de memoria van al final y no aceptan persona_id", () => {
+  it("las tools de memoria conservan su lugar (después de las originales) y no aceptan persona_id", () => {
     const nombres = TOOLS.map((t) => t.name);
-    expect(nombres.slice(-3)).toEqual(["recordar", "buscar_memoria", "resolver_contradiccion"]);
+    expect(nombres.slice(16, 19)).toEqual(["recordar", "buscar_memoria", "resolver_contradiccion"]);
     for (const n of ["recordar", "buscar_memoria", "resolver_contradiccion"]) {
       const props = (TOOLS.find((t) => t.name === n)!.input_schema as { properties: Record<string, unknown> }).properties;
       expect(props).not.toHaveProperty("persona_id");
@@ -94,6 +94,9 @@ describe("prompt caching del chat", () => {
         "show_all_medications",
         "open_screen",
         "set_avatar_mood",
+        "recordar",
+        "buscar_memoria",
+        "resolver_contradiccion",
         "list_upcoming_appointments",
         "get_medication_stock",
         "list_measurements",
@@ -102,9 +105,6 @@ describe("prompt caching del chat", () => {
         "update_appointment",
         "delete_appointment",
         "add_measurement",
-        "recordar",
-        "buscar_memoria",
-        "resolver_contradiccion",
       ]
     `);
   });

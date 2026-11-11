@@ -16,6 +16,12 @@ describe("estadoDeToma", () => {
   it("sin confirmar justo a la hora", () => {
     expect(estadoDeToma(false, "08:00", "08:00")).toBe("sin-confirmar");
   });
+  it("no la tomó no es sin confirmar, aunque haya pasado la hora", () => {
+    expect(estadoDeToma(false, "08:00", "09:30", true)).toBe("omitida");
+  });
+  it("tomada gana sobre no la tomó", () => {
+    expect(estadoDeToma(true, "08:00", "09:30", true)).toBe("tomada");
+  });
   it("más tarde si todavía no llegó", () => {
     expect(estadoDeToma(false, "21:00", "17:00")).toBe("mas-tarde");
   });
@@ -29,6 +35,11 @@ describe("filasTomas", () => {
       ["a", "tomada", false],
       ["b", "mas-tarde", false],
     ]);
+  });
+  it("marca como omitida la de hoy con No la tomó y no la cuenta como tomada", () => {
+    const filas = filasTomas([{ ...t("a", "08:00"), omitida: true }, t("b", "09:00", true)], [], "17:00");
+    expect(filas.map((f) => f.estado)).toEqual(["omitida", "tomada"]);
+    expect(contadorDeHoy(filas)).toEqual({ tomadas: 1, total: 2 });
   });
   it("sin tomas devuelve vacío", () => {
     expect(filasTomas([], [], "10:00")).toEqual([]);

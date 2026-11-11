@@ -108,7 +108,9 @@ export async function listarVencidasDeAyer(
       .eq("fecha", fechaAyerEnAR(ahora));
     if (error) return [];
     const tomadas = new Set((data ?? []).map((t) => t.medicamento_id as string));
-    return filtrarDosisDeAyerVencidas(todos, tomadas, ahora, minutosGracia);
+    // "No la tomé" de ayer (057) tampoco está sin confirmar (degrada a vacío).
+    const omitidas = await idsOmitidas(supabase, todos.map((m) => m.id), fechaAyerEnAR(ahora));
+    return filtrarDosisDeAyerVencidas(todos, new Set([...tomadas, ...omitidas]), ahora, minutosGracia);
   } catch {
     return [];
   }
@@ -401,6 +403,15 @@ export async function agregar(
       .insert(comida.indicacion ? { ...sinColumnasPlan, indicacion: comida.indicacion } : sinColumnasPlan)
       .select()
       .single());
+    // Con la 056 también sin aplicar, `sinPlan` aún trae `droga`: mismo reintento que el alta múltiple.
+    if (error && droga && faltaColumnaDroga(error)) {
+      const sinAmbas = sinColumnaDroga(sinColumnasPlan, datosCrudos.nombre.trim());
+      ({ data, error } = await supabase
+        .from("medicamentos")
+        .insert(comida.indicacion ? { ...sinAmbas, indicacion: comida.indicacion } : sinAmbas)
+        .select()
+        .single());
+    }
   }
 
   if (error) {
