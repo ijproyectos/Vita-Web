@@ -22,6 +22,7 @@ export function VistaPreviaModoSimple({ grupo, siguientes, alertado }: { grupo: 
             onEscuchar={nada}
             onPosponer={nada}
             onAlternarVoz={nada}
+            onNoTome={nada}
           />
           {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} />}
         </div>

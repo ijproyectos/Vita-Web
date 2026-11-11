@@ -89,6 +89,33 @@ export async function marcarGrupoTomadoAction(medicamentoIds: string[], tomado =
   return { status: "success" };
 }
 
+/**
+ * Modo simple, "No la tomé": el grupo queda como no tomado a propósito (ver
+ * `marcarNoTomada`). Sin revalidar, igual que confirmar: la pantalla se refresca sola.
+ */
+export async function marcarGrupoNoTomadoAction(medicamentoIds: string[], fechaDosis?: string): Promise<EstadoAccion> {
+  await requireUser();
+  const ids = [...new Set(medicamentoIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
+  if (ids.length === 0) return { status: "success" };
+  const supabase = await createClient();
+  try {
+    const objetivos = await Promise.all(ids.map((id) => duenioEditable(supabase, id)));
+    const negado = objetivos.find((o) => !o.ok);
+    if (negado && !negado.ok) return { status: "error", message: negado.message };
+    const resultados = await Promise.allSettled(
+      ids.map((id, i) => {
+        const o = objetivos[i];
+        return o.ok ? medicamentos.marcarNoTomada(supabase, o.usuarioId, id, fechaDosis) : Promise.resolve();
+      })
+    );
+    const fallo = resultados.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (fallo) return { status: "error", message: "No se pudo guardar. Probá de nuevo o avisale a tu familia." };
+  } catch {
+    return { status: "error", message: "No se pudo guardar. Probá de nuevo o avisale a tu familia." };
+  }
+  return { status: "success" };
+}
+
 // Marcar todos los pendientes de hoy de una — el diálogo/botón viejo
 // (marcar-todos-button.tsx) se había perdido al migrar de Medicamentos a
 // Rutina; el hallazgo del review lo marcó como regresión real, no un

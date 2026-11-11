@@ -231,16 +231,23 @@ export function payloadResumenDia(d: {
   tomadas: number;
   total: number;
   pendientes: { nombre: string; hora: string }[];
+  /** Las que la persona dijo "No la tomé" (057). */
+  noTomadas?: { nombre: string; hora: string }[];
   fechaAR: string;
   rolDestino?: "editar" | "ver" | null;
 }): PayloadPush {
   const nombre = primerNombre(d.personaNombre);
-  const falta = d.pendientes.slice(0, 2).map((p) => `${p.nombre} (${horaCorta(p.hora)})`);
-  const resto = d.pendientes.length - falta.length;
-  const cuerpo =
-    d.pendientes.length === 0
-      ? "Completó todas sus tomas de hoy."
-      : `Quedó sin tomar: ${falta.join(", ")}${resto > 0 ? ` y ${resto} más` : ""}.`;
+  const lista = (xs: { nombre: string; hora: string }[]) => {
+    const primeras = xs.slice(0, 2).map((p) => `${p.nombre} (${horaCorta(p.hora)})`);
+    const resto = xs.length - primeras.length;
+    return `${primeras.join(", ")}${resto > 0 ? ` y ${resto} más` : ""}`;
+  };
+  const noTomadas = d.noTomadas ?? [];
+  const partes = [
+    d.pendientes.length > 0 ? `Quedó sin tomar: ${lista(d.pendientes)}.` : null,
+    noTomadas.length > 0 ? `Dijo que no tomó: ${lista(noTomadas)}.` : null,
+  ].filter(Boolean);
+  const cuerpo = partes.length === 0 ? "Completó todas sus tomas de hoy." : partes.join(" ");
   return {
     title: `${nombre} tomó ${d.tomadas} de ${d.total} hoy`,
     body: cuerpo,

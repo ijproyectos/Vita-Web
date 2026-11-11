@@ -998,6 +998,67 @@ export async function marcarTomado(
 }
 
 /**
+ * "No la tomé" (modo simple): la dosis de hoy (o la de ayer en la ventana de
+ * medianoche, ver `fechaDeTomaEnAR`) queda como no tomada a propósito. Nunca
+ * pisa una toma ya confirmada. Necesita la migración 057 (`omitida_at`); sin
+ * ella lanza y quien llama avisa.
+ */
+export async function marcarNoTomada(
+  supabase: Cliente,
+  usuarioId: string,
+  medicamentoId: string,
+  fechaDosis?: string
+): Promise<void> {
+  const ahora = new Date();
+  const fecha = fechaDeTomaEnAR(ahora, fechaDosis);
+  if (fechaDosis && fecha !== fechaDosis) {
+    throw new Error("Esa toma era de ayer y ya no se puede marcar. Recargá la pantalla.");
+  }
+  const omitida_at = ahora.toISOString();
+  const { data: actualizadas, error: errUpdate } = await supabase
+    .from("medicamentos_tomas")
+    .update({ omitida_at })
+    .eq("medicamento_id", medicamentoId)
+    .eq("fecha", fecha)
+    .eq("tomado", false)
+    .select("id");
+  if (errUpdate) throw new Error(`No se pudo guardar: ${errUpdate.message}`);
+  if ((actualizadas?.length ?? 0) > 0) return;
+
+  const { data: insertadas, error: errInsert } = await supabase
+    .from("medicamentos_tomas")
+    .upsert(
+      { medicamento_id: medicamentoId, usuario_id: usuarioId, fecha, tomado: false, tomado_en: null, omitida_at },
+      { onConflict: "medicamento_id,fecha", ignoreDuplicates: true }
+    )
+    .select("id");
+  if (errInsert) throw new Error(`No se pudo guardar: ${errInsert.message}`);
+  // Sin fila nueva y sin fila sin tomar: ya estaba confirmada como tomada.
+  if ((insertadas?.length ?? 0) === 0) throw new Error("Esa pastilla ya figura como tomada.");
+}
+
+/**
+ * Ids de medicamento con "No la tomé" en `fecha` (AR). Nunca lanza: sin la
+ * migración 057 o ante un error devuelve vacío (se comporta como antes).
+ */
+export async function idsOmitidas(supabase: Cliente, medicamentoIds: string[], fecha: string): Promise<Set<string>> {
+  if (medicamentoIds.length === 0) return new Set();
+  try {
+    const { data, error } = await supabase
+      .from("medicamentos_tomas")
+      .select("medicamento_id")
+      .eq("fecha", fecha)
+      .eq("tomado", false)
+      .not("omitida_at", "is", null)
+      .in("medicamento_id", medicamentoIds);
+    if (error) return new Set();
+    return new Set((data ?? []).map((t) => t.medicamento_id as string));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
  * Descuenta (-1) o devuelve (+1) una toma del inventario del medicamento, si
  * tiene uno — la RPC multiplica por `pastillas_por_toma` del lado de la DB.
  * Nunca lanza (ver `ajustarStock`).

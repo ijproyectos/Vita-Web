@@ -187,12 +187,15 @@ export function TarjetaGrupo({
   onPosponer,
   onAlternarVoz,
   deAyer = false,
+  onNoTome,
 }: {
   grupo: Dosis[];
   momento: MomentoDia | null;
   alertado: boolean;
   /** Dosis de ayer sin tomar, en la ventana 00:00-00:30 (igual que "Era ayer" en el resto de la app). */
   deAyer?: boolean;
+  /** "No la tomé": sin él no se muestra (p. ej. en la vista previa vieja). */
+  onNoTome?: () => void;
   confirmando: boolean;
   escuchandoVoz: boolean;
   silenciada: boolean;
@@ -265,6 +268,16 @@ export function TarjetaGrupo({
         >
           <VitaIcon name="mic" size={19} />
           {escuchandoVoz ? "Escuchando…" : "Tocá y decí \"sí\""}
+        </button>
+      )}
+      {onNoTome && (
+        <button
+          type="button"
+          onClick={onNoTome}
+          disabled={confirmando}
+          className="mt-4 min-h-12 w-full text-center text-[17px] font-bold text-slate-brand underline underline-offset-4 disabled:opacity-70"
+        >
+          {n === 1 ? "No la tomé" : "No las tomé"}
         </button>
       )}
     </div>

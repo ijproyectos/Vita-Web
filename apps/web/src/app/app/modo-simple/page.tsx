@@ -49,12 +49,18 @@ export default async function ModoSimplePage() {
     // Solo para la respuesta hablada de la charla: sin "ver turnos" no se menciona ninguno.
     config.ver_turnos ? opcional(proximoTurnoParaCharla(supabase, usuario.id, ahoraHHMM), null, "el próximo turno") : null,
   ]);
-  const pendienteHoy = proximoGrupoPendiente(hoy, ahoraHHMM);
+  // "No la tomé" (057): esas dosis ya no se piden. Sin la migración, el set viene vacío.
+  const omitidasHoy = await medicamentos.idsOmitidas(supabase, hoy.map((m) => m.id), medicamentos.fechaEnAR());
+  const pendienteHoy = proximoGrupoPendiente(hoy.filter((m) => !omitidasHoy.has(m.id)), ahoraHHMM);
   // Medianoche (00:00-00:30 AR): la dosis de AYER sin tomar va primero, como "Era ayer" en el
   // resto de la app; se marca con la fecha de ayer. Fuera de la ventana no consulta nada.
-  const deAyer = [...(await medicamentos.listarVencidasDeAyer(supabase, usuario.id))].sort((a, b) =>
-    a.hora_programada.localeCompare(b.hora_programada)
-  );
+  const vencidasAyer = await medicamentos.listarVencidasDeAyer(supabase, usuario.id);
+  const omitidasAyer = vencidasAyer.length
+    ? await medicamentos.idsOmitidas(supabase, vencidasAyer.map((m) => m.id), medicamentos.fechaAyerEnAR())
+    : new Set<string>();
+  const deAyer = vencidasAyer
+    .filter((m) => !omitidasAyer.has(m.id))
+    .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
   const fechaDosis = deAyer.length > 0 ? medicamentos.fechaAyerEnAR() : null;
   const { resto, invalidas } = pendienteHoy;
   const enGrupo = deAyer.length > 0 ? deAyer : pendienteHoy.enGrupo;

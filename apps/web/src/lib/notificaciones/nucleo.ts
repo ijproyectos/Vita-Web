@@ -149,6 +149,21 @@ export async function detectarDosisVencidas(
   const confirmadas = new Set(
     ((tomas ?? []) as { medicamento_id: string; fecha: string }[]).map((t) => `${t.medicamento_id}|${t.fecha}`)
   );
+  // "No la tomé" (057) tampoco alerta: el cuidador se entera en el resumen de la noche.
+  // Consulta aparte y sin lanzar: sin la migración no hay omitidas y todo sigue igual.
+  const { data: omitidas, error: errorOmitidas } = await admin
+    .from("medicamentos_tomas")
+    .select("medicamento_id, fecha")
+    .eq("tomado", false)
+    .not("omitida_at", "is", null)
+    .in("fecha", [hoyAR, ayerAR])
+    .in(
+      "medicamento_id",
+      conCuidadores.map((m) => m.id)
+    );
+  if (!errorOmitidas) {
+    for (const t of (omitidas ?? []) as { medicamento_id: string; fecha: string }[]) confirmadas.add(`${t.medicamento_id}|${t.fecha}`);
+  }
   const vencidas = conCuidadores.filter((m) => !confirmadas.has(`${m.id}|${m.fechaAR}`));
   if (vencidas.length === 0) return [];
 

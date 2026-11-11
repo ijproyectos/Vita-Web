@@ -38,7 +38,7 @@ import {
   type PorCorregir,
   type TurnoSimple,
 } from "@/components/vita/modo-simple/piezas";
-import { marcarGrupoTomadoAction } from "../rutina/actions";
+import { marcarGrupoNoTomadoAction, marcarGrupoTomadoAction } from "../rutina/actions";
 import { confirmoPorVoz } from "@/lib/modo-simple/confirmacion-voz";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
@@ -118,6 +118,7 @@ export function Pantalla({
   // puramente transitoria y nunca la manda el servidor.
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [preguntarNo, setPreguntarNo] = useState(false);
   const hayGrupo = grupo.length > 0;
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
@@ -210,6 +211,26 @@ export function Pantalla({
   function verAhora() {
     posponer.cancelar();
     void cancelarPosposicionAction(grupo.map((m) => m.id)).catch(() => {});
+  }
+
+  // "No la tomé": se pregunta antes (no se deshace desde acá) y deja de pedirla
+  // hoy. El cuidador se entera en el resumen de la noche, no en el momento.
+  function noTome() {
+    setPreguntarNo(false);
+    posponer.cancelar();
+    startTransition(async () => {
+      try {
+        const r = await marcarGrupoNoTomadoAction(grupo.map((m) => m.id), fechaDosis ?? undefined);
+        if (r.status === "error") {
+          toast.error(r.message);
+          return;
+        }
+        toast.success("Listo. No te la vuelvo a pedir hoy.");
+        router.refresh();
+      } catch {
+        toast.error("No se pudo guardar. Probá de nuevo o avisale a tu familia.");
+      }
+    });
   }
 
   // "Me equivoqué": vuelve a la tarjeta enseguida y desmarca en el servidor.
@@ -354,6 +375,7 @@ export function Pantalla({
                   momento={momento}
                   alertado={fase === "alertado"}
                   deAyer={!!fechaDosis}
+                  onNoTome={() => setPreguntarNo(true)}
                   confirmando={pendiente}
                   escuchandoVoz={estadoVoz !== "inactivo"}
                   silenciada={silenciada}
@@ -391,6 +413,7 @@ export function Pantalla({
         onAlternarSonido={alternarSonido}
       />
       <SheetAyudaSinContacto open={ayudaAbierta && !telefonoAyuda} onOpenChange={setAyudaAbierta} />
+      <SheetNoTome open={preguntarNo} onOpenChange={setPreguntarNo} cuantas={grupo.length} onSi={noTome} />
       {charlaAbierta && (
         <CharlaSimple
           nombre={nombre}
@@ -582,6 +605,27 @@ function EnlaceAMiCuenta({
     >
       {children}
     </a>
+  );
+}
+
+function SheetNoTome({ open, onOpenChange, cuantas, onSi }: { open: boolean; onOpenChange: (v: boolean) => void; cuantas: number; onSi: () => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-[28px] pb-8">
+        <SheetHeader>
+          <SheetTitle className="text-[24px]">{cuantas === 1 ? "¿Hoy no la vas a tomar?" : "¿Hoy no las vas a tomar?"}</SheetTitle>
+          <SheetDescription className="text-[17px]">No te la vuelvo a pedir hoy. A la noche se lo cuento a tu familia.</SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-3 px-4">
+          <button type="button" onClick={onSi} className="flex h-16 items-center justify-center rounded-full bg-teal-deep text-[20px] font-extrabold text-primary-foreground">
+            {cuantas === 1 ? "Sí, hoy no la tomo" : "Sí, hoy no las tomo"}
+          </button>
+          <button type="button" onClick={() => onOpenChange(false)} className="flex h-14 items-center justify-center rounded-full bg-secondary text-[18px] font-bold text-slate-brand">
+            Volver
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
