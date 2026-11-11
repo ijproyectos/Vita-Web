@@ -9,6 +9,8 @@ import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { horaCorta } from "@/lib/notificaciones/mensajes";
+import type { FilaHoy } from "@/lib/modo-simple/seleccion";
 import { esTipoMedicion, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
@@ -28,6 +30,7 @@ import {
   TarjetaGrupo,
   TarjetaMediciones,
   TarjetaSiguientes,
+  TarjetaHoy,
   TarjetaPorCorregir,
   TarjetaTurno,
   fraseAnuncio,
@@ -67,6 +70,7 @@ export function Pantalla({
   hayMedsHoy,
   vencida,
   fechaDosis = null,
+  filas = [],
   recordatorios,
   config,
   turno,
@@ -105,6 +109,8 @@ export function Pantalla({
   vencida: boolean;
   /** Fecha de AYER cuando el grupo son dosis de ayer en la ventana de medianoche; si no, null. */
   fechaDosis?: string | null;
+  /** Lista "Hoy": todas las tomas del día con su estado. */
+  filas?: FilaHoy[];
   /** Un familiar le recordó estas dosis (aviso tranquilo, sin sonido). */
   recordatorios: { medicamentoId: string; nombre: string; horaProgramada: string }[];
 }) {
@@ -119,6 +125,7 @@ export function Pantalla({
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [preguntarNo, setPreguntarNo] = useState(false);
+  const [filaElegida, setFilaElegida] = useState<FilaHoy | null>(null);
   const hayGrupo = grupo.length > 0;
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
@@ -229,6 +236,27 @@ export function Pantalla({
         router.refresh();
       } catch {
         toast.error("No se pudo guardar. Probá de nuevo o avisale a tu familia.");
+      }
+    });
+  }
+
+  // Una pastilla de la lista "Hoy": tomarla, decir que no o deshacer, de a una.
+  function accionFila(fila: FilaHoy, accion: "tomar" | "no" | "desmarcar") {
+    setFilaElegida(null);
+    startTransition(async () => {
+      try {
+        const r =
+          accion === "no"
+            ? await marcarGrupoNoTomadoAction([fila.id])
+            : await marcarGrupoTomadoAction([fila.id], accion === "tomar");
+        if (r.status === "error") {
+          toast.error(r.message);
+          return;
+        }
+        toast.success(accion === "tomar" ? "¡Muy bien! Quedó anotada." : accion === "no" ? "Listo. No te la vuelvo a pedir hoy." : "Listo, la desmarqué.");
+        router.refresh();
+      } catch {
+        toast.error("No se pudo guardar. Probá de nuevo.");
       }
     });
   }
@@ -399,7 +427,11 @@ export function Pantalla({
 
               {porCorregir.length > 0 && <TarjetaPorCorregir items={porCorregir} />}
 
-              {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
+              {filas.length > 0 ? (
+                <TarjetaHoy filas={filas} onTocar={setFilaElegida} />
+              ) : (
+                siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />
+              )}
             </div>
           </div>
           <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
@@ -413,6 +445,7 @@ export function Pantalla({
         onAlternarSonido={alternarSonido}
       />
       <SheetAyudaSinContacto open={ayudaAbierta && !telefonoAyuda} onOpenChange={setAyudaAbierta} />
+      <SheetFila fila={filaElegida} onCerrar={() => setFilaElegida(null)} onAccion={accionFila} />
       <SheetNoTome open={preguntarNo} onOpenChange={setPreguntarNo} cuantas={grupo.length} onSi={noTome} />
       {charlaAbierta && (
         <CharlaSimple
@@ -605,6 +638,57 @@ function EnlaceAMiCuenta({
     >
       {children}
     </a>
+  );
+}
+
+/** Qué hacer con una pastilla de la lista "Hoy", según cómo está. */
+function SheetFila({
+  fila,
+  onCerrar,
+  onAccion,
+}: {
+  fila: FilaHoy | null;
+  onCerrar: () => void;
+  onAccion: (fila: FilaHoy, accion: "tomar" | "no" | "desmarcar") => void;
+}) {
+  const boton = "flex h-16 w-full items-center justify-center rounded-full text-[20px] font-extrabold";
+  const titulo = !fila
+    ? ""
+    : fila.estado === "tomada"
+      ? `¿No tomaste ${fila.nombre}?`
+      : fila.estado === "omitida"
+        ? `¿Al final tomaste ${fila.nombre}?`
+        : `¿Tomaste ${fila.nombre}?`;
+  return (
+    <Sheet open={!!fila} onOpenChange={(v) => !v && onCerrar()}>
+      <SheetContent side="bottom" className="rounded-t-[28px] pb-8">
+        <SheetHeader>
+          <SheetTitle className="text-[24px]">{titulo}</SheetTitle>
+          <SheetDescription className="text-[17px]">{fila ? `La de las ${horaCorta(fila.hora)}.` : ""}</SheetDescription>
+        </SheetHeader>
+        {fila && (
+          <div className="flex flex-col gap-3 px-4">
+            {fila.estado === "tomada" ? (
+              <button type="button" onClick={() => onAccion(fila, "desmarcar")} className={cn(boton, "bg-teal-deep text-primary-foreground")}>
+                Me equivoqué, no la tomé
+              </button>
+            ) : (
+              <button type="button" onClick={() => onAccion(fila, "tomar")} className={cn(boton, "bg-teal-deep text-primary-foreground")}>
+                Sí, ya la tomé
+              </button>
+            )}
+            {(fila.estado === "se-paso" || fila.estado === "ahora") && (
+              <button type="button" onClick={() => onAccion(fila, "no")} className={cn(boton, "border-2 border-foreground/10 bg-card text-foreground")}>
+                No la tomé
+              </button>
+            )}
+            <button type="button" onClick={onCerrar} className="flex h-14 items-center justify-center rounded-full bg-secondary text-[18px] font-bold text-slate-brand">
+              Volver
+            </button>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 

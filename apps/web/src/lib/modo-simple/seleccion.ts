@@ -2,7 +2,9 @@ import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
 import { momentoDelDia, normalizarHora } from "@/lib/rutina/momento";
 
 /**
- * La toma más antigua que ya corresponde, agrupada solo por su hora exacta.
+ * La toma MÁS RECIENTE que ya corresponde, agrupada solo por su hora exacta
+ * (rediseño 2026-11-10: una olvidada de la mañana ya no tapa la de ahora; queda
+ * en la lista "Hoy" como "Se pasó", ver `filasHoy`).
  * Ordena por hora normalizada ("8:00" antes que "09:00"). Una pendiente cuya
  * hora guardada es inválida no se puede ubicar en el día: se devuelve aparte
  * en `invalidas` (nunca como futura en `resto`) para que se la corrija.
@@ -17,7 +19,7 @@ export function proximoGrupoPendiente(hoy: MedicamentoConToma[], ahoraHHMM: stri
     .filter((x): x is { m: MedicamentoConToma; hora: string } => x.hora !== null)
     .sort((a, b) => a.hora.localeCompare(b.hora))
     .map((x) => x.m);
-  const primera = pendientes.find((m) => ahora !== null && normalizarHora(m.hora_programada)! <= ahora) ?? null;
+  const primera = [...pendientes].reverse().find((m) => ahora !== null && normalizarHora(m.hora_programada)! <= ahora) ?? null;
   const horaGrupo = primera ? normalizarHora(primera.hora_programada) : null;
   const momento = primera ? momentoDelDia(primera.hora_programada) : null;
   const enGrupo = primera ? pendientes.filter((m) => normalizarHora(m.hora_programada) === horaGrupo) : [];
@@ -33,4 +35,33 @@ export function proximoGrupoPendiente(hoy: MedicamentoConToma[], ahoraHHMM: stri
  */
 export function elegirProximoTurno<T extends { fecha: string; hora: string }>(turnos: T[], hoyISO: string, ahoraHHMM: string): T | null {
   return turnos.find((t) => t.fecha > hoyISO || (t.fecha === hoyISO && t.hora.slice(0, 5) >= ahoraHHMM)) ?? null;
+}
+
+export type EstadoFilaHoy = "tomada" | "omitida" | "se-paso" | "ahora" | "mas-tarde";
+export type FilaHoy = { id: string; nombre: string; hora: string; estado: EstadoFilaHoy };
+
+/**
+ * La lista "Hoy" del modo simple: todas las tomas del día en orden de hora con
+ * su estado. "ahora" = las del grupo de la tarjeta grande; "se-paso" = pendientes
+ * de una hora anterior; "omitida" = "No la tomé" (057). Las de hora inválida no
+ * van (tienen su propia tarjeta para corregir). PURO.
+ */
+export function filasHoy(hoy: MedicamentoConToma[], omitidas: Set<string>, idsGrupo: Set<string>, ahoraHHMM: string): FilaHoy[] {
+  const ahora = normalizarHora(ahoraHHMM);
+  return hoy
+    .map((m) => ({ m, hora: normalizarHora(m.hora_programada) }))
+    .filter((x): x is { m: MedicamentoConToma; hora: string } => x.hora !== null)
+    .sort((a, b) => a.hora.localeCompare(b.hora))
+    .map(({ m, hora }) => {
+      const estado: EstadoFilaHoy = m.tomado
+        ? "tomada"
+        : omitidas.has(m.id)
+          ? "omitida"
+          : idsGrupo.has(m.id)
+            ? "ahora"
+            : ahora !== null && hora <= ahora
+              ? "se-paso"
+              : "mas-tarde";
+      return { id: m.id, nombre: m.nombre.trim() || "Pastilla", hora, estado };
+    });
 }

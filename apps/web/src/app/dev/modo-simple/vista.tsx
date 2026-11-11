@@ -1,11 +1,12 @@
 "use client";
 
-import { BarraInferior, Cabecera, TarjetaGrupo, TarjetaSiguientes, type Dosis, type Siguiente } from "@/components/vita/modo-simple/piezas";
+import { BarraInferior, Cabecera, TarjetaGrupo, TarjetaHoy, type Dosis } from "@/components/vita/modo-simple/piezas";
+import type { FilaHoy } from "@/lib/modo-simple/seleccion";
 
 // Pantalla principal del modo simple con datos de ejemplo y botones inertes (solo para capturas).
 const nada = () => {};
 
-export function VistaPreviaModoSimple({ grupo, siguientes, alertado }: { grupo: Dosis[]; siguientes: Siguiente[]; alertado: boolean }) {
+export function VistaPreviaModoSimple({ grupo, filas, alertado }: { grupo: Dosis[]; filas: FilaHoy[]; alertado: boolean }) {
   return (
     <>
       <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-5">
@@ -13,7 +14,7 @@ export function VistaPreviaModoSimple({ grupo, siguientes, alertado }: { grupo: 
         <div className="mt-5 flex flex-col gap-4">
           <TarjetaGrupo
             grupo={grupo}
-            momento="mañana"
+            momento="mediodia"
             alertado={alertado}
             confirmando={false}
             escuchandoVoz={false}
@@ -24,7 +25,7 @@ export function VistaPreviaModoSimple({ grupo, siguientes, alertado }: { grupo: 
             onAlternarVoz={nada}
             onNoTome={nada}
           />
-          {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} />}
+          <TarjetaHoy filas={filas} onTocar={nada} />
         </div>
       </div>
       <BarraInferior estado="idle" onHablar={nada} onAjustes={nada} />

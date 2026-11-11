@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MedicamentoConToma } from "@/lib/medicamentos/tipos";
-import { elegirProximoTurno, proximoGrupoPendiente } from "./seleccion";
+import { elegirProximoTurno, filasHoy, proximoGrupoPendiente } from "./seleccion";
 
 function toma(id: string, hora: string, tomado = false): MedicamentoConToma {
   return {
@@ -38,11 +38,11 @@ describe("selección de tomas en modo simple", () => {
     expect(r.resto.map((m) => m.id)).toEqual(["c"]);
   });
 
-  it("conserva una toma atrasada sin mezclarla con otro horario ya cumplido", () => {
+  it("una toma atrasada no tapa la de ahora: el grupo es el horario cumplido más reciente", () => {
     const hoy = [toma("segunda", "09:00"), toma("primera", "08:00"), toma("futura", "18:00")];
     const r = proximoGrupoPendiente(hoy, "10:00");
-    expect(r.enGrupo.map((m) => m.id)).toEqual(["primera"]);
-    expect(r.resto.map((m) => m.id)).toEqual(["segunda", "futura"]);
+    expect(r.enGrupo.map((m) => m.id)).toEqual(["segunda"]);
+    expect(r.resto.map((m) => m.id)).toEqual(["primera", "futura"]);
     expect(hoy[0].id).toBe("segunda");
   });
 
@@ -69,9 +69,9 @@ describe("selección de tomas en modo simple", () => {
 
   it("ordena por hora normalizada: 8:00 va antes que 09:00", () => {
     const r = proximoGrupoPendiente([toma("nueve", "09:00"), toma("ocho", "8:00")], "10:00");
-    expect(r.primera?.id).toBe("ocho");
-    expect(r.enGrupo.map((m) => m.id)).toEqual(["ocho"]);
-    expect(r.resto.map((m) => m.id)).toEqual(["nueve"]);
+    expect(r.pendientes.map((m) => m.id)).toEqual(["ocho", "nueve"]);
+    expect(r.primera?.id).toBe("nueve");
+    expect(r.resto.map((m) => m.id)).toEqual(["ocho"]);
   });
 
   it("una hora inválida no queda como futura: se devuelve aparte", () => {
@@ -107,5 +107,28 @@ describe("elegirProximoTurno", () => {
   });
   it("sin ninguno vigente devuelve null", () => {
     expect(elegirProximoTurno(pasados, hoy, "12:00")).toBeNull();
+  });
+});
+
+describe("filasHoy", () => {
+  it("ordena por hora y marca cada estado", () => {
+    const hoy = [
+      { ...toma("noche", "21:00") },
+      { ...toma("manana", "08:00"), tomado: true },
+      { ...toma("olvidada", "09:00") },
+      { ...toma("salteada", "10:00") },
+      { ...toma("ahora", "13:00") },
+    ];
+    const filas = filasHoy(hoy, new Set(["salteada"]), new Set(["ahora"]), "13:10");
+    expect(filas.map((f) => [f.id, f.estado])).toEqual([
+      ["manana", "tomada"],
+      ["olvidada", "se-paso"],
+      ["salteada", "omitida"],
+      ["ahora", "ahora"],
+      ["noche", "mas-tarde"],
+    ]);
+  });
+  it("deja afuera las de hora inválida", () => {
+    expect(filasHoy([toma("rara", "??")], new Set(), new Set(), "10:00")).toEqual([]);
   });
 });

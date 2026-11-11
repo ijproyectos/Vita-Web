@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { horaCorta } from "@/lib/notificaciones/mensajes";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import type { MedicionSimple, TurnoSimple } from "@/lib/modo-simple/tipos";
+import type { EstadoFilaHoy, FilaHoy } from "@/lib/modo-simple/seleccion";
 
 export type { MedicionSimple, TurnoSimple };
 
@@ -303,6 +304,49 @@ export function TarjetaSiguientes({ siguientes, titulo = "Después" }: { siguien
             </div>
           </li>
         ))}
+      </ul>
+    </section>
+  );
+}
+
+// Lista "Hoy" (rediseño 2026-11-10, como la Rutina del modo normal): todas las
+// tomas del día con su estado. Tocar un renglón abre lo que se puede hacer con
+// esa pastilla (tomarla, decir que no, deshacer).
+const ESTADO_FILA: Record<EstadoFilaHoy, { texto: string; clase: string }> = {
+  tomada: { texto: "Tomada", clase: "text-teal-deep" },
+  omitida: { texto: "No la tomaste", clase: "text-slate-brand" },
+  "se-paso": { texto: "Se pasó", clase: "text-aviso-ink" },
+  ahora: { texto: "Ahora", clase: "text-teal-deep" },
+  "mas-tarde": { texto: "Más tarde", clase: "text-subtle" },
+};
+
+export function TarjetaHoy({ filas, onTocar }: { filas: FilaHoy[]; onTocar: (fila: FilaHoy) => void }) {
+  return (
+    <section>
+      <h2 className="eyebrow px-1 pb-2 text-subtle">Hoy</h2>
+      <ul className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-card">
+        {filas.map((f) => {
+          const e = ESTADO_FILA[f.estado];
+          const apagada = f.estado === "tomada" || f.estado === "omitida";
+          return (
+            <li key={f.id} className="[&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
+              <button
+                type="button"
+                onClick={() => onTocar(f)}
+                className={cn("flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left active:bg-secondary", apagada && "bg-secondary/40")}
+              >
+                <span className="w-[62px] shrink-0 font-heading text-[19px] font-extrabold tabular-nums">{horaCorta(f.hora)}</span>
+                <span className={cn("line-clamp-2 min-w-0 flex-1 font-heading text-[19px] font-extrabold leading-tight tracking-[-0.02em]", apagada && "text-slate-brand")}>
+                  {f.nombre}
+                </span>
+                <span className={cn("flex shrink-0 items-center gap-1 text-[15px] font-bold", e.clase)}>
+                  {f.estado === "tomada" && <VitaIcon name="check" size={18} strokeWidth={3} />}
+                  {e.texto}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

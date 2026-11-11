@@ -2,11 +2,12 @@ import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { obtenerPerfilCacheado } from "@/lib/perfil/cacheado";
-import { momentoDelDia } from "@/lib/rutina/momento";
+import { momentoDelDia, normalizarHora } from "@/lib/rutina/momento";
 import { fechaLargaEnAR, saludoEnAR } from "@/lib/rutina/formato";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
 import { medicionesParaMostrar, proximoGrupoPendiente, proximoTurnoParaCharla, turnoParaMostrar } from "@/lib/modo-simple/datos";
+import { filasHoy } from "@/lib/modo-simple/seleccion";
 import type { PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { Pantalla } from "./pantalla";
 
@@ -83,6 +84,9 @@ export default async function ModoSimplePage() {
     medsHoy: hoy.map((m) => ({ nombre: m.nombre, hora_programada: m.hora_programada, tomado: m.tomado })),
   };
 
+  // Lista "Hoy" (todas las tomas del día con su estado). Con una dosis de ayer en la tarjeta,
+  // ninguna de hoy es "ahora".
+  const filas = filasHoy(hoy, omitidasHoy, new Set(fechaDosis ? [] : enGrupo.map((m) => m.id)), ahoraHHMM);
   const vencida = deAyer.length > 0 || (primera ? medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN) : false);
   // Los recordatorios del familiar son de las dosis de hoy: con una de ayer en pantalla no se muestran.
   const recordatorios =
@@ -96,6 +100,7 @@ export default async function ModoSimplePage() {
       // del grupo anterior.
       key={(fechaDosis ? "ayer:" : "") + (enGrupo.map((m) => m.id).join(",") || "descanso")}
       fechaDosis={fechaDosis}
+      filas={filas}
       {...cabecera}
       grupo={enGrupo.map((m) => ({
         id: m.id,
@@ -105,7 +110,7 @@ export default async function ModoSimplePage() {
         horaProgramada: m.hora_programada,
       }))}
       momento={momento}
-      siguientes={resto.slice(0, 3).map((m) => ({
+      siguientes={resto.filter((m) => (normalizarHora(m.hora_programada) ?? "") > ahoraHHMM).slice(0, 3).map((m) => ({
         id: m.id,
         nombre: m.nombre,
         horaProgramada: m.hora_programada,
