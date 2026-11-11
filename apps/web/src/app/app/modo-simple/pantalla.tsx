@@ -405,7 +405,10 @@ export function Pantalla({
               {porCorregir.length > 0 && <TarjetaPorCorregir items={porCorregir} />}
 
               {filas.length > 0 ? (
-                <AccesoRutinaCompleta filas={filas} />
+                // "Después" (lo que sigue, con nombres) queda a la vista; el resto del día está en la rutina completa.
+                <AccesoRutinaCompleta filas={filas}>
+                  {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
+                </AccesoRutinaCompleta>
               ) : (
                 siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />
               )}

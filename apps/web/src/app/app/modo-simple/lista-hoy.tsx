@@ -19,7 +19,7 @@ export const RUTA_RUTINA_SIMPLE = "/app/modo-simple/rutina";
  * (queda a la vista a propósito, no escondida en la otra pantalla) y el botón a
  * "Tu rutina de hoy" con un resumen corto.
  */
-export function AccesoRutinaCompleta({ filas }: { filas: FilaHoy[] }) {
+export function AccesoRutinaCompleta({ filas, children }: { filas: FilaHoy[]; children?: React.ReactNode }) {
   const sePasaron = filas.filter((f) => f.estado === "se-paso");
   const cuenta = (estado: FilaHoy["estado"]) => filas.filter((f) => f.estado === estado).length;
   const resumen = [
@@ -45,6 +45,7 @@ export function AccesoRutinaCompleta({ filas }: { filas: FilaHoy[] }) {
           <VitaIcon name="chevron-right" size={20} className="shrink-0" />
         </Link>
       )}
+      {children}
       <Link
         href={RUTA_RUTINA_SIMPLE}
         className="flex min-h-[72px] items-center gap-3.5 rounded-[var(--radius-card)] bg-card px-5 py-4 shadow-card transition-transform active:scale-[0.99] motion-reduce:transition-none"

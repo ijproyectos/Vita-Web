@@ -5,6 +5,17 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import { filasHoy, proximoGrupoPendiente } from "@/lib/modo-simple/seleccion";
 import { VitaIcon } from "@/lib/vita-icons";
 import { ListaHoyInteractiva } from "../lista-hoy";
+import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
+import { medicionesParaMostrar, turnoParaMostrar } from "@/lib/modo-simple/datos";
+import { TarjetaMedicionesEnlace, TarjetaTurno } from "./tarjetas";
+
+async function opcional<T>(promesa: Promise<T>, respaldo: T): Promise<T> {
+  try {
+    return await promesa;
+  } catch {
+    return respaldo;
+  }
+}
 
 // "Tu rutina de hoy" del modo simple: todas las tomas del día con su estado,
 // con la forma de la Rutina del modo normal. Se llega desde "Ver rutina
@@ -21,6 +32,12 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
   const ahora = medicamentos.horaEnAR();
   const { enGrupo } = proximoGrupoPendiente(hoy.filter((m) => !omitidas.has(m.id)), ahora);
   const filas = filasHoy(hoy, omitidas, new Set(enGrupo.map((m) => m.id)), ahora);
+  // Lo mismo que la pantalla principal muestra de turnos y mediciones (y con la misma configuración).
+  const config = await obtenerPrefs(supabase, usuario.id);
+  const [turno, mediciones] = await Promise.all([
+    config.ver_turnos ? opcional(turnoParaMostrar(supabase, usuario.id), null) : null,
+    config.ver_mediciones ? opcional(medicionesParaMostrar(supabase, usuario.id), null) : null,
+  ]);
 
   return (
     <main className="min-h-dvh bg-canvas px-5 pb-12 pt-[max(1.25rem,env(safe-area-inset-top))]">
@@ -39,6 +56,12 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
           <p className="text-[19px] font-semibold text-slate-brand">Hoy no tenés pastillas cargadas.</p>
         )}
       </div>
+      {(turno || mediciones) && (
+        <div className="mt-6 flex flex-col gap-4">
+          {turno && <TarjetaTurno turno={turno} />}
+          {mediciones && <TarjetaMedicionesEnlace titulo={mediciones.titulo} mediciones={mediciones.items} />}
+        </div>
+      )}
     </main>
   );
 }
