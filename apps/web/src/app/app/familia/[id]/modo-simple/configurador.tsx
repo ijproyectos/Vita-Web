@@ -389,7 +389,7 @@ function VistaPrevia({
                 <TarjetaDescanso nombre={nombre} hayMedsHoy={previa.hayMedsHoy} proximaHora={previa.siguientes[0]?.horaProgramada} />
               )}
               {prefs.ver_mediciones && previa.mediciones && (
-                <TarjetaMediciones titulo={previa.mediciones.titulo} mediciones={previa.mediciones.items} hrefDe={null} />
+                <TarjetaMediciones titulo={previa.mediciones.titulo} mediciones={previa.mediciones.items} />
               )}
               {previa.porCorregir.length > 0 && <TarjetaPorCorregir items={previa.porCorregir} />}
               {previa.siguientes.length > 0 && <TarjetaSiguientes siguientes={previa.siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}

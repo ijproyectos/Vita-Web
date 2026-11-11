@@ -9,6 +9,7 @@ import { validarMedicion } from "@/lib/mediciones/tipos";
 import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
 import { estaSuspendida } from "@/lib/suspensiones/guardia";
 import { actualizarPrefs } from "./nucleo";
+import { esTipoMedirSimple, type TipoMedirSimple } from "./medir";
 import { CLAVES_BOOLEANAS_MS, esMinutosPosponer, type ParcheModoSimple } from "./tipos";
 
 // Server Actions del modo simple. Nunca lanzan (requireUser queda fuera del try:
@@ -70,14 +71,14 @@ export async function guardarPrefsModoSimpleAction(personaId: string, parche: Pa
  * persona confirmó. Siempre para la cuenta LOGUEADA (nunca un id que venga del cliente); la RLS manda.
  */
 export async function guardarMedicionSimpleAction(datos: {
-  tipo: "glucemia" | "presion";
+  tipo: TipoMedirSimple;
   valor: number;
   valorSecundario?: number | null;
 }): Promise<EstadoModoSimple> {
   const user = await requireUser();
   const MENSAJE_MEDICION = "No pudimos anotarlo. Probá de nuevo.";
   try {
-    if (!datos || (datos.tipo !== "glucemia" && datos.tipo !== "presion")) return { status: "error", message: MENSAJE_MEDICION };
+    if (!datos || !esTipoMedirSimple(datos.tipo)) return { status: "error", message: MENSAJE_MEDICION };
     const entrada = { tipo: datos.tipo, valor: datos.valor, valorSecundario: datos.valorSecundario ?? undefined };
     const validado = validarMedicion(entrada);
     if (!validado.ok) return { status: "error", message: validado.message };

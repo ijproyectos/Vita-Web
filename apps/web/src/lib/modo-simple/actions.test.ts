@@ -41,10 +41,16 @@ describe("guardarMedicionSimpleAction", () => {
     expect(vi.mocked(agregar).mock.calls[0][2]).toMatchObject({ tipo: "presion", valor: 130, valorSecundario: 80 });
   });
 
-  it("un tipo desconocido no guarda nada", async () => {
-    const r = await guardarMedicionSimpleAction({ tipo: "peso" as never, valor: 70 });
+  it("un tipo que el teclado no ofrece no guarda nada", async () => {
+    const r = await guardarMedicionSimpleAction({ tipo: "pulso" as never, valor: 70 });
     expect(r.status).toBe("error");
     expect(agregar).not.toHaveBeenCalled();
+  });
+
+  it("peso y temperatura (teclado grande) se guardan", async () => {
+    await expect(guardarMedicionSimpleAction({ tipo: "peso", valor: 64.5 })).resolves.toEqual({ status: "success" });
+    await expect(guardarMedicionSimpleAction({ tipo: "temperatura", valor: 36.8 })).resolves.toEqual({ status: "success" });
+    expect(agregar).toHaveBeenCalledTimes(2);
   });
 
   it("un valor fuera de rango vuelve con el mensaje de validación y no guarda", async () => {

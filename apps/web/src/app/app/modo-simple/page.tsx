@@ -6,7 +6,8 @@ import { momentoDelDia, normalizarHora } from "@/lib/rutina/momento";
 import { fechaLargaEnAR, saludoEnAR } from "@/lib/rutina/formato";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
-import { medicionesParaMostrar, proximoGrupoPendiente, proximoTurnoParaCharla, turnoParaMostrar } from "@/lib/modo-simple/datos";
+import { medicionesParaMostrar, medirDeHoy, proximoGrupoPendiente, proximoTurnoParaCharla, turnoParaMostrar } from "@/lib/modo-simple/datos";
+import { medirQueToca } from "@/lib/modo-simple/medir";
 import { filasHoy } from "@/lib/modo-simple/seleccion";
 import type { PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { Pantalla } from "./pantalla";
@@ -33,9 +34,11 @@ export default async function ModoSimplePage() {
     obtenerPrefs(supabase, usuario.id),
   ]);
   const ahoraHHMM = medicamentos.horaEnAR();
-  const [turno, mediciones, turnoProximo] = await Promise.all([
+  const [turno, mediciones, medirHoy, turnoProximo] = await Promise.all([
     config.ver_turnos ? conRespaldo(turnoParaMostrar(supabase, usuario.id), null, "el turno") : null,
     config.ver_mediciones ? conRespaldo(medicionesParaMostrar(supabase, usuario.id), null, "las mediciones") : null,
+    // "Es hora de medirte…": del plan de monitoreo, como un recordatorio de pastilla.
+    config.ver_mediciones ? conRespaldo(medirDeHoy(supabase, usuario.id), [], "el plan de mediciones") : [],
     // Solo para la respuesta hablada de la charla: sin "ver turnos" no se menciona ninguno.
     config.ver_turnos ? conRespaldo(proximoTurnoParaCharla(supabase, usuario.id, ahoraHHMM), null, "el próximo turno") : null,
   ]);
@@ -69,6 +72,7 @@ export default async function ModoSimplePage() {
     config: config satisfies PrefsModoSimple,
     turno,
     mediciones,
+    medirAhora: medirQueToca(medirHoy, ahoraHHMM),
     turnoProximo,
     medsHoy: hoy.map((m) => ({ nombre: m.nombre, hora_programada: m.hora_programada, tomado: m.tomado })),
   };
