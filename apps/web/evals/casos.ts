@@ -74,16 +74,18 @@ export const CASOS: CasoEval[] = [
   },
   {
     id: "alta-dos-horarios",
-    descripcion: "Un medicamento a dos horas: ambas quedan cargadas, sin duplicados de más.",
+    descripcion: "Un medicamento a dos horas: UNA sola alta con las dos horas (scheduled_time + extra_times).",
     mensaje: "Agregá Amoxicilina 500mg a las 8:00 y a las 20:00",
     contexto: VACIO,
     espera: {
-      minLlamadas: { add_medication: 2 },
-      argumentos: [
-        { tool: "add_medication", contiene: { name: /amoxicilina/i, scheduled_time: /^08:00/ } },
-        { tool: "add_medication", contiene: { name: /amoxicilina/i, scheduled_time: /^20:00/ } },
-      ],
-      custom: (r) => (r.llamadas.filter((l) => l.nombre === "add_medication").length > 4 ? "demasiadas altas (duplicados)" : null),
+      llama: ["add_medication"],
+      argumentos: [{ tool: "add_medication", contiene: { name: /amoxicilina/i } }],
+      custom: (r) => {
+        const altas = r.llamadas.filter((l) => l.nombre === "add_medication");
+        if (altas.length !== 1) return `se esperaba una sola alta con las dos horas, hubo ${altas.length}`;
+        const horas = [altas[0].input.scheduled_time, ...(Array.isArray(altas[0].input.extra_times) ? altas[0].input.extra_times : [])].map((h) => String(h).padStart(5, "0").slice(0, 5));
+        return horas.includes("08:00") && horas.includes("20:00") ? null : `faltan horas: ${horas.join(", ")}`;
+      },
     },
   },
   {
