@@ -45,6 +45,8 @@ import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones"
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import type { MedHoy, TurnoProximo } from "@/lib/modo-simple/respuestas";
 import { CharlaSimple } from "./charla-simple";
+import { FlujoAyuda, type AyudaPedida } from "./flujo-ayuda";
+import { textoAyudaSaben } from "@/lib/modo-simple/charla";
 import { AccesoRutinaCompleta } from "./lista-hoy";
 
 // La confirmación por voz se aparta a propósito del regex del diseño: ese no
@@ -133,6 +135,9 @@ export function Pantalla({
   const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
+  // Botón "Ayuda": pregunta, cuenta regresiva, avisa a la familia y ofrece llamar.
+  const [flujoAyuda, setFlujoAyuda] = useState(false);
+  const [ayudaPedida, setAyudaPedida] = useState<AyudaPedida | null>(null);
   const [pendiente, startTransition] = useTransition();
   // Para que el avatar muestre "speaking" mientras suena el anuncio por voz
   // — reproducirAnuncio ya esperaba el audio entero, esto solo expone esa
@@ -349,11 +354,18 @@ export function Pantalla({
               saludo={saludo}
               nombre={nombre}
               fechaTexto={fechaTexto}
-              onAyuda={() => setAyudaAbierta(true)}
-              telefono={telefonoAyuda}
+              onAyuda={() => setFlujoAyuda(true)}
+              // Sin teléfono: el botón abre el flujo (avisar a la familia) en vez de llamar directo.
+              telefono={null}
               contacto={nombreAyuda}
               conAyuda={config.ayuda}
             />
+            {ayudaPedida && (
+              <div role="status" className="mt-4 flex items-center gap-3 rounded-[20px] bg-success/12 px-4 py-3.5 text-[17px] font-bold leading-[1.35] text-foreground">
+                <VitaIcon name="check" size={22} strokeWidth={2.6} className="shrink-0 text-success" />
+                {textoAyudaSaben(ayudaPedida.nombres, ayudaPedida.hora) || `Tu familia sabe que pediste ayuda a las ${ayudaPedida.hora}.`}
+              </div>
+            )}
 
             <div className="mt-5 flex flex-col gap-4">
               <ActivarNotificaciones variante="simple" />
@@ -425,6 +437,9 @@ export function Pantalla({
         onAlternarSonido={alternarSonido}
       />
       <SheetAyudaSinContacto open={ayudaAbierta && !telefonoAyuda} onOpenChange={setAyudaAbierta} />
+      {flujoAyuda && (
+        <FlujoAyuda telefono={telefonoAyuda} contacto={nombreAyuda} onCerrar={() => setFlujoAyuda(false)} onAvisados={setAyudaPedida} />
+      )}
       <SheetNoTome open={preguntarNo} onOpenChange={setPreguntarNo} cuantas={grupo.length} onSi={noTome} />
       {charlaAbierta && (
         <CharlaSimple

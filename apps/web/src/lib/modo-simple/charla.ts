@@ -37,6 +37,13 @@ export function textoAyudaAvisada(nombres: string[]): string {
   return limpios.length === 0 ? "" : `Le avisé a ${unirNombres(limpios)}`;
 }
 
+/** Cartel de la pantalla después del botón Ayuda: "Mica y Martina saben que pediste ayuda a las 10:40." */
+export function textoAyudaSaben(nombres: string[], hora: string): string {
+  const limpios = nombres.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim());
+  if (limpios.length === 0) return "";
+  return `${unirNombres(limpios)} ${limpios.length === 1 ? "sabe" : "saben"} que pediste ayuda a las ${hora}.`;
+}
+
 /** Nombres del payload de `ayuda_llamar` (viene del servidor, pero se re-chequea la forma). */
 export function leerAvisados(accion: Record<string, unknown>): string[] {
   const v = accion.avisados;

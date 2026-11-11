@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { rolSobre } from "@/lib/familia/perfil-activo";
 import { agregar as agregarMedicion } from "@/lib/mediciones/nucleo";
 import { validarMedicion } from "@/lib/mediciones/tipos";
+import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
 import { actualizarPrefs } from "./nucleo";
 import { CLAVES_BOOLEANAS_MS, esMinutosPosponer, type ParcheModoSimple } from "./tipos";
 
@@ -86,5 +87,34 @@ export async function guardarMedicionSimpleAction(datos: {
     return { status: "success" };
   } catch {
     return { status: "error", message: MENSAJE_MEDICION };
+  }
+}
+
+export type ResultadoAyudaSimple =
+  | { status: "avisado"; nombres: string[] }
+  | { status: "no-avisado"; razon: "sin-cuidadores" | "tope" | "error" };
+
+/** Lo que ve quien cuida en el aviso (no lo escribe el cliente ni el modelo). */
+const MOTIVO_BOTON_AYUDA = "Tocó el botón Ayuda en su celular.";
+
+/**
+ * Botón "Ayuda" del modo simple, después de confirmar y de la cuenta regresiva:
+ * avisa a todos sus cuidadores aceptados (feed + push), igual que la charla
+ * (`pedirAyudaAFamilia`). Siempre es la cuenta logueada. "avisado" solo cuando
+ * el servidor lo confirmó (enviado, o ya se les había avisado hace un rato).
+ */
+export async function pedirAyudaSimpleAction(): Promise<ResultadoAyudaSimple> {
+  try {
+    // Sin `requireUser`: redirige al login, y con la sesión vencida la persona tiene que
+    // poder llamar igual. Sin sesión: "no-avisado" y la pantalla ofrece llamar.
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return { status: "no-avisado", razon: "error" };
+    const r = await pedirAyudaAFamilia(supabase, data.user.id, MOTIVO_BOTON_AYUDA);
+    if (r.status === "enviado" || r.status === "repetido") return { status: "avisado", nombres: r.nombres };
+    if (r.status === "sin-cuidadores" || r.status === "tope") return { status: "no-avisado", razon: r.status };
+    return { status: "no-avisado", razon: "error" };
+  } catch {
+    return { status: "no-avisado", razon: "error" };
   }
 }
