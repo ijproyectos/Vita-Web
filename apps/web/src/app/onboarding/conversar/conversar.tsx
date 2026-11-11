@@ -73,10 +73,8 @@ import {
   type BorradorMed,
 } from "./medicamento-guiado";
 
-// Onboarding conversacional nuevo (reemplaza /onboarding/nombre +
-// /onboarding/chat como camino por defecto — ver pantallas/ingreso /Ingreso1-3.jpeg,
-// la referencia visual/de flujo). El guion viejo (sin IA, por catálogo)
-// sigue existiendo en /onboarding/nombre, pero ya no se ofrece desde la charla.
+// Onboarding conversacional (camino único — ver pantallas/ingreso /Ingreso1-3.jpeg,
+// la referencia visual/de flujo).
 //
 // Qué se pregunta lo decide UN estado por persona (`EstadoPersona`, ver
 // lib/onboarding/conversacion.ts): cada respuesta lo actualiza y `avanzar`
@@ -643,7 +641,7 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
     agregarBurbujaUsuario("Sumarme yo");
     setTabActiva("vos");
     // uso_app pasa a "ambos". Si falla no se corta el chat: "cuido" y
-    // "ambos" llevan al mismo destino (vincular-cuidado).
+    // "ambos" siguen el mismo camino.
     const r = await marcarUsoAmbosAction();
     if (r.status === "error") toast.error("No pudimos actualizar tu perfil de uso, seguimos igual.");
     setResumen(RESUMEN_VACIO);
@@ -926,7 +924,7 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
   }
 
   // "Terminar después" (V7 `skipChat`): cierra con lo que ya se guardó.
-  // Guardar y abrir la pantalla siguiente tarda: el botón queda en "Guardando…".
+  // Cerrar la charla y abrir la pantalla siguiente tarda: el botón queda en "Cargando tu perfil…".
   const [terminando, setTerminando] = useState(false);
   async function terminarDespues() {
     setTerminando(true);
@@ -958,10 +956,6 @@ export function ConversarOnboarding({ usoApp, estadoInicial }: { usoApp: UsoApp;
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-canvas">
-      {/* /onboarding/nombre, no /onboarding/chat directo -- conserva el paso
-          de nombre del guion viejo en vez de saltarlo (el perfil ya viene
-          con el nombre de Google, pero así la persona lo puede corregir
-          antes de seguir, como en el flujo original). */}
       <EncabezadoConversar
         tabs={tabs}
         escribiendo={escribiendo}
