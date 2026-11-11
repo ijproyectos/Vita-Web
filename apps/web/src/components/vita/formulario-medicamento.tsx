@@ -6,6 +6,7 @@ import { useVolver } from "@/lib/navegacion/rastreador";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EditorTomas } from "@/components/vita/editor-tomas";
 import { CampoMedicamento } from "@/components/vita/campo-medicamento";
+import { sugerirSeparacion } from "@/lib/medicamentos/nombre-largo";
 import { cn } from "@/lib/utils";
 import { separarDosis } from "@/lib/inventario/tipos";
 import { FilaCuando, FilaStock, HojaCuando, HojaCuantoQueda, SelectForma } from "@/components/vita/campos-medicamento";
@@ -30,6 +31,16 @@ export type InicialMedicamento = {
   /** Stock contado por foto en "Mis pastillas"; "" si no viene de ahí. */
   stockInicial: string;
   pastillasPorToma: string;
+};
+
+const ETIQUETA_DIA: Record<string, string> = {
+  lunes: "lunes",
+  martes: "martes",
+  miercoles: "miércoles",
+  jueves: "jueves",
+  viernes: "viernes",
+  sabado: "sábado",
+  domingo: "domingo",
 };
 
 export function FormularioMedicamento({
@@ -94,6 +105,17 @@ export function FormularioMedicamento({
   const dosisEnviada = dosis.valor;
   const unidadEnviada = dosis.unidad ?? inicial?.unidad ?? "mg";
 
+  // "Losartan 500mg los martes a las 21hs" en Nombre: se ofrece separarlo (nunca solo).
+  const sugerencia = sugerirSeparacion(nombre);
+  function separar() {
+    if (!sugerencia) return;
+    setNombre(sugerencia.nombre);
+    if (sugerencia.dosis && !dosisTexto.trim()) setDosisTexto(sugerencia.dosis);
+    if (sugerencia.dias.length > 0) setCuando((c) => ({ ...c, dias: sugerencia.dias }));
+    const hora = sugerencia.hora;
+    if (hora && tomas.length === 1) setTomas((prev) => [{ ...prev[0], hora }]);
+  }
+
   // Otra forma es otra unidad: las cantidades y el stock cargados dejan de valer.
   function cambiarForma(nueva: FormaMedicamento) {
     if (nueva === forma) return;
@@ -134,6 +156,26 @@ export function FormularioMedicamento({
             ariaLabel="Nombre del medicamento"
           />
         </div>
+        {sugerencia && (
+          <div className="mt-3 flex items-center gap-3 rounded-[var(--radius-item)] bg-persona-1-tint px-4 py-3">
+            <div className="min-w-0 flex-1 text-[12.5px] font-medium leading-snug text-slate-brand">
+              <span className="font-bold text-foreground">¿Lo separo?</span> El nombre quedaría{" "}
+              <span className="font-bold text-foreground">{sugerencia.nombre}</span>
+              {[
+                sugerencia.dosis && `dosis ${sugerencia.dosis}`,
+                sugerencia.dias.length > 0 && `días: ${sugerencia.dias.map((d) => ETIQUETA_DIA[d]).join(", ")}`,
+                sugerencia.hora && tomas.length === 1 && `a las ${sugerencia.hora}`,
+              ]
+                .filter(Boolean)
+                .map((t) => ` · ${t}`)
+                .join("")}
+              .
+            </div>
+            <button type="button" onClick={separar} className="shrink-0 rounded-full bg-primary px-4 py-2 text-[13px] font-bold text-primary-foreground">
+              Separar
+            </button>
+          </div>
+        )}
         {/* La droga es un dato aparte: el nombre que la persona conoce es el que se muestra siempre. */}
         <input
           name="droga"
