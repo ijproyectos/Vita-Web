@@ -26,7 +26,7 @@ export type DosisVencida = {
   rolPorCuidador: Record<string, "editar" | "ver">;
   /** Relación que cargó cada cuidador en su vínculo ("Mamá"), para nombrarla en el aviso. */
   relacionPorCuidador?: Record<string, string | null>;
-  /** Avisos que ya le llegaron a la persona por esta toma (a la hora, segundo, pospuesta). */
+  /** Avisos que ya le llegaron a la persona por esta toma (`dosis_hora` y `dosis_segundo`, con `ref_id` = id del medicamento; la pospuesta no cuenta). */
   avisosEnviados?: number;
   /** Emails de esos cuidadores; solo se resuelven si hay RESEND_API_KEY. */
   destinatarios: string[];

@@ -14,6 +14,8 @@ import { unirNombres } from "@/lib/modo-simple/respuestas";
 // El llamado es un botón: un `tel:` automático, sin el toque, no es confiable.
 
 const SEGUNDOS = 5;
+// Si avisar tarda más que esto (red lenta), se ofrece llamar igual: nunca queda esperando sin salida.
+const ESPERA_MAXIMA_MS = 8000;
 
 type Estado =
   | { tipo: "pregunta" }
@@ -58,7 +60,13 @@ export function FlujoAyuda({
       return;
     }
     setEstado({ tipo: "enviando" });
-    const r = await pedirAyudaSimpleAction().catch(() => ({ status: "no-avisado" as const, razon: "error" as const }));
+    const sinRespuesta = new Promise<{ status: "no-avisado"; razon: "error" }>((resolver) =>
+      setTimeout(() => resolver({ status: "no-avisado", razon: "error" }), ESPERA_MAXIMA_MS)
+    );
+    const r = await Promise.race([
+      pedirAyudaSimpleAction().catch(() => ({ status: "no-avisado" as const, razon: "error" as const })),
+      sinRespuesta,
+    ]);
     if (r.status === "avisado") {
       setEstado({ tipo: "avisado", nombres: r.nombres });
       onAvisados({ nombres: r.nombres, hora: horaAhora() });
@@ -150,6 +158,8 @@ export function FlujoAyuda({
           <>
             <div className="size-16 animate-spin rounded-full border-4 border-destructive/20 border-t-destructive motion-reduce:animate-none" aria-hidden />
             <h1 className="font-heading text-[28px] font-extrabold tracking-[-0.03em]">Avisándole a tu familia…</h1>
+            {/* Mientras tanto se puede llamar: no hay que esperar a que termine. */}
+            {botonesLlamar}
           </>
         )}
 
