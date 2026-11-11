@@ -96,10 +96,6 @@ export function FlujoAyuda({
           Cargar a quién llamar
         </Link>
       )}
-      <a href="tel:107" className="flex h-[60px] items-center justify-center gap-2 rounded-full bg-card text-[18px] font-extrabold text-destructive shadow-card">
-        <VitaIcon name="phone" size={20} strokeWidth={2.4} />
-        Llamar al 107
-      </a>
     </div>
   );
 
