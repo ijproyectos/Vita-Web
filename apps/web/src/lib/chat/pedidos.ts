@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { verificarHorariosDisponibles } from "@/lib/medicamentos/nucleo";
 import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, normalizarHoraDuplicados } from "@/lib/medicamentos/duplicados";
-import { avisoMismoRemedio, ejecutarTool, normalizarAltaMedicamento, resultadoErrorMedicamento, type ResultadoTool } from "@/lib/ai/tools";
+import { avisoMismoRemedio, ejecutarTool, horasExtraDelModelo, normalizarAltaMedicamento,resultadoErrorMedicamento, type ResultadoTool } from "@/lib/ai/tools";
 import {
   mensajeEsperandoConfirmacion,
   mensajeFaltaConfirmacion,
@@ -630,7 +630,8 @@ export async function ejecutarToolIdempotente(
   if (nombre === "add_medication") {
     try {
       const candidato = normalizarAltaMedicamento(input);
-      await verificarHorariosDisponibles(supabase, destino.destinoId, [candidato]);
+      const extras = horasExtraDelModelo(input, candidato.horaProgramada);
+      await verificarHorariosDisponibles(supabase, destino.destinoId, [candidato, ...extras.map((horaProgramada) => ({ ...candidato, horaProgramada }))]);
       // "¿Es el mismo remedio?" se pregunta ANTES de pedir la confirmación de un familiar.
       const aviso = await avisoMismoRemedio(supabase, destino.destinoId, candidato, input);
       if (aviso) return aviso;

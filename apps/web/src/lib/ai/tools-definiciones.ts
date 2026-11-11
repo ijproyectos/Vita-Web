@@ -52,14 +52,19 @@ const TOOLS_BASE: Anthropic.Tool[] = [
   {
     name: "add_medication",
     description:
-      "Crea un medicamento nuevo con su horario. Si es jarabe, gotas, inyección u otra forma, pasá form; si tiene duración ('por 7 días'), calculá end_date con la fecha de hoy. Si ya hay uno con la misma droga y otro nombre, la tool te pide preguntar si es el mismo remedio: pasá same_drug_ok: true solo si la persona dijo que es otro.",
+      "Crea un medicamento nuevo con su horario. Si lo toma más de una vez por día ('cada 12 h', 'a la mañana y a la noche'), hacé UNA sola llamada: la primera hora en scheduled_time y las demás en extra_times. Si es jarabe, gotas, inyección u otra forma, pasá form; si tiene duración ('por 7 días'), calculá end_date con la fecha de hoy. Si ya hay uno con la misma droga y otro nombre, la tool te pide preguntar si es el mismo remedio: pasá same_drug_ok: true solo si la persona dijo que es otro.",
     input_schema: {
       type: "object",
       properties: {
         name: { type: "string", description: "Nombre del medicamento." },
         dose: { type: "string", description: "Dosis, ej. '400mg'." },
-        scheduled_time: { type: "string", description: "Hora en formato HH:MM." },
-        time_of_day: { type: "string", enum: ["morning", "midday", "afternoon", "night"] },
+        scheduled_time: { type: "string", description: "Primera hora en formato HH:MM." },
+        extra_times: {
+          type: "array",
+          items: { type: "string" },
+          description: "Opcional: las otras horas del mismo día (HH:MM), hasta 5. Ej. cada 12 h desde las 09:00 = ['21:00'].",
+        },
+        time_of_day: { type: "string", enum: ["morning", "midday", "afternoon", "night"], description: "Opcional: se deduce de la hora." },
         condition: { type: "string", description: "Para qué condición es, opcional." },
         recurring_days: {
           type: "array",
@@ -76,7 +81,7 @@ const TOOLS_BASE: Anthropic.Tool[] = [
         end_date: { type: "string", description: "Opcional: último día del tratamiento (YYYY-MM-DD, inclusive). Omitir = sin fin." },
         same_drug_ok: { type: "boolean", description: "Solo después de que la persona confirmó que NO es el mismo remedio que uno ya cargado con la misma droga." },
       },
-      required: ["name", "scheduled_time", "time_of_day"],
+      required: ["name", "scheduled_time"],
     },
   },
   {

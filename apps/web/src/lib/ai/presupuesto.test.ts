@@ -50,6 +50,11 @@ describe("presupuesto de tiempo", () => {
     expect(textoCortePorTiempo(0)).not.toContain("guardar");
     expect(textoCortePorTiempo(2)).toContain("ya quedó guardado");
   });
+  it("con una confirmación pendiente no dice que guardó y manda a tocar la opción", () => {
+    const t = textoCortePorTiempo(0, true);
+    expect(t).not.toContain("guardado");
+    expect(t).toContain("tocá la opción");
+  });
   it("usoParcial suma lo que el stream ya reportó y es robusto", () => {
     expect(usoParcial({ usage: { input_tokens: 120, output_tokens: 8 } })).toEqual({ input: 120, output: 8, cacheRead: 0, cacheWrite: 0 });
     expect(usoParcial(undefined)).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });

@@ -10,6 +10,7 @@ import { respuestaSiSuspendida } from "@/lib/suspensiones/guardia";
 import { MODELO_IA, MAX_TOKENS_CHAT } from "@/lib/ai/modelo";
 import { TOOLS } from "@/lib/ai/tools";
 import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
+import { esAccionDeEscritura } from "@/lib/ai/acciones-escritura";
 import {
   alcanzaParaOtraVuelta,
   MARGEN_CIERRE_MS,
@@ -286,6 +287,7 @@ export async function POST(request: Request) {
       let cortePorTiempo = false;
       let fallaPorTiempo = false;
       let escriturasHechas = 0; // tarjetas de escritura ya emitidas: lo hecho no se pierde si se corta
+      let quedaParaConfirmar = false; // ya salió una tarjeta "¿Confirmás?": un corte no la deja sin explicación
 
       // Límite de interacciones por día (migración 049): suma la de este turno ANTES de llamar al modelo. Devuelve
       // true si ya no hay cupo (y deja la respuesta cerrada). Falla ABIERTO: un error del contador deja pasar.
@@ -580,7 +582,9 @@ export async function POST(request: Request) {
               enviar({ action: resultado.accionUI });
               tarjetasDelTurno.push(resultado.accionUI);
             }
-            if (resultado.accionUI && TOOLS_DE_ESCRITURA.has(uso.name)) escriturasHechas++;
+            // Only a real write counts: a "¿Confirmás?" card from a write tool saved nothing yet.
+            if (resultado.accionUI && esAccionDeEscritura(resultado.accionUI.type)) escriturasHechas++;
+            if (resultado.accionUI?.type === "opciones_confirmacion") quedaParaConfirmar = true;
             resultadosTool.push({
               type: "tool_result",
               tool_use_id: uso.id,
@@ -600,10 +604,10 @@ export async function POST(request: Request) {
           // corta y lo hecho queda (las tarjetas ya salieron). Se registra 'error'/'tiempo' en ambos casos.
           medicion.resultado = "error";
           medicion.errorCodigo = "tiempo";
-          if (!textoAcumulado && escriturasHechas === 0) {
+          if (!textoAcumulado && escriturasHechas === 0 && !quedaParaConfirmar) {
             fallaPorTiempo = true;
           } else {
-            const nota = `${textoAcumulado ? "\n\n" : ""}${textoCortePorTiempo(escriturasHechas)}`;
+            const nota = `${textoAcumulado ? "\n\n" : ""}${textoCortePorTiempo(escriturasHechas, quedaParaConfirmar)}`;
             textoAcumulado += nota;
             enviar({ chunk: nota });
           }

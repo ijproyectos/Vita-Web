@@ -19,6 +19,11 @@ function normHora(valor: unknown): string {
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : norm(valor);
 }
 
+// Las otras horas de un alta: el orden no cambia la acción ("21:00,13:00" = "13:00,21:00").
+function horasExtra(valor: unknown): string {
+  return Array.isArray(valor) ? valor.map(normHora).sort().join(",") : "";
+}
+
 // "400mg", "400 mg" y "400 MG" son la misma dosis.
 function normDosis(valor: unknown): string {
   return norm(valor).replace(/\s+/g, "");
@@ -38,7 +43,7 @@ export function claveSemantica(nombre: string, input: Record<string, unknown>): 
   let campos: unknown[];
   switch (nombre) {
     case "add_medication":
-      campos = [input.name, normDosis(input.dose), normHora(input.scheduled_time), input.time_of_day, dias, input.form, input.end_date, input.amount_per_take, input.drug, input.same_drug_ok];
+      campos = [input.name, normDosis(input.dose), normHora(input.scheduled_time), horasExtra(input.extra_times), input.time_of_day, dias,input.form, input.end_date, input.amount_per_take, input.drug, input.same_drug_ok];
       break;
     case "update_schedule":
       campos = [
