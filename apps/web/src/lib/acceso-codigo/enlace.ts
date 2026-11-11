@@ -1,7 +1,7 @@
 // Link corto para compartir un código: abre DIRECTO la pantalla de ingreso de código, con el código ya escrito.
 // Sin "server-only": lo usan pantallas cliente (WhatsApp / copiar), el mail y la ruta pública /c/[codigo].
 
-import { MINUTOS_VIGENCIA_CODIGO_ACCESO, textoDuracion } from "./tipos";
+import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "./tipos";
 
 /** Los dos tipos de código (vínculo y acceso) son de 6 dígitos. */
 const CODIGO_RE = /^\d{6}$/;
@@ -43,5 +43,5 @@ export function mensajeInvitacionCuidador(args: { persona: string | null; url: s
 /** WhatsApp / copiar del código de acceso ("Que use su celular", charla de onboarding). */
 export function mensajeCodigoAcceso(args: { codigo: string; origen: string; minutos?: number }): string {
   const minutos = args.minutos ?? MINUTOS_VIGENCIA_CODIGO_ACCESO;
-  return `Tu código para entrar a vita: ${args.codigo}. Tocá este link y entrás directo, con el código ya escrito: ${urlCodigo(args.origen, args.codigo)}. Vence en ${textoDuracion(minutos)} y sirve una sola vez.`;
+  return `Tu código para entrar a vita: ${args.codigo}. Tocá este link y entrás directo, con el código ya escrito: ${urlCodigo(args.origen, args.codigo)}. Vence en ${minutos} minutos y sirve una sola vez.`;
 }

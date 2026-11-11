@@ -7,6 +7,7 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { CLASES_COLOR } from "@/lib/familia/colores";
 import type { ColorPerfil } from "@/lib/familia/tipos";
+import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
 import { mensajeCodigoAcceso } from "@/lib/acceso-codigo/enlace";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 
@@ -388,7 +389,7 @@ export function TarjetaCodigoCompartir({ nombre, codigo, venceA }: { nombre: str
         </button>
       </div>
       <p className="mt-3 text-pretty text-[11.5px] font-medium text-subtle">
-        Vence mañana a las {venceA} y sirve una sola vez. Si se vence, le mandás otro desde Familia.
+        Vence a las {venceA} ({MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos desde que se generó) y sirve una sola vez. Si se vence, le mandás otro desde Familia.
       </p>
     </div>
   );

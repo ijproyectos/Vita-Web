@@ -1,6 +1,6 @@
 import { BotonCta, BotonVolver } from "@/components/vita/auth-ui";
 import { PanelCodigoAcceso } from "@/components/vita/panel-codigo-acceso";
-import { MINUTOS_VIGENCIA_CODIGO_ACCESO, textoDuracion } from "@/lib/acceso-codigo/tipos";
+import { MINUTOS_VIGENCIA_CODIGO_ACCESO } from "@/lib/acceso-codigo/tipos";
 import type { RolVinculo } from "@/lib/familia/tipos";
 import { etiquetaRol } from "./piezas";
 
@@ -54,7 +54,7 @@ export function InvitacionLista({
       </dl>
 
       <p className="px-1 text-pretty text-[12px] font-medium leading-[1.45] text-subtle">
-        El código vence en {textoDuracion(MINUTOS_VIGENCIA_CODIGO_ACCESO)} y sirve una sola vez.
+        El código vence en {MINUTOS_VIGENCIA_CODIGO_ACCESO} minutos y sirve una sola vez.
       </p>
 
       <BotonCta type="button" onClick={onListo}>
