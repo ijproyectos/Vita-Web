@@ -12,7 +12,7 @@ import { relacionDeToma } from "@/lib/medicamentos/comidas";
 import { siguienteHora } from "@/lib/medicamentos/forma";
 import { MAX_HORARIOS_PLAN, fraseMedir, type HorarioPlan, type Monitoreo } from "@/lib/mediciones/plan";
 import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, type TipoMedicion, type TipoRegistrable } from "@/lib/mediciones/tipos";
-import type { EstadoAccion } from "../../../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 import { guardarMonitoreoAction } from "../actions";
 import { verboAvisa } from "@/lib/notificaciones/destinatario";
 import { ChipsMetrica } from "../chips-metrica";

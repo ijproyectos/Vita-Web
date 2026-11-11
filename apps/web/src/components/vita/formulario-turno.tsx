@@ -8,7 +8,7 @@ import { FilaHora } from "@/components/vita/selector-hora";
 import { Interruptor } from "@/components/vita/interruptor";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
-import type { EstadoAccion } from "@/app/app/rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 import { credencialDeObraSocial } from "@/lib/turnos/alta";
 import { SUGERENCIAS_LLEVAR, type ItemLlevar, type Turno } from "@/lib/turnos/tipos";
 import { verboAvisa } from "@/lib/notificaciones/destinatario";

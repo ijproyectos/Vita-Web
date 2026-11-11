@@ -151,7 +151,8 @@ export async function omitirOnboardingAction(): Promise<ErrorAccion> {
   await redirigirSegunUsoApp(supabase, usuario.id);
 }
 
-export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
+export type { EstadoAccion } from "@/lib/acciones";
+import type { EstadoAccion } from "@/lib/acciones";
 
 // Crea un medicamento sugerido por el catálogo (lib/onboarding/catalogo-condiciones.ts)
 // durante la encuesta — llamado ad-hoc (no vía <form action>) desde cada

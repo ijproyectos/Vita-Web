@@ -6,7 +6,7 @@ import { useVolver } from "@/lib/navegacion/rastreador";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
-import type { EstadoAccion } from "../../../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 import { crearMedicionAction } from "../actions";
 import { ChipsMetrica } from "../chips-metrica";
 import {

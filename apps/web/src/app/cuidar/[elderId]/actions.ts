@@ -9,7 +9,7 @@ import { generarCodigoAcceso } from "@/lib/acceso-codigo/nucleo";
 import type { ResultadoCodigoAcceso } from "@/lib/acceso-codigo/tipos";
 import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
-import type { EstadoAccion } from "@/app/app/rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, mensajeSeguroMedicamento } from "@/lib/medicamentos/duplicados";
 import { leerTomas, leerPlanMedicamento } from "@/lib/medicamentos/formulario";
 

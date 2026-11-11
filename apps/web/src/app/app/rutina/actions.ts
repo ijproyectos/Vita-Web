@@ -34,6 +34,26 @@ async function duenioEditable(
   return { ok: true, usuarioId: duenio };
 }
 
+/** Ids de un grupo del modo simple: sin repetidos ni vacíos, como mucho 20. */
+function idsDeGrupo(medicamentoIds: string[]): string[] {
+  return [...new Set(medicamentoIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
+}
+
+/** Dueño editable de cada dosis del grupo; si alguna no se puede tocar, el mensaje de la primera. */
+async function duenosEditables(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: string[]
+): Promise<{ ok: true; objetivos: { id: string; usuarioId: string }[] } | { ok: false; message: string }> {
+  const objetivos = await Promise.all(ids.map((id) => duenioEditable(supabase, id)));
+  const objetivosOk: { id: string; usuarioId: string }[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const o = objetivos[i];
+    if (!o.ok) return { ok: false, message: o.message };
+    objetivosOk.push({ id: ids[i], usuarioId: o.usuarioId });
+  }
+  return { ok: true, objetivos: objetivosOk };
+}
+
 /**
  * `fechaDosis` (opcional, "YYYY-MM-DD"): la tarjeta "Era ayer" marca la dosis
  * de AYER; `marcarTomado` re-valida (`fechaDeTomaEnAR`) que sea ayer AR y que
@@ -67,18 +87,14 @@ export async function marcarTomadoAction(medicamentoId: string, tomado: boolean,
  */
 export async function marcarGrupoTomadoAction(medicamentoIds: string[], tomado = true, fechaDosis?: string): Promise<EstadoAccion> {
   await requireUser();
-  const ids = [...new Set(medicamentoIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
+  const ids = idsDeGrupo(medicamentoIds);
   if (ids.length === 0) return { status: "success" };
   const supabase = await createClient();
   try {
-    const objetivos = await Promise.all(ids.map((id) => duenioEditable(supabase, id)));
-    const negado = objetivos.find((o) => !o.ok);
-    if (negado && !negado.ok) return { status: "error", message: negado.message };
+    const grupo = await duenosEditables(supabase, ids);
+    if (!grupo.ok) return { status: "error", message: grupo.message };
     const resultados = await Promise.allSettled(
-      ids.map((id, i) => {
-        const o = objetivos[i];
-        return o.ok ? medicamentos.marcarTomado(supabase, o.usuarioId, id, tomado === true, fechaDosis) : Promise.resolve();
-      })
+      grupo.objetivos.map((o) => medicamentos.marcarTomado(supabase, o.usuarioId, o.id, tomado === true, fechaDosis))
     );
     if (resultados.some((r) => r.status === "rejected")) {
       return { status: "error", message: "No se pudo registrar toda la toma." };
@@ -95,18 +111,14 @@ export async function marcarGrupoTomadoAction(medicamentoIds: string[], tomado =
  */
 export async function marcarGrupoNoTomadoAction(medicamentoIds: string[], fechaDosis?: string): Promise<EstadoAccion> {
   await requireUser();
-  const ids = [...new Set(medicamentoIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
+  const ids = idsDeGrupo(medicamentoIds);
   if (ids.length === 0) return { status: "success" };
   const supabase = await createClient();
   try {
-    const objetivos = await Promise.all(ids.map((id) => duenioEditable(supabase, id)));
-    const negado = objetivos.find((o) => !o.ok);
-    if (negado && !negado.ok) return { status: "error", message: negado.message };
+    const grupo = await duenosEditables(supabase, ids);
+    if (!grupo.ok) return { status: "error", message: grupo.message };
     const resultados = await Promise.allSettled(
-      ids.map((id, i) => {
-        const o = objetivos[i];
-        return o.ok ? medicamentos.marcarNoTomada(supabase, o.usuarioId, id, fechaDosis) : Promise.resolve();
-      })
+      grupo.objetivos.map((o) => medicamentos.marcarNoTomada(supabase, o.usuarioId, o.id, fechaDosis))
     );
     const fallo = resultados.find((r): r is PromiseRejectedResult => r.status === "rejected");
     if (fallo) return { status: "error", message: "No se pudo guardar. Probá de nuevo o avisale a tu familia." };
@@ -138,7 +150,9 @@ export async function marcarTodosTomadosAction(): Promise<EstadoAccion> {
 
 // Mismo motivo — no había ningún camino para borrar un medicamento
 // cargado por error desde que se retiró el módulo viejo de Medicamentos.
-export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
+import type { EstadoAccion } from "@/lib/acciones";
+// Vive en lib/acciones.ts; se re-exporta para los imports viejos.
+export type { EstadoAccion } from "@/lib/acciones";
 
 export async function eliminarMedicamentoAction(medicamentoId: string): Promise<EstadoAccion> {
   await requireUser();

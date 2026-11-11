@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import type { EstadoAccion } from "@/app/app/rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 import { useVolver } from "@/lib/navegacion/rastreador";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EditorTomas } from "@/components/vita/editor-tomas";

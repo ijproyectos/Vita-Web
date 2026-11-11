@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/dal";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import { leerTurnoDelFormulario } from "@/lib/turnos/formulario";
 import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
-import type { EstadoAccion } from "../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 
 // Editar / borrar un turno existente desde "Mis turnos": escribe sobre el
 // DUEÑO del turno (no sobre el perfil activo) y exige rol "editar". La
