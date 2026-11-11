@@ -56,6 +56,8 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
   const formas = await inventarioNucleo.formasDeInventarios(supabase, elderId);
   const stockBajo = inventarioNucleo.filtrarStockBajo(inventarios).map((i) => ({ ...i, forma: formas.get(i.id) }));
 
+  // "No la tomé" (057): no es una dosis atrasada. Nunca lanza.
+  const omitidasHoy = await medicamentos.idsOmitidas(supabase, medsHoy.map((m) => m.id), medicamentos.fechaEnAR());
   const ahoraAR = medicamentos.horaEnAR();
 
   return (
@@ -136,6 +138,7 @@ export default async function CuidarElderPage(props: PageProps<"/cuidar/[elderId
                 puedeRecordar={puedeEditar}
                 elderId={elderId}
                 stock={med.inventario_id ? (stockPorId.get(med.inventario_id) ?? null) : null}
+                omitida={omitidasHoy.has(med.id)}
               />
             ))}
           </div>
@@ -181,6 +184,7 @@ function FilaMedicamentoSoloLectura({
   elderId,
   stock,
   deAyer = false,
+  omitida = false,
 }: {
   med: MedicamentoConToma;
   divider: boolean;
@@ -189,15 +193,16 @@ function FilaMedicamentoSoloLectura({
   elderId: string;
   stock: ResumenStock | null;
   deAyer?: boolean;
+  omitida?: boolean;
 }) {
-  const atrasada = !med.tomado && (deAyer || medicamentosEsDosisVencida(med.hora_programada, ahoraAR));
+  const atrasada = !med.tomado && !omitida && (deAyer || medicamentosEsDosisVencida(med.hora_programada, ahoraAR));
 
   return (
     <div className={cn("flex items-center gap-3 px-4.5 py-3.5", divider && "border-b")}>
       <div
         className={cn(
           "flex size-10 shrink-0 items-center justify-center rounded-full",
-          med.tomado ? "bg-chip-teal-bg text-chip-teal-ink" : atrasada ? "bg-chip-rose-bg text-chip-rose-ink" : "bg-chip-amber-bg text-chip-amber-ink"
+          med.tomado ? "bg-chip-teal-bg text-chip-teal-ink" : omitida ? "bg-secondary text-slate-brand" : atrasada ? "bg-chip-rose-bg text-chip-rose-ink" : "bg-chip-amber-bg text-chip-amber-ink"
         )}
       >
         <VitaIcon name="pill" size={19} />
@@ -212,17 +217,17 @@ function FilaMedicamentoSoloLectura({
         </div>
         {stock && <BadgeStock stock={stock} className="mt-1" />}
         {/* Ya llegó su hora y sigue sin tomarse: se puede recordar. */}
-        {puedeRecordar && !deAyer && !med.tomado && med.hora_programada <= ahoraAR && (
+        {puedeRecordar && !deAyer && !med.tomado && !omitida && med.hora_programada <= ahoraAR && (
           <BotonRecordarle elderId={elderId} medicamentoId={med.id} />
         )}
       </div>
       <span
         className={cn(
           "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold",
-          med.tomado ? "bg-chip-teal-bg text-chip-teal-ink" : atrasada ? "bg-chip-rose-bg text-chip-rose-ink" : "bg-chip-amber-bg text-chip-amber-ink"
+          med.tomado ? "bg-chip-teal-bg text-chip-teal-ink" : omitida ? "bg-secondary text-slate-brand" : atrasada ? "bg-chip-rose-bg text-chip-rose-ink" : "bg-chip-amber-bg text-chip-amber-ink"
         )}
       >
-        {med.tomado ? "Tomada" : atrasada ? (deAyer ? "Atrasada · ayer" : "Atrasada") : "Pendiente"}
+        {med.tomado ? "Tomada" : omitida ? "No la tomó" : atrasada ? (deAyer ? "Atrasada · ayer" : "Atrasada") : "Pendiente"}
       </span>
     </div>
   );

@@ -1,4 +1,5 @@
 import { opcionDeIndicacion, type ComidaToma } from "@/lib/medicamentos/comidas";
+import { moverHora } from "@/lib/rutina/momento";
 import { separarDosis, UNIDADES_DOSIS } from "@/lib/inventario/tipos";
 
 // Piezas puras del paso guiado de remedios del onboarding (una pregunta por
@@ -50,16 +51,6 @@ export function leerDosis(texto: string): LecturaDosis {
 export const REMEDIOS_RAPIDOS = ["Metformina", "Losartán", "Levotiroxina"] as const;
 
 export const MAX_HORAS_MED = 4;
-
-function aMinutos(hora: string): number {
-  return Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5));
-}
-
-/** Suma o resta minutos, dando la vuelta al día. */
-export function moverHora(hora: string, delta: number): string {
-  const n = (((aMinutos(hora) + delta) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
-}
 
 /** Hora que propone "Agregar otro horario": 12 h después de la primera, o 6 después de la última, sin repetir. */
 export function siguienteHoraMed(horas: string[]): string {

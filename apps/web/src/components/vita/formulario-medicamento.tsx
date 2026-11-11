@@ -1,19 +1,18 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import type { EstadoAccion } from "@/app/app/rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 import { useVolver } from "@/lib/navegacion/rastreador";
 import { ErrorGuardarSheet } from "@/components/vita/error-guardar-sheet";
 import { EditorTomas } from "@/components/vita/editor-tomas";
 import { CampoMedicamento } from "@/components/vita/campo-medicamento";
-import { VitaIcon } from "@/lib/vita-icons";
+import { sugerirSeparacion } from "@/lib/medicamentos/nombre-largo";
 import { cn } from "@/lib/utils";
 import { separarDosis } from "@/lib/inventario/tipos";
 import { FilaCuando, FilaStock, HojaCuando, HojaCuantoQueda, SelectForma } from "@/components/vita/campos-medicamento";
 import { ajustarTomas, type TomaForm } from "@/lib/medicamentos/comidas";
 import { CUANDO_INICIAL, fechaFinDe, fechaHoyAR, type CuandoForm } from "@/lib/medicamentos/cuando";
 import {
-  adivinarForma,
   CONFIG_FORMA,
   consumoDeToma,
   frecuenciaDeTomas,
@@ -34,13 +33,23 @@ export type InicialMedicamento = {
   pastillasPorToma: string;
 };
 
+const ETIQUETA_DIA: Record<string, string> = {
+  lunes: "lunes",
+  martes: "martes",
+  miercoles: "miércoles",
+  jueves: "jueves",
+  viernes: "viernes",
+  sabado: "sábado",
+  domingo: "domingo",
+};
+
 export function FormularioMedicamento({
   accion,
   inicial,
   etiquetaGuardar,
   onExito,
   volverA = "/app/rutina",
-  mostrarContar = false,
+  mostrarStock = false,
 }: {
   accion: (prev: EstadoAccion, formData: FormData) => Promise<EstadoAccion>;
   inicial?: InicialMedicamento;
@@ -48,16 +57,20 @@ export function FormularioMedicamento({
   onExito?: () => void;
   /** Destino de Cancelar/Descartar sin historial dentro de la app. */
   volverA?: string;
-  /** Ofrece "Contar pastillas con foto" (solo para el perfil activo, no para el alta del cuidador). */
-  mostrarContar?: boolean;
+  /**
+   * Muestra la fila de stock (solo para el perfil activo, no para el alta del
+   * cuidador). Acá se carga a mano: contar con foto se hace desde el
+   * medicamento ya guardado, porque salir a otra pantalla perdía lo cargado.
+   */
+  mostrarStock?: boolean;
 }) {
   const volver = useVolver(volverA);
   const [nombre, setNombre] = useState(inicial?.nombre ?? "");
+  const [droga, setDroga] = useState("");
   const [dosisTexto, setDosisTexto] = useState(
     inicial?.dosis ? `${inicial.dosis} ${inicial.unidad}`.trim() : ""
   );
   const [forma, setForma] = useState<FormaMedicamento>("pastilla");
-  const [formaTocada, setFormaTocada] = useState(false);
   const [tomas, setTomas] = useState<TomaForm[]>(() => {
     const porToma = Number(inicial?.pastillasPorToma);
     const valida = porToma >= CONFIG_FORMA.pastilla.minimo && porToma <= CONFIG_FORMA.pastilla.maximo;
@@ -92,6 +105,17 @@ export function FormularioMedicamento({
   const dosisEnviada = dosis.valor;
   const unidadEnviada = dosis.unidad ?? inicial?.unidad ?? "mg";
 
+  // "Losartan 500mg los martes a las 21hs" en Nombre: se ofrece separarlo (nunca solo).
+  const sugerencia = sugerirSeparacion(nombre);
+  function separar() {
+    if (!sugerencia) return;
+    setNombre(sugerencia.nombre);
+    if (sugerencia.dosis && !dosisTexto.trim()) setDosisTexto(sugerencia.dosis);
+    if (sugerencia.dias.length > 0) setCuando((c) => ({ ...c, dias: sugerencia.dias }));
+    const hora = sugerencia.hora;
+    if (hora && tomas.length === 1) setTomas((prev) => [{ ...prev[0], hora }]);
+  }
+
   // Otra forma es otra unidad: las cantidades y el stock cargados dejan de valer.
   function cambiarForma(nueva: FormaMedicamento) {
     if (nueva === forma) return;
@@ -100,11 +124,6 @@ export function FormularioMedicamento({
     setTomas((prev) => prev.map((t) => ({ ...t, cantidad: CONFIG_FORMA[nueva].porDefecto })));
   }
 
-  function cambiarNombre(valor: string) {
-    setNombre(valor);
-    const sugerida = adivinarForma(valor);
-    if (sugerida && !formaTocada) cambiarForma(sugerida);
-  }
 
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-[22px] pb-24">
@@ -123,16 +142,51 @@ export function FormularioMedicamento({
 
       <div>
         <Etiqueta text="Nombre" />
-        <div className="mt-3.5 flex items-center gap-3 rounded-full bg-card py-1 pl-[18px] pr-1.5 shadow-item">
-          <VitaIcon name="pill" size={18} className="shrink-0 text-subtle" />
+        <div className="mt-3.5">
           <CampoMedicamento
             name="nombre"
             value={nombre}
-            onChange={cambiarNombre}
+            onChange={setNombre}
+            onElegir={(e) => {
+              setNombre(e.nombre);
+              // Escribir la marca no pisa una droga que la persona ya escribió.
+              if (e.origen === "lista" || !droga.trim()) setDroga(e.droga ?? "");
+            }}
             placeholder="Ibupirac, Metformina…"
             ariaLabel="Nombre del medicamento"
           />
         </div>
+        {sugerencia && (
+          <div className="mt-3 flex items-center gap-3 rounded-[var(--radius-item)] bg-persona-1-tint px-4 py-3">
+            <div className="min-w-0 flex-1 text-[12.5px] font-medium leading-snug text-slate-brand">
+              <span className="font-bold text-foreground">¿Lo separo?</span> El nombre quedaría{" "}
+              <span className="font-bold text-foreground">{sugerencia.nombre}</span>
+              {[
+                sugerencia.dosis && `dosis ${sugerencia.dosis}`,
+                sugerencia.dias.length > 0 && `días: ${sugerencia.dias.map((d) => ETIQUETA_DIA[d]).join(", ")}`,
+                sugerencia.hora && tomas.length === 1 && `a las ${sugerencia.hora}`,
+              ]
+                .filter(Boolean)
+                .map((t) => ` · ${t}`)
+                .join("")}
+              .
+            </div>
+            <button type="button" onClick={separar} className="shrink-0 rounded-full bg-primary px-4 py-2 text-[13px] font-bold text-primary-foreground">
+              Separar
+            </button>
+          </div>
+        )}
+        {/* La droga es un dato aparte: el nombre que la persona conoce es el que se muestra siempre. */}
+        <input
+          name="droga"
+          value={droga}
+          onChange={(e) => setDroga(e.target.value)}
+          placeholder="Droga (opcional)"
+          aria-label="Droga"
+          autoComplete="off"
+          maxLength={80}
+          className="mt-3 w-full rounded-full border border-foreground/10 bg-card px-[18px] py-[13px] text-sm font-semibold outline-none placeholder:font-medium placeholder:text-faint focus-visible:ring-2 focus-visible:ring-primary/40"
+        />
         <div className="mt-3 flex gap-[9px]">
           <input
             value={dosisTexto}
@@ -145,10 +199,7 @@ export function FormularioMedicamento({
           <div className="w-[138px] shrink-0">
             <SelectForma
               valor={forma}
-              onCambio={(f) => {
-                setFormaTocada(true);
-                cambiarForma(f);
-              }}
+              onCambio={cambiarForma}
               className="w-full rounded-full border border-foreground/10 bg-card py-[13px] pl-[18px] text-sm font-bold outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             />
           </div>
@@ -175,14 +226,8 @@ export function FormularioMedicamento({
       </div>
 
       <FilaCuando cuando={cuando} onClick={() => setHojaCuando(true)} />
-      {mostrarContar && (
-        <FilaStock
-          forma={forma}
-          stock={stock}
-          consumoPorDia={consumoPorDia}
-          href={config.conFoto ? `/app/pastillas/contar?desde=agregar${nombre.trim() ? `&nombre=${encodeURIComponent(nombre.trim().slice(0, 80))}` : ""}` : undefined}
-          onClick={() => setHojaStock(true)}
-        />
+      {mostrarStock && (
+        <FilaStock forma={forma} stock={stock} consumoPorDia={consumoPorDia} onClick={() => setHojaStock(true)} />
       )}
       <HojaCuando abierto={hojaCuando} valor={cuando} onCambio={setCuando} onCerrar={() => setHojaCuando(false)} />
       <HojaCuantoQueda

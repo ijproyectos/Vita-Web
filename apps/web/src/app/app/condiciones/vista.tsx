@@ -19,7 +19,7 @@ import {
   editarCondicionAction,
   quitarItemAction,
 } from "./actions";
-import type { EstadoAccion } from "../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 
 type Tab = "cond" | "alergias";
 type Edicion = { tab: Tab; original: string; label: string; detalle: string };

@@ -56,6 +56,8 @@ export type Medicamento = {
   cantidad_por_toma?: number | null;
   /** Último día de tratamiento (inclusive) en fecha AR; null = sin fin. */
   fecha_fin?: string | null;
+  /** Migración 056: droga (genérico) aparte del nombre que la persona conoce. */
+  droga?: string | null;
 };
 
 /** Una toma registrada (fila de `medicamentos_tomas`) para el historial y la semana del detalle. */
@@ -74,6 +76,8 @@ export type MedicamentoConToma = Medicamento & {
 
 export type DatosNuevoMedicamento = {
   nombre: string;
+  /** Droga aparte del nombre; si el nombre trae "(Droga)" se separa sola. */
+  droga?: string | null;
   dosis?: string | null;
   unidad?: string;
   horaProgramada: string;
@@ -85,6 +89,10 @@ export type DatosNuevoMedicamento = {
   indicacion?: IndicacionComida | null;
   duracion?: string | null;
   notas?: string | null;
+  /** Migración 052: forma (pastilla, jarabe, gotas…), fecha de fin y cantidad por toma. */
+  forma?: string;
+  fechaFin?: string | null;
+  cantidad?: number | null;
 };
 
 // Hora default por momento — usada por el form nuevo (AgregarMedicamentoScreen
@@ -102,6 +110,8 @@ export const HORA_POR_MOMENTO: Record<MomentoDia, string> = {
 // ya usa la app: una fila = un horario puntual).
 export type DatosNuevoMedicamentoMultiMomento = {
   nombre: string;
+  /** Droga aparte del nombre; si el nombre trae "(Droga)" se separa sola. */
+  droga?: string | null;
   dosis?: string | null;
   unidad?: string;
   /** Alta por momento (chat, onboarding): una fila por momento, hora por defecto. */
@@ -192,6 +202,8 @@ export type TomaEditada = { id?: string; hora: string; conComida: ConComida; can
 
 export type DatosActualizarGrupo = {
   nombre: string;
+  /** undefined = no tocar; null = quitarla. */
+  droga?: string | null;
   dosis: string | null;
   unidad: string;
   /** undefined = no tocar la frecuencia descriptiva. */

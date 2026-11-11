@@ -12,6 +12,7 @@ import {
   fechaAyerEnAR,
   fechaEnAR,
   horaEnAR,
+  omitidasPorFecha,
 } from "@/lib/medicamentos/nucleo";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
 import type { DosisVencida, ResultadoAlertaDosis } from "./tipos";
@@ -149,6 +150,14 @@ export async function detectarDosisVencidas(
   const confirmadas = new Set(
     ((tomas ?? []) as { medicamento_id: string; fecha: string }[]).map((t) => `${t.medicamento_id}|${t.fecha}`)
   );
+  // "No la tomé" (057) tampoco alerta: el cuidador se entera en el resumen de la noche.
+  // Sin la migración no hay omitidas y todo sigue igual.
+  const omitidas = await omitidasPorFecha(
+    admin,
+    conCuidadores.map((m) => m.id),
+    [hoyAR, ayerAR]
+  );
+  for (const clave of omitidas) confirmadas.add(clave);
   const vencidas = conCuidadores.filter((m) => !confirmadas.has(`${m.id}|${m.fechaAR}`));
   if (vencidas.length === 0) return [];
 

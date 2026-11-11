@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/dal";
 import * as medicionesNucleo from "@/lib/mediciones/nucleo";
 import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
-import type { EstadoAccion } from "../../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 
 // Las Server Actions nunca lanzan: devuelven {status, message?}.
 // requireUser/perfilActivoEditable van fuera del try (pueden redirigir).

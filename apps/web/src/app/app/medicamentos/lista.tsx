@@ -47,6 +47,7 @@ export type StockPorFila = Record<string, { stock: number; porToma: number }>;
 type Edicion = {
   grupoId: string;
   nombre: string;
+  droga: string;
   dosis: string;
   forma: FormaMedicamento;
   tomas: TomaForm[];
@@ -66,6 +67,7 @@ function edicionDe(grupo: Grupo, stocks: StockPorFila): Edicion {
   return {
     grupoId: grupo.id,
     nombre: primera.nombre,
+    droga: primera.droga ?? "",
     dosis: textoDosis(primera),
     forma,
     tomas: grupo.filas.map((f) => ({ id: f.id, hora: f.hora_programada.slice(0, 5), conComida: f.con_comida, indicacion: f.indicacion ?? null, cantidad: f.cantidad_por_toma ?? cantidadVieja })),
@@ -80,6 +82,7 @@ function resumenFila(filas: Medicamento[], hoy: string): string {
   const horas = filas.map((f) => f.hora_programada.slice(0, 5)).join(" y ");
   const indicaciones = [...new Set(filas.map((f) => indicacionDeComida(f)).filter((x): x is string => !!x))];
   return [
+    filas[0].droga ?? null,
     tratamientoTerminado(filas, hoy) ? "Terminado" : null,
     textoDosis(filas[0]),
     `${horas} hs`,
@@ -140,6 +143,7 @@ export function ListaMedicamentos({
         grupo.filas.map((f) => f.id),
         {
           nombre: e.nombre,
+          droga: e.droga,
           dosis,
           unidad,
           // La frecuencia es descriptiva: solo se actualiza si cambió la cantidad de tomas.
@@ -300,7 +304,6 @@ function FormEdicion({
   const consumoPorDia =
     edicion.tomas.reduce((total, t) => total + consumoDeToma(edicion.forma, t.cantidad ?? config.porDefecto), 0) *
     (edicion.cuando.dias.length > 0 ? edicion.cuando.dias.length / 7 : 1);
-  const filaParaContar = edicion.tomas.find((t) => t.id)?.id;
 
   function cambiarForma(forma: FormaMedicamento) {
     if (forma === edicion.forma) return;
@@ -327,16 +330,35 @@ function FormEdicion({
     >
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2">
         <CampoPill etiqueta="Nombre">
-          <CampoMedicamento variante="pill" value={edicion.nombre} onChange={(nombre) => onCambio({ ...edicion, nombre })} ariaLabel="Nombre del medicamento" />
+          <CampoMedicamento
+            variante="pill"
+            value={edicion.nombre}
+            onChange={(nombre) => onCambio({ ...edicion, nombre })}
+            onElegir={({ nombre, droga, origen }) =>
+              onCambio({ ...edicion, nombre, droga: origen === "lista" || !edicion.droga.trim() ? (droga ?? "") : edicion.droga })
+            }
+            ariaLabel="Nombre del medicamento"
+          />
         </CampoPill>
         <CampoPill etiqueta="Dosis">
           <input value={edicion.dosis} onChange={(e) => onCambio({ ...edicion, dosis: e.target.value })} placeholder={config.placeholderDosis} className={CLASE_INPUT_PILL} />
         </CampoPill>
       </div>
 
-      <CampoPill etiqueta="Forma">
-        <SelectForma valor={edicion.forma} onCambio={cambiarForma} className={CLASE_INPUT_PILL} />
-      </CampoPill>
+      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2">
+        <CampoPill etiqueta="Droga">
+          <input
+            value={edicion.droga}
+            onChange={(e) => onCambio({ ...edicion, droga: e.target.value })}
+            placeholder="Opcional"
+            maxLength={80}
+            className={CLASE_INPUT_PILL}
+          />
+        </CampoPill>
+        <CampoPill etiqueta="Forma">
+          <SelectForma valor={edicion.forma} onCambio={cambiarForma} className={CLASE_INPUT_PILL} />
+        </CampoPill>
+      </div>
 
       <div className="flex flex-col gap-2">
         <span className="eyebrow pl-1 text-subtle">Horarios</span>
@@ -344,13 +366,8 @@ function FormEdicion({
       </div>
 
       <FilaCuando cuando={edicion.cuando} onClick={() => setHojaCuando(true)} />
-      <FilaStock
-        forma={edicion.forma}
-        stock={edicion.stock}
-        consumoPorDia={consumoPorDia}
-        href={config.conFoto && filaParaContar ? `/app/pastillas/contar?medicamento=${filaParaContar}&desde=medicamentos` : undefined}
-        onClick={() => setHojaStock(true)}
-      />
+      {/* A mano: contar con foto sale de la edición y perdía los cambios; se cuenta desde la fila (cámara). */}
+      <FilaStock forma={edicion.forma} stock={edicion.stock} consumoPorDia={consumoPorDia} onClick={() => setHojaStock(true)} />
       <HojaCuando
         abierto={hojaCuando}
         valor={edicion.cuando}

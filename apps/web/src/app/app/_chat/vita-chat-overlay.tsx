@@ -458,6 +458,12 @@ export function VitaChatOverlay({
             if (evento.action.type === "medication_deleted") {
               toast.success(persona ? `Medicamento eliminado de ${persona}.` : "Medicamento eliminado.");
             }
+            if (evento.action.type === "appointment_deleted") {
+              toast.success(persona ? `Turno eliminado de ${persona}.` : "Turno eliminado.");
+            }
+            if (evento.action.type === "appointment_updated") {
+              toast.success(persona ? `Turno de ${persona} actualizado.` : "Turno actualizado.");
+            }
             if (evento.action.type === "all_medications_taken") {
               toast.success(persona ? `Marcaste todo como tomado para ${persona}.` : "Marcaste todo como tomado.");
             }

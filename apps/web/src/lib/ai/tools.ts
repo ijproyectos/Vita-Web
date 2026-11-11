@@ -24,7 +24,16 @@ import { pedirAyudaAFamilia } from "@/lib/notificaciones/pedido-ayuda";
 import { accionPedidoAyuda, textoPedidoAyudaParaModelo } from "@/lib/notificaciones/pedido-ayuda-logica";
 import { limpiarDato } from "./limpiar";
 import { ERROR_INDICACION, leerIndicacionDelModelo } from "@/lib/chat/confirmaciones-logica";
-import { validarMedicion } from "@/lib/mediciones/tipos";
+import { TIPOS_PLAN, esTipoMedicion, validarMedicion, type TipoRegistrable } from "@/lib/mediciones/tipos";
+import * as mediciones from "@/lib/mediciones/nucleo";
+import * as planesMedicion from "@/lib/mediciones/planes-nucleo";
+import * as estudios from "@/lib/estudios/nucleo";
+import * as inventarioNucleo from "@/lib/inventario/nucleo";
+import { medidoAtDesdeModelo } from "./mapeo";
+import { drogaDeMarca } from "@/lib/medicamentos/catalogo";
+import { mismoRemedioConOtroNombre, normalizarNombreYDroga } from "@/lib/medicamentos/nombre";
+import { esForma } from "@/lib/medicamentos/forma";
+import { acotarLimite, adherenciaParaModelo, estudioParaModelo, medicionParaModelo, monitoreoParaModelo, stockParaModelo, turnoParaModelo } from "./lecturas";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 import { ejecutarResolverContradiccion, ejecutarToolMemoria, NOMBRE_TOOL_RESOLVER_CONTRADICCION, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
 
@@ -80,13 +89,56 @@ export function normalizarAltaMedicamento(input: Record<string, unknown>): Datos
       throw new ErrorEntradaMedicamento("La dosis y la condición deben ser texto.");
     }
   }
+  if (input.form !== undefined && input.form !== null && !esForma(input.form)) {
+    throw new ErrorEntradaMedicamento("La forma tiene que ser pastilla, jarabe, gotas, inyección u otro.");
+  }
+  if (input.end_date !== undefined && input.end_date !== null && typeof input.end_date !== "string") {
+    throw new ErrorEntradaMedicamento("La fecha de fin tiene que ser YYYY-MM-DD.");
+  }
+  if (input.amount_per_take !== undefined && input.amount_per_take !== null && typeof input.amount_per_take !== "number") {
+    throw new ErrorEntradaMedicamento("La cantidad por toma tiene que ser un número.");
+  }
+  const nombre = input.name.trim();
+  const drogaDicha = typeof input.drug === "string" && input.drug.trim() ? input.drug.trim() : null;
   return {
-    nombre: input.name.trim(),
+    nombre,
+    // La droga que dijo la persona manda; si no, la de una marca conocida del catálogo.
+    droga: drogaDicha ?? drogaDeMarca(nombre),
     dosis: (input.dose as string | null | undefined) ?? null,
     condicion: (input.condition as string | null | undefined) ?? null,
     horaProgramada,
     momentoDia: momentoDelDia(horaProgramada),
     diasRecurrentes,
+    ...(esForma(input.form) ? { forma: input.form } : {}),
+    ...(typeof input.end_date === "string" && input.end_date.trim() ? { fechaFin: input.end_date.trim() } : {}),
+    ...(typeof input.amount_per_take === "number" ? { cantidad: input.amount_per_take } : {}),
+  };
+}
+
+/**
+ * Antes de cargar un remedio: si ya hay uno con la misma droga y otro nombre, se
+ * pregunta (la persona puede conocerlo por la marca). null = se puede seguir.
+ */
+export async function avisoMismoRemedio(
+  supabase: SupabaseClient,
+  destinoId: string,
+  datos: DatosNuevoMedicamento,
+  input: Record<string, unknown>
+): Promise<ResultadoTool | null> {
+  if (input.same_drug_ok === true) return null;
+  // Es una ayuda, no una regla: si la lista no se puede leer, se sigue (el alta valida lo demás).
+  let existentes: Medicamento[] | null;
+  try {
+    existentes = await medicamentos.listarTodos(supabase, destinoId);
+  } catch {
+    existentes = null;
+  }
+  if (!Array.isArray(existentes)) return null;
+  const parecido = mismoRemedioConOtroNombre(existentes, normalizarNombreYDroga(datos.nombre, datos.droga));
+  if (!parecido) return null;
+  const drogaTxt = parecido.droga ? ` (${limpiarDato(parecido.droga)})` : "";
+  return {
+    contenido: `Ya hay un medicamento cargado que parece el mismo: "${limpiarDato(parecido.nombre)}"${drogaTxt}. NO se guardó nada. Preguntale a la persona si es el mismo remedio. Si es el mismo, no lo cargues de nuevo (si cambió el horario, eso se hace con update_schedule). Si dice que es otro, volvé a llamar a add_medication con los mismos datos y same_drug_ok: true.`,
   };
 }
 
@@ -177,10 +229,10 @@ async function ejecutarEnDestino(
       if (indicacion === "invalida") return { contenido: ERROR_INDICACION };
       // Solo claves del catálogo: lo que mande el modelo se valida acá, no se guarda tal cual.
       // Se guarda como se pidió, aunque no coincida con la hora habitual de esa comida.
-      const creado = await medicamentos.agregar(supabase, usuarioId, {
-        ...normalizarAltaMedicamento(input),
-        indicacion: indicacion ?? null,
-      });
+      const datos = normalizarAltaMedicamento(input);
+      const aviso = await avisoMismoRemedio(supabase, usuarioId, datos, input);
+      if (aviso) return aviso;
+      const creado = await medicamentos.agregar(supabase, usuarioId, { ...datos, indicacion: indicacion ?? null });
       return {
         contenido: JSON.stringify(paraModelo(creado)),
         accionUI: {
@@ -197,6 +249,8 @@ async function ejecutarEnDestino(
     // tras la confirmación, lo ejecuta por id (lib/chat/pedidos.ts). Defensa en profundidad.
     case "update_schedule":
     case "delete_schedule":
+    case "update_appointment":
+    case "delete_appointment":
       return { contenido: "Esta acción requiere la confirmación del usuario y no se ejecutó nada." };
 
     case "mark_taken": {
@@ -282,6 +336,75 @@ async function ejecutarEnDestino(
       };
     }
 
+    // Lecturas: si la lectura falla, se le dice al modelo (nunca un "no tenés nada" falso).
+    case "list_upcoming_appointments":
+      return leer("los turnos", async () => {
+        const proximos = await turnos.listarProximos(supabase, usuarioId, acotarLimite(input.limit, 10, 1, 20));
+        return proximos.map(turnoParaModelo);
+      });
+
+    case "get_medication_stock":
+      return leer("el stock", async () => {
+        const grupos = await inventarioNucleo.listarGrupos(supabase, usuarioId);
+        return grupos.flatMap((g) => stockParaModelo({ ...g, dias: inventarioNucleo.diasQueAlcanza(g) }) ?? []);
+      });
+
+    case "list_measurements":
+      return leer("las mediciones", async () => {
+        const limite = acotarLimite(input.limit, 10, 1, 30);
+        const pedido = input.type;
+        if (pedido !== undefined && pedido !== null && pedido !== "" && !esTipoMedicion(pedido) && pedido !== "otra") {
+          return { error: `No existe el tipo de medición "${limpiarDato(String(pedido))}". Usá uno de la lista o no lo pases.` };
+        }
+        const tipo = esTipoMedicion(pedido) || pedido === "otra" ? (pedido as TipoRegistrable) : null;
+        const [lista, planes] = await Promise.all([
+          tipo ? mediciones.listarPorTipo(supabase, usuarioId, tipo, limite) : mediciones.listarRecientes(supabase, usuarioId, limite),
+          planesMedicion.listarSeguro(supabase, usuarioId),
+        ]);
+        return { measurements: lista.map(medicionParaModelo), monitoring_plans: planes.map(monitoreoParaModelo) };
+      });
+
+    case "list_studies":
+      return leer("los estudios", async () => {
+        const lista = await estudios.listarParaChat(supabase, usuarioId, acotarLimite(input.limit, 5, 1, 10));
+        return lista.map(estudioParaModelo);
+      });
+
+    case "get_adherence":
+      return leer("las tomas", async () => {
+        const dias = acotarLimite(input.days, 7, 1, 30);
+        return adherenciaParaModelo(await medicamentos.calcularAdherencia(supabase, usuarioId, dias), dias);
+      });
+
+    case "add_measurement": {
+      // Solo las métricas que ofrece la app (sin pulso ni saturación).
+      if (!(TIPOS_PLAN as readonly unknown[]).includes(input.type)) {
+        return { contenido: "Solo puedo anotar presión, glucemia, peso o temperatura. No se guardó nada." };
+      }
+      const medidoAt = medidoAtDesdeModelo(input.measured_at);
+      if (medidoAt === "invalida") {
+        return { contenido: "measured_at tiene que ser YYYY-MM-DDTHH:MM (hora de Argentina). No se guardó nada: confirmá el momento con la persona." };
+      }
+      let medicion;
+      try {
+        medicion = await mediciones.agregar(supabase, usuarioId, {
+          tipo: input.type,
+          valor: input.value,
+          valorSecundario: input.secondary_value,
+          contexto: input.glucose_context,
+          medidoAt,
+          notas: typeof input.notes === "string" ? input.notes : undefined,
+        });
+      } catch (e) {
+        return { contenido: `No se guardó la medición: ${e instanceof Error ? e.message : "error"} Pedile que revise el valor.` };
+      }
+      const vista = medicionParaModelo(medicion);
+      return {
+        contenido: JSON.stringify(vista),
+        accionUI: { type: "measurement_added", name: vista.name, value: vista.value, measured_at: vista.measured_at },
+      };
+    }
+
     case "update_health_profile": {
       const cambios: CambiosPerfil = {};
       if (input.gender) cambios.genero = String(input.gender);
@@ -359,12 +482,20 @@ async function ejecutarEnDestino(
   }
 }
 
+/** Corre una lectura y la devuelve como JSON; si falla, un aviso claro para el modelo. */
+async function leer(queEs: string, fn: () => Promise<unknown>): Promise<ResultadoTool> {
+  try {
+    return { contenido: JSON.stringify(await fn()) };
+  } catch {
+    return { contenido: `No pude leer ${queEs} ahora. Decile que no pudiste y que lo puede ver en la pantalla correspondiente; no digas que no tiene nada cargado.` };
+  }
+}
+
 // Traduce un medicamento al vocabulario en inglés de las tools antes de
 // devolverlo al modelo — mismo mapeo que usan los inputs, en la dirección
 // contraria. Todo string que escribió un usuario pasa por limpiarDato (como el
 // contexto del prompt): un resultado de tool es DATO, nunca una instrucción.
-// (Esta rama no tiene tools de mediciones/estudios/listas de familia; si se
-// agregan, sus strings también van por limpiarDato.)
+// (Las lecturas de turnos, stock, mediciones y estudios dan formato en lecturas.ts, también con limpiarDato.)
 function paraModelo(m: Medicamento | MedicamentoConToma) {
   return {
     id: m.id,

@@ -56,7 +56,8 @@ export function DetalleTurno({
   const lugar = turno.lugar?.trim() || null;
   const direccion = turno.direccion?.trim() || null;
   const telefono = turno.telefono?.trim() || null;
-  const destinoMapa = direccion ?? lugar;
+  // Lugar y dirección son un solo dato ("Lugar o dirección"); los turnos viejos pueden traer los dos.
+  const destinoMapa = [lugar, direccion].filter(Boolean).join(", ") || null;
 
   function persistir(siguiente: ItemLlevar[]) {
     const anterior = items;
@@ -114,11 +115,9 @@ export function DetalleTurno({
         <div className="flex items-center gap-3 rounded-[20px] bg-card px-4 py-[15px] shadow-card">
           <div className="min-w-0 flex-1">
             <div className="font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">
-              {lugar ?? "Sin lugar cargado"}
+              {lugar ?? direccion ?? "Sin lugar cargado"}
             </div>
-            <div className="mt-0.5 text-[11.5px] font-medium text-subtle">
-              {direccion ?? "Sin dirección cargada"}
-            </div>
+            {lugar && direccion && direccion !== lugar && <div className="mt-0.5 text-[11.5px] font-medium text-subtle">{direccion}</div>}
           </div>
           {destinoMapa && (
             <a
@@ -255,7 +254,7 @@ export function DetalleTurno({
             </button>
           ) : (
             <Link
-              href={`/app/turnos?editar=${turno.id}`}
+              href={`/app/turnos/${turno.id}/editar`}
               className={CLASE_BOTON_SECUNDARIO}
             >
               Editar

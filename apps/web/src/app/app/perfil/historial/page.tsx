@@ -133,6 +133,7 @@ function Reporte({ h }: { h: HistorialExportado }) {
               <Tarjeta key={m.id}>
                 <div className="text-sm font-semibold">
                   {m.nombre}
+                  {m.droga ? <span className="font-normal text-muted-foreground"> ({m.droga})</span> : null}
                   {m.dosis ? ` · ${m.dosis} ${m.unidad}` : ""}
                 </div>
                 <div className="mt-1 text-[12.5px] text-muted-foreground">

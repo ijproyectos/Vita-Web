@@ -126,14 +126,20 @@ export function LoginForm({
   next,
   cuentaEliminada,
   codigoInicial,
+  modoSimple = false,
 }: {
   next?: string;
   cuentaEliminada?: boolean;
+  /**
+   * El celular estaba en modo simple y se cerró la sesión (lo manda `proxy.ts`): abre directo en el
+   * código con un texto para la persona mayor, que casi siempre entró con un código de su familiar.
+   */
+  modoSimple?: boolean;
   /** Código ya validado (6 dígitos) que vino del link corto /c/[codigo]: abre la vista de código con las cajas llenas. */
   codigoInicial?: string;
 }) {
   const router = useRouter();
-  const [vista, setVista] = useState<Vista>(codigoInicial ? "codigo" : "bienvenida");
+  const [vista, setVista] = useState<Vista>(codigoInicial || modoSimple ? "codigo" : "bienvenida");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nombre, setNombre] = useState("");
@@ -363,10 +369,17 @@ export function LoginForm({
     return (
       <PantallaAuth>
         <BotonVolver onClick={() => ir("bienvenida")} />
-        <TituloAuth
-          titulo="Ingresá tu código"
-          sub="Te lo mandó alguien de tu familia por WhatsApp. Sirve para conectar tu celular o para ayudar a cuidar a alguien."
-        />
+        {modoSimple ? (
+          <TituloAuth
+            titulo="Se cerró tu sesión"
+            sub="Pedile a alguien de tu familia un código para volver a entrar. Lo saca desde su celular, en tu perfil, con «Que use su celular»."
+          />
+        ) : (
+          <TituloAuth
+            titulo="Ingresá tu código"
+            sub="Te lo mandó alguien de tu familia por WhatsApp. Sirve para conectar tu celular o para ayudar a cuidar a alguien."
+          />
+        )}
         <form onSubmit={(e) => e.preventDefault()}>
           <CodigoSeisCajas valor={codigo} onChange={cambiarCodigo} autoFocus disabled={enviandoCodigo} />
         </form>

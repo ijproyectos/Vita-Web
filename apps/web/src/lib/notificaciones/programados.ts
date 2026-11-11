@@ -3,7 +3,7 @@ import "server-only";
 import { sinTratamientoTerminado, vigenteEnFecha } from "@/lib/medicamentos/cuando";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { diaSemanaDe, fechaEnAR, horaEnAR } from "@/lib/medicamentos/nucleo";
+import { diaSemanaDe, fechaEnAR, horaEnAR, idsOmitidas } from "@/lib/medicamentos/nucleo";
 import type { DiaSemana } from "@/lib/medicamentos/tipos";
 import { esStockBajo } from "@/lib/inventario/tipos";
 import {
@@ -225,6 +225,10 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     ]),
   ];
   const tomadas = await tomadasHoyAR(admin, idsAConsultar, hoyAR);
+  // "No la tomé" (057): no se le vuelve a avisar. Es aparte de `tomadas` a propósito:
+  // el "ya tomó" al cuidador (más abajo) solo sale por una toma real.
+  const omitidas = await idsOmitidas(admin, idsAConsultar, hoyAR);
+  const resuelta = (id: string) => tomadas.has(id) || omitidas.has(id);
 
   // Turnos de hoy y mañana + stock.
   const { data: turnosData } = await admin
@@ -265,7 +269,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   // a) A la hora de la toma.
   for (const m of candHora) {
     const prefs = prefsDe(m.usuario_id);
-    if (!prefs.recordatorio_dosis || silenciado(m.usuario_id) || tomadas.has(m.id) || posActiva(m.id)) continue;
+    if (!prefs.recordatorio_dosis || silenciado(m.usuario_id) || resuelta(m.id) || posActiva(m.id)) continue;
     if (!(await reclamarEnvio(admin, "dosis_hora", m.id, hoyAR, m.usuario_id))) continue;
     const payload = payloadDosisHora(conDatosDosis(m, hoyAR));
     await entregarAviso(
@@ -280,7 +284,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   // b) Segundo aviso: sigue sin tomarse y no hay una posposición en juego.
   for (const m of candSegundo) {
     const prefs = prefsDe(m.usuario_id);
-    if (!prefs.recordatorio_dosis || tomadas.has(m.id) || (posPorMed.get(m.id) ?? []).length > 0) continue;
+    if (!prefs.recordatorio_dosis || resuelta(m.id) || (posPorMed.get(m.id) ?? []).length > 0) continue;
     // Solo tiene sentido si el primero llegó a salir (si estaba silenciado no hay "todavía no").
     if (!(await existeEnvio(admin, "dosis_hora", m.id, hoyAR))) continue;
     if (!(await reclamarEnvio(admin, "dosis_segundo", m.id, hoyAR, m.usuario_id))) continue;
@@ -299,7 +303,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     const m = medPorId.get(p.medicamento_id);
     if (!m) continue;
     const prefs = prefsDe(p.usuario_id);
-    if (!prefs.recordatorio_dosis || silenciado(p.usuario_id) || tomadas.has(m.id)) continue;
+    if (!prefs.recordatorio_dosis || silenciado(p.usuario_id) || resuelta(m.id)) continue;
     if (!(await reclamarEnvio(admin, "dosis_pospuesta", p.id, hoyAR, p.usuario_id))) continue;
     const payload = payloadDosisPospuesta(conDatosDosis(m, hoyAR));
     await entregarAviso(
@@ -572,14 +576,17 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
   if (hacerResumen) {
     const ids = [...medsDePersona.values()].flat().map((m) => m.id);
     const tomadas = await tomadasHoyAR(admin, ids, hoyAR);
+    const omitidas = await idsOmitidas(admin, ids, hoyAR);
     for (const [personaId, meds] of medsDePersona) {
       const cuidadores = cuidadoresDe.get(personaId);
       if (!cuidadores || meds.length === 0) continue;
       const hechas = meds.filter((m) => tomadas.has(m.id)).length;
-      const pendientes = meds
-        .filter((m) => !tomadas.has(m.id))
-        .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada))
+      const ordenadas = [...meds].sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
+      // Las que dijo "No la tomé" van aparte: el cuidador se entera a la noche (decisión 2026-11-10).
+      const pendientes = ordenadas
+        .filter((m) => !tomadas.has(m.id) && !omitidas.has(m.id))
         .map((m) => ({ nombre: m.nombre, hora: m.hora_programada }));
+      const noTomadas = ordenadas.filter((m) => omitidas.has(m.id)).map((m) => ({ nombre: m.nombre, hora: m.hora_programada }));
       for (const cu of cuidadores) {
         const silenciado = enSilencioNocturno(prefsDe(cu.cuidadorId), horaAR);
         if (!cuidadorRecibe("resumen_dia_persona", prefsDe(cu.cuidadorId), cu.rol, silenciado)) continue;
@@ -590,6 +597,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           tomadas: hechas,
           total: meds.length,
           pendientes,
+          noTomadas,
           fechaAR: hoyAR,
           rolDestino: cu.rol,
         });

@@ -1,4 +1,5 @@
 import type { DiaSemana } from "./tipos";
+import { fechaEnAR } from "@/lib/tiempo-ar";
 
 // "¿Cuándo lo toma?" (V7): días de la semana y hasta cuándo. Las fechas son
 // "YYYY-MM-DD" en hora de Argentina, el mismo criterio que `medicamentos_tomas.fecha`.
@@ -29,7 +30,7 @@ export type CuandoForm = { dias: DiaSemana[]; hasta: HastaCuando; fechaElegida: 
 export const CUANDO_INICIAL: CuandoForm = { dias: [], hasta: "siempre", fechaElegida: "" };
 
 export function fechaHoyAR(ahora: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(ahora);
+  return fechaEnAR(ahora);
 }
 
 function sumarDias(fecha: string, dias: number): string {

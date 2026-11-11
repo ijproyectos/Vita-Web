@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ErrorMedicamentoAmbiguo, resolverMedicamento } from "./resolucion";
+import { fechaEnAR } from "@/lib/tiempo-ar";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ConComida,
@@ -32,6 +33,7 @@ import { vigenteEnFecha } from "./cuando";
 import type { FormaMedicamento } from "./forma";
 import { normalizarCantidad, normalizarDias, normalizarFechaFin, normalizarForma } from "./formulario";
 import { claveMedicamento, separarDosis } from "@/lib/inventario/tipos";
+import { normalizarNombreYDroga } from "./nombre";
 import { momentoDelDia } from "@/lib/rutina/momento";
 
 // Núcleo de lógica de medicamentos, sin acoplarse a Server Actions ni al
@@ -42,43 +44,27 @@ import { momentoDelDia } from "@/lib/rutina/momento";
 // contra un `Database` autogenerado que este proyecto todavía no tiene.
 type Cliente = SupabaseClient;
 
-const DIAS_POR_INDICE: DiaSemana[] = [
-  "domingo",
-  "lunes",
-  "martes",
-  "miercoles",
-  "jueves",
-  "viernes",
-  "sabado",
-];
-
-/**
- * Día de la semana (en español, minúsculas) de una fecha dada, en el
- * calendario de Argentina — exportada porque el detector de dosis
- * vencidas necesita el día correspondiente a un `ahora` explícito, igual
- * criterio que `fechaEnAR`.
- *
- * OJO: NO se puede usar `fecha.getDay()` directo — depende del huso
- * horario del proceso (Netlify/Node corren en UTC), así que entre las
- * 21:00 y 23:59 hora AR (00:00-02:59 UTC del día siguiente) devolvería el
- * día de mañana, no el de hoy en Argentina — exactamente la misma clase
- * de desfase UTC/AR que `horaEnAR` documenta para la hora, pero en el día
- * de la semana. Se reconstruye
- * la fecha a partir de sus componentes Y/M/D ya en huso AR (vía
- * `Intl.DateTimeFormat`) antes de pedir `getDay()`, para que el resultado
- * no dependa del huso del proceso.
- */
-export function diaSemanaDe(fecha: Date): DiaSemana {
-  const partes = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(fecha);
-  const obj = Object.fromEntries(partes.map((p) => [p.type, p.value]));
-  const fechaAR = new Date(Number(obj.year), Number(obj.month) - 1, Number(obj.day));
-  return DIAS_POR_INDICE[fechaAR.getDay()];
-}
+export {
+  FIN_VENTANA_MEDIANOCHE,
+  aplicaEnDia,
+  diaSemanaDe,
+  diasDeAdherencia,
+  esDosisDeAyerVencida,
+  esDosisVencida,
+  fechaAyerEnAR,
+  fechaDeTomaEnAR,
+  filtrarDosisDeAyerVencidas,
+  horaEnAR,
+} from "./fechas";
+import {
+  FIN_VENTANA_MEDIANOCHE,
+  diaSemanaDe,
+  diasDeAdherencia,
+  fechaAyerEnAR,
+  fechaDeTomaEnAR,
+  filtrarDosisDeAyerVencidas,
+  horaEnAR,
+} from "./fechas";
 
 function diaDeHoy(): DiaSemana {
   return diaSemanaDe(new Date());
@@ -90,122 +76,10 @@ function diaDeHoy(): DiaSemana {
  * UTC) y también los recordatorios y el dedupe de alertas push, que no deben
  * duplicarse ni perderse al cruzar la medianoche UTC (21:00 AR).
  */
-export function fechaEnAR(fecha: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(fecha);
-}
+export { fechaEnAR } from "@/lib/tiempo-ar";
 
 function fechaDeHoy(): string {
   return fechaEnAR();
-}
-
-/**
- * Hora de pared argentina ("HH:MM") de un instante dado. `hora_programada`
- * siempre representa una hora AR, sin importar en qué huso horario corre
- * el proceso (Netlify/Node corren en UTC) — `new Date()` captura el
- * instante real, y esto lo reconstruye a la hora de pared que un usuario
- * en Argentina vería en ese momento. Usada por `esDosisVencida` (detector
- * de dosis vencidas) y por el badge "atrasada" de modo simple.
- */
-export function horaEnAR(fecha: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(fecha);
-}
-
-/**
- * Predicado puro: ¿una dosis programada a `horaProgramada` ("HH:MM", hora
- * AR) está vencida a `ahoraHHMM` ("HH:MM", ya convertida a hora AR — ver
- * `horaEnAR`), dado un margen de gracia en minutos? No conoce fechas ni
- * confirmaciones — quien llama resuelve eso (ver `detectarDosisVencidas`,
- * lib/notificaciones/nucleo.ts).
- */
-export function esDosisVencida(
-  horaProgramada: string,
-  ahoraHHMM: string,
-  minutosGracia: number
-): boolean {
-  const aMinutos = (hhmm: string): number => {
-    const [horas, minutos] = hhmm.split(":").map(Number);
-    return horas * 60 + minutos;
-  };
-
-  return aMinutos(ahoraHHMM) - aMinutos(horaProgramada) >= minutosGracia;
-}
-
-/**
- * Fin de la ventana de medianoche (hora AR): hasta las 00:30 las dosis de
- * AYER que nadie tomó siguen contando como vencidas (decisión del usuario).
- * Pasada esa hora dejan de contar — y de alertar.
- */
-export const FIN_VENTANA_MEDIANOCHE = "00:30";
-
-/**
- * Predicado puro: ¿una dosis de AYER ("HH:MM", hora AR) sigue vencida a
- * `ahoraHHMM` (hora AR de hoy)? Solo dentro de la ventana 00:00-00:29 AR y
- * con el mismo margen de gracia, contado cruzando la medianoche (23:50 a las
- * 00:10 son 20 minutos). Fuera de la ventana siempre `false`, así que una
- * dosis futura de HOY nunca se confunde con una vencida (un "+24 h"
- * genérico en `esDosisVencida` lo haría). Igual que `esDosisVencida`, quien
- * llama resuelve días aplicables y confirmaciones (ver
- * `filtrarDosisDeAyerVencidas`).
- */
-export function esDosisDeAyerVencida(
-  horaProgramada: string,
-  ahoraHHMM: string,
-  minutosGracia: number
-): boolean {
-  if (ahoraHHMM >= FIN_VENTANA_MEDIANOCHE) return false;
-  const aMinutos = (hhmm: string): number => {
-    const [horas, minutos] = hhmm.split(":").map(Number);
-    return horas * 60 + minutos;
-  };
-  return aMinutos(ahoraHHMM) + 24 * 60 - aMinutos(horaProgramada) >= minutosGracia;
-}
-
-/** Fecha AR "YYYY-MM-DD" del día anterior al de `fecha` (AR no tiene horario de verano: 24 h exactas). */
-export function fechaAyerEnAR(fecha: Date = new Date()): string {
-  return fechaEnAR(new Date(fecha.getTime() - 24 * 60 * 60 * 1000));
-}
-
-/** ¿El medicamento aplica el día de la semana (AR) de `dia`? Sin días = todos. */
-export function aplicaEnDia(medicamento: Pick<Medicamento, "dias_recurrentes">, dia: DiaSemana): boolean {
-  return medicamento.dias_recurrentes.length === 0 || medicamento.dias_recurrentes.includes(dia);
-}
-
-/**
- * Dosis de AYER aún vencidas en la ventana de medianoche: las que aplicaban
- * el día de la semana de ayer (AR), no figuran en `tomadas` (ids de
- * medicamento con `tomado=true`) y superan la gracia cruzando las 00:00.
- * Pura; `[]` fuera de la ventana. Quien arma `tomadas` debe mirar
- * `medicamentos_tomas.fecha = ayerAR` (o hoy AR si ya se marcó pasada la
- * medianoche sin indicar la fecha de la dosis): `marcarTomado` graba la fecha
- * AR de la dosis.
- */
-export function filtrarDosisDeAyerVencidas<T extends Pick<Medicamento, "hora_programada" | "dias_recurrentes" | "fecha_fin"> & { id: string }>(
-  meds: T[],
-  tomadas: Set<string>,
-  ahora: Date,
-  minutosGracia: number
-): T[] {
-  const horaAhora = horaEnAR(ahora);
-  if (horaAhora >= FIN_VENTANA_MEDIANOCHE) return [];
-  const diaAyer = diaSemanaDe(new Date(ahora.getTime() - 24 * 60 * 60 * 1000));
-  const fechaAyer = fechaAyerEnAR(ahora);
-  return meds.filter(
-    (m) =>
-      aplicaEnDia(m, diaAyer) &&
-      vigenteEnFecha(m, fechaAyer) &&
-      !tomadas.has(m.id) &&
-      esDosisDeAyerVencida(m.hora_programada, horaAhora, minutosGracia)
-  );
 }
 
 /**
@@ -234,7 +108,9 @@ export async function listarVencidasDeAyer(
       .eq("fecha", fechaAyerEnAR(ahora));
     if (error) return [];
     const tomadas = new Set((data ?? []).map((t) => t.medicamento_id as string));
-    return filtrarDosisDeAyerVencidas(todos, tomadas, ahora, minutosGracia);
+    // "No la tomé" de ayer (057) tampoco está sin confirmar (degrada a vacío).
+    const omitidas = await idsOmitidas(supabase, todos.map((m) => m.id), fechaAyerEnAR(ahora));
+    return filtrarDosisDeAyerVencidas(todos, new Set([...tomadas, ...omitidas]), ahora, minutosGracia);
   } catch {
     return [];
   }
@@ -359,6 +235,28 @@ function faltaColumnaPlan(error: { code?: string; message?: string }): boolean {
   return /forma|cantidad_por_toma|fecha_fin/i.test(error.message ?? "") && (error.code === "42703" || error.code === "PGRST204");
 }
 
+// Falta la columna `droga` (migración 056 sin aplicar): se guarda sin ella. Es
+// un dato de referencia (el nombre que se muestra no cambia), así que perderlo
+// mientras tanto es preferible a no poder cargar el remedio.
+function faltaColumnaDroga(error: { code?: string; message?: string }): boolean {
+  return /droga/i.test(error.message ?? "") && (error.code === "42703" || error.code === "PGRST204");
+}
+
+function sinDroga<T extends Record<string, unknown>>(fila: T): Omit<T, "droga"> {
+  const { droga: _droga, ...resto } = fila;
+  void _droga;
+  return resto;
+}
+
+/**
+ * Fila para una base sin la columna `droga`: vuelve al nombre tal como lo
+ * escribió la persona ("Forxiga (Dapagliflozina)"), así la droga que venía en
+ * el paréntesis no se pierde mientras la 056 no esté aplicada.
+ */
+function sinColumnaDroga<T extends Record<string, unknown>>(fila: T, nombreOriginal: string): Omit<T, "droga"> {
+  return { ...sinDroga(fila), nombre: nombreOriginal } as Omit<T, "droga">;
+}
+
 function sinPlan(fila: Record<string, unknown>): Record<string, unknown> {
   const { forma: _f, cantidad_por_toma: _c, fecha_fin: _d, ...resto } = fila;
   void _f;
@@ -448,13 +346,24 @@ export async function verificarHorariosDisponibles(
 export async function agregar(
   supabase: Cliente,
   usuarioId: string,
-  datos: DatosNuevoMedicamento
+  datosCrudos: DatosNuevoMedicamento
 ): Promise<Medicamento> {
+  const { nombre, droga } = normalizarNombreYDroga(datosCrudos.nombre, datosCrudos.droga);
+  const datos = { ...datosCrudos, nombre };
+  const forma = normalizarForma(datos.forma);
+  const fechaFin = normalizarFechaFin(datos.fechaFin, fechaDeHoy());
+  const cantidad = normalizarCantidad(datos.cantidad);
   await verificarHorariosDisponibles(supabase, usuarioId, [datos]);
   const comida = columnasComida(datos);
+  // Pastilla común sin fin ni cantidad especial: se puede guardar sin la migración 052.
+  const planComun = forma === "pastilla" && !fechaFin && (cantidad === null || cantidad === 1);
   const fila: Record<string, unknown> = {
+    ...(datos.forma !== undefined ? { forma } : {}),
+    ...(fechaFin ? { fecha_fin: fechaFin } : {}),
+    ...columnaCantidad(cantidad ?? undefined, forma, true),
     usuario_id: usuarioId,
-    nombre: datos.nombre,
+    nombre,
+    ...(droga ? { droga } : {}),
     dosis: datos.dosis ?? null,
     unidad: datos.unidad ?? "mg",
     hora_programada: normalizarHoraDuplicados(datos.horaProgramada),
@@ -474,6 +383,35 @@ export async function agregar(
     .single();
   if (error && comida.indicacion && faltaColumnaIndicacion(error)) {
     ({ data, error } = await supabase.from("medicamentos").insert(fila).select().single());
+  }
+  if (error && droga && faltaColumnaDroga(error)) {
+    const sinColumna = sinColumnaDroga(fila, datosCrudos.nombre.trim());
+    ({ data, error } = await supabase
+      .from("medicamentos")
+      .insert(comida.indicacion ? { ...sinColumna, indicacion: comida.indicacion } : sinColumna)
+      .select()
+      .single());
+    if (error && comida.indicacion && faltaColumnaIndicacion(error)) {
+      ({ data, error } = await supabase.from("medicamentos").insert(sinColumna).select().single());
+    }
+  }
+  // Sin la 052 un alta común sigue andando; una con forma, fin o cantidad especial falla en vez de perder el dato.
+  if (error && planComun && faltaColumnaPlan(error)) {
+    const sinColumnasPlan = sinPlan(fila);
+    ({ data, error } = await supabase
+      .from("medicamentos")
+      .insert(comida.indicacion ? { ...sinColumnasPlan, indicacion: comida.indicacion } : sinColumnasPlan)
+      .select()
+      .single());
+    // Con la 056 también sin aplicar, `sinPlan` aún trae `droga`: mismo reintento que el alta múltiple.
+    if (error && droga && faltaColumnaDroga(error)) {
+      const sinAmbas = sinColumnaDroga(sinColumnasPlan, datosCrudos.nombre.trim());
+      ({ data, error } = await supabase
+        .from("medicamentos")
+        .insert(comida.indicacion ? { ...sinAmbas, indicacion: comida.indicacion } : sinAmbas)
+        .select()
+        .single());
+    }
   }
 
   if (error) {
@@ -508,8 +446,10 @@ function columnaCantidad(
 export async function agregarMultiMomento(
   supabase: Cliente,
   usuarioId: string,
-  datos: DatosNuevoMedicamentoMultiMomento
+  datosCrudos: DatosNuevoMedicamentoMultiMomento
 ): Promise<Medicamento[]> {
+  const { nombre, droga } = normalizarNombreYDroga(datosCrudos.nombre, datosCrudos.droga);
+  const datos = { ...datosCrudos, nombre };
   // Alta por toma (hora propia + comida por fila) o por momento (hora por defecto).
   const plan: { hora: string; momento: MomentoDia; conComida: ConComida; indicacion: IndicacionComida | null; cantidad?: number | null }[] = datos.tomas?.length
     ? datos.tomas.map((t) => {
@@ -531,7 +471,8 @@ export async function agregarMultiMomento(
     // Solo si hay uno: así el insert tampoco depende de que la columna exista.
     ...(inventarioId ? { inventario_id: inventarioId } : {}),
     usuario_id: usuarioId,
-    nombre: datos.nombre,
+    nombre,
+    ...(droga ? { droga } : {}),
     dosis: datos.dosis ?? null,
     unidad: datos.unidad ?? "mg",
     hora_programada: toma.hora,
@@ -547,15 +488,25 @@ export async function agregarMultiMomento(
     notas: datos.notas ?? null,
   }));
 
-  let { data, error } = await supabase.from("medicamentos").insert(filas).select();
-  if (error && filas.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
-    ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinIndicacion)).select());
+  let aInsertar: Record<string, unknown>[] = filas;
+  let { data, error } = await supabase.from("medicamentos").insert(aInsertar).select();
+  if (error && droga && faltaColumnaDroga(error)) {
+    aInsertar = filas.map((f) => sinColumnaDroga(f, datosCrudos.nombre.trim()));
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
+  }
+  if (error && aInsertar.some((f) => "indicacion" in f) && faltaColumnaIndicacion(error)) {
+    aInsertar = aInsertar.map(sinIndicacion);
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
   }
   // Sin la migración 052 un alta común sigue andando; una con forma, fin o
   // cantidad especial falla en vez de perder el dato.
   const planComun = forma === "pastilla" && !fechaFin && plan.every((t) => t.cantidad == null || t.cantidad === 1);
   if (error && planComun && faltaColumnaPlan(error)) {
-    ({ data, error } = await supabase.from("medicamentos").insert(filas.map(sinPlan)).select());
+    aInsertar = aInsertar.map(sinPlan);
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar).select());
+  }
+  if (error && droga && faltaColumnaDroga(error)) {
+    ({ data, error } = await supabase.from("medicamentos").insert(aInsertar.map((f) => sinColumnaDroga(f, datosCrudos.nombre.trim()))).select());
   }
   if (error) {
     traducirErrorDuplicado(error);
@@ -668,7 +619,9 @@ export async function actualizarGrupo(
   ids: string[],
   datos: DatosActualizarGrupo
 ): Promise<void> {
-  const nombre = datos.nombre.trim();
+  const separado = normalizarNombreYDroga(datos.nombre, datos.droga);
+  let nombre = separado.nombre;
+  const droga = separado.droga;
   if (!nombre) throw new Error("El nombre no puede quedar vacío.");
   if (new Set(ids).size !== ids.length) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
   if (datos.tomas.length === 0) throw new Error("Tiene que haber al menos un horario.");
@@ -683,6 +636,9 @@ export async function actualizarGrupo(
   // Every id must exist for this person and be a take of the same medicine
   // (rows of one group share name and dose); otherwise we would edit unrelated rows.
   if (filas.length !== ids.length || !mismoGrupo(filas)) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
+  // Sin la migración 056 no hay dónde guardar la droga: el nombre queda como se escribió.
+  const hayColumnaDroga = "droga" in filas[0];
+  if (!hayColumnaDroga) nombre = datos.nombre.trim();
 
   const idsValidos = new Set(filas.map((f) => f.id));
   if (datos.tomas.some((t) => t.id && !idsValidos.has(t.id))) throw new Error("Ese medicamento cambió. Volvé a abrirlo.");
@@ -726,6 +682,8 @@ export async function actualizarGrupo(
   if (dias !== undefined) compartido.dias_recurrentes = dias;
   if (forma !== undefined && (hayColumnas || forma !== "pastilla")) compartido.forma = forma;
   if (fechaFin !== undefined && (hayColumnas || fechaFin)) compartido.fecha_fin = fechaFin;
+  // Sin la migración 056 la fila no trae `droga`: no se manda (ver faltaColumnaDroga).
+  if (droga !== undefined && hayColumnaDroga) compartido.droga = droga;
   const ahora = new Date().toISOString();
 
   // Primero lo que no puede dejar el grupo a medias: altas y borrados.
@@ -831,38 +789,6 @@ export async function eliminarGrupo(supabase: Cliente, usuarioId: string, ids: s
 }
 
 /**
- * Fecha AR con la que se graba (o se busca) la toma marcada en `ahora`. Sin
- * `fechaDosis` es el día AR de hoy. `fechaDosis` ("YYYY-MM-DD") permite marcar
- * una dosis de AYER (tarjeta "Era ayer", /cuidar) pero solo dentro de la
- * ventana 00:00-00:29 AR y solo si es exactamente ayer AR: cualquier otro
- * valor (inválido, futuro, más viejo, ayer fuera de ventana) cae a hoy — el
- * cliente nunca decide una fecha arbitraria.
- */
-export function fechaDeTomaEnAR(ahora: Date, fechaDosis?: string): string {
-  const hoy = fechaEnAR(ahora);
-  if (
-    fechaDosis &&
-    fechaDosis === fechaAyerEnAR(ahora) &&
-    horaEnAR(ahora) < FIN_VENTANA_MEDIANOCHE
-  ) {
-    return fechaDosis;
-  }
-  return hoy;
-}
-
-/**
- * Los últimos `dias` días AR (de hoy hacia atrás) con su fecha "YYYY-MM-DD" y
- * día de la semana: las claves de `calcularAdherencia`, sin depender del huso
- * del proceso.
- */
-export function diasDeAdherencia(ahora: Date, dias: number): { fecha: string; dia: DiaSemana }[] {
-  return Array.from({ length: dias }, (_, i) => {
-    const instante = new Date(ahora.getTime() - i * 24 * 60 * 60 * 1000); // AR sin horario de verano
-    return { fecha: fechaEnAR(instante), dia: diaSemanaDe(instante) };
-  });
-}
-
-/**
  * `fechaDosis`: ver `fechaDeTomaEnAR` (opcional, solo hoy o ayer dentro de la
  * ventana de medianoche; si no, hoy AR).
  */
@@ -921,6 +847,90 @@ export async function marcarTomado(
   }
 
   if (huboCambio) await moverStock(supabase, medicamentoId, tomado ? -1 : 1);
+
+  // Tomarla borra un "No la tomé" previo: si después se desmarca ("Me equivoqué")
+  // tiene que volver a pendiente, no a salteada. Aparte y sin lanzar: sin la
+  // migración 057 la columna no existe y no pasa nada.
+  if (tomado && huboCambio) {
+    try {
+      await supabase
+        .from("medicamentos_tomas")
+        .update({ omitida_at: null })
+        .eq("medicamento_id", medicamentoId)
+        .eq("fecha", fecha)
+        .not("omitida_at", "is", null);
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+/**
+ * "No la tomé" (modo simple): la dosis de hoy (o la de ayer en la ventana de
+ * medianoche, ver `fechaDeTomaEnAR`) queda como no tomada a propósito. Nunca
+ * pisa una toma ya confirmada. Necesita la migración 057 (`omitida_at`); sin
+ * ella lanza y quien llama avisa.
+ */
+export async function marcarNoTomada(
+  supabase: Cliente,
+  usuarioId: string,
+  medicamentoId: string,
+  fechaDosis?: string
+): Promise<void> {
+  const ahora = new Date();
+  const fecha = fechaDeTomaEnAR(ahora, fechaDosis);
+  if (fechaDosis && fecha !== fechaDosis) {
+    throw new Error("Esa toma era de ayer y ya no se puede marcar. Recargá la pantalla.");
+  }
+  const omitida_at = ahora.toISOString();
+  const { data: actualizadas, error: errUpdate } = await supabase
+    .from("medicamentos_tomas")
+    .update({ omitida_at })
+    .eq("medicamento_id", medicamentoId)
+    .eq("fecha", fecha)
+    .eq("tomado", false)
+    .select("id");
+  if (errUpdate) throw new Error(`No se pudo guardar: ${errUpdate.message}`);
+  if ((actualizadas?.length ?? 0) > 0) return;
+
+  const { data: insertadas, error: errInsert } = await supabase
+    .from("medicamentos_tomas")
+    .upsert(
+      { medicamento_id: medicamentoId, usuario_id: usuarioId, fecha, tomado: false, tomado_en: null, omitida_at },
+      { onConflict: "medicamento_id,fecha", ignoreDuplicates: true }
+    )
+    .select("id");
+  if (errInsert) throw new Error(`No se pudo guardar: ${errInsert.message}`);
+  // Sin fila nueva y sin fila sin tomar: ya estaba confirmada como tomada.
+  if ((insertadas?.length ?? 0) === 0) throw new Error("Esa pastilla ya figura como tomada.");
+}
+
+/**
+ * "No la tomé" (057) en varias fechas AR, como claves `medicamentoId|fecha`.
+ * Nunca lanza: sin la migración o ante un error devuelve vacío (se comporta
+ * como antes). Única lectura de `omitida_at`.
+ */
+export async function omitidasPorFecha(supabase: Cliente, medicamentoIds: string[], fechas: string[]): Promise<Set<string>> {
+  if (medicamentoIds.length === 0 || fechas.length === 0) return new Set();
+  try {
+    const { data, error } = await supabase
+      .from("medicamentos_tomas")
+      .select("medicamento_id, fecha")
+      .in("fecha", fechas)
+      .eq("tomado", false)
+      .not("omitida_at", "is", null)
+      .in("medicamento_id", medicamentoIds);
+    if (error) return new Set();
+    return new Set(((data ?? []) as { medicamento_id: string; fecha: string }[]).map((t) => `${t.medicamento_id}|${t.fecha}`));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Ids de medicamento con "No la tomé" en `fecha` (AR). Nunca lanza (ver `omitidasPorFecha`). */
+export async function idsOmitidas(supabase: Cliente, medicamentoIds: string[], fecha: string): Promise<Set<string>> {
+  const claves = await omitidasPorFecha(supabase, medicamentoIds, [fecha]);
+  return new Set([...claves].map((c) => c.slice(0, c.lastIndexOf("|"))));
 }
 
 /**

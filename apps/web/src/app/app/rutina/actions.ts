@@ -7,7 +7,8 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as inventarioNucleo from "@/lib/inventario/nucleo";
 import { PASTILLAS_POR_TOMA_MAXIMO, STOCK_MAXIMO } from "@/lib/inventario/tipos";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
-import { normalizarLlevar, validarTelefono, type ItemLlevar } from "@/lib/turnos/tipos";
+import type { ItemLlevar } from "@/lib/turnos/tipos";
+import { leerTurnoDelFormulario } from "@/lib/turnos/formulario";
 import { leerTomas, leerPlanMedicamento } from "@/lib/medicamentos/formulario";
 import { mensajeSeguroMedicamento } from "@/lib/medicamentos/duplicados";
 import { MENSAJE_SOLO_LECTURA, perfilActivoEditable, rolSobre } from "@/lib/familia/perfil-activo";
@@ -33,6 +34,26 @@ async function duenioEditable(
   return { ok: true, usuarioId: duenio };
 }
 
+/** Ids de un grupo del modo simple: sin repetidos ni vacíos, como mucho 20. */
+function idsDeGrupo(medicamentoIds: string[]): string[] {
+  return [...new Set(medicamentoIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
+}
+
+/** Dueño editable de cada dosis del grupo; si alguna no se puede tocar, el mensaje de la primera. */
+async function duenosEditables(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: string[]
+): Promise<{ ok: true; objetivos: { id: string; usuarioId: string }[] } | { ok: false; message: string }> {
+  const objetivos = await Promise.all(ids.map((id) => duenioEditable(supabase, id)));
+  const objetivosOk: { id: string; usuarioId: string }[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const o = objetivos[i];
+    if (!o.ok) return { ok: false, message: o.message };
+    objetivosOk.push({ id: ids[i], usuarioId: o.usuarioId });
+  }
+  return { ok: true, objetivos: objetivosOk };
+}
+
 /**
  * `fechaDosis` (opcional, "YYYY-MM-DD"): la tarjeta "Era ayer" marca la dosis
  * de AYER; `marcarTomado` re-valida (`fechaDeTomaEnAR`) que sea ayer AR y que
@@ -51,6 +72,59 @@ export async function marcarTomadoAction(medicamentoId: string, tomado: boolean,
   revalidatePath("/app");
   revalidatePath("/app/rutina");
   revalidatePath("/app/modo-simple");
+  return { status: "success" };
+}
+
+/**
+ * Modo simple, "Ya tomé las N": todo el grupo en UNA acción. Next despacha las
+ * Server Actions de a una por cliente, así que N llamadas a `marcarTomadoAction`
+ * eran N viajes en fila, cada uno re-renderizando la pantalla. Acá se valida y
+ * se marca en paralelo dentro del servidor, y NO se revalida: la página del
+ * modo simple se refresca sola después (`router.refresh`) y las demás son
+ * dinámicas, así que la respuesta no trae un re-render que nadie mira.
+ * `tomado = false` lo deshace ("Me equivoqué"): devuelve el stock como siempre.
+ * `fechaDosis` = la dosis de AYER en la ventana de medianoche (marcarTomado la re-valida).
+ */
+export async function marcarGrupoTomadoAction(medicamentoIds: string[], tomado = true, fechaDosis?: string): Promise<EstadoAccion> {
+  await requireUser();
+  const ids = idsDeGrupo(medicamentoIds);
+  if (ids.length === 0) return { status: "success" };
+  const supabase = await createClient();
+  try {
+    const grupo = await duenosEditables(supabase, ids);
+    if (!grupo.ok) return { status: "error", message: grupo.message };
+    const resultados = await Promise.allSettled(
+      grupo.objetivos.map((o) => medicamentos.marcarTomado(supabase, o.usuarioId, o.id, tomado === true, fechaDosis))
+    );
+    if (resultados.some((r) => r.status === "rejected")) {
+      return { status: "error", message: "No se pudo registrar toda la toma." };
+    }
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : "No se pudo registrar la toma." };
+  }
+  return { status: "success" };
+}
+
+/**
+ * Modo simple, "No la tomé": el grupo queda como no tomado a propósito (ver
+ * `marcarNoTomada`). Sin revalidar, igual que confirmar: la pantalla se refresca sola.
+ */
+export async function marcarGrupoNoTomadoAction(medicamentoIds: string[], fechaDosis?: string): Promise<EstadoAccion> {
+  await requireUser();
+  const ids = idsDeGrupo(medicamentoIds);
+  if (ids.length === 0) return { status: "success" };
+  const supabase = await createClient();
+  try {
+    const grupo = await duenosEditables(supabase, ids);
+    if (!grupo.ok) return { status: "error", message: grupo.message };
+    const resultados = await Promise.allSettled(
+      grupo.objetivos.map((o) => medicamentos.marcarNoTomada(supabase, o.usuarioId, o.id, fechaDosis))
+    );
+    const fallo = resultados.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (fallo) return { status: "error", message: "No se pudo guardar. Probá de nuevo o avisale a tu familia." };
+  } catch {
+    return { status: "error", message: "No se pudo guardar. Probá de nuevo o avisale a tu familia." };
+  }
   return { status: "success" };
 }
 
@@ -76,7 +150,9 @@ export async function marcarTodosTomadosAction(): Promise<EstadoAccion> {
 
 // Mismo motivo — no había ningún camino para borrar un medicamento
 // cargado por error desde que se retiró el módulo viejo de Medicamentos.
-export type EstadoAccion = { status: "idle" } | { status: "success" } | { status: "error"; message: string };
+import type { EstadoAccion } from "@/lib/acciones";
+// Vive en lib/acciones.ts; se re-exporta para los imports viejos.
+export type { EstadoAccion } from "@/lib/acciones";
 
 export async function eliminarMedicamentoAction(medicamentoId: string): Promise<EstadoAccion> {
   await requireUser();
@@ -177,49 +253,12 @@ export async function crearTurnoAction(
   await requireUser();
   const destino = await perfilActivoEditable();
   if (!destino.ok) return { status: "error", message: destino.message };
-  const supabase = await createClient();
-
-  const especialidad = String(formData.get("especialidad") ?? "").trim();
-  const profesional = String(formData.get("profesional") ?? "").trim();
-  const lugar = String(formData.get("lugar") ?? "").trim();
-  const fecha = String(formData.get("fecha") ?? "").trim();
-  const hora = String(formData.get("hora") ?? "").trim();
-  const motivo = String(formData.get("motivo") ?? "").trim();
-  const recordatorio = String(formData.get("recordatorio") ?? "");
-  const acompanado = formData.get("acompanado") === "on";
-  const notas = String(formData.get("notas") ?? "").trim();
-  const telefonoCrudo = formData.get("telefono");
-  const tel = typeof telefonoCrudo === "string" ? validarTelefono(telefonoCrudo) : null;
-  if (tel && !tel.ok) return { status: "error", message: tel.message };
-  // "Qué hay que llevar": JSON del formulario; sin el campo no se toca la columna.
-  let llevar: ItemLlevar[] | undefined;
-  const llevarCrudo = formData.get("llevar");
-  if (typeof llevarCrudo === "string") {
-    try {
-      llevar = normalizarLlevar(JSON.parse(llevarCrudo));
-    } catch {
-      llevar = undefined;
-    }
-  }
-
-  if (!especialidad || !fecha || !hora) {
-    return { status: "error", message: "Especialidad, fecha y hora son obligatorios." };
-  }
+  const lectura = leerTurnoDelFormulario(formData);
+  if (!lectura.ok) return { status: "error", message: lectura.message };
 
   try {
-    await turnosNucleo.agregar(supabase, destino.perfil.id, {
-      especialidad,
-      profesional: profesional || null,
-      lugar: lugar || null,
-      fecha,
-      hora,
-      motivo: motivo || null,
-      recordatorio: recordatorio || null,
-      acompanado,
-      notas: notas || null,
-      ...(llevar !== undefined ? { llevar } : {}),
-      ...(tel && tel.ok && tel.valor ? { telefono: tel.valor } : {}),
-    });
+    const supabase = await createClient();
+    await turnosNucleo.agregar(supabase, destino.perfil.id, lectura.datos);
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : "Error desconocido." };
   }

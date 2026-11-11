@@ -86,9 +86,6 @@ export const ESPECIALIDADES_SUGERIDAS = [
   "Otro",
 ] as const;
 
-/** Especialidades del alta de turno (V7 `specOptions`); "Otra" abre un campo libre. */
-export const ESPECIALIDADES_ALTA = ["Cardiología", "Clínica", "Laboratorio", "Odontología", "Kinesiología"] as const;
-
 /** Sugerencias de "Qué hay que llevar" por especialidad (V7 `SUG`). */
 export const SUGERENCIAS_LLEVAR: Record<string, string[]> = {
   "Cardiología": ["El electro anterior", "Últimos análisis"],

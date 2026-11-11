@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { esDosisVencida, horaEnAR, listarHoy, listarVencidasDeAyer } from "@/lib/medicamentos/nucleo";
+import { esDosisVencida, fechaEnAR, horaEnAR, idsOmitidas, listarHoy, listarVencidasDeAyer } from "@/lib/medicamentos/nucleo";
 import type {
   DosisVencidaCuidador,
   ElderVinculado,
@@ -404,8 +404,10 @@ export async function listarDosisVencidasDeMisElders(
 
   for (const elder of elders) {
     const hoy = await listarHoy(supabase, elder.elderId);
+    // "No la tomé" (057) no es una dosis vencida sin confirmar.
+    const omitidas = await idsOmitidas(supabase, hoy.map((m) => m.id), fechaEnAR());
     for (const m of hoy) {
-      if (!m.tomado && esDosisVencida(m.hora_programada, ahoraAR, graciaMin)) {
+      if (!m.tomado && !omitidas.has(m.id) && esDosisVencida(m.hora_programada, ahoraAR, graciaMin)) {
         resultados.push({
           elderId: elder.elderId,
           elderNombre: elder.nombre,

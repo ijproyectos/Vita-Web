@@ -12,6 +12,7 @@ import { momentoDelDia } from "@/lib/rutina/momento";
 import { fechaISOEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { FilaTurno } from "@/components/vita/fila-turno";
+import { ChipsMomento, PasoHora } from "@/components/vita/hora-momento";
 import {
   agregarItem,
   estadoVacio,
@@ -58,7 +59,6 @@ import {
   CHIPS_UNIDAD,
   frecuenciaDeHoras,
   MAX_HORAS_MED,
-  moverHora,
   REMEDIOS_RAPIDOS,
   siguienteHoraMed,
   textoHoras,
@@ -1327,32 +1327,10 @@ function TarjetaHorasMed({ onListo }: { onListo: (horas: string[]) => void }) {
       )}
 
       <div className="eyebrow mb-2 mt-3.5 text-subtle">Momento del día</div>
-      <div className="flex gap-1.5">
-        {MOMENTOS_SELECTOR.map((m) => (
-          <button
-            key={m.momento}
-            type="button"
-            aria-pressed={momento === m.momento}
-            onClick={() => cambiar(m.hora)}
-            className={cn("flex-1 rounded-[12px] py-2.5 text-[12px] font-bold transition-colors motion-reduce:transition-none", momento === m.momento ? "bg-ink text-background" : "bg-secondary text-slate-brand")}
-          >
-            {m.etiqueta}
-          </button>
-        ))}
-      </div>
+      <ChipsMomento momento={momento} onElegir={(_, horaSugerida) => cambiar(horaSugerida)} compacto />
 
       <div className="eyebrow mb-2 mt-3.5 text-subtle">Hora</div>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={() => cambiar(moverHora(hora, -30))} aria-label="30 minutos menos" className="h-[52px] w-12 rounded-[var(--radius-item)] bg-secondary text-2xl font-bold text-slate-brand active:scale-95 motion-reduce:transform-none">
-          −
-        </button>
-        <div aria-live="polite" className="flex h-[52px] flex-1 items-center justify-center rounded-[var(--radius-item)] bg-secondary font-heading text-[26px] font-bold tabular-nums tracking-[-0.03em]">
-          {hora}
-        </div>
-        <button type="button" onClick={() => cambiar(moverHora(hora, 30))} aria-label="30 minutos más" className="h-[52px] w-12 rounded-[var(--radius-item)] bg-secondary text-2xl font-bold text-slate-brand active:scale-95 motion-reduce:transform-none">
-          +
-        </button>
-      </div>
+      <PasoHora hora={hora} onCambio={cambiar} compacto />
 
       {horas.length < MAX_HORAS_MED && (
         <button type="button" onClick={agregar} className="mt-2.5 flex items-center justify-center gap-1.5 rounded-[14px] border-[1.5px] border-dashed border-primary/45 py-2.5 text-[13px] font-extrabold text-teal-deep active:scale-[0.98] motion-reduce:transform-none">

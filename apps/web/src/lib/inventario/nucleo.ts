@@ -20,6 +20,8 @@ type Cliente = SupabaseClient;
 export type GrupoMedicamento = {
   clave: string;
   nombre: string;
+  /** Migración 056: droga aparte del nombre; null sin cargar o sin la migración. */
+  droga: string | null;
   dosis: string | null;
   /** Id de una de las filas del grupo — sirve de "handle" para la UI. */
   representanteId: string;
@@ -46,6 +48,7 @@ type FilaMed = {
   forma?: FormaMedicamento;
   cantidad_por_toma?: number | null;
   fecha_fin?: string | null;
+  droga?: string | null;
 };
 
 export async function listar(supabase: Cliente, usuarioId: string): Promise<Inventario[]> {
@@ -104,6 +107,7 @@ export async function listarGrupos(supabase: Cliente, usuarioId: string): Promis
       grupo = {
         clave,
         nombre: fila.nombre,
+        droga: fila.droga ?? null,
         dosis: fila.dosis,
         representanteId: fila.id,
         forma: fila.forma,

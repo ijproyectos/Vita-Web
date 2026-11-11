@@ -16,7 +16,21 @@ export default function ErrorModoSimple({ error, retry }: { error: Error & { dig
     console.error(error);
   }, [error]);
 
-  function irAlInicio() {
+  // Casi siempre es un corte de internet: se reintenta solo al volver la red y
+  // cada 30 s, así nadie tiene que tocar nada (y menos salir del modo simple).
+  useEffect(() => {
+    const reintentar = () => retry();
+    const t = setInterval(reintentar, 30_000);
+    window.addEventListener("online", reintentar);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("online", reintentar);
+    };
+  }, [retry]);
+
+  // Salida explícita y chica: antes decía "Ir al inicio", sonaba inofensivo y
+  // apagaba el modo simple para siempre en ese celular.
+  function salirDelModoSimple() {
     olvidarModoSimple();
     // Refresh so /app is re-evaluated server-side with the cookie already cleared.
     router.replace("/app");
@@ -36,10 +50,10 @@ export default function ErrorModoSimple({ error, retry }: { error: Error & { dig
         </button>
         <button
           type="button"
-          onClick={irAlInicio}
-          className="flex h-[64px] w-full items-center justify-center rounded-full bg-card text-[20px] font-bold text-teal-deep shadow-card transition-transform active:scale-[0.98] motion-reduce:transition-none"
+          onClick={salirDelModoSimple}
+          className="mt-4 min-h-12 text-[15px] font-semibold text-subtle underline underline-offset-4"
         >
-          Ir al inicio
+          Salir del modo simple
         </button>
       </div>
     </main>

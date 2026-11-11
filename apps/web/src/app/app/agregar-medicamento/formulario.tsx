@@ -22,7 +22,7 @@ export function FormularioAgregarMedicamento({
     <FormularioMedicamento
       accion={crearMedicamentoAction}
       inicial={inicial}
-      mostrarContar
+      mostrarStock
       etiquetaGuardar={paraNombre ? `+ Agregar medicamento a ${paraNombre}` : "✓ Guardar medicamento"}
       onExito={() => {
         toast.success("Medicamento agregado");

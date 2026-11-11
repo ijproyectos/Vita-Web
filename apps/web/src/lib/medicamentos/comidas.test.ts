@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  SIN_COMIDA,
+  comidaParaMomento,
+  momentoDeToma,
   INDICACIONES_COMIDA,
   CLAVES_INDICACION,
   conComidaDeIndicacion,
@@ -119,5 +122,32 @@ describe("textoRecordatorio", () => {
   it("sin horas invita a elegir un horario, sin hueco en la frase", () => {
     expect(textoRecordatorio([], "1x día")).toBe("Elegí un horario para que vita te recuerde.");
     expect(textoRecordatorio([], "Única vez")).toBe("Elegí un horario para que vita te recuerde.");
+  });
+});
+
+describe("momentoDeToma", () => {
+  it("manda el momento de la comida elegida, no la hora", () => {
+    expect(momentoDeToma("06:30", { conComida: "antes", indicacion: "ayunas" })).toBe("mañana");
+  });
+
+  it("sin comida, sale de la hora", () => {
+    expect(momentoDeToma("21:00", SIN_COMIDA)).toBe("noche");
+    expect(momentoDeToma("", SIN_COMIDA)).toBe("mañana");
+  });
+});
+
+describe("comidaParaMomento", () => {
+  const ayunas = { conComida: "antes" as const, indicacion: "ayunas" as const };
+
+  it("conserva la comida del mismo momento", () => {
+    expect(comidaParaMomento(ayunas, "mañana")).toBe(ayunas);
+  });
+
+  it("una comida de otro momento vuelve a Ninguna", () => {
+    expect(comidaParaMomento(ayunas, "noche")).toEqual(SIN_COMIDA);
+  });
+
+  it("Ninguna sigue siendo Ninguna", () => {
+    expect(comidaParaMomento(SIN_COMIDA, "tarde")).toEqual(SIN_COMIDA);
   });
 });

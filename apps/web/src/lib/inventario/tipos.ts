@@ -1,4 +1,5 @@
 import { cantidadStock } from "@/lib/medicamentos/forma";
+import { separarNombreDroga } from "@/lib/medicamentos/nombre";
 // Tipos y helpers puros del inventario de pastillas — sin `server-only` a
 // propósito: los componentes de cliente (badge, flujo de conteo) importan de
 // acá las mismas reglas (umbral, clave de agrupación) que usa el núcleo.
@@ -33,6 +34,36 @@ export type ResumenStock = {
  */
 export function claveMedicamento(nombre: string, dosis: string | null | undefined): string {
   return `${nombre.trim().toLowerCase()}|${(dosis ?? "").trim().toLowerCase()}`;
+}
+
+type Candidato = { clave: string; nombre: string; dosis: string | null; droga?: string | null };
+
+/**
+ * A qué medicamento ya cargado corresponde un conteo por foto. Primero la
+ * clave exacta; si no, compara el nombre y la droga (su columna o, en
+ * filas viejas, el paréntesis "Forxiga (Dapagliflozina)"): el blister puede
+ * decir "Forxiga" o "Dapagliflozina". Solo enlaza si hay UNO que coincide (con
+ * dosis, tiene que coincidir también la dosis).
+ */
+export function buscarMedicamentoContado<T extends Candidato>(
+  candidatos: T[],
+  nombre: string,
+  dosis: string | null
+): T | undefined {
+  const exacto = candidatos.find((c) => c.clave === claveMedicamento(nombre, dosis));
+  if (exacto) return exacto;
+
+  const norma = (t: string) => t.trim().toLowerCase();
+  const buscado = separarNombreDroga(nombre);
+  const nombresBuscados = new Set([buscado.nombre, buscado.droga].filter((x): x is string => !!x).map(norma));
+  const mismoNombre = candidatos.filter((c) => {
+    const { nombre: n, droga } = separarNombreDroga(c.nombre);
+    return [n, droga, c.droga ?? null].some((x) => x !== null && nombresBuscados.has(norma(x)));
+  });
+  // Con dosis o sin ella, solo se enlaza si hay UNO: dos marcas con la misma
+  // droga y dosis no se adivinan (pisaría el stock de la equivocada).
+  const candidatosFinales = dosis ? mismoNombre.filter((c) => norma(c.dosis ?? "") === norma(dosis)) : mismoNombre;
+  return candidatosFinales.length === 1 ? candidatosFinales[0] : undefined;
 }
 
 /** "Poco stock" = menos pastillas que el umbral (por defecto, menos de 5). */

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  adivinarForma,
   consumoDeToma,
   etiquetaCantidad,
   frecuenciaDeTomas,
@@ -18,18 +17,6 @@ describe("seCuentaConFoto", () => {
   it("sin forma guardada se trata como pastilla", () => {
     expect(seCuentaConFoto(undefined)).toBe(true);
     expect(seCuentaConFoto(null)).toBe(true);
-  });
-});
-
-describe("adivinarForma", () => {
-  it("detecta la forma por el nombre", () => {
-    expect(adivinarForma("Jarabe para la tos")).toBe("jarabe");
-    expect(adivinarForma("Gotas oftálmicas")).toBe("gotas");
-    expect(adivinarForma("Insulina")).toBe("inyeccion");
-    expect(adivinarForma("Crema")).toBe("otro");
-  });
-  it("sin pista devuelve null", () => {
-    expect(adivinarForma("Enalapril")).toBeNull();
   });
 });
 

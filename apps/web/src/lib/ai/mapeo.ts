@@ -62,3 +62,22 @@ export function diasDesdeIngles(valores: string[]): DiaSemana[] {
 export function diasAIngles(valores: DiaSemana[]): string[] {
   return valores.map((v) => DIA_A_INGLES[v]);
 }
+
+/**
+ * `measured_at` del modelo ("2026-11-10T09:30", hora de Argentina) a ISO con
+ * zona. undefined si no vino; "invalida" si no tiene ese formato (la fecha
+ * futura la rechaza validarMedicion).
+ */
+export function medidoAtDesdeModelo(valor: unknown): string | undefined | "invalida" {
+  if (valor === undefined || valor === null || (typeof valor === "string" && valor.trim() === "")) return undefined;
+  if (typeof valor !== "string") return "invalida";
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})$/.exec(valor.trim());
+  if (!m) return "invalida";
+  const [anio, mes, dia] = m[1].split("-").map(Number);
+  const [hora, minuto] = m[2].split(":").map(Number);
+  // Ida y vuelta: un 30 de febrero no se "corre" a marzo, se rechaza.
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  const fechaReal = fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia;
+  if (!fechaReal || hora > 23 || minuto > 59) return "invalida";
+  return `${m[1]}T${m[2]}:00-03:00`;
+}

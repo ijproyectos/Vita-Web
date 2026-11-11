@@ -15,6 +15,7 @@ export function HoyPendientes({
   nombre,
   subtitulo,
   pendientes,
+  noTomadas = [],
   conectado,
   puedeRecordar,
 }: {
@@ -22,6 +23,8 @@ export function HoyPendientes({
   nombre: string;
   subtitulo: string;
   pendientes: DosisPendiente[];
+  /** Las que dijo "No la tomé" en el modo simple: se muestran, sin recordar. */
+  noTomadas?: DosisPendiente[];
   conectado: boolean;
   puedeRecordar: boolean;
 }) {
@@ -69,6 +72,8 @@ export function HoyPendientes({
         <span className="text-[11.5px] font-semibold text-subtle">{subtitulo}</span>
       </div>
       <div className="rounded-[20px] bg-card shadow-card">
+        {pendientes.length > 0 && (
+        <>
         <div className="flex items-center gap-3 px-4 pb-2.5 pt-[15px]">
           <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-aviso ring-4 ring-aviso/15" />
           <div className="min-w-0 flex-1">
@@ -106,6 +111,26 @@ export function HoyPendientes({
             );
           })}
         </ul>
+        </>
+        )}
+        {noTomadas.length > 0 && (
+          <div className={pendientes.length > 0 ? "border-t border-foreground/[0.08]" : undefined}>
+            <div className="flex items-center gap-3 px-4 pb-2.5 pt-[15px]">
+              <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-slate-brand/50" />
+              <div className="font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">
+                {noTomadas.length === 1 ? `${nombre} dijo que no tomó 1` : `${nombre} dijo que no tomó ${noTomadas.length}`}
+              </div>
+            </div>
+            <ul>
+              {noTomadas.map((p) => (
+                <li key={p.id} className="border-t border-foreground/[0.05] px-4 py-3">
+                  <div className="truncate text-[13.5px] font-bold">{p.nombre}</div>
+                  <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">{p.meta}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </section>
   );

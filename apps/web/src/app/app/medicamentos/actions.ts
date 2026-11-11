@@ -7,7 +7,7 @@ import * as medicamentos from "@/lib/medicamentos/nucleo";
 import * as inventario from "@/lib/inventario/nucleo";
 import type { DatosActualizarGrupo } from "@/lib/medicamentos/tipos";
 import { MENSAJE_SOLO_LECTURA, rolSobre } from "@/lib/familia/perfil-activo";
-import type { EstadoAccion } from "../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 
 // Edición y borrado de un medicamento completo (todos sus horarios) desde
 // "Mis medicamentos". Como las demás acciones sobre filas existentes, escribe

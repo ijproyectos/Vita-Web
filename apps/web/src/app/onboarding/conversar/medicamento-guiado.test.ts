@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frecuenciaDeHoras, moverHora, siguienteHoraMed, horasDeRemedio, textoHoras, textoVeces, tomasDesdeHoras, leerDosis, remediosVisibles, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
+import { frecuenciaDeHoras, siguienteHoraMed, horasDeRemedio, textoHoras, textoVeces, tomasDesdeHoras, leerDosis, remediosVisibles, lineaDeToma, tituloMed, UNIDAD_POR_CHIP, CHIPS_UNIDAD } from "./medicamento-guiado";
 
 describe("leerDosis", () => {
   it("lee valor y unidad", () => {
@@ -47,11 +47,6 @@ describe("resumen de remedios", () => {
 });
 
 describe("horas del remedio", () => {
-  it("mueve la hora y da la vuelta al día", () => {
-    expect(moverHora("08:00", 30)).toBe("08:30");
-    expect(moverHora("23:30", 30)).toBe("00:00");
-    expect(moverHora("00:00", -30)).toBe("23:30");
-  });
   it("propone el próximo horario sin repetir", () => {
     expect(siguienteHoraMed(["08:00"])).toBe("20:00");
     expect(siguienteHoraMed(["08:00", "20:00"])).toBe("02:00");

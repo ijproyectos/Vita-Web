@@ -21,4 +21,10 @@ describe("resumenHoy", () => {
   it("usa minutos si pasó menos de una hora y omite la dosis vacía", () => {
     expect(resumenHoy([d({ dosis: null, hora_programada: "11:10" })], "11:40").pendientes[0].meta).toBe("11:10 hs · hace 30 min");
   });
+
+  it("lo que dijo que no tomó sale de pendientes y va aparte", () => {
+    const r = resumenHoy([d({ id: "1", hora_programada: "08:00" }), d({ id: "2", hora_programada: "09:00" })], "11:40", new Set(["1"]));
+    expect(r.pendientes.map((p) => p.id)).toEqual(["2"]);
+    expect(r.noTomadas).toEqual([{ id: "1", nombre: "Enalapril", meta: "08:00 hs · dijo que no la tomó" }]);
+  });
 });

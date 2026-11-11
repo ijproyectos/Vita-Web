@@ -49,9 +49,9 @@ describe("prompt caching del chat", () => {
     // ~4 caracteres por token en español: con holgura, el prefijo es mucho mayor que 1024 tokens.
     expect(prefijoCacheado(ctx(1)).length / 4).toBeGreaterThan(1024);
   });
-  it("las tools de memoria van al final y no aceptan persona_id", () => {
+  it("las tools de memoria conservan su lugar (después de las originales) y no aceptan persona_id", () => {
     const nombres = TOOLS.map((t) => t.name);
-    expect(nombres.slice(-3)).toEqual(["recordar", "buscar_memoria", "resolver_contradiccion"]);
+    expect(nombres.slice(16, 19)).toEqual(["recordar", "buscar_memoria", "resolver_contradiccion"]);
     for (const n of ["recordar", "buscar_memoria", "resolver_contradiccion"]) {
       const props = (TOOLS.find((t) => t.name === n)!.input_schema as { properties: Record<string, unknown> }).properties;
       expect(props).not.toHaveProperty("persona_id");
@@ -97,6 +97,14 @@ describe("prompt caching del chat", () => {
         "recordar",
         "buscar_memoria",
         "resolver_contradiccion",
+        "list_upcoming_appointments",
+        "get_medication_stock",
+        "list_measurements",
+        "list_studies",
+        "get_adherence",
+        "update_appointment",
+        "delete_appointment",
+        "add_measurement",
       ]
     `);
   });
@@ -141,4 +149,12 @@ describe("prompt caching del chat", () => {
 
 it("le pide no repetir en el texto la lista que ya muestra la tarjeta", () => {
   expect(SYSTEM_PROMPT).toContain("No repitas\n  esa lista en el texto");
+});
+
+it("trae la guía de cómo funciona la app en el bloque estático, con las pantallas nuevas", () => {
+  expect(SYSTEM_PROMPT).toContain("Cómo funciona la app");
+  expect(SYSTEM_PROMPT).toContain("- vita_plus: vita+");
+  expect(SYSTEM_PROMPT).toContain("- invitar_cuidador: Invitar a alguien");
+  // Le dice qué todavía no puede hacer, para que mande a la pantalla en vez de inventar.
+  expect(SYSTEM_PROMPT).toContain("Lo que todavía no podés hacer vos desde el chat");
 });

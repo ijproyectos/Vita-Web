@@ -43,3 +43,44 @@ export function normalizarHora(crudo: string): string | null {
   if (h > 23 || Number(minutos) > 59) return null;
   return `${String(h).padStart(2, "0")}:${minutos}`;
 }
+
+/** Suma o resta minutos a una hora "HH:MM", dando la vuelta al día. */
+export function moverHora(hora: string, delta: number): string {
+  const [h, m] = hora.split(":").map(Number);
+  const n = ((((h || 0) * 60 + (m || 0) + delta) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+}
+
+// Límites de cada momento en minutos del día (mismos cortes que momentoDelDia;
+// la noche cruza la medianoche: 20:00 a 07:00).
+const LIMITES_MOMENTO: Record<MomentoDia, [number, number]> = {
+  "mañana": [7 * 60, 12 * 60],
+  mediodia: [12 * 60, 14 * 60],
+  tarde: [14 * 60, 20 * 60],
+  noche: [20 * 60, 31 * 60],
+};
+
+/** Cuánto le falta a una hora para caer dentro de un momento (0 = adentro). */
+export function minutosFueraDelMomento(hora: string, momento: MomentoDia): number {
+  const [h, m] = hora.split(":").map(Number);
+  const t = (h || 0) * 60 + (m || 0);
+  const [desde, hasta] = LIMITES_MOMENTO[momento];
+  return Math.min(
+    ...[-1440, 0, 1440].map((k) => {
+      const x = t + k;
+      return x < desde ? desde - x : x >= hasta ? x - hasta : 0;
+    })
+  );
+}
+
+/** Margen en que una hora "cercana" se respeta al elegir un momento (06:30 sigue siendo mañana). */
+export const TOLERANCIA_MOMENTO_MIN = 45;
+
+/**
+ * Hora al elegir un momento del día: si la hora ya está en ese momento o cerca
+ * (hasta TOLERANCIA_MOMENTO_MIN afuera) se respeta; si queda lejos (08:00 con
+ * "Noche") pasa a la hora sugerida del momento.
+ */
+export function horaParaMomento(hora: string, momento: MomentoDia, sugerida: string): string {
+  return minutosFueraDelMomento(hora, momento) <= TOLERANCIA_MOMENTO_MIN ? hora : sugerida;
+}

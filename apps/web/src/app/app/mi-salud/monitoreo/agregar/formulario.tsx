@@ -6,7 +6,7 @@ import { useVolver } from "@/lib/navegacion/rastreador";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
-import type { EstadoAccion } from "../../../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 import { crearMedicionAction } from "../actions";
 import { ChipsMetrica } from "../chips-metrica";
 import {
@@ -33,6 +33,7 @@ export function FormularioMedicion({
   otra,
   metricaFija = false,
   ultimoValor,
+  esAhora = false,
 }: {
   tipoInicial: string;
   volver: string;
@@ -42,13 +43,17 @@ export function FormularioMedicion({
   metricaFija?: boolean;
   /** Último valor cargado, como referencia en el campo ("120/80"). */
   ultimoValor?: string | null;
+  /**
+   * Se abrió porque es hora de medir (aviso, Rutina o modo simple): no se
+   * elige fecha ni hora, se guarda con las de ahora (campos vacíos = ahora).
+   */
+  esAhora?: boolean;
 }) {
   const router = useRouter();
   const volverAtras = useVolver(volver);
   const [tipo, setTipo] = useState<TipoRegistrable>(otra ? "otra" : esTipoMedicion(tipoInicial) ? tipoInicial : "presion");
   const [valor, setValor] = useState("");
   const [secundario, setSecundario] = useState("");
-  const [pulso, setPulso] = useState("");
   const [contexto, setContexto] = useState<ContextoGlucemia | "">("");
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
@@ -110,7 +115,6 @@ export function FormularioMedicion({
             setTipo(t);
             setValor("");
             setSecundario("");
-            setPulso("");
             setContexto("");
           }}
         />
@@ -160,25 +164,6 @@ export function FormularioMedicion({
         </div>
       </div>
 
-      {esPresion && (
-        <div>
-          <Etiqueta text="Pulso (opcional)" />
-          <div className="flex items-center gap-2.5 rounded-full bg-card px-[18px] py-1 shadow-item">
-            <VitaIcon name="heart-plus" size={16} className="text-muted-foreground" />
-            <input
-              name="pulso"
-              value={pulso}
-              onChange={(e) => setPulso(e.target.value)}
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="72"
-              className="w-full bg-transparent py-3 text-[15px] font-semibold outline-none placeholder:font-medium placeholder:text-faint"
-            />
-            <span className="text-xs font-bold text-subtle">lpm</span>
-          </div>
-        </div>
-      )}
-
       {tipo === "glucemia" && (
         <div>
           <Etiqueta text="Momento" />
@@ -207,6 +192,9 @@ export function FormularioMedicion({
         </div>
       )}
 
+      {esAhora ? (
+        <p className="text-[12.5px] font-medium text-subtle">Se guarda con la fecha y hora de ahora.</p>
+      ) : (
       <div>
         <Etiqueta text="Cuándo (opcional)" />
         <div className="flex items-start gap-3">
@@ -235,6 +223,7 @@ export function FormularioMedicion({
         </div>
         <p className="mt-2 text-xs font-medium text-subtle">Si lo dejás vacío, se guarda con la fecha y hora de ahora.</p>
       </div>
+      )}
 
       <div>
         <Etiqueta text="Notas (opcional)" />

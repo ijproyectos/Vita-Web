@@ -1,3 +1,5 @@
+import { ZONA_AR, fechaEnAR } from "@/lib/tiempo-ar";
+
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 
@@ -15,13 +17,12 @@ export function diaYMes(fechaISO: string): { dia: string; mes: string } {
   return { dia: String(d.getDate()), mes: MESES[d.getMonth()].toUpperCase() };
 }
 
-const ZONA_AR = "America/Argentina/Buenos_Aires";
 
 // Fecha calendario (YYYY-MM-DD) en hora de Argentina. `toISOString()` da la
 // fecha UTC, que entre las 21:00 y las 23:59 AR ya es "mañana" — por eso los
 // chips "Hoy/Mañana" y el contexto de fecha del chat usan esto.
 export function fechaISOEnAR(fecha: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: ZONA_AR }).format(fecha);
+  return fechaEnAR(fecha);
 }
 
 export function fechaDeHoyISO(): string {

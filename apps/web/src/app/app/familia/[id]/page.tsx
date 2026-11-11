@@ -36,7 +36,9 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
     perfilNucleo.obtenerNombre(supabase, usuario.id),
     medicamentosNucleo.listarHoy(supabase, id).catch(() => []),
   ]);
-  const hoy = resumenHoy(dosisHoy, medicamentosNucleo.horaEnAR());
+  // "No la tomé" del modo simple (057): sin la migración el set viene vacío.
+  const omitidas = await medicamentosNucleo.idsOmitidas(supabase, dosisHoy.map((m) => m.id), medicamentosNucleo.fechaEnAR());
+  const hoy = resumenHoy(dosisHoy, medicamentosNucleo.horaEnAR(), omitidas);
   const emergencia = perfil?.contacto_emergencia_nombre?.trim();
   const emergenciaSub = [perfil?.contacto_emergencia_relacion?.trim(), perfil?.contacto_emergencia_telefono?.trim()].filter(Boolean).join(" · ");
   const meta = [
@@ -72,12 +74,13 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
       {/* Propio de la app (no está en el diseño): cambia el perfil activo. */}
       <AccionesMiembro elderId={miembro.id} vinculoId={miembro.vinculoId} nombre={primerNombre} soloVerRutina />
 
-      {hoy.pendientes.length > 0 && (
+      {(hoy.pendientes.length > 0 || hoy.noTomadas.length > 0) && (
         <HoyPendientes
           elderId={miembro.id}
           nombre={primerNombre}
           subtitulo={hoy.subtitulo}
           pendientes={hoy.pendientes}
+          noTomadas={hoy.noTomadas}
           conectado={miembro.conectado}
           puedeRecordar={puedeEditar}
         />

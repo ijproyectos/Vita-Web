@@ -9,6 +9,7 @@ import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import type { FilaHoy } from "@/lib/modo-simple/seleccion";
 import { esTipoMedicion, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
@@ -38,19 +39,20 @@ import {
   type PorCorregir,
   type TurnoSimple,
 } from "@/components/vita/modo-simple/piezas";
-import { marcarTomadoAction } from "../rutina/actions";
+import { marcarGrupoNoTomadoAction, marcarGrupoTomadoAction } from "../rutina/actions";
+import { confirmoPorVoz } from "@/lib/modo-simple/confirmacion-voz";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import type { MedHoy, TurnoProximo } from "@/lib/modo-simple/respuestas";
 import { CharlaSimple } from "./charla-simple";
+import { AccesoRutinaCompleta } from "./lista-hoy";
 
-// Coincide EXACTO con el regex del diseño — nunca se toca esta lista de
-// palabras sin actualizar también design/tasks.
-const CONFIRMACION_POR_VOZ = /\b(s[ií]|tom[eé]|listo|ya est[aá])\b/i;
+// La confirmación por voz se aparta a propósito del regex del diseño: ese no
+// entendía "sí" con tilde y confirmaba "no sé si la tomé" (ver confirmacion-voz.ts).
 
 // Fases del state machine (spec: waiting | confirmed | alerted | resting).
 // "confirmado" es transitoria (solo local, nunca viene del servidor): se
-// entra al confirmar y se sale sola a los ~2.4s pidiendo un refresh del
+// entra al confirmar y se sale sola a los ~6 s (tiempo para "Me equivoqué") pidiendo un refresh del
 // server component, que recalcula el próximo grupo pendiente (u ninguno).
 type Fase = "esperando" | "alertado" | "confirmado" | "descanso";
 
@@ -66,6 +68,8 @@ export function Pantalla({
   porCorregir,
   hayMedsHoy,
   vencida,
+  fechaDosis = null,
+  filas = [],
   recordatorios,
   config,
   turno,
@@ -102,6 +106,10 @@ export function Pantalla({
   /** Había medicación programada hoy (distingue "todo tomado" de "nada cargado"). */
   hayMedsHoy: boolean;
   vencida: boolean;
+  /** Fecha de AYER cuando el grupo son dosis de ayer en la ventana de medianoche; si no, null. */
+  fechaDosis?: string | null;
+  /** Lista "Hoy": todas las tomas del día con su estado. */
+  filas?: FilaHoy[];
   /** Un familiar le recordó estas dosis (aviso tranquilo, sin sonido). */
   recordatorios: { medicamentoId: string; nombre: string; horaProgramada: string }[];
 }) {
@@ -114,6 +122,8 @@ export function Pantalla({
   // "confirmado" es la única fase que sí necesita estado local: es
   // puramente transitoria y nunca la manda el servidor.
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
+  const [guardado, setGuardado] = useState(false);
+  const [preguntarNo, setPreguntarNo] = useState(false);
   const hayGrupo = grupo.length > 0;
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
   const { silenciada, alternar: alternarSilencio } = useSilencioVita();
@@ -169,22 +179,27 @@ export function Pantalla({
   }
 
   function confirmar() {
-    if (!hayGrupo || pendiente) return;
+    if (!hayGrupo || pendiente || confirmadoLocal) return;
+    // "¡Listo!" al instante (optimista): el servidor guarda por detrás y, si
+    // falla, se vuelve atrás con el aviso.
+    setConfirmadoLocal(true);
+    posponer.cancelar();
     startTransition(async () => {
       try {
-        // Cada dosis del grupo se marca con la misma acción de siempre
-        // (marcarTomado) — no hay un camino de escritura paralelo.
-        const resultados = await Promise.all(grupo.map((m) => marcarTomadoAction(m.id, true)));
-        if (resultados.some((r) => r.status === "error")) {
+        // Todo el grupo en una sola acción (usa marcarTomado por dentro: no
+        // hay un camino de escritura paralelo).
+        const resultado = await marcarGrupoTomadoAction(grupo.map((m) => m.id), true, fechaDosis ?? undefined);
+        if (resultado.status === "error") {
           // Puede haberse registrado solo una parte: se vuelve a leer del
           // servidor para que la pantalla muestre lo que realmente quedó.
+          setConfirmadoLocal(false);
           toast.error("No se pudo registrar toda la toma. Probá de nuevo.");
           router.refresh();
           return;
         }
-        posponer.cancelar();
-        setConfirmadoLocal(true);
+        setGuardado(true);
       } catch {
+        setConfirmadoLocal(false);
         toast.error("No se pudo registrar la toma. Probá de nuevo.");
       }
     });
@@ -203,15 +218,51 @@ export function Pantalla({
     void cancelarPosposicionAction(grupo.map((m) => m.id)).catch(() => {});
   }
 
+  // "No la tomé": se pregunta antes (no se deshace desde acá) y deja de pedirla
+  // hoy. El cuidador se entera en el resumen de la noche, no en el momento.
+  function noTome() {
+    setPreguntarNo(false);
+    posponer.cancelar();
+    startTransition(async () => {
+      try {
+        const r = await marcarGrupoNoTomadoAction(grupo.map((m) => m.id), fechaDosis ?? undefined);
+        if (r.status === "error") {
+          toast.error(r.message);
+          return;
+        }
+        toast.success("Listo. No te la vuelvo a pedir hoy.");
+        router.refresh();
+      } catch {
+        toast.error("No se pudo guardar. Probá de nuevo o avisale a tu familia.");
+      }
+    });
+  }
+
+  // "Me equivoqué": vuelve a la tarjeta enseguida y desmarca en el servidor.
+  // Next encola las acciones, así que corre después de la confirmación aunque
+  // esa todavía no haya terminado.
+  function deshacer() {
+    setConfirmadoLocal(false);
+    setGuardado(false);
+    void marcarGrupoTomadoAction(grupo.map((m) => m.id), false, fechaDosis ?? undefined)
+      .then((r) => {
+        if (r.status === "error") toast.error("No se pudo deshacer. Avisale a tu familia.");
+      })
+      .catch(() => toast.error("No se pudo deshacer. Avisale a tu familia."))
+      .finally(() => router.refresh());
+  }
+
+  // Se refresca recién cuando el servidor confirmó (si no, podría traer la
+  // dosis todavía sin marcar). Unos segundos, para dar tiempo a "Me equivoqué".
   useEffect(() => {
-    if (!confirmadoLocal) return;
-    const t = setTimeout(() => router.refresh(), 2400);
+    if (!guardado) return;
+    const t = setTimeout(() => router.refresh(), 6000);
     return () => clearTimeout(t);
-  }, [confirmadoLocal, router]);
+  }, [guardado, router]);
 
   const { estado: estadoVoz, iniciar: iniciarVoz, detener: detenerVoz } = useGrabacionVoz({
     onTranscripcion: (texto) => {
-      if (CONFIRMACION_POR_VOZ.test(texto)) {
+      if (confirmoPorVoz(texto)) {
         confirmar();
       } else {
         toast.info("No te escuché confirmar — tocá el botón cuando la hayas tomado.");
@@ -284,7 +335,7 @@ export function Pantalla({
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-cream">
       {fase === "confirmado" ? (
-        <FaseConfirmado grupo={grupo} />
+        <FaseConfirmado grupo={grupo} onDeshacer={deshacer} />
       ) : pendienteDeGesto ? (
         <>
           <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
@@ -328,6 +379,8 @@ export function Pantalla({
                   grupo={grupo}
                   momento={momento}
                   alertado={fase === "alertado"}
+                  deAyer={!!fechaDosis}
+                  onNoTome={() => setPreguntarNo(true)}
                   confirmando={pendiente}
                   escuchandoVoz={estadoVoz !== "inactivo"}
                   silenciada={silenciada}
@@ -345,13 +398,20 @@ export function Pantalla({
                 <TarjetaMediciones
                   titulo={mediciones.titulo}
                   mediciones={mediciones.items}
-                  hrefDe={(tipo) => hrefNuevaMedicion({ tipo: esTipoMedicion(tipo) ? tipo : undefined, volver: "/app/modo-simple" })}
+                  hrefDe={(tipo) => hrefNuevaMedicion({ tipo: esTipoMedicion(tipo) ? tipo : undefined, volver: "/app/modo-simple", ahora: true })}
                 />
               )}
 
               {porCorregir.length > 0 && <TarjetaPorCorregir items={porCorregir} />}
 
-              {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
+              {filas.length > 0 ? (
+                // "Después" (lo que sigue, con nombres) queda a la vista; el resto del día está en la rutina completa.
+                <AccesoRutinaCompleta filas={filas}>
+                  {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
+                </AccesoRutinaCompleta>
+              ) : (
+                siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />
+              )}
             </div>
           </div>
           <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
@@ -365,6 +425,7 @@ export function Pantalla({
         onAlternarSonido={alternarSonido}
       />
       <SheetAyudaSinContacto open={ayudaAbierta && !telefonoAyuda} onOpenChange={setAyudaAbierta} />
+      <SheetNoTome open={preguntarNo} onOpenChange={setPreguntarNo} cuantas={grupo.length} onSi={noTome} />
       {charlaAbierta && (
         <CharlaSimple
           nombre={nombre}
@@ -454,7 +515,7 @@ function FaseGesto({ onTocar, estado }: { onTocar: () => void; estado: EstadoAva
   );
 }
 
-function FaseConfirmado({ grupo }: { grupo: Dosis[] }) {
+function FaseConfirmado({ grupo, onDeshacer }: { grupo: Dosis[]; onDeshacer: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-teal-deep px-8 text-center text-primary-foreground">
       <div className="flex size-24 items-center justify-center rounded-full bg-primary-foreground/20">
@@ -466,6 +527,13 @@ function FaseConfirmado({ grupo }: { grupo: Dosis[] }) {
           ? `Registramos que tomaste ${grupo[0].nombre}`
           : `Registramos tus ${grupo.length} pastillas: ${listaHablada(grupo.map((m) => m.nombre))}`}
       </div>
+      <button
+        type="button"
+        onClick={onDeshacer}
+        className="mt-6 min-h-14 rounded-full border-2 border-primary-foreground/60 px-6 text-[18px] font-bold text-primary-foreground transition-transform active:scale-[0.98] motion-reduce:transition-none"
+      >
+        {grupo.length === 1 ? "Me equivoqué, no la tomé" : "Me equivoqué, no las tomé"}
+      </button>
     </div>
   );
 }
@@ -549,6 +617,27 @@ function EnlaceAMiCuenta({
     >
       {children}
     </a>
+  );
+}
+
+function SheetNoTome({ open, onOpenChange, cuantas, onSi }: { open: boolean; onOpenChange: (v: boolean) => void; cuantas: number; onSi: () => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-[28px] pb-8">
+        <SheetHeader>
+          <SheetTitle className="text-[24px]">{cuantas === 1 ? "¿Hoy no la vas a tomar?" : "¿Hoy no las vas a tomar?"}</SheetTitle>
+          <SheetDescription className="text-[17px]">No te la vuelvo a pedir hoy. A la noche se lo cuento a tu familia.</SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-3 px-4">
+          <button type="button" onClick={onSi} className="flex h-16 items-center justify-center rounded-full bg-teal-deep text-[20px] font-extrabold text-primary-foreground">
+            {cuantas === 1 ? "Sí, hoy no la tomo" : "Sí, hoy no las tomo"}
+          </button>
+          <button type="button" onClick={() => onOpenChange(false)} className="flex h-14 items-center justify-center rounded-full bg-secondary text-[18px] font-bold text-slate-brand">
+            Volver
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

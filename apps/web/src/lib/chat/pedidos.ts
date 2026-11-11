@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { verificarHorariosDisponibles } from "@/lib/medicamentos/nucleo";
 import { ErrorEntradaMedicamento, ErrorHorarioMedicamentoDuplicado, normalizarHoraDuplicados } from "@/lib/medicamentos/duplicados";
-import { ejecutarTool, normalizarAltaMedicamento, resultadoErrorMedicamento, type ResultadoTool } from "@/lib/ai/tools";
+import { avisoMismoRemedio, ejecutarTool, normalizarAltaMedicamento, resultadoErrorMedicamento, type ResultadoTool } from "@/lib/ai/tools";
 import {
   mensajeEsperandoConfirmacion,
   mensajeFaltaConfirmacion,
@@ -14,6 +14,7 @@ import {
   TOOLS_CONFIRMACION_ATADA,
   TOOLS_CONFIRMACION_PROPIA,
   TOOLS_DE_ESCRITURA,
+  TOOLS_TURNO_CONFIRMADO,
 } from "@/lib/ai/destino";
 import { limpiarDato } from "@/lib/ai/limpiar";
 import { clasificarRespuesta } from "@/lib/ai/respuesta";
@@ -29,8 +30,20 @@ import {
   tomarSnapshot,
   autorizaPendiente,
   esObjetivoGuardado,
+  esObjetivoMedicamento,
+  esObjetivoTurno,
   type ObjetivoGuardado,
 } from "@/lib/chat/confirmaciones-logica";
+import {
+  cambiosTurnoDeInput,
+  snapshotTurnoCoincide,
+  textoExitoTurno,
+  textoPropuestaTurno,
+  tomarSnapshotTurno,
+  turnoQuedaEnElPasado,
+  type ToolTurno,
+} from "@/lib/chat/confirmaciones-turno";
+import * as turnos from "@/lib/turnos/nucleo";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 
@@ -119,6 +132,8 @@ const TEXTO_NO_VERIFICADA = "No pude confirmarlo por un problema temporal, así 
 const TEXTO_NADA_PENDIENTE = "No hay nada pendiente de confirmar (ya se confirmó, se canceló o venció). Si querés, pedímelo de nuevo.";
 const TEXTO_SIN_PERMISO = "Ya no tenés permiso para editar a esa persona, así que no cambié nada.";
 const TEXTO_CAMBIO_ENTRE_MEDIO = "Ese medicamento cambió mientras tanto, así que no toqué nada. Pedímelo de nuevo para que lo revise.";
+const TEXTO_TURNO_PASADO = "Ese día y hora ya pasaron, así que no cambié el turno.";
+const TEXTO_TURNO_CAMBIO_ENTRE_MEDIO = "Ese turno cambió o ya no está, así que no toqué nada. Pedímelo de nuevo para que lo revise.";
 
 type ResolucionObjetivo = { ok: true; objetivo: ObjetivoGuardado } | { ok: false; resultado: ResultadoTool };
 
@@ -133,6 +148,7 @@ async function resolverObjetivo(
   destino: { destinoId: string; persona: string | null },
   supabase: SupabaseClient
 ): Promise<ResolucionObjetivo> {
+  if (TOOLS_TURNO_CONFIRMADO.has(nombre)) return resolverObjetivoTurno(nombre as ToolTurno, input, destino, supabase);
   const buscado = typeof input.medication_name === "string" ? input.medication_name.trim() : "";
   if (!buscado) return { ok: false, resultado: { contenido: "Falta medication_name. No se ejecutó nada." } };
   let todos;
@@ -204,10 +220,51 @@ async function resolverObjetivo(
 }
 
 /**
+ * update_appointment / delete_appointment: el turno se busca por el id exacto (que el
+ * modelo sacó de list_upcoming_appointments) DENTRO del destino; nunca por especialidad.
+ */
+async function resolverObjetivoTurno(
+  tool: ToolTurno,
+  input: Record<string, unknown>,
+  destino: { destinoId: string; persona: string | null },
+  supabase: SupabaseClient
+): Promise<ResolucionObjetivo> {
+  const id = typeof input.appointment_id === "string" ? input.appointment_id.trim() : "";
+  if (!UUID_RE.test(id)) {
+    return { ok: false, resultado: { contenido: "Falta el appointment_id exacto (sacalo de list_upcoming_appointments). No se ejecutó nada." } };
+  }
+  let turno;
+  try {
+    turno = await turnos.obtenerPorId(supabase, destino.destinoId, id);
+  } catch {
+    return { ok: false, resultado: { contenido: MENSAJE_CONFIRMACION_NO_VERIFICADA } };
+  }
+  if (!turno) {
+    return { ok: false, resultado: { contenido: "No encontré ese turno. Volvé a leer los próximos turnos con list_upcoming_appointments y preguntale cuál es. No se ejecutó nada." } };
+  }
+  let cambios;
+  if (tool === "update_appointment") {
+    const c = cambiosTurnoDeInput(input, medicamentos.fechaEnAR(), medicamentos.horaEnAR(), turno);
+    if ("error" in c) return { ok: false, resultado: { contenido: `${c.error} No se ejecutó nada.` } };
+    cambios = c.datos;
+  }
+  return {
+    ok: true,
+    objetivo: {
+      turnoId: turno.id,
+      snapshotTurno: tomarSnapshotTurno(turno),
+      texto: textoPropuestaTurno(tool, destino.persona, turno, cambios),
+      ...(cambios ? { cambiosTurno: cambios } : {}),
+    },
+  };
+}
+
+/**
  * Ejecuta lo CONFIRMADO, por id y con el núcleo (nunca por nombre ni con lo que el modelo
  * reformule): relee el permiso sobre el destino y que la fila siga igual a lo que se mostró.
  */
-async function ejecutarObjetivo(
+/** Exportada solo para los tests de la ejecución confirmada (pedidos-turnos.test.ts). */
+export async function ejecutarObjetivo(
   nombre: string,
   accion: AccionPendiente | null,
   ctx: { supabase: SupabaseClient; usuarioId: string; familia: MiembroFamilia[] }
@@ -221,14 +278,43 @@ async function ejecutarObjetivo(
     return falla(TEXTO_NO_VERIFICADA, "confirmacion_no_verificada");
   }
   const { objetivo, destinoId } = accion;
-  const tool = nombre as "delete_schedule" | "update_schedule";
   if (!destinoPermitido(destinoId, ctx.usuarioId, ctx.familia)) return falla(TEXTO_SIN_PERMISO, "confirmacion_sin_permiso");
+  const persona = accion.persona ? accion.persona : null;
+  const conPersona = persona ? { persona } : {};
+
+  if (TOOLS_TURNO_CONFIRMADO.has(nombre)) {
+    if (!esObjetivoTurno(objetivo)) return falla(TEXTO_NO_VERIFICADA, "confirmacion_no_verificada");
+    const toolTurno = nombre as ToolTurno;
+    try {
+      const actual = await turnos.obtenerPorId(ctx.supabase, destinoId, objetivo.turnoId);
+      if (!actual || !snapshotTurnoCoincide(objetivo.snapshotTurno, actual)) return falla(TEXTO_TURNO_CAMBIO_ENTRE_MEDIO, "confirmacion_cambio");
+      // Se vuelve a validar al ejecutar: una confirmación tardía no puede dejar el turno en el pasado.
+      const c = objetivo.cambiosTurno;
+      if (
+        c &&
+        (c.fecha || c.hora) &&
+        turnoQuedaEnElPasado(c.fecha ?? actual.fecha, c.hora ?? actual.hora, medicamentos.fechaEnAR(), medicamentos.horaEnAR())
+      ) {
+        return falla(TEXTO_TURNO_PASADO, "confirmacion_conflicto");
+      }
+      const texto = textoExitoTurno(toolTurno, persona, objetivo.snapshotTurno, objetivo.cambiosTurno);
+      if (toolTurno === "delete_appointment") {
+        await turnos.eliminar(ctx.supabase, destinoId, objetivo.turnoId);
+        return { contenido: texto, textoUsuario: texto, accionUI: { type: "appointment_deleted", ...conPersona } };
+      }
+      await turnos.actualizar(ctx.supabase, destinoId, objetivo.turnoId, objetivo.cambiosTurno ?? {});
+      return { contenido: texto, textoUsuario: texto, accionUI: { type: "appointment_updated", ...conPersona } };
+    } catch {
+      return falla(TEXTO_NO_VERIFICADA, "confirmacion_no_verificada");
+    }
+  }
+
+  if (!esObjetivoMedicamento(objetivo)) return falla(TEXTO_NO_VERIFICADA, "confirmacion_no_verificada");
+  const tool = nombre as "delete_schedule" | "update_schedule";
   try {
     const actual = await medicamentos.obtenerPorId(ctx.supabase, destinoId, objetivo.medicamentoId);
     if (!actual || !snapshotCoincide(objetivo.snapshot, actual)) return falla(TEXTO_CAMBIO_ENTRE_MEDIO, "confirmacion_cambio");
-    const persona = accion.persona ? accion.persona : null;
     const texto = textoExito(tool, persona, objetivo.snapshot, objetivo.cambios);
-    const conPersona = persona ? { persona } : {};
     if (tool === "delete_schedule") {
       await medicamentos.eliminarHorario(ctx.supabase, destinoId, objetivo.medicamentoId);
       return { contenido: texto, textoUsuario: texto, accionUI: { type: "medication_deleted", ...conPersona } };
@@ -545,6 +631,9 @@ export async function ejecutarToolIdempotente(
     try {
       const candidato = normalizarAltaMedicamento(input);
       await verificarHorariosDisponibles(supabase, destino.destinoId, [candidato]);
+      // "¿Es el mismo remedio?" se pregunta ANTES de pedir la confirmación de un familiar.
+      const aviso = await avisoMismoRemedio(supabase, destino.destinoId, candidato, input);
+      if (aviso) return aviso;
     } catch (error) {
       return resultadoErrorMedicamento(error, destino.persona);
     }

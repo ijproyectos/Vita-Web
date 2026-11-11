@@ -93,6 +93,7 @@ Adherencia — una fila por medicamento+fecha. Sin cambios respecto al pase ante
 | fecha | date | |
 | tomado | boolean | |
 | tomado_en | timestamptz | null si no se tomó |
+| omitida_at | timestamptz | "No la tomé" del modo simple (057, solo con `tomado = false`); el modo simple deja de pedirla, no hay aviso ni alerta al cuidador y el resumen de la noche la lista aparte |
 
 unique `(medicamento_id, fecha)`. Desde la migración 032 `fecha` es la fecha de pared **AR** de la dosis (antes: fecha UTC del momento de marcar); la 032 migra las filas existentes y borra las de `tomado = false`.
 

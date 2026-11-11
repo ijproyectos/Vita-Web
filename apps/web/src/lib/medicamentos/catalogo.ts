@@ -260,43 +260,41 @@ export type Sugerencia = {
 
 export const MINIMO_CARACTERES_SUGERENCIA = 2;
 
-/** Texto de la fila: "Ibupirac (Ibuprofeno)" si coincidió por marca. */
-export function etiquetaSugerencia(s: Sugerencia): string {
-  return s.marca ? `${s.marca} (${s.nombre})` : s.nombre;
-}
-
 /**
- * Sugerencias por prefijo, sin importar mayúsculas ni acentos. Primero los
- * nombres genéricos, después las marcas, cada grupo en orden alfabético.
+ * Sugerencias como las especialidades de turnos: filtra por cualquier parte
+ * del nombre comercial o del genérico ("gliflo" encuentra Dapagliflozina), sin
+ * importar mayúsculas ni acentos. Primero los que EMPIEZAN con el texto,
+ * después los que lo contienen; cada grupo en orden alfabético de lo que se
+ * muestra. Una marca y su genérico son filas distintas: si la persona conoce
+ * el remedio por la marca, la ve como "Forxiga" (con la droga abajo).
  */
-export function sugerirMedicamentos(texto: string, limite = 8): Sugerencia[] {
+export function sugerirMedicamentos(texto: string, limite = 6): Sugerencia[] {
   const q = normalizar(texto);
   if (q.length < MINIMO_CARACTERES_SUGERENCIA || limite <= 0) return [];
-  const porNombre: Sugerencia[] = [];
-  const porMarca: Sugerencia[] = [];
+  const empiezan: Sugerencia[] = [];
+  const contienen: Sugerencia[] = [];
+  const sumar = (n: string, s: Sugerencia) => {
+    if (n.startsWith(q)) empiezan.push(s);
+    else if (n.includes(q)) contienen.push(s);
+  };
   for (const { entrada, nombreN, marcasN } of INDICE) {
-    if (nombreN.startsWith(q)) {
-      porNombre.push({ nombre: entrada.nombre, tipo: entrada.tipo });
-      continue;
-    }
-    const m = marcasN.find((x) => x.n.startsWith(q));
-    if (m) porMarca.push({ nombre: entrada.nombre, marca: m.marca, tipo: entrada.tipo });
+    sumar(nombreN, { nombre: entrada.nombre, tipo: entrada.tipo });
+    for (const m of marcasN) sumar(m.n, { nombre: entrada.nombre, marca: m.marca, tipo: entrada.tipo });
   }
   const alfabetico = (a: Sugerencia, b: Sugerencia) =>
     (a.marca ?? a.nombre).localeCompare(b.marca ?? b.nombre, "es");
-  return [...porNombre.sort(alfabetico), ...porMarca.sort(alfabetico)].slice(0, limite);
+  return [...empiezan.sort(alfabetico), ...contienen.sort(alfabetico)].slice(0, limite);
 }
 
 /**
- * Si exactamente un nombre genérico del catálogo empieza con el texto, lo
- * devuelve completo ("Ibup" -> "Ibuprofeno"); si no hay uno solo (o ya está
- * completo), null.
+ * La droga (genérico) de una marca del catálogo escrita EXACTA ("Forxiga" ->
+ * "Dapagliflozina"); null si no es una marca conocida o ya es el genérico.
  */
-export function completarEnLinea(texto: string): string | null {
-  const q = normalizar(texto);
-  if (q.length < MINIMO_CARACTERES_SUGERENCIA) return null;
-  const candidatos = INDICE.filter((i) => i.nombreN.startsWith(q));
-  if (candidatos.length !== 1) return null;
-  const { entrada, nombreN } = candidatos[0];
-  return nombreN === q ? null : entrada.nombre;
+export function drogaDeMarca(nombre: string): string | null {
+  const q = normalizar(nombre);
+  if (!q) return null;
+  for (const { entrada, marcasN } of INDICE) {
+    if (marcasN.some((m) => m.n === q)) return entrada.nombre;
+  }
+  return null;
 }

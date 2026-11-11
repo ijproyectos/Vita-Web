@@ -5,6 +5,8 @@ import type { DatosActualizarHorario, DiaSemana, Medicamento } from "@/lib/medic
 import { textoDosis } from "@/lib/medicamentos/tipos";
 import { hhmm, resolverMedicamento } from "@/lib/medicamentos/resolucion";
 import { momentoDelDia } from "@/lib/rutina/momento";
+import type { DatosActualizarTurno } from "@/lib/turnos/tipos";
+import type { SnapshotTurno } from "./confirmaciones-turno";
 
 // Lógica PURA (sin DB ni server-only) de las confirmaciones de borrar / cambiar un
 // horario: resolver a qué fila se refiere el modelo, comparar con lo que se le mostró
@@ -70,7 +72,7 @@ export function snapshotCoincide(snapshot: unknown, actual: Medicamento): boolea
  * Lo que se ejecuta al confirmar, siempre por id (nunca por nombre). Se guarda dentro
  * de la pendiente (`resultado.pendiente.objetivo`): la acción exacta que se le mostró.
  */
-export type ObjetivoGuardado = {
+export type ObjetivoMedicamento = {
   medicamentoId: string;
   snapshot: SnapshotMedicamento;
   /** La pregunta tal como la ve el usuario. */
@@ -78,9 +80,19 @@ export type ObjetivoGuardado = {
   cambios?: DatosActualizarHorario;
 };
 
-export function esObjetivoGuardado(valor: unknown): valor is ObjetivoGuardado {
+/** Cambiar / borrar un turno (confirmaciones-turno.ts): mismo contrato, por id del turno. */
+export type ObjetivoTurno = {
+  turnoId: string;
+  snapshotTurno: SnapshotTurno;
+  texto: string;
+  cambiosTurno?: DatosActualizarTurno;
+};
+
+export type ObjetivoGuardado = ObjetivoMedicamento | ObjetivoTurno;
+
+export function esObjetivoMedicamento(valor: unknown): valor is ObjetivoMedicamento {
   if (!valor || typeof valor !== "object") return false;
-  const o = valor as Partial<ObjetivoGuardado>;
+  const o = valor as Partial<ObjetivoMedicamento>;
   return (
     typeof o.medicamentoId === "string" &&
     typeof o.texto === "string" &&
@@ -88,6 +100,22 @@ export function esObjetivoGuardado(valor: unknown): valor is ObjetivoGuardado {
     typeof o.snapshot === "object" &&
     typeof (o.snapshot as Partial<SnapshotMedicamento>).id === "string"
   );
+}
+
+export function esObjetivoTurno(valor: unknown): valor is ObjetivoTurno {
+  if (!valor || typeof valor !== "object") return false;
+  const o = valor as Partial<ObjetivoTurno>;
+  return (
+    typeof o.turnoId === "string" &&
+    typeof o.texto === "string" &&
+    !!o.snapshotTurno &&
+    typeof o.snapshotTurno === "object" &&
+    typeof (o.snapshotTurno as Partial<SnapshotTurno>).id === "string"
+  );
+}
+
+export function esObjetivoGuardado(valor: unknown): valor is ObjetivoGuardado {
+  return esObjetivoMedicamento(valor) || esObjetivoTurno(valor);
 }
 
 function descripcion(m: Pick<Medicamento, "nombre" | "dosis" | "unidad">): string {

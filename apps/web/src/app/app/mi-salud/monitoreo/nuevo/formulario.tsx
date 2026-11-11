@@ -11,9 +11,10 @@ import { CUANDO_INICIAL, fechaFinDe, fechaHoyAR, type CuandoForm } from "@/lib/m
 import { relacionDeToma } from "@/lib/medicamentos/comidas";
 import { siguienteHora } from "@/lib/medicamentos/forma";
 import { MAX_HORARIOS_PLAN, fraseMedir, type HorarioPlan, type Monitoreo } from "@/lib/mediciones/plan";
-import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, TIPOS_PLAN, type TipoRegistrable } from "@/lib/mediciones/tipos";
-import type { EstadoAccion } from "../../../rutina/actions";
+import { MAX_NOMBRE_OTRA, MAX_UNIDAD_OTRA, type TipoMedicion, type TipoRegistrable } from "@/lib/mediciones/tipos";
+import type { EstadoAccion } from "@/lib/acciones";
 import { guardarMonitoreoAction } from "../actions";
+import { verboAvisa } from "@/lib/notificaciones/destinatario";
 import { ChipsMetrica } from "../chips-metrica";
 
 const ESTADO_INICIAL: EstadoAccion = { status: "idle" };
@@ -24,12 +25,18 @@ export function FormularioMonitoreo({
   tipoInicial,
   nombreInicial,
   existente,
+  tipos,
   volver,
+  paraNombre,
 }: {
   tipoInicial: TipoRegistrable;
+  /** Métricas que se pueden elegir: al crear, las que todavía no tienen monitoreo; al cambiar, solo la suya. */
+  tipos: readonly TipoMedicion[];
   nombreInicial: string;
   existente: Monitoreo | null;
   volver: string;
+  /** Primer nombre de la persona cuando el perfil activo no es el propio. */
+  paraNombre?: string;
 }) {
   const router = useRouter();
   const volverAtras = useVolver(volver);
@@ -53,7 +60,7 @@ export function FormularioMonitoreo({
   async function accion(prev: EstadoAccion, formData: FormData): Promise<EstadoAccion> {
     const resultado = await guardarMonitoreoAction(prev, formData);
     if (resultado.status === "success") {
-      toast.success(`Listo. vita te avisa para medir ${fraseMedir({ tipo, nombre_otra: nombre })}`);
+      toast.success(`Listo. vita ${verboAvisa(paraNombre)} para medir ${fraseMedir({ tipo, nombre_otra: nombre })}`);
       router.replace(volver);
     }
     return resultado;
@@ -69,7 +76,7 @@ export function FormularioMonitoreo({
       <div>
         <Etiqueta text="Qué medir" />
         {/* Al editar la métrica queda fija: para medir otra cosa se crea un monitoreo nuevo. */}
-        <ChipsMetrica tipos={existente ? TIPOS_PLAN.filter((t) => t === tipo) : TIPOS_PLAN} valor={tipo} onElegir={setTipo} />
+        <ChipsMetrica tipos={tipos} valor={tipo} onElegir={setTipo} />
         <input type="hidden" name="tipo" value={tipo} />
         {esOtra && (
           <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_110px] gap-2.5">
@@ -127,7 +134,11 @@ export function FormularioMonitoreo({
 
       <div className="flex items-start gap-[11px]">
         <div className="min-h-[34px] w-[3px] self-stretch rounded-[3px] bg-primary" />
-        <p className="text-[12.5px] font-medium leading-normal text-slate-brand">vita te avisa a cada hora. Tocás el aviso y cargás el valor.</p>
+        <p className="text-[12.5px] font-medium leading-normal text-slate-brand">
+          {paraNombre
+            ? `vita le avisa a ${paraNombre} a cada hora. Si no tiene vita en su celular, te avisa a vos.`
+            : "vita te avisa a cada hora. Tocás el aviso y cargás el valor."}
+        </p>
       </div>
 
       {estado.status === "error" && (

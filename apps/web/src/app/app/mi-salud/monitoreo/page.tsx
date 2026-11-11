@@ -5,10 +5,10 @@ import * as medicionesNucleo from "@/lib/mediciones/nucleo";
 import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
 import { metricasDe } from "@/lib/mediciones/plan";
 import { crearEscala, cuandoAR, MINIMO_TARJETA, resumirTipo } from "@/lib/mediciones/resumen";
-import { RUTA_MONITOREO, formatearValor, hrefDetalleMetrica, hrefNuevaMedicion, hrefNuevoMonitoreo } from "@/lib/mediciones/tipos";
+import { RUTA_MONITOREO, formatearValor, hrefDetalleMetrica, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
-import { VitaIcon } from "@/lib/vita-icons";
+import { BotonAgregarMonitoreo } from "./boton-agregar-monitoreo";
 import { TopBar } from "../../top-bar";
 import { BadgeMedicion, EstadoVacioMonitoreo } from "./componentes";
 
@@ -31,13 +31,7 @@ export default async function MonitoreoPage() {
         title="Monitoreo activo"
         accionDerecha={
           puedeEditar ? (
-            <Link
-              href={hrefNuevoMonitoreo({ volver: RUTA_MONITOREO })}
-              aria-label="Nuevo monitoreo"
-              className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-cta-sm transition-transform active:scale-[0.94] motion-reduce:transition-none"
-            >
-              <VitaIcon name="plus" size={20} strokeWidth={2.4} />
-            </Link>
+            <BotonAgregarMonitoreo />
           ) : undefined
         }
       />

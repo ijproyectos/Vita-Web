@@ -7,7 +7,7 @@ import * as estudiosNucleo from "@/lib/estudios/nucleo";
 import { extraerDatosEstudio, TIPOS_SOPORTADOS } from "@/lib/estudios/extraer";
 import { TAMANIO_MAXIMO_BYTES, type DatosExtraidos } from "@/lib/estudios/tipos";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
-import type { EstadoAccion } from "@/app/app/rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 
 export type ResultadoAnalisis =
   | { status: "success"; path: string; tipo: string; datos: DatosExtraidos | null }

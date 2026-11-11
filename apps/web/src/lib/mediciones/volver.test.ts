@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RUTA_MONITOREO, volverSeguro } from "./tipos";
+import { RUTA_MONITOREO, hrefNuevaMedicion, volverSeguro } from "./tipos";
 
 describe("volverSeguro", () => {
   it.each(["/app", "/app/rutina", "/app/mi-salud/monitoreo?tipo=peso", "/app/a/b_c-d"])("acepta %j", (v) => {
@@ -26,5 +26,17 @@ describe("volverSeguro", () => {
     expect(volverSeguro(undefined)).toBe(RUTA_MONITOREO);
     expect(volverSeguro(["/app"])).toBe(RUTA_MONITOREO);
     expect(volverSeguro(null)).toBe(RUTA_MONITOREO);
+  });
+});
+
+describe("hrefNuevaMedicion con ahora", () => {
+  it("marca la medición como de ahora (sin elegir fecha)", () => {
+    expect(hrefNuevaMedicion({ tipo: "presion", volver: "/app/modo-simple", ahora: true })).toBe(
+      "/app/mi-salud/monitoreo/agregar?tipo=presion&volver=%2Fapp%2Fmodo-simple&ahora=1"
+    );
+  });
+
+  it("sin ahora no agrega nada", () => {
+    expect(hrefNuevaMedicion({ tipo: "presion" })).toBe("/app/mi-salud/monitoreo/agregar?tipo=presion");
   });
 });

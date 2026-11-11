@@ -33,6 +33,8 @@ export default async function AgregarMedicionPage(props: PageProps<"/app/mi-salu
   const metricaFija = esTipoMedicion(crudo) || !!nombreOtra;
   const tipo: TipoRegistrable = nombreOtra ? "otra" : esTipoMedicion(crudo) ? crudo : "presion";
   const horaPedida = texto(params?.hora);
+  // Viene de "es hora de medir" (aviso o Rutina traen la hora del plan; el modo simple manda `ahora`): se registra ahora.
+  const esAhora = texto(params?.ahora) === "1" || /^\d{2}:\d{2}$/.test(horaPedida);
   const consulta = { tipo, nombre_otra: nombreOtra || null };
   const supabase = await createClient();
   const historial = metricaFija ? await medicionesNucleo.listarPorTipoSeguro(supabase, activo.id, tipo) : [];
@@ -44,7 +46,7 @@ export default async function AgregarMedicionPage(props: PageProps<"/app/mi-salu
     <div className="flex flex-col gap-[22px] px-[18px] pt-1.5">
       <TopBar eyebrow={eyebrow} title={titulo} volverA={volver} />
       <BannerPerfil perfil={activo} accion="cargar" />
-      <FormularioMedicion tipoInicial={tipoInicial} volver={volver} otra={nombreOtra ? { nombre: nombreOtra, unidad: unidadOtra } : null} metricaFija={metricaFija} ultimoValor={ultima ? formatearValor(ultima) : null} />
+      <FormularioMedicion tipoInicial={tipoInicial} volver={volver} otra={nombreOtra ? { nombre: nombreOtra, unidad: unidadOtra } : null} metricaFija={metricaFija} ultimoValor={ultima ? formatearValor(ultima) : null} esAhora={esAhora} />
     </div>
   );
 }

@@ -124,6 +124,7 @@ function Resumen({ r }: { r: ResumenProfesional }) {
               <li key={i} className="py-2.5 first:pt-0 last:pb-0">
                 <div className="text-[15px] font-semibold">
                   {m.nombre}
+                  {m.droga ? <span className="font-normal text-muted-foreground"> ({m.droga})</span> : null}
                   {m.dosis ? ` · ${m.dosis} ${m.unidad}` : ""}
                 </div>
                 <div className="mt-0.5 text-[13px] text-muted-foreground">

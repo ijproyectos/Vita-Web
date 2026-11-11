@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/dal";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import { condicionDesdeDetalle } from "@/lib/perfil/tipos";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
-import type { EstadoAccion } from "../rutina/actions";
+import type { EstadoAccion } from "@/lib/acciones";
 
 // Condiciones y alergias (V7): alta, edición y baja sobre el PERFIL ACTIVO.
 // Nunca lanzan; con permiso "ver" devuelven el mensaje de solo lectura.

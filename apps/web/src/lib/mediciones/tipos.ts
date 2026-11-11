@@ -356,7 +356,7 @@ export function hrefDetalleMetrica(m: ConMetrica): string {
 }
 
 export function hrefNuevaMedicion(
-  opciones: { tipo?: TipoRegistrable; nombre?: string | null; unidad?: string | null; hora?: string; volver?: string } = {}
+  opciones: { tipo?: TipoRegistrable; nombre?: string | null; unidad?: string | null; hora?: string; volver?: string; ahora?: boolean } = {}
 ): string {
   const q = new URLSearchParams();
   if (opciones.tipo) q.set("tipo", opciones.tipo);
@@ -364,6 +364,8 @@ export function hrefNuevaMedicion(
   if (opciones.unidad) q.set("unidad", opciones.unidad);
   if (opciones.hora) q.set("hora", opciones.hora);
   if (opciones.volver) q.set("volver", opciones.volver);
+  // "Es hora de medir": la medición se registra ahora, sin elegir fecha (con `hora` ya se entiende así).
+  if (opciones.ahora) q.set("ahora", "1");
   const s = q.toString();
   return `${RUTA_MONITOREO}/agregar${s ? `?${s}` : ""}`;
 }

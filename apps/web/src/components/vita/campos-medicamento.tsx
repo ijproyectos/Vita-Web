@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -66,31 +65,27 @@ export function FilaCuando({ cuando, onClick }: { cuando: CuandoForm; onClick: (
   );
 }
 
-/** Fila de stock. La pastilla se cuenta con foto (`href`); lo demás se carga a mano (`onClick`). */
+/**
+ * Fila de stock del alta y la edición: siempre se carga a mano (`onClick`).
+ * Contar con foto vive en el medicamento ya guardado (no sale del formulario).
+ */
 export function FilaStock({
   forma,
   stock,
   consumoPorDia,
-  href,
   onClick,
 }: {
   forma: FormaMedicamento;
   stock: number | null;
   consumoPorDia: number;
-  href?: string;
-  onClick?: () => void;
+  onClick: () => void;
 }) {
   const titulo = CONFIG_FORMA[forma].tituloStock;
   if (!titulo) return null;
   const { texto, alerta } = resumenStock(forma, stock, consumoPorDia);
-  const contenido = <ContenidoFila icono="camera" titulo={titulo} resumen={texto} alerta={alerta} />;
-  return href ? (
-    <Link href={href} className={CLASE_FILA}>
-      {contenido}
-    </Link>
-  ) : (
+  return (
     <button type="button" onClick={onClick} className={CLASE_FILA}>
-      {contenido}
+      <ContenidoFila icono="pill" titulo={titulo} resumen={texto} alerta={alerta} />
     </button>
   );
 }

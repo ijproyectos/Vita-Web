@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { momentoDelDia, normalizarHora, ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_MOMENTO } from "./momento";
+import { horaParaMomento, minutosFueraDelMomento, momentoDelDia, moverHora, normalizarHora, ORDEN_MOMENTOS, ETIQUETA_MOMENTO, RANGO_MOMENTO } from "./momento";
 
 describe("momentoDelDia", () => {
   it.each([
@@ -56,5 +56,42 @@ describe("normalizarHora", () => {
   it("rechaza segundos distintos de 00 (08:00:99, 08:00:30)", () => {
     expect(normalizarHora("08:00:99")).toBeNull();
     expect(normalizarHora("08:00:30")).toBeNull();
+  });
+});
+
+describe("moverHora", () => {
+  it("suma y resta minutos dando la vuelta al día", () => {
+    expect(moverHora("08:00", 30)).toBe("08:30");
+    expect(moverHora("23:30", 30)).toBe("00:00");
+    expect(moverHora("00:00", -30)).toBe("23:30");
+  });
+});
+
+describe("minutosFueraDelMomento", () => {
+  it("adentro del momento es 0, también en la noche que cruza la medianoche", () => {
+    expect(minutosFueraDelMomento("09:00", "mañana")).toBe(0);
+    expect(minutosFueraDelMomento("23:30", "noche")).toBe(0);
+    expect(minutosFueraDelMomento("02:00", "noche")).toBe(0);
+  });
+
+  it("mide la distancia al borde más cercano", () => {
+    expect(minutosFueraDelMomento("06:30", "mañana")).toBe(30);
+    expect(minutosFueraDelMomento("08:00", "noche")).toBe(60);
+    expect(minutosFueraDelMomento("14:30", "mediodia")).toBe(30);
+  });
+});
+
+describe("horaParaMomento", () => {
+  it("respeta una hora cercana (06:30 en ayunas sigue siendo mañana)", () => {
+    expect(horaParaMomento("06:30", "mañana", "08:00")).toBe("06:30");
+  });
+
+  it("mueve una hora lejana a la sugerida del momento", () => {
+    expect(horaParaMomento("08:00", "noche", "21:00")).toBe("21:00");
+    expect(horaParaMomento("22:00", "mañana", "08:00")).toBe("08:00");
+  });
+
+  it("si ya está en el momento no la toca", () => {
+    expect(horaParaMomento("19:30", "tarde", "17:00")).toBe("19:30");
   });
 });

@@ -11,6 +11,9 @@ const ACCIONES_ESCRITURA = new Set([
   "profile_updated",
   "condition_added",
   "allergy_added",
+  "measurement_added",
+  "appointment_updated",
+  "appointment_deleted",
 ]);
 
 export function esAccionDeEscritura(tipo: string): boolean {

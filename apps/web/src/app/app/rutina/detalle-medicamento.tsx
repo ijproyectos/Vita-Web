@@ -129,7 +129,7 @@ export function DetalleMedicamento({
       eyebrow={eyebrow}
       eyebrowClassName={tono.ink}
       titulo={med.nombre}
-      subtitulo={textoDosis(med) || undefined}
+      subtitulo={[med.droga, textoDosis(med)].filter(Boolean).join(" · ") || undefined}
     >
       <div className="grid grid-cols-2 gap-2">
         <Dato label="Horario" valor={horarios.join(" · ")} sub={porDia === 1 ? "1 vez por día" : `${porDia} veces por día`} />
