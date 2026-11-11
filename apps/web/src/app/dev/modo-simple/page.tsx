@@ -5,7 +5,7 @@ import { VistaPreviaModoSimple } from "./vista";
 
 // Vista previa de la pantalla principal del modo simple SIN login, para capturas. Solo dev/test:
 // 404 en producción salvo NEXT_PUBLIC_ENABLE_TEST_LOGIN === "true" (mismo criterio que /dev/charla-simple).
-// `?vista=` : grupo (default, 3 pastillas a la misma hora) | una | alertado. Abajo, la lista "Hoy" con todos los estados.
+// `?vista=` : grupo (default, 3 pastillas a la misma hora) | una | alertado | rutina (la pantalla "Tu rutina de hoy"). Abajo, la lista "Hoy" con todos los estados.
 
 const TRES: Dosis[] = [
   { id: "3", nombre: "Metformina", dosis: "850", unidad: "mg", horaProgramada: "13:00" },
@@ -30,7 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ v
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md justify-center bg-cream">
       <div className="relative flex h-dvh w-full max-w-md flex-col overflow-hidden bg-canvas">
-        <VistaPreviaModoSimple grupo={grupo} filas={vista === "una" ? FILAS.filter((f) => f.id !== "4" && f.id !== "5") : FILAS} alertado={vista === "alertado"} />
+        <VistaPreviaModoSimple grupo={grupo} filas={vista === "una" ? FILAS.filter((f) => f.id !== "4" && f.id !== "5") : FILAS} alertado={vista === "alertado"} soloLista={vista === "rutina"} />
       </div>
     </div>
   );
