@@ -14,6 +14,7 @@ const SECCIONES = [
   "Condiciones y alergias",
   "Tus medicamentos con dosis, horarios y cómo tomarlos",
   "Qué porcentaje de las tomas cumpliste en los últimos 14 días",
+  "Tus mediciones de los últimos 30 días (presión, glucemia, peso…)",
   "Resumen de tus estudios recientes (sin las fotos)",
   "Tu contacto de emergencia",
 ];

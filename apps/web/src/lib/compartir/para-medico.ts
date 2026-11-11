@@ -2,10 +2,14 @@
 // PURO: lo usa el PDF de "Para tu médico". El link público (/p/[token]) sale
 // de la RPC `resumen_profesional` (056); este módulo copia sus reglas para que
 // el PDF y el link muestren lo mismo. Si cambia una, cambiar la otra.
-import type { ResumenProfesional } from "./tipos";
+import { formatearNumero, formatearValor, metaDe, esTipoRegistrable, ETIQUETA_CONTEXTO, esContextoGlucemia } from "@/lib/mediciones/tipos";
+import type { MedicionParaMedico, ResumenProfesional } from "./tipos";
 
 export const DIAS_CUMPLIMIENTO = 14;
+export const DIAS_MEDICIONES = 30;
 const MAX_ESTUDIOS = 5;
+const MAX_MEDICIONES = 60;
+const ULTIMAS_POR_METRICA = 5;
 // Igual que `dias_recurrentes` (sin tildes). getUTCDay: 0 = domingo.
 const DIAS_SEMANA = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
 
@@ -91,6 +95,8 @@ export function armarResumenParaMedico(args: {
   /** Fechas AR de las tomas marcadas como tomadas en los últimos 14 días. */
   tomadas: string[];
   estudios: EstudioParaMedico[];
+  /** Mediciones de los últimos 30 días (cualquier orden). */
+  mediciones: MedicionParaMedico[];
   hoy: string;
   generadoEn: string;
 }): ResumenProfesional {
@@ -165,6 +171,57 @@ export function armarResumenParaMedico(args: {
     // El médico no ve los turnos (decisión del usuario 2026-11-11).
     turnos: [],
     estudios,
+    mediciones: [...args.mediciones].sort((a, b) => b.medido_at.localeCompare(a.medido_at)).slice(0, MAX_MEDICIONES).map((m) => ({
+      tipo: m.tipo,
+      nombre_otra: m.nombre_otra ?? null,
+      unidad_otra: m.unidad_otra ?? null,
+      valor: Number(m.valor),
+      valor_secundario: m.valor_secundario == null ? null : Number(m.valor_secundario),
+      contexto: m.contexto ?? null,
+      medido_at: m.medido_at,
+    })),
     contacto_emergencia: { nombre: p?.contacto_emergencia_nombre ?? null, telefono: p?.contacto_emergencia_telefono ?? null },
   };
+}
+
+export type GrupoMediciones = {
+  nombre: string;
+  unidad: string;
+  cantidad: number;
+  /** Promedio del período ("128/82" en presión). */
+  promedio: string;
+  /** Las más nuevas primero. */
+  ultimas: { valor: string; medidoAt: string; contexto: string | null }[];
+};
+
+/** Agrupa las mediciones por métrica para el reporte (una "Otra" por su nombre). */
+export function agruparMediciones(mediciones: MedicionParaMedico[]): GrupoMediciones[] {
+  const grupos = new Map<string, MedicionParaMedico[]>();
+  for (const m of mediciones) {
+    if (!esTipoRegistrable(m.tipo)) continue;
+    const clave = m.tipo === "otra" ? `otra:${(m.nombre_otra ?? "").trim().toLowerCase()}` : m.tipo;
+    grupos.set(clave, [...(grupos.get(clave) ?? []), m]);
+  }
+  return [...grupos.values()].map((lista) => {
+    const ordenadas = [...lista].sort((a, b) => b.medido_at.localeCompare(a.medido_at));
+    const primera = ordenadas[0];
+    const meta = metaDe({ tipo: primera.tipo as Parameters<typeof metaDe>[0]["tipo"], nombre_otra: primera.nombre_otra, unidad_otra: primera.unidad_otra });
+    const prom = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
+    const diastolicas = ordenadas.map((m) => m.valor_secundario).filter((x): x is number => x != null);
+    const promedio =
+      primera.tipo === "presion" && diastolicas.length > 0
+        ? `${formatearNumero(prom(ordenadas.map((m) => m.valor)), 0)}/${formatearNumero(prom(diastolicas), 0)}`
+        : formatearNumero(prom(ordenadas.map((m) => m.valor)), meta.decimales);
+    return {
+      nombre: meta.nombre,
+      unidad: meta.unidad,
+      cantidad: ordenadas.length,
+      promedio,
+      ultimas: ordenadas.slice(0, ULTIMAS_POR_METRICA).map((m) => ({
+        valor: formatearValor({ tipo: m.tipo as Parameters<typeof formatearValor>[0]["tipo"], valor: m.valor, valor_secundario: m.valor_secundario }),
+        medidoAt: m.medido_at,
+        contexto: esContextoGlucemia(m.contexto) && m.contexto !== "otro" ? ETIQUETA_CONTEXTO[m.contexto] : null,
+      })),
+    };
+  });
 }

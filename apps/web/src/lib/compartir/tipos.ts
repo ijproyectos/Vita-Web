@@ -86,4 +86,16 @@ export type ResumenProfesional = {
     valores: { nombre: string; valor: string }[];
   }[];
   contacto_emergencia: { nombre: string | null; telefono: string | null };
+  /** Últimos 30 días, las más nuevas primero (máx. 60). Migración 058: sin ella falta en el link. */
+  mediciones?: MedicionParaMedico[];
+};
+
+export type MedicionParaMedico = {
+  tipo: string;
+  nombre_otra?: string | null;
+  unidad_otra?: string | null;
+  valor: number;
+  valor_secundario: number | null;
+  contexto: string | null;
+  medido_at: string;
 };

@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { textoQuedan } from "@/lib/inventario/tipos";
 import type { ResumenProfesional } from "@/lib/compartir/tipos";
 import { VitaWordmark } from "@/components/vita/v-mark";
+import { agruparMediciones, DIAS_MEDICIONES } from "@/lib/compartir/para-medico";
+import { ZONA_AR } from "@/lib/tiempo-ar";
 
 const MOMENTOS = [
   { clave: "mañana", label: "Mañana" },
@@ -22,10 +24,18 @@ function fechaSimple(iso: string | null | undefined): string {
   return a && m && d ? `${d}/${m}/${a}` : iso;
 }
 
+// "11/11 09:30" en hora de Argentina.
+function diaYHora(iso: string): string {
+  const partes = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: ZONA_AR }).formatToParts(new Date(iso));
+  const p = (t: string) => partes.find((x) => x.type === t)?.value ?? "";
+  return `${p("day")}/${p("month")} ${p("hour")}:${p("minute")}`;
+}
+
 /**
  * Resumen de salud para el médico: lo mismo en el link (/p/[token]) y en el
  * PDF de "Para tu médico". Sin turnos, tomas una por una, cuidadores ni charla
  * con vita (decisión del usuario 2026-11-11); el cumplimiento va solo como %.
+ * Las mediciones van agrupadas por métrica: promedio y las últimas 5.
  */
 export function ReporteMedico({ r, subtitulo, accion }: { r: ResumenProfesional; subtitulo: string; accion?: ReactNode }) {
   const p = r.paciente;
@@ -147,6 +157,42 @@ export function ReporteMedico({ r, subtitulo, accion }: { r: ResumenProfesional;
           </div>
         )}
       </Seccion>
+
+      {/* Sin la migración 058 el link no trae mediciones: la sección no aparece. */}
+      {r.mediciones && (
+        <Seccion titulo={`Mediciones (últimos ${DIAS_MEDICIONES} días)`}>
+          {r.mediciones.length === 0 ? (
+            <Vacio />
+          ) : (
+            <ul className="flex flex-col divide-y">
+              {agruparMediciones(r.mediciones).map((g) => (
+                <li key={g.nombre} className="evitar-corte py-2.5 first:pt-0 last:pb-0">
+                  <div className="text-[15px] font-semibold">
+                    {g.nombre}
+                    <span className="font-normal text-muted-foreground">
+                      {" "}
+                      · promedio {g.promedio}
+                      {g.unidad ? ` ${g.unidad}` : ""} · {g.cantidad} {g.cantidad === 1 ? "medición" : "mediciones"}
+                    </span>
+                  </div>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {g.ultimas.map((u, i) => (
+                      <li key={i} className="flex gap-3 text-[13px]">
+                        <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{diaYHora(u.medidoAt)}</span>
+                        <span className="font-medium tabular-nums">
+                          {u.valor}
+                          {g.unidad ? ` ${g.unidad}` : ""}
+                        </span>
+                        {u.contexto && <span className="text-muted-foreground">{u.contexto}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Seccion>
+      )}
 
       <Seccion titulo="Estudios recientes" cantidad={r.estudios.length}>
         {r.estudios.length === 0 ? (

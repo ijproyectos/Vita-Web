@@ -9,12 +9,14 @@ import {
   type EnlaceCreado,
   type EnlaceProfesional,
   type EstadoEnlace,
+  type MedicionParaMedico,
   type ResumenProfesional,
 } from "./tipos";
 import { fechaEnAR } from "@/lib/tiempo-ar";
 import {
   armarResumenParaMedico,
   DIAS_CUMPLIMIENTO,
+  DIAS_MEDICIONES,
   restarDias,
   type EstudioParaMedico,
   type MedicamentoParaMedico,
@@ -107,14 +109,17 @@ export async function obtenerResumenParaMedico(supabase: Cliente, personaId: str
   const hoy = fechaEnAR();
   const desde = restarDias(hoy, DIAS_CUMPLIMIENTO - 1);
   // `select("*")`: forma, fecha_fin y droga son de migraciones que pueden no estar aplicadas.
-  const [perfil, meds, inventario, tomas, estudios] = await Promise.all([
+  const desdeMediciones = new Date(Date.now() - DIAS_MEDICIONES * 24 * 60 * 60 * 1000).toISOString();
+  const [perfil, meds, inventario, tomas, estudios, mediciones] = await Promise.all([
     supabase.from("perfiles").select("*").eq("id", personaId).maybeSingle(),
     supabase.from("medicamentos").select("*").eq("usuario_id", personaId),
     supabase.from("inventario_pastillas").select("id, stock").eq("usuario_id", personaId),
     supabase.from("medicamentos_tomas").select("fecha").eq("usuario_id", personaId).eq("tomado", true).gte("fecha", desde).lte("fecha", hoy),
     supabase.from("estudios").select("tipo, fecha, resumen, valores, estado, created_at").eq("usuario_id", personaId).eq("estado", "listo"),
+    // `*`: nombre_otra/unidad_otra son de la 053.
+    supabase.from("mediciones").select("*").eq("usuario_id", personaId).gte("medido_at", desdeMediciones).order("medido_at", { ascending: false }).limit(60),
   ]);
-  const error = perfil.error ?? meds.error ?? inventario.error ?? tomas.error ?? estudios.error;
+  const error = perfil.error ?? meds.error ?? inventario.error ?? tomas.error ?? estudios.error ?? mediciones.error;
   if (error) throw new Error(`obtenerResumenParaMedico: ${error.message}`);
 
   const medicamentos: MedicamentoParaMedico[] = (meds.data ?? []).map((m) => ({
@@ -127,6 +132,7 @@ export async function obtenerResumenParaMedico(supabase: Cliente, personaId: str
     stockPorInventario: new Map((inventario.data ?? []).map((i) => [i.id as string, Number(i.stock)])),
     tomadas: (tomas.data ?? []).map((t) => String(t.fecha).slice(0, 10)),
     estudios: (estudios.data ?? []) as EstudioParaMedico[],
+    mediciones: (mediciones.data ?? []) as MedicionParaMedico[],
     hoy,
     generadoEn: new Date().toISOString(),
   });
