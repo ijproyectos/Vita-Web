@@ -166,6 +166,7 @@ Ninguna de estas tiene un `onClick`/handler real en `vita.ia.html` tampoco:
 - [ ] Probar el login con Google y el recorrido completo de punta a punta en https://vitappweb.netlify.app/ (nunca se probó con un navegador real).
 - [ ] Si en algún momento se quiere activar el email de alertas de dosis vencida (hoy el aviso real es el push y el popup dentro de `/cuidar`): cargar `RESEND_API_KEY` en Netlify. `009`/`018` ya están aplicadas, `CRON_SECRET` está cargada y el job `dosis-vencidas` ya corre cada 5 min.
 - [ ] Completar `RESPONSABLE` y `CONTACTO_EMAIL` en `lib/legal/datos.ts` (placeholders en las páginas públicas de privacidad y términos) y pasar ambos textos por revisión legal.
+- [ ] **Antes de producción: latencia del chat** (cortes "Se me hizo largo", presupuesto de 9 s). Datos del 2026-11-11: el primer token tarda 4,3–5,1 s y el modelo escribe rápido; el tiempo se va en ~15–20 consultas a Supabase hechas en fila en `/api/chat` y quizás en la región. Ya hecho: `add_medication` con `extra_times` (una sola llamada para varias tomas). Falta: medir por etapas, paralelizar las lecturas previas, poner las funciones de Netlify en `us-west-2` (junto a Supabase) y subir el presupuesto con el timeout de Netlify. Detalle en `odd/tasks/chat-latencia.md` (local).
 - [ ] Rotar la contraseña de la base y la `ANTHROPIC_API_KEY` (circularon en el chat). Borrar `medicamentos_tomas_bak_032` (respaldo de la 032, 8 filas) cuando se confirme que no hace falta.
 
 ## Stack
