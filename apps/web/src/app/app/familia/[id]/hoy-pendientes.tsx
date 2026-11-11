@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { recordarleAction } from "@/app/cuidar/[elderId]/actions";
 import type { DosisPendiente } from "@/lib/familia/pendientes-hoy";
+import { VitaIcon } from "@/lib/vita-icons";
 
 const SIN_CELULAR = "Conectá su celular para que le lleguen los avisos";
 const SIN_AVISOS = "No tiene avisos activados en su celular. Probá con una llamada o un WhatsApp.";
@@ -71,11 +72,13 @@ export function HoyPendientes({
         <h2 className="eyebrow text-subtle">Hoy</h2>
         <span className="text-[11.5px] font-semibold text-subtle">{subtitulo}</span>
       </div>
-      <div className="rounded-[20px] bg-card shadow-card">
+      <div className="overflow-hidden rounded-[20px] bg-card shadow-card">
         {pendientes.length > 0 && (
         <>
-        <div className="flex items-center gap-3 px-4 pb-2.5 pt-[15px]">
-          <span aria-hidden className="size-2.5 shrink-0 rounded-full bg-aviso ring-4 ring-aviso/15" />
+        <div className="flex items-center gap-3 bg-destructive/5 px-4 pb-3 pt-3.5">
+          <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <VitaIcon name="alert-triangle" size={17} />
+          </span>
           <div className="min-w-0 flex-1">
             <div className="font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">
               {pendientes.length === 1 ? "1 dosis sin confirmar" : `${pendientes.length} dosis sin confirmar`}
@@ -83,7 +86,7 @@ export function HoyPendientes({
             <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Le llega un aviso a su celular</div>
           </div>
           {puedeRecordar && sinAvisar.length > 1 && (
-            <button type="button" disabled={pendiente} onClick={() => recordar(sinAvisar.map((p) => p.id))} className="shrink-0 text-[12.5px] font-extrabold text-teal-deep disabled:opacity-60">
+            <button type="button" disabled={pendiente} onClick={() => recordar(sinAvisar.map((p) => p.id))} className="shrink-0 rounded-full bg-primary px-3 py-2 text-[12px] font-extrabold text-primary-foreground disabled:opacity-60">
               Recordarle todo
             </button>
           )}
@@ -92,9 +95,9 @@ export function HoyPendientes({
           {pendientes.map((p) => {
             const avisado = avisados.includes(p.id);
             return (
-              <li key={p.id} className="flex items-center gap-3 border-t border-foreground/[0.05] px-4 py-3">
+              <li key={p.id} className="flex items-center gap-3 border-t border-foreground/[0.05] px-4 py-3.5">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13.5px] font-bold">{p.nombre}</div>
+                  <div className="truncate font-heading text-[14.5px] font-extrabold tracking-[-0.02em] text-destructive">{p.nombre}</div>
                   <div className="mt-0.5 truncate text-[11.5px] font-medium text-subtle">{p.meta}</div>
                 </div>
                 {puedeRecordar && (
@@ -102,8 +105,9 @@ export function HoyPendientes({
                     type="button"
                     disabled={pendiente}
                     onClick={() => recordar([p.id])}
-                    className={`shrink-0 rounded-full px-3.5 py-[9px] text-[12.5px] font-extrabold disabled:opacity-60 ${avisado ? "bg-secondary text-subtle" : "bg-primary text-primary-foreground"}`}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-[9px] text-[12.5px] font-extrabold disabled:opacity-60 ${avisado ? "bg-secondary text-subtle" : "bg-primary/10 text-teal-deep"}`}
                   >
+                    {!avisado && <VitaIcon name="bell" size={14} strokeWidth={2.3} />}
                     {avisado ? "Avisado" : "Recordarle"}
                   </button>
                 )}

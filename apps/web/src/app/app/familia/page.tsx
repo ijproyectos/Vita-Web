@@ -95,24 +95,6 @@ export default async function FamiliaPage() {
             })}
           </ul>
         )}
-        {familia.length > 0 && (
-          // Propio de la app (no está en el diseño): /cuidar tiene lo que Familia
-          // no — "Recordarle" una dosis y las dosis vencidas de todas las
-          // personas a cargo en un solo lugar. Es a donde llevan los avisos push.
-          <Link
-            href="/cuidar"
-            className="mt-2.5 flex items-center gap-3 rounded-[20px] bg-card px-4 py-3.5 shadow-card transition-colors hover:bg-foreground/[0.02]"
-          >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-teal-deep">
-              <VitaIcon name="activity" size={17} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-heading text-[14px] font-extrabold tracking-[-0.02em]">Panel de cuidador</div>
-              <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Dosis pendientes y recordatorios de todos</div>
-            </div>
-            <VitaIcon name="chevron-right" size={17} className="shrink-0 text-faint" />
-          </Link>
-        )}
       </section>
 
       <section>
