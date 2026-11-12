@@ -334,96 +334,93 @@ export function Pantalla({
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-cream">
-      {fase === "confirmado" ? (
-        <FaseConfirmado grupo={grupo} onDeshacer={deshacer} />
-
-      ) : (
-        <>
-          <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-[max(1.25rem,env(safe-area-inset-top))]">
-            <BarraSinConexion grande />
-            <Cabecera
-              saludo={saludo}
-              nombre={nombre}
-              fechaTexto={fechaTexto}
-              onAyuda={() => setFlujoAyuda(true)}
-              // Sin teléfono: el botón abre el flujo (avisar a la familia) en vez de llamar directo.
-              telefono={null}
-              contacto={nombreAyuda}
-              conAyuda={config.ayuda}
-            />
-            {ayudaPedida && (
-              <div role="status" className="mt-4 flex items-center gap-3 rounded-[20px] bg-success/12 px-4 py-3.5 text-[17px] font-bold leading-[1.35] text-foreground">
-                <VitaIcon name="check" size={22} strokeWidth={2.6} className="shrink-0 text-success" />
-                {textoAyudaSaben(ayudaPedida.nombres, ayudaPedida.hora) || `Tu familia sabe que pediste ayuda a las ${ayudaPedida.hora}.`}
-              </div>
-            )}
-
-            <div className="mt-5 flex flex-col gap-4">
-              <ActivarNotificaciones variante="simple" />
-              {recordatorios.length > 0 && <AvisoRecordatorio grande items={recordatorios} />}
-
-              {turno && <TarjetaTurno turno={turno} />}
-
-              {fase === "descanso" && <TarjetaDescanso nombre={nombre} hayMedsHoy={hayMedsHoy} proximaHora={siguientes[0]?.horaProgramada} />}
-
-              {mostrarTarjeta && posponer.posponido && (
-                <TarjetaPospuesta
-                  grupo={grupo}
-                  minutos={posponer.minutosRestantes}
-                  confirmando={pendiente}
-                  onConfirmar={confirmar}
-                  onVolver={verAhora}
-                  conAviso={pushActivo}
-                />
-              )}
-
-              {mostrarTarjeta && !posponer.posponido && (
-                <TarjetaGrupo
-                  grupo={grupo}
-                  momento={momento}
-                  alertado={fase === "alertado"}
-                  deAyer={!!fechaDosis}
-                  onNoTome={() => setPreguntarNo(true)}
-                  confirmando={pendiente}
-                  escuchandoVoz={estadoVoz !== "inactivo"}
-                  silenciada={silenciada}
-                  conVoz={config.voz}
-                  puedePosponer={config.posponer}
-                  minutosPosponer={config.posponer_min}
-                  onConfirmar={confirmar}
-                  onEscuchar={alEscuchar}
-                  onPosponer={posponerAqui}
-                  onAlternarVoz={alternarEscuchaVoz}
-                />
-              )}
-
-              {medirAhora && (
-                <TarjetaMedirAhora medir={medirAhora} onAnotar={() => setTeclado({ tipo: medirAhora.tipo, ultimo: ultimaDe(medirAhora.tipo) })} />
-              )}
-
-              {mediciones && (
-                <TarjetaMediciones
-                  titulo={mediciones.titulo}
-                  mediciones={mediciones.items}
-                  onTocar={(tipo) => setTeclado({ tipo, ultimo: ultimaDe(tipo) })}
-                />
-              )}
-
-              {porCorregir.length > 0 && <TarjetaPorCorregir items={porCorregir} />}
-
-              {filas.length > 0 ? (
-                // "Después" (lo que sigue, con nombres) queda a la vista; el resto del día está en la rutina completa.
-                <AccesoRutinaCompleta filas={filas}>
-                  {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
-                </AccesoRutinaCompleta>
-              ) : (
-                siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />
-              )}
-            </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-[max(1.25rem,env(safe-area-inset-top))]">
+        <BarraSinConexion grande />
+        <Cabecera
+          saludo={saludo}
+          nombre={nombre}
+          fechaTexto={fechaTexto}
+          onAyuda={() => setFlujoAyuda(true)}
+          // Sin teléfono: el botón abre el flujo (avisar a la familia) en vez de llamar directo.
+          telefono={null}
+          contacto={nombreAyuda}
+          conAyuda={config.ayuda}
+        />
+        {ayudaPedida && (
+          <div role="status" className="mt-4 flex items-center gap-3 rounded-[20px] bg-success/12 px-4 py-3.5 text-[17px] font-bold leading-[1.35] text-foreground">
+            <VitaIcon name="check" size={22} strokeWidth={2.6} className="shrink-0 text-success" />
+            {textoAyudaSaben(ayudaPedida.nombres, ayudaPedida.hora) || `Tu familia sabe que pediste ayuda a las ${ayudaPedida.hora}.`}
           </div>
-          <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
-        </>
-      )}
+        )}
+
+        <div className="mt-5 flex flex-col gap-4">
+          <ActivarNotificaciones variante="simple" />
+          {recordatorios.length > 0 && <AvisoRecordatorio grande items={recordatorios} />}
+
+          {turno && <TarjetaTurno turno={turno} />}
+
+          {fase === "descanso" && <TarjetaDescanso nombre={nombre} hayMedsHoy={hayMedsHoy} proximaHora={siguientes[0]?.horaProgramada} />}
+
+          {/* "Ya tomé" transforma la misma tarjeta (no una pantalla aparte): queda
+              "¡Muy bien!" con "Me equivoqué" hasta que la página se recarga. */}
+          {fase === "confirmado" && <TarjetaConfirmada grupo={grupo} onDeshacer={deshacer} />}
+
+          {mostrarTarjeta && posponer.posponido && (
+            <TarjetaPospuesta
+              grupo={grupo}
+              minutos={posponer.minutosRestantes}
+              confirmando={pendiente}
+              onConfirmar={confirmar}
+              onVolver={verAhora}
+              conAviso={pushActivo}
+            />
+          )}
+
+          {mostrarTarjeta && !posponer.posponido && (
+            <TarjetaGrupo
+              grupo={grupo}
+              momento={momento}
+              alertado={fase === "alertado"}
+              deAyer={!!fechaDosis}
+              onNoTome={() => setPreguntarNo(true)}
+              confirmando={pendiente}
+              escuchandoVoz={estadoVoz !== "inactivo"}
+              silenciada={silenciada}
+              conVoz={config.voz}
+              puedePosponer={config.posponer}
+              minutosPosponer={config.posponer_min}
+              onConfirmar={confirmar}
+              onEscuchar={alEscuchar}
+              onPosponer={posponerAqui}
+              onAlternarVoz={alternarEscuchaVoz}
+            />
+          )}
+
+          {medirAhora && (
+            <TarjetaMedirAhora medir={medirAhora} onAnotar={() => setTeclado({ tipo: medirAhora.tipo, ultimo: ultimaDe(medirAhora.tipo) })} />
+          )}
+
+          {mediciones && (
+            <TarjetaMediciones
+              titulo={mediciones.titulo}
+              mediciones={mediciones.items}
+              onTocar={(tipo) => setTeclado({ tipo, ultimo: ultimaDe(tipo) })}
+            />
+          )}
+
+          {porCorregir.length > 0 && <TarjetaPorCorregir items={porCorregir} />}
+
+          {filas.length > 0 ? (
+            // "Después" (lo que sigue, con nombres) queda a la vista; el resto del día está en la rutina completa.
+            <AccesoRutinaCompleta filas={filas}>
+              {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
+            </AccesoRutinaCompleta>
+          ) : (
+            siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />
+          )}
+        </div>
+      </div>
+      <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
 
       <SheetAjustes
         open={ajustesAbiertos}
@@ -505,13 +502,13 @@ function TarjetaPospuesta({
   );
 }
 
-function FaseConfirmado({ grupo, onDeshacer }: { grupo: Dosis[]; onDeshacer: () => void }) {
+function TarjetaConfirmada({ grupo, onDeshacer }: { grupo: Dosis[]; onDeshacer: () => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-teal-deep px-8 text-center text-primary-foreground">
-      <div className="flex size-24 items-center justify-center rounded-full bg-primary-foreground/20">
-        <VitaIcon name="check" size={44} color="var(--primary-foreground)" />
+    <div role="status" className="flex flex-col items-center gap-3 rounded-[28px] bg-teal-deep p-6 text-center text-primary-foreground shadow-card">
+      <div className="flex size-16 items-center justify-center rounded-full bg-primary-foreground/20">
+        <VitaIcon name="check" size={34} color="var(--primary-foreground)" />
       </div>
-      <div className="font-heading text-[32px] font-extrabold tracking-[-0.03em]">¡Muy bien!</div>
+      <div className="font-heading text-[30px] font-extrabold tracking-[-0.03em]">¡Muy bien!</div>
       <div className="text-[18px] opacity-90">
         {grupo.length === 1
           ? `Registramos que tomaste ${grupo[0].nombre}`
@@ -520,7 +517,7 @@ function FaseConfirmado({ grupo, onDeshacer }: { grupo: Dosis[]; onDeshacer: () 
       <button
         type="button"
         onClick={onDeshacer}
-        className="mt-6 min-h-14 rounded-full border-2 border-primary-foreground/60 px-6 text-[18px] font-bold text-primary-foreground transition-transform active:scale-[0.98] motion-reduce:transition-none"
+        className="mt-3 min-h-14 rounded-full border-2 border-primary-foreground/60 px-6 text-[18px] font-bold text-primary-foreground transition-transform active:scale-[0.98] motion-reduce:transition-none"
       >
         {grupo.length === 1 ? "Me equivoqué, no la tomé" : "Me equivoqué, no las tomé"}
       </button>
