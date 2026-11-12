@@ -27,7 +27,7 @@ export default async function MonitoreoPage() {
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pb-10 pt-1.5">
       <TopBar volverA="/app/mi-salud"
-        eyebrow="Mi salud"
+        eyebrow={activo.esPropio ? "Mi salud" : `Salud de ${activo.nombre.split(" ")[0]}`}
         title="Monitoreo activo"
         accionDerecha={
           puedeEditar ? (

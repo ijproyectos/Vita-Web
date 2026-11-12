@@ -35,7 +35,7 @@ export default async function MedicamentosPage(props: PageProps<"/app/medicament
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
       <TopBar volverA="/app/mi-salud"
-        eyebrow="Mi salud"
+        eyebrow={activo.esPropio ? "Mi salud" : `Salud de ${activo.nombre.split(" ")[0]}`}
         title={activo.esPropio ? "Mis medicamentos" : `Medicamentos de ${activo.nombre.split(" ")[0]}`}
       />
       <BannerPerfil perfil={activo} />
