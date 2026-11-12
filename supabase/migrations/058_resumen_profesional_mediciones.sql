@@ -5,6 +5,8 @@
 -- bloque `mediciones`. El PDF de "Para tu médico" arma lo mismo con la sesión
 -- (lib/compartir/para-medico.ts): si cambia una, cambiar la otra.
 --
+-- El resumen ya NO incluye los turnos (el médico no los ve, igual que en el PDF).
+--
 -- Requiere 052, 053 (columnas nombre_otra/unidad_otra) y 056 aplicadas antes.
 -- Sin esta migración el link se ve igual, sin la sección de mediciones.
 
@@ -25,7 +27,6 @@ declare
   v_paciente jsonb;
   v_medicamentos jsonb;
   v_adherencia jsonb;
-  v_turnos jsonb;
   v_estudios jsonb;
   v_mediciones jsonb;
 begin
@@ -131,26 +132,6 @@ begin
     ) tm
   ) x;
 
-  select coalesce(jsonb_agg(
-    jsonb_build_object(
-      'especialidad', s.especialidad,
-      'profesional', s.profesional,
-      'lugar', s.lugar,
-      'fecha', s.fecha,
-      'hora', s.hora,
-      'motivo', s.motivo
-    )
-    order by s.fecha, s.hora
-  ), '[]'::jsonb)
-  into v_turnos
-  from (
-    select t.especialidad, t.profesional, t.lugar, t.fecha, t.hora, t.motivo
-    from turnos t
-    where t.usuario_id = v_uid and t.fecha >= v_hoy_ar
-    order by t.fecha, t.hora
-    limit 5
-  ) s;
-
   -- Sin archivo_path / archivo_tipo / ids: nada que permita llegar a la imagen.
   select coalesce(jsonb_agg(
     jsonb_build_object(
@@ -201,7 +182,6 @@ begin
     'alergias', to_jsonb(coalesce(v_perfil.alergias, '{}'::text[])),
     'medicamentos', v_medicamentos,
     'adherencia', v_adherencia,
-    'turnos', v_turnos,
     'estudios', v_estudios,
     'mediciones', v_mediciones,
     'contacto_emergencia', jsonb_build_object(

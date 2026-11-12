@@ -43,6 +43,7 @@ describe("add_medication con varias tomas en una sola llamada (extra_times)", ()
     expect(datos).toMatchObject({ nombre: "Amoxicilina", dosis: "500mg", condicion: "Gripe", fechaFin: "2026-11-17" });
     expect(datos.tomas?.map((t) => t.hora)).toEqual(["09:00", "21:00"]);
     expect(datos.tomas?.every((t) => t.cantidad === 1 && t.indicacion === "despues-desayuno")).toBe(true);
+    expect(datos.tomas?.every((t) => t.conComida === "no-importa")).toBe(true);
     expect(r.accionUI).toMatchObject({ type: "medication_added", id: "a", name: "Amoxicilina", time: "09:00 y 21:00" });
   });
 

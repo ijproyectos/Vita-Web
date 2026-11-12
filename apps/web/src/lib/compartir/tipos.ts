@@ -71,7 +71,8 @@ export type ResumenProfesional = {
     porcentaje: number | null;
     por_dia: { fecha: string; programadas: number; tomadas: number }[];
   };
-  turnos: {
+  /** El médico no ve los turnos: la migración 058 ya no los manda. Se acepta vacío por si llega un link viejo. */
+  turnos?: {
     especialidad: string;
     profesional: string | null;
     lugar: string | null;

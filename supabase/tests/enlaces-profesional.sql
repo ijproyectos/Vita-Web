@@ -50,7 +50,7 @@ begin;
     raise notice 'PASS: 1a valid token returns a summary';
 
     if not (r ? 'paciente' and r ? 'condiciones' and r ? 'alergias' and r ? 'medicamentos'
-            and r ? 'adherencia' and r ? 'turnos' and r ? 'estudios' and r ? 'contacto_emergencia') then
+            and r ? 'adherencia' and not (r ? 'turnos') and r ? 'estudios' and r ? 'contacto_emergencia') then
       raise exception 'FAIL: 1b summary is missing sections: %', (select array_agg(k) from jsonb_object_keys(r) k);
     end if;
     raise notice 'PASS: 1b summary has all sections';
