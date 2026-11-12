@@ -104,7 +104,7 @@ export default async function PerfilPage() {
 
       {activo.esPropio && <TarjetaVitaPlus />}
 
-      <Grupo titulo="Mi salud">
+      <Grupo titulo={activo.esPropio ? "Mi salud" : `Salud de ${nombre.split(" ")[0]}`}>
         <FilaNav
           icon="heart"
           tono="rose"
