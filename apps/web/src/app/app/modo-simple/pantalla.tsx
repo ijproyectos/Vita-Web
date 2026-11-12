@@ -257,7 +257,7 @@ export function Pantalla({
   // dosis todavía sin marcar). Unos segundos, para dar tiempo a "Me equivoqué".
   useEffect(() => {
     if (!guardado) return;
-    const t = setTimeout(() => router.refresh(), 6000);
+    const t = setTimeout(() => router.refresh(), 3000);
     return () => clearTimeout(t);
   }, [guardado, router]);
 
