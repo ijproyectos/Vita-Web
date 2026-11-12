@@ -6,22 +6,34 @@ import { useSyncExternalStore } from "react";
 // vita (hablar y escuchar). Store mínimo a nivel módulo + evento `storage`
 // para que todos los componentes montados (chat, modo simple) queden en
 // sincronía sin setState en efectos.
+//
+// Sin preferencia guardada, cada pantalla decide el valor por defecto: el
+// chat normal arranca con sonido y el modo simple arranca silenciado (la
+// persona lo prende desde Ajustes). Tocar el interruptor guarda la elección
+// explícita y vale para las dos.
 const CLAVE = "vita_silenciada";
 
 const oyentes = new Set<() => void>();
-let valor: boolean | null = null; // null = todavía no leído de localStorage
+// "1" silenciada, "0" con sonido, "" sin elección guardada.
+type Guardado = "1" | "0" | "";
+let valor: Guardado | null = null; // null = todavía no leído de localStorage
 
-function leer(): boolean {
+function leer(): Guardado {
   try {
-    return window.localStorage.getItem(CLAVE) === "1";
+    const v = window.localStorage.getItem(CLAVE);
+    return v === "1" || v === "0" ? v : "";
   } catch {
-    return false;
+    return "";
   }
 }
 
-function snapshot(): boolean {
+function snapshot(): Guardado {
   if (valor === null) valor = leer();
   return valor;
+}
+
+export function silenciadaEfectiva(guardado: Guardado, porDefecto: boolean): boolean {
+  return guardado === "" ? porDefecto : guardado === "1";
 }
 
 function avisar() {
@@ -29,7 +41,7 @@ function avisar() {
 }
 
 function escribir(nuevo: boolean) {
-  valor = nuevo;
+  valor = nuevo ? "1" : "0";
   try {
     window.localStorage.setItem(CLAVE, nuevo ? "1" : "0");
   } catch {
@@ -57,11 +69,9 @@ function setSilenciada(nuevo: boolean) {
   escribir(nuevo);
 }
 
-function alternar() {
-  escribir(!snapshot());
-}
-
-export function useSilencioVita() {
-  const silenciada = useSyncExternalStore(suscribir, snapshot, () => false);
+export function useSilencioVita({ porDefecto = false }: { porDefecto?: boolean } = {}) {
+  const guardado = useSyncExternalStore(suscribir, snapshot, () => "" as Guardado);
+  const silenciada = silenciadaEfectiva(guardado, porDefecto);
+  const alternar = () => escribir(!silenciadaEfectiva(snapshot(), porDefecto));
   return { silenciada, alternar, setSilenciada };
 }

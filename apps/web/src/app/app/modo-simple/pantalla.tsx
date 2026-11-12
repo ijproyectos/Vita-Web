@@ -5,7 +5,6 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { useRefrescoPeriodico } from "@/components/vita/refresco-periodico";
-import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -132,11 +131,10 @@ export function Pantalla({
   const [preguntarNo, setPreguntarNo] = useState(false);
   const hayGrupo = grupo.length > 0;
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
-  const { silenciada, alternar: alternarSilencio } = useSilencioVita();
+  const { silenciada, alternar: alternarSilencio } = useSilencioVita({ porDefecto: true });
   const [charlaAbierta, setCharlaAbierta] = useState(false);
   const posponer = usePosponer(grupo.map((m) => m.id).join(","), config.posponer_min);
   const pushActivo = usePushActivo();
-  const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
   // Botón "Ayuda": pregunta, cuenta regresiva, avisa a la familia y ofrece llamar.
@@ -172,21 +170,12 @@ export function Pantalla({
     }
   }
 
-  function alDesbloquear() {
-    // Tiene que ser lo primero, todavía dentro del gesto sincrónico del
-    // tap — después de este punto todo es async y en Safari/iOS ya sería
-    // tarde para desbloquear el motor de audio (mismo criterio que
-    // vita-chat-overlay.tsx).
-    desbloquearVoz();
-    setAudioDesbloqueado(true);
-    void reproducirAnuncio();
-  }
-
-  // "Escuchar" de la tarjeta: también es un gesto del usuario, así que
-  // vuelve a desbloquear antes de cualquier await.
+  // "Escuchar" de la tarjeta: desbloquear tiene que ser lo primero, dentro
+  // del gesto sincrónico del tap (Safari/iOS no deja sonar sin un toque,
+  // mismo criterio que vita-chat-overlay.tsx). No hay pantalla previa de
+  // "Tocá para escuchar": la tarjeta se ve directo y vita lee al tocar.
   function alEscuchar() {
     desbloquearVoz();
-    setAudioDesbloqueado(true);
     void reproducirAnuncio();
   }
 
@@ -341,18 +330,13 @@ export function Pantalla({
               ? "calm"
               : "idle";
 
-  const pendienteDeGesto = (fase === "esperando" || fase === "alertado") && !posponer.posponido && !silenciada && config.voz && !audioDesbloqueado;
-  const mostrarTarjeta = (fase === "esperando" || fase === "alertado") && !pendienteDeGesto;
+  const mostrarTarjeta = fase === "esperando" || fase === "alertado";
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-cream">
       {fase === "confirmado" ? (
         <FaseConfirmado grupo={grupo} onDeshacer={deshacer} />
-      ) : pendienteDeGesto ? (
-        <>
-          <FaseGesto onTocar={alDesbloquear} estado={estadoAvatar} />
-          <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
-        </>
+
       ) : (
         <>
           <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-[max(1.25rem,env(safe-area-inset-top))]">
@@ -518,27 +502,6 @@ function TarjetaPospuesta({
         Verlas ahora
       </button>
     </div>
-  );
-}
-
-// vita protagonista también acá (es la primera pantalla que ve la persona
-// mayor), con un parlante chico como pista de que al tocar va a hablar.
-function FaseGesto({ onTocar, estado }: { onTocar: () => void; estado: EstadoAvatar }) {
-  return (
-    <button
-      type="button"
-      onClick={onTocar}
-      className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-28 text-center"
-    >
-      <div className="relative">
-        <VitaAvatar size={180} estado={estado} />
-        <div className="absolute -bottom-1 right-2 flex size-14 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep shadow-card">
-          <VitaIcon name="volume" size={26} />
-        </div>
-      </div>
-      <div className="font-heading text-[28px] font-extrabold tracking-[-0.03em]">Tocá para escuchar</div>
-      <div className="text-[16px] font-medium text-subtle">vita te va a leer tu medicación</div>
-    </button>
   );
 }
 

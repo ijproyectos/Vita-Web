@@ -107,7 +107,7 @@ export function CharlaSimple({
   inicial?: VistaInicialCharla;
 }) {
   const enLinea = useEnLinea() && !inicial?.sinInternet;
-  const { silenciada } = useSilencioVita();
+  const { silenciada } = useSilencioVita({ porDefecto: true });
 
   const [fase, setFase] = useState<Fase>(inicial?.fase ?? "inicio");
   const [pregunta, setPregunta] = useState(inicial?.pregunta ?? "");
