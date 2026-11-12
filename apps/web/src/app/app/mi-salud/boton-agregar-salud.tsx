@@ -4,8 +4,8 @@ import { useState } from "react";
 import { VitaIcon } from "@/lib/vita-icons";
 import { AgregarSheet } from "../rutina/agregar-sheet";
 
-// "+" de Mi Salud (D:487): abre la hoja "Agregar a tu salud" con Estudio y
-// "Pedírselo a vita", igual que el diseño.
+// "+" de Mi Salud: hoja "Agregar a tu salud" con Estudio, Cargar una medición
+// y Pedírselo a vita.
 export function BotonAgregarSalud({ nombrePersona }: { nombrePersona?: string | null }) {
   const [abierto, setAbierto] = useState(false);
   return (
@@ -18,7 +18,7 @@ export function BotonAgregarSalud({ nombrePersona }: { nombrePersona?: string | 
       >
         <VitaIcon name="plus" size={20} strokeWidth={2} />
       </button>
-      <AgregarSheet open={abierto} onOpenChange={setAbierto} nombrePersona={nombrePersona} />
+      <AgregarSheet open={abierto} onOpenChange={setAbierto} nombrePersona={nombrePersona} tipo="salud" />
     </>
   );
 }

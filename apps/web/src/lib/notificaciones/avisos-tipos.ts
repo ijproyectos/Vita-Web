@@ -18,6 +18,8 @@ export type TipoAviso =
   | "medicion_persona"
   | "turno_dia_antes"
   | "turno_2h"
+  | "turno_hoy"
+  | "turno_persona_hoy"
   | "stock_bajo"
   | "resumen_dia_persona"
   | "turno_persona_dia_antes"

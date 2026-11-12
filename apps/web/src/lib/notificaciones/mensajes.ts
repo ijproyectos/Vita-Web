@@ -203,6 +203,18 @@ export function payloadTurno2h(t: TurnoAviso): PayloadPush {
   };
 }
 
+/** Turno de hoy sin aviso la noche anterior (cargado hoy): "Hoy a las 15:30 tenés Cardiología". */
+export function payloadTurnoHoy(t: TurnoAviso): PayloadPush {
+  return {
+    title: `Hoy a las ${horaCorta(t.hora)} tenés ${t.especialidad}`,
+    body: conLlevar([t.profesional?.trim() || null, t.lugar?.trim() || null].filter(Boolean).join(" · "), t.llevar),
+    url: "/app/rutina",
+    tag: `turno-hoy-${t.turnoId}`,
+    actions: t.lugar ? [{ action: "como-llegar", title: "Cómo llegar" }] : undefined,
+    datos: urlMapas(t.lugar),
+  };
+}
+
 /** A un cuidador Admin, cuando la persona no tiene avisos activos en ningún celular. */
 export function payloadMedirPersona(d: { personaId: string; personaNombre: string; monitoreoId: string; que: string; hora: string; relacion?: string | null }): PayloadPush {
   return {
@@ -292,6 +304,28 @@ export function payloadCumpleanosPersona(d: {
     body: `Cumple ${d.edad}. Es un buen día para mandarle un saludo.`,
     url: urlFichaPersona(d.personaId, d.rolDestino),
     tag: `cumpleanos-persona-${d.personaId}-${d.fechaAR}`,
+  };
+}
+
+/** Turno de hoy de la persona que no recibió el aviso de la noche anterior: "Hoy a las 15:30 Elsa tiene Kinesiología". */
+export function payloadTurnoPersonaHoy(t: {
+  personaId: string;
+  personaNombre: string;
+  turnoId: string;
+  especialidad: string;
+  profesional: string | null;
+  hora: string;
+  acompanado?: boolean | null;
+  llevar?: unknown;
+  rolDestino?: "editar" | "ver" | null;
+  relacion?: string | null;
+}): PayloadPush {
+  const detalle = [t.profesional?.trim() || null, t.acompanado ? "pidió compañía" : null].filter(Boolean).join(" · ");
+  return {
+    title: `Hoy a las ${horaCorta(t.hora)} ${comoLlamarla(t.personaNombre, t.relacion).medio} tiene ${t.especialidad}`,
+    body: conLlevar(detalle, t.llevar),
+    url: urlFichaPersona(t.personaId, t.rolDestino),
+    tag: `turno-persona-hoy-${t.turnoId}`,
   };
 }
 

@@ -62,6 +62,45 @@ export async function marcarTodosLeidos(supabase: Cliente, usuarioId: string): P
   return !error;
 }
 
+/** Pedido de ayuda sin cerrar, para la tarjeta del Inicio. */
+export type PedidoAyudaPendiente = { id: string; titulo: string; cuerpo: string | null; url: string | null; hora: string };
+
+/** Ventana en la que un pedido de ayuda sin cerrar se sigue mostrando en el Inicio. */
+export const HORAS_PEDIDO_AYUDA_VISIBLE = 24;
+
+const HORA_AR = new Intl.DateTimeFormat("es-AR", {
+  timeZone: "America/Argentina/Buenos_Aires",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/**
+ * Pedidos de ayuda recibidos por la cuenta logueada (de cualquier persona que
+ * cuida), sin leer y de las últimas 24 h. Cerrar la tarjeta = marcarlo leído.
+ * Nunca lanza: si falla, no hay tarjeta.
+ */
+export async function listarPedidosAyudaPendientes(supabase: Cliente, usuarioId: string): Promise<PedidoAyudaPendiente[]> {
+  const desde = new Date(Date.now() - HORAS_PEDIDO_AYUDA_VISIBLE * 3_600_000).toISOString();
+  const { data, error } = await supabase
+    .from("avisos")
+    .select("id, titulo, cuerpo, url, created_at")
+    .eq("usuario_id", usuarioId)
+    .eq("tipo", "pedido_ayuda")
+    .is("leido_at", null)
+    .gte("created_at", desde)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (error || !data) return [];
+  return (data as { id: string; titulo: string; cuerpo: string | null; url: string | null; created_at: string }[]).map((a) => ({
+    id: a.id,
+    titulo: a.titulo,
+    cuerpo: a.cuerpo,
+    url: a.url,
+    hora: HORA_AR.format(new Date(a.created_at)),
+  }));
+}
+
 // --- Preferencias ---------------------------------------------------------------
 
 type FilaPreferencias = {

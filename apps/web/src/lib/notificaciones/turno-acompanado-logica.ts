@@ -21,14 +21,15 @@ export function debeAvisarAcompanado(previo: EstadoTurnoAcompanado | null, nuevo
 export type VinculoCrudo = { cuidador_id: string | null; estado: string; rol?: string | null };
 
 /**
- * Cuidadores a avisar: vínculos ACEPTADOS con cuenta, sin repetidos, sin quien hizo la acción (un cuidador que
- * carga el turno desde el perfil familiar no se avisa a sí mismo) y sin el propio dueño del turno.
+ * Cuidadores a avisar: vínculos ACEPTADOS con cuenta, sin repetidos y sin el propio dueño del turno. Quien
+ * cargó el turno desde el perfil familiar TAMBIÉN recibe el aviso (decisión del usuario 2026-11-12: le sirve de
+ * recordatorio, sobre todo si es la única que la cuida).
  */
-export function destinatariosAcompanado(vinculos: VinculoCrudo[], actorId: string | null, duenioId: string): string[] {
+export function destinatariosAcompanado(vinculos: VinculoCrudo[], duenioId: string): string[] {
   const ids = new Set<string>();
   for (const v of vinculos) {
     if (v.estado !== "aceptado" || !v.cuidador_id) continue;
-    if (v.cuidador_id === actorId || v.cuidador_id === duenioId) continue;
+    if (v.cuidador_id === duenioId) continue;
     ids.add(v.cuidador_id);
   }
   return [...ids];

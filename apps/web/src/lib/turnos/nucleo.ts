@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizarLlevar, type DatosActualizarTurno, type DatosNuevoTurno, type Turno } from "./tipos";
 import { fechaDeHoyISO } from "@/lib/rutina/formato";
 import { avisarTurnoAcompanado } from "@/lib/notificaciones/turno-acompanado";
+import { avisarTurnoDeHoy } from "@/lib/notificaciones/turno-hoy";
 
 // Mismo patrón que lib/medicamentos/nucleo.ts — funciones puras
 // (supabase, usuarioId, ...), consumidas tanto por Server Actions como por
@@ -114,6 +115,8 @@ export async function agregar(
   const creado = data as Turno;
   // "Voy a ir acompañado": best-effort, nunca bloquea ni lanza (decisión del dueño 2026-10-30).
   if (creado.acompanado) await avisarTurnoAcompanado(supabase, creado.id, null);
+  // Turno para hoy: "Hoy a las…" en el momento, a la persona y a quienes la cuidan.
+  await avisarTurnoDeHoy(supabase, creado.id);
   return creado;
 }
 
@@ -175,6 +178,8 @@ export async function actualizar(
       : null;
     await avisarTurnoAcompanado(supabase, guardado.id, previo);
   }
+  // Pasó a ser para hoy: mismo aviso en el momento; los claims evitan repetirlo.
+  if (!antes || antes.fecha !== guardado.fecha) await avisarTurnoDeHoy(supabase, guardado.id);
   return guardado;
 }
 
