@@ -14,6 +14,7 @@ import {
 } from "./avisos-tipos";
 import { procesarMonitoreos } from "./medir";
 import { entregarAviso, existeEnvio, familiaAvisosDisponible, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
+import { debeAvisarTurnoHoy } from "./turno-hoy-logica";
 import {
   cuidadorRecibe,
   enVentanaResumenDia,
@@ -37,6 +38,7 @@ import {
   payloadDosisSegundoAviso,
   payloadStockBajo,
   payloadTurno2h,
+  payloadTurnoHoy,
   payloadTurnoDiaAntes,
 } from "./mensajes";
 
@@ -51,6 +53,7 @@ import {
 //   dosis_pospuesta    hasta vencida (<45 min), sin tomar    posposición
 //   turno_dia_antes    el día anterior 20:00-22:59           turno
 //   turno_2h           105..120 min antes del turno          turno
+//   turno_hoy          turno de hoy sin aviso la noche anterior (cargado hoy), una vez
 //   stock_bajo         09:00-20:59, una vez por día          inventario
 //
 // Avisos de familia (al CUIDADOR, sobre la persona cuidada; migración 028 —
@@ -75,6 +78,7 @@ export type ResumenProgramados = {
   dosisPospuesta: number;
   turnoDiaAntes: number;
   turno2h: number;
+  turnoHoy: number;
   stockBajo: number;
   dosisResuelta: number;
   resumenDia: number;
@@ -153,6 +157,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     dosisPospuesta: 0,
     turnoDiaAntes: 0,
     turno2h: 0,
+    turnoHoy: 0,
     stockBajo: 0,
     dosisResuelta: 0,
     resumenDia: 0,
@@ -347,6 +352,21 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
           payload
         );
         resumen.turno2h++;
+      }
+      if (
+        // Primero lo barato; la consulta del aviso de la noche anterior, solo si hace falta.
+        debeAvisarTurnoHoy({ faltanMin: faltan, horaAR, huboAvisoDiaAntes: false }) &&
+        !(await existeEnvio(admin, "turno_dia_antes", t.id, t.fecha)) &&
+        (await reclamarEnvio(admin, "turno_hoy", t.id, t.fecha, t.usuario_id))
+      ) {
+        const payload = payloadTurnoHoy(datosTurno);
+        await entregarAviso(
+          admin,
+          t.usuario_id,
+          { tipo: "turno_hoy", titulo: payload.title, cuerpo: payload.body, url: payload.url, datos: payload.datos },
+          payload
+        );
+        resumen.turnoHoy++;
       }
     }
   }

@@ -203,6 +203,18 @@ export function payloadTurno2h(t: TurnoAviso): PayloadPush {
   };
 }
 
+/** Turno de hoy sin aviso la noche anterior (cargado hoy): "Hoy a las 15:30 tenés Cardiología". */
+export function payloadTurnoHoy(t: TurnoAviso): PayloadPush {
+  return {
+    title: `Hoy a las ${horaCorta(t.hora)} tenés ${t.especialidad}`,
+    body: conLlevar([t.profesional?.trim() || null, t.lugar?.trim() || null].filter(Boolean).join(" · "), t.llevar),
+    url: "/app/rutina",
+    tag: `turno-hoy-${t.turnoId}`,
+    actions: t.lugar ? [{ action: "como-llegar", title: "Cómo llegar" }] : undefined,
+    datos: urlMapas(t.lugar),
+  };
+}
+
 /** A un cuidador Admin, cuando la persona no tiene avisos activos en ningún celular. */
 export function payloadMedirPersona(d: { personaId: string; personaNombre: string; monitoreoId: string; que: string; hora: string; relacion?: string | null }): PayloadPush {
   return {
