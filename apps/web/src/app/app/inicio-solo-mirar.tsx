@@ -14,6 +14,8 @@ import { iconoDeEspecialidad } from "@/lib/turnos/icono";
 import { cn } from "@/lib/utils";
 import { VitaIcon } from "@/lib/vita-icons";
 import { EncabezadoPerfil } from "@/components/vita/encabezado-perfil";
+import { TarjetasPedidoAyuda } from "@/components/vita/tarjeta-pedido-ayuda";
+import { listarPedidosAyudaPendientes } from "@/lib/notificaciones/avisos";
 import { InstalarVita } from "@/components/vita/instalar-vita";
 import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
 import { AjustesSoloMirar } from "./ajustes-solo-mirar";
@@ -49,12 +51,13 @@ export async function InicioSoloMirar({
     // Lecturas secundarias: si fallan, la página sigue sin el nombre del Admin ni "Dejar de cuidar".
     listarCuidadoresDe(supabase, pid).catch(() => null),
     listarFamilia(supabase).catch(() => null),
+    listarPedidosAyudaPendientes(supabase, usuario.id),
   ]).catch((error: unknown) => {
     console.error("inicio solo mirar: falló una lectura", error);
     return null;
   });
   if (!lecturas) return <RespaldoSoloMirar key={pid} fallo />;
-  const [perfil, miPerfil, medsHoy, deAyer, turnos, cuidadores, familia] = lecturas;
+  const [perfil, miPerfil, medsHoy, deAyer, turnos, cuidadores, familia, pedidosAyuda] = lecturas;
   // "No la tomé" (057): se muestra aparte, nunca como sin confirmar. Nunca lanza.
   const omitidasHoy = await medicamentos.idsOmitidas(supabase, medsHoy.map((m) => m.id), medicamentos.fechaEnAR());
 
@@ -109,6 +112,8 @@ export async function InicioSoloMirar({
             </div>
           }
         />
+
+        <TarjetasPedidoAyuda pedidos={pedidosAyuda} />
 
         <TarjetaAvisosApagados />
 
