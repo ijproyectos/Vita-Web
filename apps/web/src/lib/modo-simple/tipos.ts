@@ -47,6 +47,8 @@ export function esMinutosPosponer(v: unknown): v is MinutosPosponer {
 // caregiver preview).
 export type TurnoSimple = {
   dia: "hoy" | "manana";
+  /** "HH:MM" (para ubicarlo en "Tu rutina de hoy"). */
+  hora: string;
   especialidad: string;
   profesional: string | null;
   /** "A las 10 de la mañana" */

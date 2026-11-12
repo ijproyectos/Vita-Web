@@ -11,6 +11,7 @@ import { ProgressRing } from "@/components/vita/progress-ring";
 import { EncabezadoPerfil } from "@/components/vita/encabezado-perfil";
 import { CheckToggle } from "./check-toggle";
 import { MarcarTodosButton } from "./marcar-todos-button";
+import { AgregarSheet } from "./agregar-sheet";
 import { DetalleMedicamento, type StockDetalle } from "./detalle-medicamento";
 import { DetalleTurno } from "./detalle-turno";
 import { HistorialView, type MedicionDia } from "./historial-view";
@@ -83,6 +84,7 @@ export function RutinaView({
   const searchParams = useSearchParams();
   const param = searchParams.get("vista");
   const vista: Vista = param === "proximos" ? "proximos" : param === "historial" ? "historial" : "hoy";
+  const [showAdd, setShowAdd] = useState(false);
   const [medAbiertoId, setMedAbiertoId] = useState<string | null>(null);
   const [turnoAbierto, setTurnoAbierto] = useState<Turno | null>(null);
   const [pendiente, startTransition] = useTransition();
@@ -133,6 +135,18 @@ export function RutinaView({
         eyebrowSelector="Rutina de"
         estatico={{ eyebrow: "Tu día de salud", titulo: "Mi Rutina" }}
         pie={!puedeEditar ? <div className="mt-1 text-[12px] font-semibold text-subtle">Solo ver: no podés cambiar nada.</div> : undefined}
+        accion={
+          puedeEditar ? (
+            <button
+              type="button"
+              onClick={() => setShowAdd(true)}
+              aria-label="Agregar a la rutina"
+              className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-card shadow-card transition-transform active:scale-[0.94] motion-reduce:transition-none"
+            >
+              <VitaIcon name="plus" size={20} />
+            </button>
+          ) : undefined
+        }
       />
 
       <div role="tablist" aria-label="Vista de la rutina" className="flex rounded-full bg-secondary p-1">
@@ -201,7 +215,11 @@ export function RutinaView({
       )}
 
       {vista === "historial" && (
-        <HistorialView meds={todosLosMeds} tomas={tomas} mediciones={medicionesDia} hoy={hoy} />
+        <HistorialView meds={todosLosMeds} tomas={tomas} mediciones={medicionesDia} hoy={hoy} puedeEditar={puedeEditar} />
+      )}
+
+      {puedeEditar && (
+        <AgregarSheet open={showAdd} onOpenChange={setShowAdd} nombrePersona={perfil.esPropio ? null : perfil.nombre.split(" ")[0]} />
       )}
 
       <DetalleMedicamento

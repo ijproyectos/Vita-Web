@@ -332,15 +332,52 @@ const TINTES_PASTILLA = [
 
 const ICONO_FRANJA: Record<MomentoDia, string> = { "mañana": "sunrise", mediodia: "sun", tarde: "sunset", noche: "moon" };
 
-export function TarjetaHoy({ filas, onTocar }: { filas: FilaHoy[]; onTocar: (fila: FilaHoy) => void }) {
+/** Turno o medición del día en "Tu rutina de hoy", en su horario. */
+export type ExtraHoy = {
+  clave: string;
+  hora: string;
+  tipo: "turno" | "medir";
+  titulo: string;
+  detalle: string;
+  hecho: boolean;
+  /** Medición pendiente: se puede tocar para anotarla. */
+  tocable?: boolean;
+  /** Solo mediciones: qué se anota con el teclado. */
+  tipoMedir?: "presion" | "glucemia" | "peso" | "temperatura";
+};
+
+function contarFranja(pastillas: number, extras: ExtraHoy[]): string {
+  const turnos = extras.filter((e) => e.tipo === "turno").length;
+  const medir = extras.filter((e) => e.tipo === "medir").length;
+  return [
+    pastillas > 0 ? `${pastillas} ${pastillas === 1 ? "pastilla" : "pastillas"}` : null,
+    turnos > 0 ? `${turnos} ${turnos === 1 ? "turno" : "turnos"}` : null,
+    medir > 0 ? `${medir} ${medir === 1 ? "medición" : "mediciones"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function TarjetaHoy({
+  filas,
+  onTocar,
+  extras = [],
+  onTocarExtra,
+}: {
+  filas: FilaHoy[];
+  onTocar: (fila: FilaHoy) => void;
+  extras?: ExtraHoy[];
+  onTocarExtra?: (extra: ExtraHoy) => void;
+}) {
   const franjas = ORDEN_MOMENTOS.map((momento) => ({
     momento,
     items: filas.map((f, indice) => ({ f, indice })).filter(({ f }) => momentoDelDia(f.hora) === momento),
-  })).filter((g) => g.items.length > 0);
+    extras: extras.filter((e) => momentoDelDia(e.hora) === momento),
+  })).filter((g) => g.items.length > 0 || g.extras.length > 0);
 
   return (
     <section className="flex flex-col gap-5">
-      {franjas.map(({ momento, items }) => (
+      {franjas.map(({ momento, items, extras: extrasFranja }) => (
         <div key={momento}>
           <div className="flex items-center gap-3 pb-3 pl-0.5">
             <div className="flex size-11 items-center justify-center rounded-[var(--radius-tile)] bg-card text-slate-brand shadow-item">
@@ -348,14 +385,33 @@ export function TarjetaHoy({ filas, onTocar }: { filas: FilaHoy[]; onTocar: (fil
             </div>
             <div>
               <div className="font-heading text-[21px] font-extrabold tracking-[-0.02em]">{ETIQUETA_MOMENTO[momento]}</div>
-              <div className="text-[14px] font-semibold text-subtle">
-                {items.length} {items.length === 1 ? "pastilla" : "pastillas"}
-              </div>
+              <div className="text-[14px] font-semibold text-subtle">{contarFranja(items.length, extrasFranja)}</div>
             </div>
           </div>
           <ul className="relative flex flex-col gap-2.5 pl-[18px]">
             <span aria-hidden className="absolute inset-y-4 left-[5px] w-0.5 rounded-full bg-border" />
-            {items.map(({ f, indice }) => {
+            {[
+              ...items.map((p) => ({ hora: p.f.hora, pastilla: p as (typeof items)[number] | null, extra: null as ExtraHoy | null })),
+              ...extrasFranja.map((x) => ({ hora: x.hora, pastilla: null as (typeof items)[number] | null, extra: x as ExtraHoy | null })),
+            ]
+              // Pastillas, turnos y mediciones intercalados por hora.
+              .sort((a, b) => a.hora.localeCompare(b.hora))
+              .map(({ pastilla, extra }) => {
+              if (extra) {
+                return (
+                  <li key={extra.clave} className="relative">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "absolute -left-[18px] top-1/2 size-3 -translate-y-1/2 rounded-full",
+                        extra.hecho ? "bg-primary shadow-[0_0_0_3px_var(--canvas)]" : "bg-card ring-2 ring-border"
+                      )}
+                    />
+                    <FilaExtra extra={extra} onTocar={extra.tocable && onTocarExtra ? () => onTocarExtra(extra) : undefined} />
+                  </li>
+                );
+              }
+              const { f, indice } = pastilla!;
               const color = TINTES_PASTILLA[indice % TINTES_PASTILLA.length];
               const e = ESTADO_FILA[f.estado];
               const tomada = f.estado === "tomada";
@@ -415,6 +471,43 @@ export function TarjetaHoy({ filas, onTocar }: { filas: FilaHoy[]; onTocar: (fil
         </div>
       ))}
     </section>
+  );
+}
+
+function FilaExtra({ extra: x, onTocar }: { extra: ExtraHoy; onTocar?: () => void }) {
+  const contenido = (
+    <>
+      <span
+        className={cn(
+          "flex size-12 shrink-0 items-center justify-center rounded-[15px]",
+          x.tipo === "turno" ? "bg-persona-violeta-tint text-persona-violeta-deep" : "bg-destructive/10 text-destructive"
+        )}
+      >
+        <VitaIcon name={x.tipo === "turno" ? "stethoscope" : "heart"} size={22} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={cn("line-clamp-2 font-heading text-[20px] font-extrabold leading-tight tracking-[-0.02em]", x.hecho && "text-slate-brand")}>{x.titulo}</span>
+        <span className="mt-0.5 block text-[15px] font-semibold text-subtle">
+          {horaCorta(x.hora)} hs · {x.detalle}
+        </span>
+      </span>
+      {x.tipo === "medir" && (
+        <span
+          aria-hidden
+          className={cn("flex size-10 shrink-0 items-center justify-center rounded-full", x.hecho ? "bg-primary text-primary-foreground" : "bg-muted text-transparent")}
+        >
+          <VitaIcon name="check" size={20} strokeWidth={3} />
+        </span>
+      )}
+    </>
+  );
+  const clases = "flex w-full items-center gap-3.5 rounded-[var(--radius-item)] bg-card p-3.5 text-left shadow-item";
+  return onTocar ? (
+    <button type="button" onClick={onTocar} className={cn(clases, "ring-2 ring-primary/30 transition-transform active:scale-[0.99] motion-reduce:transition-none")}>
+      {contenido}
+    </button>
+  ) : (
+    <div className={clases}>{contenido}</div>
   );
 }
 
@@ -558,12 +651,12 @@ export function TarjetaTurno({ turno }: { turno: TurnoSimple }) {
 export function TarjetaMediciones({
   titulo,
   mediciones,
-  hrefDe,
+  onTocar,
 }: {
   titulo: string;
   mediciones: MedicionSimple[];
-  /** null = no navega (vista previa). */
-  hrefDe: ((tipo: MedicionSimple["tipo"]) => string) | null;
+  /** Abre el teclado grande para anotar (sin esto, vista previa: no hace nada). */
+  onTocar?: (tipo: MedicionSimple["tipo"]) => void;
 }) {
   return (
     <section className="flex flex-col gap-3">
@@ -587,17 +680,17 @@ export function TarjetaMediciones({
                   <span className="font-heading text-[36px] font-extrabold leading-none tracking-[-0.04em] tabular-nums">{m.valor}</span>
                   <span className="text-[15px] font-bold text-slate-brand">{m.unidad}</span>
                 </span>
-                <span className={cn("mt-1.5 block text-pretty text-[17px] font-semibold leading-[1.3]", m.pendiente ? "text-aviso-ink" : "text-teal-deep")}>
-                  {m.pendiente ? `${m.cuando} · falta medir hoy` : m.cuando}
+                <span className="mt-1.5 block text-pretty text-[17px] font-semibold leading-[1.3] text-teal-deep">
+                  {onTocar ? `${m.cuando} · tocá para anotar` : m.cuando}
                 </span>
               </span>
             </>
           );
           const clases = "flex min-w-0 flex-1 flex-col gap-3 rounded-[26px] border-2 border-foreground/[0.08] bg-card px-4 py-[18px] text-left";
-          return hrefDe ? (
-            <a key={m.tipo} href={hrefDe(m.tipo)} className={cn(clases, "transition-colors active:bg-secondary")}>
+          return onTocar ? (
+            <button key={m.tipo} type="button" onClick={() => onTocar(m.tipo)} className={cn(clases, "transition-colors active:bg-secondary")}>
               {contenido}
-            </a>
+            </button>
           ) : (
             <div key={m.tipo} className={clases}>
               {contenido}

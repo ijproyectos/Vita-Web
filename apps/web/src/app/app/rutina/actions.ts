@@ -242,7 +242,6 @@ export async function crearMedicamentoAction(
 
   revalidatePath("/app");
   revalidatePath("/app/rutina");
-  revalidatePath("/app/pastillas");
   return { status: "success" };
 }
 

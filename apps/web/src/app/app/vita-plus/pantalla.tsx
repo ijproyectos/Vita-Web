@@ -13,6 +13,8 @@ import {
   textoPesosPorPeriodo,
   type CotizacionPlanes,
   type EstadoVitaPlus,
+  MOTIVOS_BAJA,
+  type MotivoBaja,
   type PlanVitaPlus,
 } from "@/lib/vita-plus/planes";
 
@@ -72,6 +74,7 @@ export function PantallaVitaPlus({
   const [cotizacion, setCotizacion] = useState<CotizacionPlanes | null>(null);
   const [procesando, setProcesando] = useState(false);
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
+  const [motivoBaja, setMotivoBaja] = useState<MotivoBaja | null>(null);
   const [cancelando, setCancelando] = useState(false);
   // Confirmación previa al pago: la persona ve cuánto se cobra en pesos ANTES de ir a Mercado Pago.
   const [porPagar, setPorPagar] = useState<{ initPoint: string; pesos: number; fx: number; plan: PlanVitaPlus } | null>(null);
@@ -167,7 +170,7 @@ export function PantallaVitaPlus({
   async function cancelar() {
     if (cancelando) return;
     setCancelando(true);
-    const r = await pedirApi({ action: "cancelar" });
+    const r = await pedirApi({ action: "cancelar", motivo: motivoBaja });
     setCancelando(false);
     if (!r.ok) {
       toast.error(mensajeDe(r.datos));
@@ -176,7 +179,7 @@ export function PantallaVitaPlus({
     const nuevo = r.datos.estado as EstadoVitaPlus | undefined;
     if (nuevo) setEstado(nuevo);
     setConfirmandoCancelar(false);
-    toast.success("Listo, no se te va a cobrar más.");
+    toast.success("Diste de baja vita+. No se te va a cobrar más.");
     router.refresh();
   }
 
@@ -316,23 +319,48 @@ export function PantallaVitaPlus({
                 onClick={() => setConfirmandoCancelar(true)}
                 className="w-full rounded-full bg-muted py-3.5 text-[14px] font-bold text-slate-brand transition-transform active:scale-[0.98] motion-reduce:transition-none"
               >
-                Cancelar suscripción
+                Dar de baja
               </button>
             )}
             {estado.renueva && confirmandoCancelar && (
-              <div role="alertdialog" aria-label="Confirmar cancelación" className="rounded-[var(--radius-item)] bg-card p-4 shadow-card">
-                <p className="text-[13.5px] font-bold">¿Cancelamos la suscripción?</p>
+              <div role="alertdialog" aria-label="Dar de baja vita+" className="rounded-[var(--radius-item)] bg-card p-4 shadow-card">
+                <p className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">Dar de baja vita+</p>
                 <p className="mt-1 text-[12.5px] font-medium text-slate-brand">
-                  No se te va a cobrar más{estado.venceAt ? ` y seguís con vita+ hasta el ${fechaLarga(estado.venceAt)}` : ""}.
+                  No te cobramos nada más{estado.venceAt ? `: vita+ sigue hasta el ${fechaLarga(estado.venceAt)}` : ""}.
                 </p>
-                <div className="mt-3 flex gap-2">
+                <p className="mt-3 text-[12px] font-bold text-subtle">¿Por qué te vas? · opcional</p>
+                <div className="mt-1.5 flex flex-wrap gap-[7px]" role="radiogroup" aria-label="Por qué te vas">
+                  {MOTIVOS_BAJA.map((m) => {
+                    const activo = motivoBaja === m.clave;
+                    return (
+                      <button
+                        key={m.clave}
+                        type="button"
+                        role="radio"
+                        aria-checked={activo}
+                        onClick={() => setMotivoBaja(activo ? null : m.clave)}
+                        className={
+                          activo
+                            ? "rounded-full bg-primary px-3.5 py-2 text-[12.5px] font-bold text-primary-foreground"
+                            : "rounded-full bg-secondary px-3.5 py-2 text-[12.5px] font-bold text-foreground"
+                        }
+                      >
+                        {m.etiqueta}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3.5 flex gap-2">
                   <button
                     type="button"
                     disabled={cancelando}
-                    onClick={() => setConfirmandoCancelar(false)}
+                    onClick={() => {
+                      setConfirmandoCancelar(false);
+                      setMotivoBaja(null);
+                    }}
                     className="flex-1 rounded-full bg-muted py-3 text-[13.5px] font-bold disabled:opacity-60"
                   >
-                    Volver
+                    Seguir con vita+
                   </button>
                   <button
                     type="button"
@@ -340,7 +368,7 @@ export function PantallaVitaPlus({
                     onClick={cancelar}
                     className="flex-1 rounded-full bg-ink py-3 text-[13.5px] font-extrabold text-on-ink disabled:opacity-60"
                   >
-                    {cancelando ? "Cancelando…" : "Sí, cancelar"}
+                    {cancelando ? "Dando de baja…" : "Dar de baja"}
                   </button>
                 </div>
               </div>
@@ -408,7 +436,7 @@ export function PantallaVitaPlus({
                     : "Se cobra en pesos al dólar oficial del día en que te suscribís."}
                 </p>
                 <p className="text-center text-[11.5px] font-medium text-subtle">
-                  Se renueva automáticamente. Podés cancelar cuando quieras desde Perfil.
+                  Se renueva automáticamente. Podés darlo de baja cuando quieras desde Perfil.
                 </p>
               </>
             ) : (

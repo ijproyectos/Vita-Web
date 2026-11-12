@@ -133,7 +133,7 @@ export default function TerminosPage() {
             con su consentimiento o si sos su cuidador.
           </li>
           <li>
-            Desde Compartir con profesional podés generar un enlace temporal con un resumen de tu salud. Quien tenga el
+            Desde Para tu médico podés generar un enlace temporal con un resumen de tu salud. Quien tenga el
             enlace puede verlo sin iniciar sesión hasta que venza o lo revoques, así que compartilo solo con quien
             corresponda.
           </li>

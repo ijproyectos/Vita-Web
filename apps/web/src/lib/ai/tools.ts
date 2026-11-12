@@ -115,6 +115,32 @@ export function normalizarAltaMedicamento(input: Record<string, unknown>): Datos
   };
 }
 
+/** Most extra take times one add_medication call accepts (six takes a day in total). */
+export const MAX_HORAS_EXTRA = 5;
+
+/**
+ * Extra take times of one add_medication call ("every 12 h" = one call with two times),
+ * normalized, without duplicates and without the main time. Invalid input never saves part of it.
+ */
+export function horasExtraDelModelo(input: Record<string, unknown>, horaPrincipal: string): string[] {
+  const crudas = input.extra_times;
+  if (crudas === undefined || crudas === null) return [];
+  if (!Array.isArray(crudas) || !crudas.every((h) => typeof h === "string")) {
+    throw new ErrorEntradaMedicamento("Las otras horas tienen que ser una lista de horas HH:MM.");
+  }
+  let horas: string[];
+  try {
+    horas = (crudas as string[]).map((h) => normalizarHoraDuplicados(h.trim()));
+  } catch {
+    throw new ErrorEntradaMedicamento("Indicá las otras horas en formato HH:MM.");
+  }
+  const unicas = [...new Set(horas)].filter((h) => h !== horaPrincipal);
+  if (unicas.length > MAX_HORAS_EXTRA) {
+    throw new ErrorEntradaMedicamento(`Se pueden cargar hasta ${MAX_HORAS_EXTRA + 1} horarios por día.`);
+  }
+  return unicas;
+}
+
 /**
  * Antes de cargar un remedio: si ya hay uno con la misma droga y otro nombre, se
  * pregunta (la persona puede conocerlo por la marca). null = se puede seguir.
@@ -230,8 +256,43 @@ async function ejecutarEnDestino(
       // Solo claves del catálogo: lo que mande el modelo se valida acá, no se guarda tal cual.
       // Se guarda como se pidió, aunque no coincida con la hora habitual de esa comida.
       const datos = normalizarAltaMedicamento(input);
+      const extras = horasExtraDelModelo(input, datos.horaProgramada);
       const aviso = await avisoMismoRemedio(supabase, usuarioId, datos, input);
       if (aviso) return aviso;
+      if (extras.length > 0) {
+        // Several takes a day in ONE call: one row per time, all validated and inserted together.
+        const creados = await medicamentos.agregarMultiMomento(supabase, usuarioId, {
+          nombre: datos.nombre,
+          droga: datos.droga,
+          dosis: datos.dosis,
+          unidad: datos.unidad,
+          condicion: datos.condicion,
+          frecuencia: datos.frecuencia,
+          duracion: datos.duracion,
+          notas: datos.notas,
+          forma: datos.forma,
+          diasRecurrentes: datos.diasRecurrentes,
+          fechaFin: datos.fechaFin ?? null,
+          tomas: [datos.horaProgramada, ...extras].map((hora) => ({
+            hora,
+            conComida: datos.conComida ?? "no-importa",
+            indicacion: indicacion ?? null,
+            ...(datos.cantidad !== undefined ? { cantidad: datos.cantidad } : {}),
+          })),
+        });
+        const ordenados = [...creados].sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
+        const primero = ordenados[0];
+        return {
+          contenido: JSON.stringify(ordenados.map(paraModelo)),
+          accionUI: {
+            type: "medication_added",
+            id: primero.id,
+            name: primero.nombre,
+            dose: textoDosis(primero) || null,
+            time: ordenados.map((m) => m.hora_programada.slice(0, 5)).join(" y "),
+          },
+        };
+      }
       const creado = await medicamentos.agregar(supabase, usuarioId, { ...datos, indicacion: indicacion ?? null });
       return {
         contenido: JSON.stringify(paraModelo(creado)),

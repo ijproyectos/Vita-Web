@@ -1,4 +1,4 @@
-// Tipos del dominio "Compartir con profesional" — ver
+// Tipos del dominio "Para tu médico" — ver
 // supabase/migrations/015_enlaces_profesional.sql. Sin lógica de servidor
 // para poder importarlos desde componentes cliente.
 
@@ -71,7 +71,8 @@ export type ResumenProfesional = {
     porcentaje: number | null;
     por_dia: { fecha: string; programadas: number; tomadas: number }[];
   };
-  turnos: {
+  /** El médico no ve los turnos: la migración 058 ya no los manda. Se acepta vacío por si llega un link viejo. */
+  turnos?: {
     especialidad: string;
     profesional: string | null;
     lugar: string | null;
@@ -86,4 +87,16 @@ export type ResumenProfesional = {
     valores: { nombre: string; valor: string }[];
   }[];
   contacto_emergencia: { nombre: string | null; telefono: string | null };
+  /** Últimos 30 días, las más nuevas primero (máx. 60). Migración 058: sin ella falta en el link. */
+  mediciones?: MedicionParaMedico[];
+};
+
+export type MedicionParaMedico = {
+  tipo: string;
+  nombre_otra?: string | null;
+  unidad_otra?: string | null;
+  valor: number;
+  valor_secundario: number | null;
+  contexto: string | null;
+  medido_at: string;
 };

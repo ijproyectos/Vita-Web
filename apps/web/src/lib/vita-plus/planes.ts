@@ -132,3 +132,16 @@ export function fechaLarga(iso: string): string {
     timeZone: "America/Argentina/Buenos_Aires",
   }).format(d);
 }
+
+// "¿Por qué te vas? · opcional" de Dar de baja (diseño). Claves = CHECK de la migración 059.
+export const MOTIVOS_BAJA = [
+  { clave: "caro", etiqueta: "Es caro" },
+  { clave: "no_lo_uso", etiqueta: "No lo uso" },
+  { clave: "otra_app", etiqueta: "Uso otra app" },
+  { clave: "otro", etiqueta: "Otro" },
+] as const;
+export type MotivoBaja = (typeof MOTIVOS_BAJA)[number]["clave"];
+
+export function esMotivoBaja(valor: unknown): valor is MotivoBaja {
+  return MOTIVOS_BAJA.some((m) => m.clave === valor);
+}

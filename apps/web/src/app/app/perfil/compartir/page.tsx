@@ -6,23 +6,26 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../../top-bar";
 import { FormularioCompartir } from "./formulario";
 import { EnlaceRow } from "./enlace-row";
+import { DescargarPdf } from "./descargar-pdf";
+import { personasConDatos } from "../privacidad/personas";
 
 const SECCIONES = [
   "Tus datos básicos: nombre de pila, edad, sexo, grupo sanguíneo, altura y peso",
   "Condiciones y alergias",
   "Tus medicamentos con dosis, horarios y cómo tomarlos",
-  "Tu rutina diaria de tomas y qué tan seguido las cumpliste en los últimos 14 días",
-  "Tus próximos turnos médicos",
+  "Qué porcentaje de las tomas cumpliste en los últimos 14 días",
+  "Tus mediciones de los últimos 30 días (presión, glucemia, peso…)",
   "Resumen de tus estudios recientes (sin las fotos)",
   "Tu contacto de emergencia",
 ];
 
-// "Compartir con profesional": el dueño genera un link temporal a un
-// resumen de solo lectura (/p/{token}, sin login). Ver
-// lib/compartir/nucleo.ts y supabase/migrations/015_enlaces_profesional.sql.
+// "Para tu médico": UN resumen de salud, en PDF (`/app/perfil/compartir/pdf`)
+// o con un link temporal de solo lectura (/p/{token}, sin login). Los dos
+// muestran lo mismo (`ReporteMedico`). Ver lib/compartir/ y la migración 015.
 export default async function CompartirPage() {
   const usuario = await requireUser();
   const supabase = await createClient();
+  const personas = await personasConDatos();
 
   let enlaces: EnlaceProfesional[] = [];
   let errorCarga = false;
@@ -34,15 +37,15 @@ export default async function CompartirPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5 pb-6">
-      <TopBar volverA="/app/perfil/privacidad" eyebrow="Privacidad y datos" title="Compartir con profesional" />
+      <TopBar volverA="/app/perfil/privacidad" eyebrow="Privacidad y datos" title="Para tu médico" />
 
       <p className="-mt-2 text-[13px] text-muted-foreground">
-        Creá un link temporal para mostrarle a tu médico un resumen de tu salud, sin que tenga que instalar nada ni
-        iniciar sesión.
+        Un resumen de tu salud para llevarle a tu médico: descargalo en PDF o mandale un link, sin que tenga que
+        instalar nada. Los dos muestran lo mismo.
       </p>
 
       <div className="rounded-[20px] bg-card p-4 shadow-card">
-        <div className="font-heading text-[15px] font-bold">Qué va a ver el profesional</div>
+        <div className="font-heading text-[15px] font-bold">Qué va a ver tu médico</div>
         <ul className="mt-2.5 flex flex-col gap-2">
           {SECCIONES.map((s) => (
             <li key={s} className="flex items-start gap-2.5 text-[13px] leading-snug">
@@ -52,11 +55,17 @@ export default async function CompartirPage() {
           ))}
         </ul>
         <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
-          No ve tu email, tus conversaciones con vita, ni datos de tus cuidadores.
+          No ve tus turnos, el detalle de cada toma, tus conversaciones con vita, tu email ni a quienes te cuidan.
         </p>
       </div>
 
-      <FormularioCompartir />
+      <DescargarPdf personas={personas} />
+
+      <div>
+        <div className="px-1.5 pb-1 font-heading text-[15px] font-bold">O mandale un link</div>
+        <p className="px-1.5 pb-2.5 text-[12.5px] text-muted-foreground">Lo abre desde su celular o su compu y vence solo. Por ahora, con tus datos.</p>
+        <FormularioCompartir />
+      </div>
 
       <div>
         <div className="px-1.5 pb-2.5 font-heading text-[15px] font-bold">Tus links</div>

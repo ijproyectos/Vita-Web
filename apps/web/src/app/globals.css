@@ -395,7 +395,7 @@
   }
 }
 
-/* Impresión (Exportar mi historial → Descargar PDF): deja solo el reporte.
+/* Impresión (Para tu médico → PDF, y el link /p): deja solo el reporte.
    Oculta el chrome de la app — botones, bottom nav, overlay del chat y
    toasts son todos `fixed` — y evita que las tarjetas se partan entre
    páginas. */

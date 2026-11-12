@@ -94,3 +94,16 @@ describe("formatos", () => {
     expect(fechaLarga("no-es-fecha")).toBe("");
   });
 });
+
+describe("motivos de baja", () => {
+  it("solo acepta las claves del CHECK de la migración 059", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { esMotivoBaja, MOTIVOS_BAJA } = await import("./planes");
+    const sql = readFileSync(new URL("../../../../../supabase/migrations/059_vita_plus_motivos_baja.sql", import.meta.url), "utf8");
+    for (const m of MOTIVOS_BAJA) {
+      expect(esMotivoBaja(m.clave)).toBe(true);
+      expect(sql).toContain(`'${m.clave}'`);
+    }
+    for (const v of ["Es caro", "", null, undefined, 3, "borrar"]) expect(esMotivoBaja(v)).toBe(false);
+  });
+});

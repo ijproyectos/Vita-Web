@@ -21,23 +21,23 @@ export async function avisarPersonaEnVita(admin: Cliente, personaId: string): Pr
 
     const { data: vinculos } = await admin
       .from("vinculos_cuidador")
-      .select("cuidador_id")
+      .select("cuidador_id, relacion")
       .eq("elder_id", personaId)
       .eq("estado", "aceptado")
       .eq("rol", "editar");
-    const cuidadorIds = ((vinculos ?? []) as { cuidador_id: string | null }[])
-      .map((v) => v.cuidador_id)
-      .filter((id): id is string => Boolean(id));
+    const filas = (vinculos ?? []) as { cuidador_id: string | null; relacion?: string | null }[];
+    const relacionDe = new Map(filas.map((v) => [v.cuidador_id, v.relacion ?? null]));
+    const cuidadorIds = filas.map((v) => v.cuidador_id).filter((id): id is string => Boolean(id));
     if (cuidadorIds.length === 0) return 0;
 
     const { data: perfil } = await admin.from("perfiles").select("nombre").eq("id", personaId).maybeSingle();
     const personaNombre = (perfil as { nombre: string | null } | null)?.nombre?.trim() || "Tu familiar";
-    const payload = payloadPersonaEnVita({ personaId, personaNombre });
     const hoyAR = fechaEnAR(new Date());
 
     let enviados = 0;
     for (const cuidadorId of cuidadorIds) {
       if (!(await reclamarEnvio(admin, "persona_en_vita", refDeterminista(personaId, cuidadorId), hoyAR, cuidadorId))) continue;
+      const payload = payloadPersonaEnVita({ personaId, personaNombre, relacion: relacionDe.get(cuidadorId) });
       await entregarAviso(
         admin,
         cuidadorId,

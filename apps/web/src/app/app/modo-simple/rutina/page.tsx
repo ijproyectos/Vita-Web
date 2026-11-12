@@ -7,7 +7,8 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { ListaHoyInteractiva } from "../lista-hoy";
 import { conRespaldo } from "@/lib/con-respaldo";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
-import { medicionesParaMostrar, turnoParaMostrar } from "@/lib/modo-simple/datos";
+import { medicionesParaMostrar, medirDeHoy, turnoParaMostrar, turnosDeHoy } from "@/lib/modo-simple/datos";
+import type { ExtraHoy } from "@/components/vita/modo-simple/piezas";
 import { TarjetaMedicionesEnlace, TarjetaTurno } from "./tarjetas";
 
 
@@ -28,10 +29,33 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
   const filas = filasHoy(hoy, omitidas, new Set(enGrupo.map((m) => m.id)), ahora);
   // Lo mismo que la pantalla principal muestra de turnos y mediciones (y con la misma configuración).
   const config = await obtenerPrefs(supabase, usuario.id);
-  const [turno, mediciones] = await Promise.all([
+  const [turno, mediciones, turnosHoy, medirHoy] = await Promise.all([
     config.ver_turnos ? conRespaldo(turnoParaMostrar(supabase, usuario.id), null) : null,
     config.ver_mediciones ? conRespaldo(medicionesParaMostrar(supabase, usuario.id), null) : null,
+    config.ver_turnos ? conRespaldo(turnosDeHoy(supabase, usuario.id), []) : [],
+    config.ver_mediciones ? conRespaldo(medirDeHoy(supabase, usuario.id), []) : [],
   ]);
+  // Turnos y mediciones del día, cada uno en su horario dentro de la lista.
+  const extras: ExtraHoy[] = [
+    ...turnosHoy.map((t, i) => ({
+      clave: `turno-${i}`,
+      hora: t.hora,
+      tipo: "turno" as const,
+      titulo: `Turno: ${t.especialidad}`,
+      detalle: t.hora < ahora ? "Ya pasó" : t.lugar ?? "Hoy",
+      hecho: t.hora < ahora,
+    })),
+    ...medirHoy.map((m) => ({
+      clave: `medir-${m.clave}`,
+      hora: m.hora,
+      tipo: "medir" as const,
+      titulo: `Medir ${m.frase}`,
+      detalle: m.valor ? `${m.valor} ${m.unidad}`.trim() : m.hora <= ahora ? "Falta anotar · tocá para anotar" : "Más tarde",
+      hecho: m.valor !== null,
+      tocable: m.valor === null,
+      tipoMedir: m.tipo,
+    })),
+  ].sort((a, b) => a.hora.localeCompare(b.hora));
 
   return (
     <main className="min-h-dvh bg-canvas px-5 pb-12 pt-[max(1.25rem,env(safe-area-inset-top))]">
@@ -44,10 +68,10 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
       </Link>
       <h1 className="mt-6 font-heading text-[32px] font-extrabold leading-tight tracking-[-0.035em]">Tu rutina de hoy</h1>
       <div className="mt-5">
-        {filas.length > 0 ? (
-          <ListaHoyInteractiva filas={filas} abrirId={abrir ?? null} />
+        {filas.length > 0 || extras.length > 0 ? (
+          <ListaHoyInteractiva filas={filas} abrirId={abrir ?? null} extras={extras} />
         ) : (
-          <p className="text-[19px] font-semibold text-slate-brand">Hoy no tenés pastillas cargadas.</p>
+          <p className="text-[19px] font-semibold text-slate-brand">Hoy no tenés nada cargado.</p>
         )}
       </div>
       {(turno || mediciones) && (

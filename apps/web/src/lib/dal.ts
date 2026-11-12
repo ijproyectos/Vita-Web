@@ -44,7 +44,7 @@ export const requireUser = cache(resolverUsuario);
  * `aceptado` como cuidador de algún elder — sin asumir todavía a cuál en
  * particular se accede, eso lo valida cada página con el `elderId` de su
  * propia URL. Un usuario logueado sin ningún elder vinculado se
- * redirige a `/cuidar/sin-vinculos` en vez de a `/login`.
+ * redirige a `/app/familia` en vez de a `/login`.
  */
 export async function requireCuidador(): Promise<{
   userId: string;
@@ -55,7 +55,7 @@ export async function requireCuidador(): Promise<{
   const elders = await listarElders(supabase, user.id);
 
   if (elders.length === 0) {
-    redirect("/cuidar/sin-vinculos");
+    redirect("/app/familia");
   }
 
   return { userId: user.id, elders };

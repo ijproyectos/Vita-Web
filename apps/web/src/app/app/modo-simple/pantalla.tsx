@@ -10,7 +10,6 @@ import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { FilaHoy } from "@/lib/modo-simple/seleccion";
-import { esTipoMedicion, hrefNuevaMedicion } from "@/lib/mediciones/tipos";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
@@ -45,6 +44,10 @@ import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones"
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import type { MedHoy, TurnoProximo } from "@/lib/modo-simple/respuestas";
 import { CharlaSimple } from "./charla-simple";
+import { FlujoAyuda, type AyudaPedida } from "./flujo-ayuda";
+import { TecladoMedicion } from "./teclado-medicion";
+import type { MedirHoy, TipoMedirSimple } from "@/lib/modo-simple/medir";
+import { textoAyudaSaben } from "@/lib/modo-simple/charla";
 import { AccesoRutinaCompleta } from "./lista-hoy";
 
 // La confirmación por voz se aparta a propósito del regex del diseño: ese no
@@ -74,6 +77,7 @@ export function Pantalla({
   config,
   turno,
   mediciones,
+  medirAhora = null,
   turnoProximo,
   medsHoy,
   telefonoAyuda,
@@ -93,6 +97,8 @@ export function Pantalla({
   turno: TurnoSimple | null;
   /** Presión/azúcar con datos reales (null = nada que mostrar, o la sección está apagada). */
   mediciones: { titulo: string; items: MedicionSimple[] } | null;
+  /** La medición del plan que toca ahora ("Es hora de medirte la presión"), o null. */
+  medirAhora?: MedirHoy | null;
   /** Próximo turno (cualquier día) para la respuesta hablada de la charla; null = ninguno o sección apagada. */
   turnoProximo: TurnoProximo | null;
   /** Medicación de hoy con su estado, para las respuestas locales de la charla. */
@@ -133,6 +139,12 @@ export function Pantalla({
   const [audioDesbloqueado, setAudioDesbloqueado] = useState(false);
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
+  // Botón "Ayuda": pregunta, cuenta regresiva, avisa a la familia y ofrece llamar.
+  const [flujoAyuda, setFlujoAyuda] = useState(false);
+  const [ayudaPedida, setAyudaPedida] = useState<AyudaPedida | null>(null);
+  // Teclado grande de medición (dentro del modo simple, nunca el formulario normal).
+  const [teclado, setTeclado] = useState<{ tipo: TipoMedirSimple; ultimo: string | null } | null>(null);
+  const ultimaDe = (tipo: string) => mediciones?.items.find((m) => m.tipo === tipo)?.valor ?? null;
   const [pendiente, startTransition] = useTransition();
   // Para que el avatar muestre "speaking" mientras suena el anuncio por voz
   // — reproducirAnuncio ya esperaba el audio entero, esto solo expone esa
@@ -349,11 +361,18 @@ export function Pantalla({
               saludo={saludo}
               nombre={nombre}
               fechaTexto={fechaTexto}
-              onAyuda={() => setAyudaAbierta(true)}
-              telefono={telefonoAyuda}
+              onAyuda={() => setFlujoAyuda(true)}
+              // Sin teléfono: el botón abre el flujo (avisar a la familia) en vez de llamar directo.
+              telefono={null}
               contacto={nombreAyuda}
               conAyuda={config.ayuda}
             />
+            {ayudaPedida && (
+              <div role="status" className="mt-4 flex items-center gap-3 rounded-[20px] bg-success/12 px-4 py-3.5 text-[17px] font-bold leading-[1.35] text-foreground">
+                <VitaIcon name="check" size={22} strokeWidth={2.6} className="shrink-0 text-success" />
+                {textoAyudaSaben(ayudaPedida.nombres, ayudaPedida.hora) || `Tu familia sabe que pediste ayuda a las ${ayudaPedida.hora}.`}
+              </div>
+            )}
 
             <div className="mt-5 flex flex-col gap-4">
               <ActivarNotificaciones variante="simple" />
@@ -394,11 +413,15 @@ export function Pantalla({
                 />
               )}
 
+              {medirAhora && (
+                <TarjetaMedirAhora medir={medirAhora} onAnotar={() => setTeclado({ tipo: medirAhora.tipo, ultimo: ultimaDe(medirAhora.tipo) })} />
+              )}
+
               {mediciones && (
                 <TarjetaMediciones
                   titulo={mediciones.titulo}
                   mediciones={mediciones.items}
-                  hrefDe={(tipo) => hrefNuevaMedicion({ tipo: esTipoMedicion(tipo) ? tipo : undefined, volver: "/app/modo-simple", ahora: true })}
+                  onTocar={(tipo) => setTeclado({ tipo, ultimo: ultimaDe(tipo) })}
                 />
               )}
 
@@ -425,6 +448,10 @@ export function Pantalla({
         onAlternarSonido={alternarSonido}
       />
       <SheetAyudaSinContacto open={ayudaAbierta && !telefonoAyuda} onOpenChange={setAyudaAbierta} />
+      {teclado && <TecladoMedicion tipo={teclado.tipo} ultimo={teclado.ultimo} onCerrar={() => setTeclado(null)} />}
+      {flujoAyuda && (
+        <FlujoAyuda telefono={telefonoAyuda} contacto={nombreAyuda} onCerrar={() => setFlujoAyuda(false)} onAvisados={setAyudaPedida} />
+      )}
       <SheetNoTome open={preguntarNo} onOpenChange={setPreguntarNo} cuantas={grupo.length} onSi={noTome} />
       {charlaAbierta && (
         <CharlaSimple
@@ -663,4 +690,34 @@ function SheetAyudaSinContacto({ open, onOpenChange }: { open: boolean; onOpenCh
       </SheetContent>
     </Sheet>
   );
+}
+
+// "Es hora de medirte la presión": recordatorio del plan de monitoreo, con la
+// forma de la tarjeta de una pastilla. Abre el teclado grande.
+function TarjetaMedirAhora({ medir, onAnotar }: { medir: MedirHoy; onAnotar: () => void }) {
+  return (
+    <section className="flex flex-col gap-4 rounded-[28px] bg-card p-5 shadow-card ring-2 ring-primary/30">
+      <div className="flex items-center gap-3.5">
+        <span aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-destructive/10 text-destructive">
+          <VitaIcon name={medir.tipo === "glucemia" ? "droplet" : "heart"} size={28} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="font-heading text-[25px] font-extrabold leading-tight tracking-[-0.02em] text-balance">Es hora de medirte {medir.frase}</h2>
+          <p className="mt-0.5 text-[17px] font-semibold text-subtle">A las {horaCortaMedir(medir.hora)}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onAnotar}
+        className="flex h-[64px] items-center justify-center gap-2 rounded-full bg-primary text-[21px] font-extrabold text-primary-foreground shadow-cta active:scale-[0.98] motion-reduce:transform-none"
+      >
+        Anotar ahora
+      </button>
+    </section>
+  );
+}
+
+/** "09:00" -> "9:00". */
+function horaCortaMedir(hhmm: string): string {
+  return hhmm.replace(/^0(\d:)/, "$1");
 }

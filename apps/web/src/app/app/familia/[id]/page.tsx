@@ -6,13 +6,15 @@ import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
 import * as medicamentosNucleo from "@/lib/medicamentos/nucleo";
 import { colorPorDefecto } from "@/lib/familia/colores";
-import { edadTexto } from "@/lib/perfil/formato";
+import { edadTexto, frasePorAhoraSoloVos } from "@/lib/perfil/formato";
 import { cn } from "@/lib/utils";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { FilaCuidador } from "@/components/vita/fila-cuidador";
 import { VitaIcon } from "@/lib/vita-icons";
 import { TopBar } from "../../top-bar";
 import { AccionesMiembro, EditarMiembro } from "./acciones";
+import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
+import { resumenPrefsModoSimple } from "@/lib/modo-simple/resumen-prefs";
 import { HoyPendientes } from "./hoy-pendientes";
 import { resumenHoy } from "@/lib/familia/pendientes-hoy";
 
@@ -30,11 +32,13 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
   const puedeEditar = miembro.rol === "editar";
   const primerNombre = miembro.nombre.split(" ")[0];
 
-  const [perfil, nRemedios, miNombre, dosisHoy] = await Promise.all([
+  const [perfil, nRemedios, miNombre, dosisHoy, prefsSimple, miPerfil] = await Promise.all([
     perfilNucleo.obtenerPerfil(supabase, id).catch(() => null),
     medicamentosNucleo.contarRemediosDistintos(supabase, id).catch(() => 0),
     perfilNucleo.obtenerNombre(supabase, usuario.id),
     medicamentosNucleo.listarHoy(supabase, id).catch(() => []),
+    obtenerPrefs(supabase, id),
+    perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null),
   ]);
   // "No la tomé" del modo simple (057): sin la migración el set viene vacío.
   const omitidas = await medicamentosNucleo.idsOmitidas(supabase, dosisHoy.map((m) => m.id), medicamentosNucleo.fechaEnAR());
@@ -70,9 +74,6 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
           <div className="mt-0.5 truncate text-[12px] font-medium text-subtle">{meta}</div>
         </div>
       </div>
-
-      {/* Propio de la app (no está en el diseño): cambia el perfil activo. */}
-      <AccionesMiembro elderId={miembro.id} vinculoId={miembro.vinculoId} nombre={primerNombre} soloVerRutina />
 
       {(hoy.pendientes.length > 0 || hoy.noTomadas.length > 0) && (
         <HoyPendientes
@@ -128,7 +129,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-heading text-[14.5px] font-extrabold tracking-[-0.02em]">Su modo simple</span>
-            <span className="mt-0.5 block text-[11.5px] font-medium text-subtle">Cómo lo ve {primerNombre} en su celular</span>
+            <span className="mt-0.5 block text-[11.5px] font-medium text-subtle">{resumenPrefsModoSimple(prefsSimple)}</span>
           </span>
           <VitaIcon name="chevron-right" size={17} className="shrink-0 text-faint" />
         </Link>
@@ -150,7 +151,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
                 {emergencia ? emergenciaSub : "A quien llama el botón Ayuda de su modo simple."}
               </span>
             </span>
-            <span className="shrink-0 text-[12.5px] font-extrabold text-teal-deep">{emergencia ? "Editar" : "Agregar"}</span>
+            <span className="shrink-0 rounded-full bg-primary/10 px-3.5 py-[9px] text-[12.5px] font-extrabold text-teal-deep">{emergencia ? "Editar" : "Agregar"}</span>
           </Link>
         </section>
       )}
@@ -172,7 +173,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
         </ul>
         {cuidadores.length <= 1 && puedeInvitar && (
           <p className="px-1.5 pt-2.5 text-pretty text-[12px] font-medium leading-[1.5] text-subtle">
-            Por ahora solo estás vos. Invitá a alguien para que también reciba los avisos.
+            {frasePorAhoraSoloVos(miPerfil?.genero)}
           </p>
         )}
         {puedeInvitar && (
@@ -186,7 +187,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
         )}
       </section>
 
-      {/* Propio de la app (no está en el diseño): nombre y color del perfil. */}
+      {/* Propio de la app (no está en el diseño): sin esto no hay forma de cambiar nombre y color. */}
       {puedeEditar ? (
         <EditarMiembro elderId={miembro.id} nombreInicial={miembro.nombre} colorInicial={color} />
       ) : (

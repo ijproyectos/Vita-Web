@@ -27,3 +27,10 @@ export function nombreConMayuscula(nombre: string): string {
     )
     .join(" ");
 }
+
+// "Por ahora sos la única…" del diseño, según el género cargado en el perfil
+// de quien mira. Sin género (o uno que no es femenino/masculino), neutro.
+export function frasePorAhoraSoloVos(genero: string | null | undefined): string {
+  const sujeto = genero === "Femenino" ? "sos la única" : genero === "Masculino" ? "sos el único" : "solo estás vos";
+  return `Por ahora ${sujeto}. Invitá a alguien para que también reciba los avisos.`;
+}

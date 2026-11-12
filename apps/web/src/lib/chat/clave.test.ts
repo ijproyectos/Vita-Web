@@ -41,4 +41,11 @@ describe("claveSemantica", () => {
       claveSemantica("add_appointment", { date: "2026-10-02", time: "10:00" })
     );
   });
+  it("add_medication: las otras horas son parte de la acción y el orden no importa", () => {
+    const base = { name: "Amoxicilina", scheduled_time: "08:00" };
+    expect(claveSemantica("add_medication", { ...base, extra_times: ["20:00", "14:00"] })).toBe(
+      claveSemantica("add_medication", { ...base, extra_times: ["14:00", "20:00"] })
+    );
+    expect(claveSemantica("add_medication", { ...base, extra_times: ["20:00"] })).not.toBe(claveSemantica("add_medication", base));
+  });
 });

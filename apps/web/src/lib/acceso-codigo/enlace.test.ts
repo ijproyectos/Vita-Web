@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mensajeCodigoAcceso, mensajeInvitacionVinculo, normalizarCodigoEnlace, rutaCodigo, urlCodigo } from "./enlace";
+import { mensajeCodigoAcceso, normalizarCodigoEnlace, rutaCodigo, urlCodigo } from "./enlace";
 
 describe("normalizarCodigoEnlace", () => {
   it("acepta 6 dígitos, con espacios o guiones de copiado", () => {
@@ -28,10 +28,5 @@ describe("urlCodigo y mensajes", () => {
     expect(t).toContain("482916");
     expect(t).toContain("30 minutos");
     expect(t).not.toContain("/login");
-  });
-  it("el mensaje de invitación de vínculo lleva el link directo", () => {
-    const t = mensajeInvitacionVinculo({ codigo: "482916", origen: "https://x.com" });
-    expect(t).toContain("https://x.com/c/482916");
-    expect(t).not.toContain("/onboarding/inicio");
   });
 });

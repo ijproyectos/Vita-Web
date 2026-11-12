@@ -3,6 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as turnosNucleo from "@/lib/turnos/nucleo";
 import * as medicionesNucleo from "@/lib/mediciones/nucleo";
+import * as planesNucleo from "@/lib/mediciones/planes-nucleo";
+import { diaSemanaDe, horaEnAR } from "@/lib/medicamentos/nucleo";
+import { medirDelDia, turnoHoyOManana, type MedirHoy } from "./medir";
 import { diasEntre, haceCuanto, horaEnPalabras } from "./formato";
 import { fechaConOffset, fechaDeHoyISO, fechaISOEnAR } from "@/lib/rutina/formato";
 import { formatearValor, META_MEDICION } from "@/lib/mediciones/tipos";
@@ -19,16 +22,20 @@ export { proximoGrupoPendiente } from "./seleccion";
 // acceso (la persona, o un cuidador vinculado).
 type Cliente = SupabaseClient;
 
-/** Turno de hoy o de mañana (real). Nunca lanza: sin turno o ante un error, null. */
+/**
+ * Turno de hoy (solo hasta su hora: después desaparece "Hoy tenés turno") o de
+ * mañana (real). Nunca lanza: sin turno o ante un error, null.
+ */
 export async function turnoParaMostrar(supabase: Cliente, usuarioId: string): Promise<TurnoSimple | null> {
   try {
-    const proximos = await turnosNucleo.listarProximos(supabase, usuarioId, 5);
+    const proximos = await turnosNucleo.listarProximos(supabase, usuarioId, 10);
     const hoy = fechaDeHoyISO();
     const manana = fechaConOffset(1);
-    const t = proximos.find((x) => x.fecha === hoy || x.fecha === manana);
+    const t = turnoHoyOManana(proximos, hoy, manana, horaEnAR());
     if (!t) return null;
     return {
       dia: t.fecha === hoy ? "hoy" : "manana",
+      hora: t.hora.slice(0, 5),
       especialidad: t.especialidad,
       profesional: t.profesional?.trim() || null,
       palabras: horaEnPalabras(t.hora.slice(0, 5)),
@@ -95,8 +102,39 @@ export async function medicionesParaMostrar(
     });
   }
   if (items.length === 0) return null;
-  const pendientes = items.filter((i) => i.pendiente).map((i) => (i.tipo === "presion" ? "la presión" : "el azúcar"));
-  const titulo = pendientes.length > 0 ? `Es hora de medirte ${pendientes.join(" y ")}` : "Tus mediciones";
-  return { titulo, items };
+  // "Es hora de medirte…" sale solo del plan de monitoreo (`medirDeHoy`): acá no se inventa un horario.
+  return { titulo: "Tus mediciones", items };
 }
 
+
+/**
+ * Mediciones de hoy según los planes de monitoreo (un renglón por horario), para
+ * el recordatorio "Es hora de medirte…" y "Tu rutina de hoy". Nunca lanza.
+ */
+export async function medirDeHoy(supabase: Cliente, usuarioId: string): Promise<MedirHoy[]> {
+  try {
+    const [planes, recientes] = await Promise.all([
+      planesNucleo.listarSeguro(supabase, usuarioId),
+      medicionesNucleo.listarRecientesSeguro(supabase, usuarioId),
+    ]);
+    if (planes.length === 0) return [];
+    const hoy = fechaDeHoyISO();
+    const deHoy = recientes.filter((m) => fechaISOEnAR(new Date(m.medido_at)) === hoy);
+    return medirDelDia(planes, deHoy, diaSemanaDe(new Date()), hoy);
+  } catch {
+    return [];
+  }
+}
+
+/** Turnos de HOY (todos, también los que ya pasaron) para "Tu rutina de hoy". Nunca lanza. */
+export async function turnosDeHoy(supabase: Cliente, usuarioId: string): Promise<{ hora: string; especialidad: string; lugar: string | null }[]> {
+  try {
+    const hoy = fechaDeHoyISO();
+    const proximos = await turnosNucleo.listarProximos(supabase, usuarioId, 10);
+    return proximos
+      .filter((t) => t.fecha === hoy)
+      .map((t) => ({ hora: t.hora.slice(0, 5), especialidad: t.especialidad, lugar: t.lugar?.trim() || null }));
+  } catch {
+    return [];
+  }
+}

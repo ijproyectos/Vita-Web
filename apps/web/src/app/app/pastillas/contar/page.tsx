@@ -13,7 +13,7 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
   await requireUser();
   const supabase = await createClient();
   const activo = await obtenerPerfilActivo();
-  if (activo.rol !== "editar") redirect("/app/pastillas");
+  if (activo.rol !== "editar") redirect("/app/medicamentos");
 
   const searchParams = await props.searchParams;
   const param = searchParams?.medicamento;
@@ -23,10 +23,10 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
   const nombreInicial = (Array.isArray(nombreParam) ? nombreParam[0] : nombreParam)?.trim().slice(0, 80) ?? "";
   const desdeParam = searchParams?.desde;
   const desde = Array.isArray(desdeParam) ? desdeParam[0] : desdeParam;
-  // Solo vuelve a las pantallas de Medicamentos desde las que se abre; cualquier otro valor cae a "Mis pastillas".
+  // Solo vuelve a las pantallas de Medicamentos desde las que se abre; cualquier otro valor cae a Mis medicamentos.
   const volverA = destinoSeguro(
     desde === "medicamentos" ? "/app/medicamentos" : desde === "agregar" ? "/app/agregar-medicamento" : null,
-    "/app/pastillas"
+    "/app/medicamentos"
   );
 
   const todos = await inventarioNucleo.listarGrupos(supabase, activo.id);
@@ -55,7 +55,7 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
       <BannerPerfil perfil={activo} accion="cargar" />
       <FlujoContar opciones={opciones} inicialId={grupoPreseleccionado?.representanteId ?? ""}
         nombreInicial={nombreInicial}
-        volverA={volverA === "/app/agregar-medicamento" ? "/app/pastillas" : volverA}
+        volverA={volverA === "/app/agregar-medicamento" ? "/app/medicamentos" : volverA}
       />
     </div>
   );

@@ -11,7 +11,7 @@ import {
   ejercerArrepentimientoVitaPlus,
   obtenerEstadoVitaPlus,
 } from "@/lib/vita-plus/nucleo";
-import { esPlanVitaPlus } from "@/lib/vita-plus/planes";
+import { esPlanVitaPlus, esMotivoBaja } from "@/lib/vita-plus/planes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     return json({ error: "Formato no soportado." }, 415);
   }
 
-  let cuerpo: { action?: unknown; plan?: unknown; codigo?: unknown };
+  let cuerpo: { action?: unknown; plan?: unknown; codigo?: unknown; motivo?: unknown };
   try {
     cuerpo = await request.json();
   } catch {
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         return json({ initPoint: r.initPoint, pesos: r.pesos, fx: r.fx });
       }
       case "cancelar": {
-        const r = await cancelarSuscripcionVitaPlus(supabase, user.id);
+        const r = await cancelarSuscripcionVitaPlus(supabase, user.id, esMotivoBaja(cuerpo.motivo) ? cuerpo.motivo : null);
         if (!r.ok) return json({ error: r.mensaje }, r.http);
         return json({ ok: true, estado: await obtenerEstadoVitaPlus(supabase) });
       }

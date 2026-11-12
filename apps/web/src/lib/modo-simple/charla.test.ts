@@ -95,3 +95,12 @@ describe("escucha automática (iOS)", () => {
     expect(textoParaEnviar("a".repeat(LARGO_MAXIMO_MENSAJE + 10))).toHaveLength(LARGO_MAXIMO_MENSAJE);
   });
 });
+
+describe("textoAyudaSaben", async () => {
+  const { textoAyudaSaben } = await import("./charla");
+  it("nombra a quienes se avisó, en singular o plural", () => {
+    expect(textoAyudaSaben(["Mica"], "10:40")).toBe("Mica sabe que pediste ayuda a las 10:40.");
+    expect(textoAyudaSaben(["Mica", " Martina "], "10:40")).toMatch(/^Mica y Martina saben que pediste ayuda a las 10:40\.$/);
+    expect(textoAyudaSaben([], "10:40")).toBe("");
+  });
+});

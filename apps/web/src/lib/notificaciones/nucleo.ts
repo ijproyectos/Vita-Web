@@ -113,7 +113,7 @@ export async function detectarDosisVencidas(
   const elderIds = [...new Set(candidatos.map((m) => m.usuario_id))];
   const { data: vinculos, error: errorVinculos } = await admin
     .from("vinculos_cuidador")
-    .select("elder_id, cuidador_id")
+    .select("elder_id, cuidador_id, rol, relacion")
     .eq("estado", "aceptado")
     .in("elder_id", elderIds);
 
@@ -122,10 +122,14 @@ export async function detectarDosisVencidas(
   }
 
   const cuidadoresPorElder = new Map<string, string[]>();
-  for (const v of (vinculos ?? []) as { elder_id: string; cuidador_id: string }[]) {
+  const rolPorVinculo = new Map<string, "editar" | "ver">();
+  const relacionPorVinculo = new Map<string, string | null>();
+  for (const v of (vinculos ?? []) as { elder_id: string; cuidador_id: string; rol?: string | null; relacion?: string | null }[]) {
     const lista = cuidadoresPorElder.get(v.elder_id) ?? [];
     lista.push(v.cuidador_id);
     cuidadoresPorElder.set(v.elder_id, lista);
+    rolPorVinculo.set(`${v.elder_id}|${v.cuidador_id}`, v.rol === "ver" ? "ver" : "editar");
+    relacionPorVinculo.set(`${v.elder_id}|${v.cuidador_id}`, v.relacion ?? null);
   }
 
   const conCuidadores = candidatos.filter((m) => cuidadoresPorElder.has(m.usuario_id));
@@ -177,6 +181,20 @@ export async function detectarDosisVencidas(
     );
   }
 
+  // "ya le llegaron 2 avisos" (diseño): los avisos a la persona por esa toma y fecha.
+  // Si la lectura falla, el aviso sale sin ese dato.
+  const avisosPorDosis = new Map<string, number>();
+  const { data: envios } = await admin
+    .from("envios_avisos")
+    .select("ref_id, fecha")
+    .in("tipo", ["dosis_hora", "dosis_segundo"])
+    .in("ref_id", vencidas.map((m) => m.id))
+    .in("fecha", [hoyAR, ayerAR]);
+  for (const e of (envios ?? []) as { ref_id: string; fecha: string }[]) {
+    const clave = `${e.ref_id}|${e.fecha}`;
+    avisosPorDosis.set(clave, (avisosPorDosis.get(clave) ?? 0) + 1);
+  }
+
   // Nombre de cada elder para el texto del push ("Elsa todavía no tomó…").
   // `perfiles` solo es legible con service_role desde acá (RLS de fila).
   const nombrePorElder = new Map<string, string>();
@@ -201,6 +219,9 @@ export async function detectarDosisVencidas(
       fechaAR: m.fechaAR,
       elderNombre: nombrePorElder.get(m.usuario_id) ?? "Tu familiar",
       cuidadorIds,
+      rolPorCuidador: Object.fromEntries(cuidadorIds.map((id) => [id, rolPorVinculo.get(`${m.usuario_id}|${id}`) ?? "editar"])),
+      relacionPorCuidador: Object.fromEntries(cuidadorIds.map((id) => [id, relacionPorVinculo.get(`${m.usuario_id}|${id}`) ?? null])),
+      avisosEnviados: avisosPorDosis.get(`${m.id}|${m.fechaAR}`) ?? 0,
       destinatarios: cuidadorIds
         .map((id) => emailPorCuidador.get(id))
         .filter((email): email is string => Boolean(email)),

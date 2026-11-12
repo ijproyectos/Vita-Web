@@ -114,6 +114,8 @@ export type DatosNuevoMedicamentoMultiMomento = {
   droga?: string | null;
   dosis?: string | null;
   unidad?: string;
+  /** Para qué condición es (opcional; el chat la manda). */
+  condicion?: string | null;
   /** Alta por momento (chat, onboarding): una fila por momento, hora por defecto. */
   momentos?: MomentoDia[];
   /** Alta por toma (formulario V7): una fila por toma, con su hora y su relación con la comida. */

@@ -75,7 +75,14 @@ export async function procesarMonitoreos(
     for (const cuidadorId of destino.cuidadores) {
       if (enSilencioNocturno(destino.prefs.get(cuidadorId) ?? PREFERENCIAS_POR_DEFECTO, horaAR)) continue;
       if (!(await reclamarEnvio(admin, "medicion_persona", refDeterminista(plan.id, hora, cuidadorId), hoyAR, cuidadorId))) continue;
-      const aviso = payloadMedirPersona({ personaId: plan.usuario_id, personaNombre: destino.nombre, monitoreoId: plan.id, que, hora });
+      const aviso = payloadMedirPersona({
+        personaId: plan.usuario_id,
+        personaNombre: destino.nombre,
+        monitoreoId: plan.id,
+        que,
+        hora,
+        relacion: destino.relacionDe.get(cuidadorId),
+      });
       await entregarAviso(
         admin,
         cuidadorId,
@@ -88,7 +95,7 @@ export async function procesarMonitoreos(
   return enviados;
 }
 
-type DestinoFamilia = { nombre: string; cuidadores: string[]; prefs: Map<string, PreferenciasAvisos> };
+type DestinoFamilia = { nombre: string; cuidadores: string[]; prefs: Map<string, PreferenciasAvisos>; relacionDe: Map<string, string | null> };
 
 /** Personas sin ningún celular con avisos, con sus cuidadores Admin. Si algo falla, nadie: no se avisa de más. */
 async function cuidadoresSinAvisoPropio(admin: SupabaseClient, usuarios: string[]): Promise<Map<string, DestinoFamilia>> {
@@ -100,17 +107,18 @@ async function cuidadoresSinAvisoPropio(admin: SupabaseClient, usuarios: string[
   if (sinAvisos.length === 0) return salida;
 
   const [vinculos, perfiles] = await Promise.all([
-    admin.from("vinculos_cuidador").select("elder_id, cuidador_id").eq("estado", "aceptado").eq("rol", "editar").in("elder_id", sinAvisos),
+    admin.from("vinculos_cuidador").select("elder_id, cuidador_id, relacion").eq("estado", "aceptado").eq("rol", "editar").in("elder_id", sinAvisos),
     admin.from("perfiles").select("id, nombre").in("id", sinAvisos),
   ]);
   if (vinculos.error) return salida;
-  const filas = (vinculos.data ?? []) as { elder_id: string; cuidador_id: string | null }[];
+  const filas = (vinculos.data ?? []) as { elder_id: string; cuidador_id: string | null; relacion?: string | null }[];
   const prefs = await obtenerPreferenciasDe(admin, [...new Set(filas.flatMap((v) => (v.cuidador_id ? [v.cuidador_id] : [])))]);
   const nombres = new Map(((perfiles.data ?? []) as { id: string; nombre: string | null }[]).map((p) => [p.id, p.nombre?.trim() || "Tu familiar"]));
   for (const v of filas) {
     if (!v.cuidador_id) continue;
-    const d = salida.get(v.elder_id) ?? { nombre: nombres.get(v.elder_id) ?? "Tu familiar", cuidadores: [], prefs };
+    const d = salida.get(v.elder_id) ?? { nombre: nombres.get(v.elder_id) ?? "Tu familiar", cuidadores: [], prefs, relacionDe: new Map<string, string | null>() };
     d.cuidadores.push(v.cuidador_id);
+    d.relacionDe.set(v.cuidador_id, v.relacion ?? null);
     salida.set(v.elder_id, d);
   }
   return salida;

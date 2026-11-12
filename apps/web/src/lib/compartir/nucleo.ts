@@ -9,10 +9,21 @@ import {
   type EnlaceCreado,
   type EnlaceProfesional,
   type EstadoEnlace,
+  type MedicionParaMedico,
   type ResumenProfesional,
 } from "./tipos";
+import { fechaEnAR } from "@/lib/tiempo-ar";
+import {
+  armarResumenParaMedico,
+  DIAS_CUMPLIMIENTO,
+  DIAS_MEDICIONES,
+  restarDias,
+  type EstudioParaMedico,
+  type MedicamentoParaMedico,
+  type PerfilParaMedico,
+} from "./para-medico";
 
-// Núcleo de "Compartir con profesional". El token crudo (32 bytes,
+// Núcleo de "Para tu médico" (link y PDF). El token crudo (32 bytes,
 // base64url) se genera acá, se devuelve UNA vez a quien llama y jamás se
 // guarda ni se loguea: la DB solo conoce su sha256 en hex. La lectura
 // pública va por la RPC `resumen_profesional` (security definer).
@@ -88,4 +99,41 @@ export async function obtenerResumenPublico(supabase: Cliente, token: string): P
   const { data, error } = await supabase.rpc("resumen_profesional", { p_token: token });
   if (error || !data) return null;
   return data as ResumenProfesional;
+}
+
+/**
+ * El mismo resumen del link, leído con la sesión (RLS: uno mismo o alguien que
+ * cuida). Lo usa el PDF de "Para tu médico". Lanza si una lectura falla.
+ */
+export async function obtenerResumenParaMedico(supabase: Cliente, personaId: string): Promise<ResumenProfesional> {
+  const hoy = fechaEnAR();
+  const desde = restarDias(hoy, DIAS_CUMPLIMIENTO - 1);
+  // `select("*")`: forma, fecha_fin y droga son de migraciones que pueden no estar aplicadas.
+  const desdeMediciones = new Date(Date.now() - DIAS_MEDICIONES * 24 * 60 * 60 * 1000).toISOString();
+  const [perfil, meds, inventario, tomas, estudios, mediciones] = await Promise.all([
+    supabase.from("perfiles").select("*").eq("id", personaId).maybeSingle(),
+    supabase.from("medicamentos").select("*").eq("usuario_id", personaId),
+    supabase.from("inventario_pastillas").select("id, stock").eq("usuario_id", personaId),
+    supabase.from("medicamentos_tomas").select("fecha").eq("usuario_id", personaId).eq("tomado", true).gte("fecha", desde).lte("fecha", hoy),
+    supabase.from("estudios").select("tipo, fecha, resumen, valores, estado, created_at").eq("usuario_id", personaId).eq("estado", "listo"),
+    // `*`: nombre_otra/unidad_otra son de la 053.
+    supabase.from("mediciones").select("*").eq("usuario_id", personaId).gte("medido_at", desdeMediciones).order("medido_at", { ascending: false }).limit(60),
+  ]);
+  const error = perfil.error ?? meds.error ?? inventario.error ?? tomas.error ?? estudios.error ?? mediciones.error;
+  if (error) throw new Error(`obtenerResumenParaMedico: ${error.message}`);
+
+  const medicamentos: MedicamentoParaMedico[] = (meds.data ?? []).map((m) => ({
+    ...(m as Omit<MedicamentoParaMedico, "alta">),
+    alta: fechaEnAR(new Date(m.created_at as string)),
+  }));
+  return armarResumenParaMedico({
+    perfil: (perfil.data as PerfilParaMedico | null) ?? null,
+    medicamentos,
+    stockPorInventario: new Map((inventario.data ?? []).map((i) => [i.id as string, Number(i.stock)])),
+    tomadas: (tomas.data ?? []).map((t) => String(t.fecha).slice(0, 10)),
+    estudios: (estudios.data ?? []) as EstudioParaMedico[],
+    mediciones: (mediciones.data ?? []) as MedicionParaMedico[],
+    hoy,
+    generadoEn: new Date().toISOString(),
+  });
 }

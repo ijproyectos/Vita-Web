@@ -68,9 +68,11 @@ export function alcanzaParaOtraVuelta(restante: number, totalMs: number = PRESUP
 }
 
 /** Nota que se agrega cuando se corta por tiempo; si ya se guardó algo, lo aclara. */
-export function textoCortePorTiempo(escriturasHechas: number): string {
+export function textoCortePorTiempo(escriturasHechas: number, quedaParaConfirmar = false): string {
   const base = "Se me hizo largo, te respondo hasta acá. Si falta algo, preguntame de nuevo.";
-  return escriturasHechas > 0 ? `${base} Lo que alcancé a guardar ya quedó guardado.` : base;
+  const guardado = escriturasHechas > 0 ? " Lo que alcancé a guardar ya quedó guardado." : "";
+  const confirmar = quedaParaConfirmar ? " Para seguir, tocá la opción de arriba." : "";
+  return `${base}${guardado}${confirmar}`;
 }
 
 /** Tokens parciales de una llamada que se cortó (snapshot del stream), o 0 si no hay. */

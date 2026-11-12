@@ -4,6 +4,7 @@ import { esVistaSoloMirar, rutaVolverAPerfil } from "@/lib/familia/solo-mirar";
 import { createClient } from "@/lib/supabase/server";
 import * as familiaNucleo from "@/lib/familia/nucleo";
 import * as perfilNucleo from "@/lib/perfil/nucleo";
+import { frasePorAhoraSoloVos } from "@/lib/perfil/formato";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { colorPorDefecto } from "@/lib/familia/colores";
 import { AvatarPersona } from "@/components/vita/avatar-persona";
@@ -35,12 +36,14 @@ export default async function FamiliaPage() {
   const soloYo = cuidadores.length === 1 && cuidadores[0].esYo;
   const nadie = cuidadores.length === 0;
   const puedeInvitar = activo.esPropio || (completa && cuidadores.some((c) => c.puedeGestionar));
+  // "Por ahora sos la única/el único…" según el género de quien mira (solo hace falta mirando a otra persona).
+  const miGenero = soloYo && !activo.esPropio ? (await perfilNucleo.obtenerPerfil(supabase, usuario.id).catch(() => null))?.genero : null;
 
   return (
     <div className="flex flex-col gap-5 px-[18px] pb-10 pt-1.5">
       <TopBar volverA={rutaVolverAPerfil(activo)} eyebrow="Familia" title="Familia y permisos" />
 
-      <TarjetaVitaPlus />
+      <TarjetaVitaPlus familia nombre={familia[0]?.nombre.split(" ")[0]} />
 
       <section>
         <h2 className={ETIQUETA_SECCION}>Perfiles a cargo</h2>
@@ -95,31 +98,18 @@ export default async function FamiliaPage() {
             })}
           </ul>
         )}
-        {familia.length > 0 && (
-          // Propio de la app (no está en el diseño): /cuidar tiene lo que Familia
-          // no — "Recordarle" una dosis y las dosis vencidas de todas las
-          // personas a cargo en un solo lugar. Es a donde llevan los avisos push.
-          <Link
-            href="/cuidar"
-            className="mt-2.5 flex items-center gap-3 rounded-[20px] bg-card px-4 py-3.5 shadow-card transition-colors hover:bg-foreground/[0.02]"
-          >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-chip-teal-bg text-teal-deep">
-              <VitaIcon name="activity" size={17} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-heading text-[14px] font-extrabold tracking-[-0.02em]">Panel de cuidador</div>
-              <div className="mt-0.5 text-[11.5px] font-medium text-subtle">Dosis pendientes y recordatorios de todos</div>
-            </div>
-            <VitaIcon name="chevron-right" size={17} className="shrink-0 text-faint" />
-          </Link>
-        )}
       </section>
 
       <section>
         <h2 className={ETIQUETA_SECCION}>{activo.esPropio ? "Cuidadores" : `Cuidadores de ${primerNombre}`}</h2>
         {nadie ? (
-          <div className="rounded-[20px] bg-card p-[18px] text-[13px] font-medium leading-[1.45] text-subtle shadow-card">
-            Por ahora nadie te cuida en vita.
+          <div className="flex flex-col items-center gap-1.5 rounded-[20px] bg-card px-5 py-[22px] text-center shadow-card">
+            <div className="font-heading text-[15px] font-extrabold tracking-[-0.02em]">
+              {activo.esPropio ? "Por ahora nadie te cuida en vita" : `Por ahora nadie cuida a ${primerNombre} en vita`}
+            </div>
+            <div className="max-w-[280px] text-balance text-[12.5px] font-medium leading-[1.45] text-subtle">
+              Invitá a alguien para que vea tus remedios y reciba tus avisos.
+            </div>
           </div>
         ) : (
           <ul className="overflow-hidden rounded-[20px] bg-card shadow-card">
@@ -136,16 +126,16 @@ export default async function FamiliaPage() {
             ))}
           </ul>
         )}
-        {(soloYo || nadie) && (
+        {soloYo && (
           <p className="px-1 pt-2.5 text-pretty text-[12.5px] font-medium leading-[1.45] text-subtle">
             {activo.esPropio
               ? "Invitá a alguien para que vea tus remedios y reciba tus avisos."
-              : "Por ahora solo estás vos. Invitá a alguien para que también reciba los avisos."}
+              : frasePorAhoraSoloVos(miGenero)}
           </p>
         )}
       </section>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2.5">
         {puedeInvitar && (
           <Link
             href={`/app/familia/invitar?persona=${activo.id}`}
@@ -155,24 +145,16 @@ export default async function FamiliaPage() {
             Invitar a un cuidador
           </Link>
         )}
-        {/* Propio de la app (no está en el diseño): */}
         <Link
           href="/app/familia/nuevo"
-          className="flex items-center justify-center gap-2 rounded-full bg-card py-[14px] font-heading text-sm font-extrabold text-teal-deep shadow-item"
+          className="flex items-center justify-center gap-2 rounded-full bg-primary/10 py-[15px] font-heading text-[14.5px] font-extrabold text-teal-deep transition-transform active:scale-[0.98]"
         >
-          <VitaIcon name="user-plus" size={16} />
+          <VitaIcon name="plus" size={16} strokeWidth={2.6} />
           Crear un perfil
         </Link>
-        <Link
-          href="/onboarding/vincular-cuidado"
-          className="flex items-center justify-center gap-2 rounded-full bg-card py-[14px] font-heading text-sm font-extrabold text-teal-deep shadow-item"
-        >
-          <VitaIcon name="link" size={16} />
-          Vincular con un código
-        </Link>
-        <p className="px-1 pt-1 text-pretty text-[11.5px] font-medium leading-[1.45] text-subtle">
+        <p className="px-1.5 pt-1 text-center text-pretty text-[12px] font-medium leading-[1.5] text-subtle">
           Creá un perfil si la persona no usa celular: llevás sus remedios desde tu app. Si tiene celular, vinculate con un
-          código.
+          código desde su perfil a cargo.
         </p>
       </div>
     </div>

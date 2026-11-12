@@ -39,7 +39,7 @@ const PATRONES_DINAMICOS: { base: string; marca: string }[] = [
 // Segmentos estaticos conocidos que cuelgan de las bases dinamicas: no se reemplazan.
 const ESTATICOS_BAJO_BASE: Record<string, string[]> = {
   "/app/familia": ["nuevo", "invitar"],
-  "/cuidar": ["sin-vinculos", "invitacion"],
+  "/cuidar": ["invitacion"],
   "/app/mi-salud/monitoreo": ["agregar"],
 };
 

@@ -5,7 +5,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { TarjetaHoy } from "@/components/vita/modo-simple/piezas";
+import { TarjetaHoy, type ExtraHoy } from "@/components/vita/modo-simple/piezas";
+import { TecladoMedicion } from "./teclado-medicion";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { horaCorta } from "@/lib/notificaciones/mensajes";
@@ -64,8 +65,10 @@ export function AccesoRutinaCompleta({ filas, children }: { filas: FilaHoy[]; ch
 }
 
 /** La lista "Hoy" con su hoja: tomarla, decir que no o deshacer, de a una. */
-export function ListaHoyInteractiva({ filas, abrirId }: { filas: FilaHoy[]; abrirId?: string | null }) {
+export function ListaHoyInteractiva({ filas, abrirId, extras = [] }: { filas: FilaHoy[]; abrirId?: string | null; extras?: ExtraHoy[] }) {
   const router = useRouter();
+  // Una medición pendiente de la lista abre el teclado grande.
+  const [medir, setMedir] = useState<ExtraHoy | null>(null);
   const [filaElegida, setFilaElegida] = useState<FilaHoy | null>(() => filas.find((f) => f.id === abrirId) ?? null);
   const [, startTransition] = useTransition();
 
@@ -91,8 +94,9 @@ export function ListaHoyInteractiva({ filas, abrirId }: { filas: FilaHoy[]; abri
 
   return (
     <>
-      <TarjetaHoy filas={filas} onTocar={setFilaElegida} />
+      <TarjetaHoy filas={filas} onTocar={setFilaElegida} extras={extras} onTocarExtra={(x) => x.tipoMedir && setMedir(x)} />
       <SheetFila fila={filaElegida} onCerrar={() => setFilaElegida(null)} onAccion={accionFila} />
+      {medir?.tipoMedir && <TecladoMedicion tipo={medir.tipoMedir} onCerrar={() => setMedir(null)} />}
     </>
   );
 }

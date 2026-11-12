@@ -477,6 +477,8 @@ export async function agregarMultiMomento(
     unidad: datos.unidad ?? "mg",
     hora_programada: toma.hora,
     momento_dia: toma.momento,
+    // Solo si hay una: las altas que no la mandan quedan igual que antes.
+    ...(datos.condicion ? { condicion: datos.condicion } : {}),
     dias_recurrentes: dias,
     ...(datos.forma !== undefined ? { forma } : {}),
     ...(fechaFin ? { fecha_fin: fechaFin } : {}),

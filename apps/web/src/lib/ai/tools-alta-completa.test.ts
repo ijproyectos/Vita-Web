@@ -50,3 +50,22 @@ describe("avisoMismoRemedio", () => {
     expect(await avisoMismoRemedio(supabase, "p", datos, {})).toBeNull();
   });
 });
+
+describe("horasExtraDelModelo (varias tomas en una sola llamada)", () => {
+  it("normaliza, saca repetidas y la hora principal", async () => {
+    const { horasExtraDelModelo } = await import("./tools");
+    expect(horasExtraDelModelo({ extra_times: ["21:00", "9:00", "21:00"] }, "09:00")).toEqual(["21:00"]);
+  });
+
+  it("sin extra_times no agrega nada", async () => {
+    const { horasExtraDelModelo } = await import("./tools");
+    expect(horasExtraDelModelo({}, "09:00")).toEqual([]);
+  });
+
+  it("rechaza una hora inválida o demasiadas horas", async () => {
+    const { horasExtraDelModelo } = await import("./tools");
+    expect(() => horasExtraDelModelo({ extra_times: ["25:00"] }, "09:00")).toThrow(/HH:MM/);
+    expect(() => horasExtraDelModelo({ extra_times: "21:00" }, "09:00")).toThrow(/lista/);
+    expect(() => horasExtraDelModelo({ extra_times: ["01:00", "02:00", "03:00", "04:00", "05:00", "06:00"] }, "09:00")).toThrow(/hasta/);
+  });
+});
