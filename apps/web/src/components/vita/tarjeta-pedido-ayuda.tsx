@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
@@ -9,6 +8,7 @@ import type { PedidoAyudaPendiente } from "@/lib/notificaciones/avisos";
 
 // "X pidió ayuda" en el Inicio de quien cuida, con el perfil que tenga elegido.
 // Sale del mismo aviso del feed (tipo pedido_ayuda); la cruz lo marca leído.
+// Sin botón "Ver": la ficha de la persona no tiene nada sobre el pedido.
 export function TarjetasPedidoAyuda({ pedidos }: { pedidos: PedidoAyudaPendiente[] }) {
   const [cerrados, setCerrados] = useState<Set<string>>(() => new Set());
   const visibles = pedidos.filter((p) => !cerrados.has(p.id));
@@ -52,15 +52,6 @@ export function TarjetasPedidoAyuda({ pedidos }: { pedidos: PedidoAyudaPendiente
                 {p.titulo}
               </div>
               {p.cuerpo && <div className="mt-1 text-pretty text-[13.5px] font-medium leading-[1.45] text-slate-brand">{p.cuerpo}</div>}
-              {p.url && p.url !== "/app" && (
-                <Link
-                  href={p.url}
-                  className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-full bg-card px-4 text-[14px] font-extrabold text-destructive shadow-item"
-                >
-                  Ver
-                  <VitaIcon name="chevron-right" size={16} strokeWidth={2.2} />
-                </Link>
-              )}
             </div>
           </div>
         </div>
