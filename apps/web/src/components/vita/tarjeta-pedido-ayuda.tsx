@@ -1,17 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { marcarAvisoLeidoAction } from "@/lib/notificaciones/actions";
 import type { PedidoAyudaPendiente } from "@/lib/notificaciones/avisos";
+import { parsearVistos, registrarVistos, vencidosTrasVerlos } from "@/lib/notificaciones/pedido-ayuda-visto";
+
+const CLAVE_VISTOS = "vita_pedidos_ayuda_vistos";
+
+function leerVistos() {
+  try {
+    return parsearVistos(window.localStorage.getItem(CLAVE_VISTOS));
+  } catch {
+    return {};
+  }
+}
+
+const sinSuscripcion = () => () => {};
 
 // "X pidió ayuda" en el Inicio de quien cuida, con el perfil que tenga elegido.
 // Sale del mismo aviso del feed (tipo pedido_ayuda); la cruz lo marca leído.
 // Sin botón "Ver": la ficha de la persona no tiene nada sobre el pedido.
+// Una hora después de verla por primera vez (en este dispositivo) se va sola y
+// el aviso queda leído en el servidor.
 export function TarjetasPedidoAyuda({ pedidos }: { pedidos: PedidoAyudaPendiente[] }) {
   const [cerrados, setCerrados] = useState<Set<string>>(() => new Set());
-  const visibles = pedidos.filter((p) => !cerrados.has(p.id));
+  // En el servidor no hay localStorage: hasta montar no se sabe qué se vio.
+  const montado = useSyncExternalStore(sinSuscripcion, () => true, () => false);
+  const ids = pedidos.map((p) => p.id);
+  const clave = ids.join(",");
+  const vencidos = new Set(montado ? vencidosTrasVerlos(ids, leerVistos(), new Date().getTime()) : []);
+
+  useEffect(() => {
+    const lista = clave ? clave.split(",") : [];
+    const ahora = new Date().getTime();
+    const vistos = leerVistos();
+    try {
+      window.localStorage.setItem(CLAVE_VISTOS, JSON.stringify(registrarVistos(lista, vistos, ahora)));
+    } catch {
+      // sin storage: la tarjeta queda hasta que la cierren
+    }
+    for (const id of vencidosTrasVerlos(lista, vistos, ahora)) void marcarAvisoLeidoAction(id).catch(() => {});
+  }, [clave]);
+
+  const visibles = pedidos.filter((p) => !cerrados.has(p.id) && !vencidos.has(p.id));
   if (visibles.length === 0) return null;
 
   function cerrar(id: string) {
