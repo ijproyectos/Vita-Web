@@ -14,3 +14,10 @@ export function debeAvisarTurnoHoy(d: { faltanMin: number; horaAR: string; huboA
   if (d.faltanMin > 105 && d.faltanMin <= 120) return false;
   return d.horaAR >= DESDE_HORA || d.faltanMin <= MAX_MIN_DE_MADRUGADA;
 }
+
+/** Minutos que faltan para un turno ("AAAA-MM-DD", "HH:MM") en hora AR (sin horario de verano). */
+export function minutosHastaTurno(fecha: string, hora: string, ahoraMs: number): number {
+  const [hh, mm] = hora.split(":");
+  const instante = new Date(`${fecha}T${hh.padStart(2, "0")}:${mm.slice(0, 2)}:00-03:00`);
+  return (instante.getTime() - ahoraMs) / 60_000;
+}

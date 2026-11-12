@@ -25,7 +25,7 @@ type TurnoGuardado = EstadoTurnoAcompanado & { id: string; usuario_id: string; e
  * Uso sancionado del cliente admin (ver `lib/supabase/admin.ts`): los avisos y las suscripciones son del
  * cuidador y quien guarda el turno no puede escribirlos con su sesión. El admin se crea RECIÉN después de
  * autorizar con el cliente de SESIÓN: el turno recién escrito tiene que ser visible para esa sesión (RLS: dueño
- * o cuidador con rol editar) y el actor sale de la sesión, nunca del cliente. Se excluye al actor.
+ * o cuidador con rol editar). Quien cargó el turno también recibe el aviso (le sirve de recordatorio).
  * Best-effort: nunca lanza ni bloquea el guardado del turno.
  */
 export async function avisarTurnoAcompanado(
@@ -43,9 +43,6 @@ export async function avisarTurnoAcompanado(
     if (!turno) return;
     if (!debeAvisarAcompanado(previo, { acompanado: turno.acompanado === true, fecha: turno.fecha, hora: turno.hora })) return;
 
-    const { data: sesion } = await supabase.auth.getUser();
-    const actorId = sesion.user?.id ?? null;
-
     // Turno visible para la sesión = autorización resuelta: recién ahora el cliente admin.
     const admin = createAdminClient();
     const { data: vinculos, error } = await admin
@@ -54,7 +51,7 @@ export async function avisarTurnoAcompanado(
       .eq("elder_id", turno.usuario_id)
       .eq("estado", "aceptado");
     if (error) return;
-    const destinatarios = destinatariosAcompanado((vinculos ?? []) as VinculoCrudo[], actorId, turno.usuario_id);
+    const destinatarios = destinatariosAcompanado((vinculos ?? []) as VinculoCrudo[], turno.usuario_id);
     if (destinatarios.length === 0) return;
 
     const { data: perfil } = await admin.from("perfiles").select("nombre").eq("id", turno.usuario_id).maybeSingle();

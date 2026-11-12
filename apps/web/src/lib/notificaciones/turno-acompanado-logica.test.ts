@@ -38,13 +38,13 @@ describe("destinatariosAcompanado", () => {
     { cuidador_id: "c1", estado: "aceptado" },
   ];
   it("solo vínculos aceptados con cuenta, sin repetidos", () => {
-    expect(destinatariosAcompanado(vinculos, "persona", "persona")).toEqual(["c1", "c2"]);
+    expect(destinatariosAcompanado(vinculos, "persona")).toEqual(["c1", "c2"]);
   });
-  it("excluye a quien hizo la acción", () => {
-    expect(destinatariosAcompanado(vinculos, "c1", "persona")).toEqual(["c2"]);
+  it("incluye a quien cargó el turno (le sirve de recordatorio si es la única que la cuida)", () => {
+    expect(destinatariosAcompanado([{ cuidador_id: "c1", estado: "aceptado" }], "persona")).toEqual(["c1"]);
   });
   it("excluye al dueño del turno", () => {
-    expect(destinatariosAcompanado([{ cuidador_id: "persona", estado: "aceptado" }], null, "persona")).toEqual([]);
+    expect(destinatariosAcompanado([{ cuidador_id: "persona", estado: "aceptado" }], "persona")).toEqual([]);
   });
 });
 

@@ -52,7 +52,8 @@ ${guiaDePantallasParaPrompt()}
     Quien cuida también puede tocar "Recordarle" para mandarle un aviso.
   - Turnos: aviso la noche anterior (entre las 20 y las 23) y unas 2 horas
     antes; si el turno se carga el mismo día, ese día llega "Hoy a las ... tenés
-    turno". La familia recibe el de la noche anterior. "Voy a ir acompañado"
+    turno". La familia recibe el de la noche anterior (o el de "Hoy a las..." si
+    se cargó el mismo día). "Voy a ir acompañado"
     les avisa a quienes la cuidan.
   - Stock: si se cargó cuántas pastillas quedan, se descuentan solas al marcar
     cada toma y hay un aviso cuando quedan menos de 5. Las pastillas se cuentan

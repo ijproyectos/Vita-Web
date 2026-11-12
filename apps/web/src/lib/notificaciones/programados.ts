@@ -14,7 +14,7 @@ import {
 } from "./avisos-tipos";
 import { procesarMonitoreos } from "./medir";
 import { entregarAviso, existeEnvio, familiaAvisosDisponible, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
-import { debeAvisarTurnoHoy } from "./turno-hoy-logica";
+import { debeAvisarTurnoHoy, minutosHastaTurno } from "./turno-hoy-logica";
 import {
   cuidadorRecibe,
   enVentanaResumenDia,
@@ -39,6 +39,7 @@ import {
   payloadStockBajo,
   payloadTurno2h,
   payloadTurnoHoy,
+  payloadTurnoPersonaHoy,
   payloadTurnoDiaAntes,
 } from "./mensajes";
 
@@ -62,6 +63,7 @@ import {
 // uuid determinista de (persona, cuidador[, turno/inventario]):
 //   resumen_dia_persona       21:00-21:59                           persona x cuidador
 //   turno_persona_dia_antes   20:00-22:59 del día anterior          turno x cuidador
+//   turno_persona_hoy         turno de hoy sin aviso la noche anterior turno x cuidador
 //   stock_bajo_persona        09:00-20:59, a cuidadores Admin       inventario x cuidador
 //
 // Silencio nocturno: aplica a dosis_hora, dosis_pospuesta, turnos y stock. NO
@@ -340,9 +342,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
     }
 
     if (t.fecha === hoyAR) {
-      const [hh, mm] = t.hora.split(":");
-      const instante = new Date(`${t.fecha}T${hh.padStart(2, "0")}:${mm}:00-03:00`); // AR no tiene horario de verano
-      const faltan = (instante.getTime() - ahoraMs) / 60_000;
+      const faltan = minutosHastaTurno(t.fecha, t.hora, ahoraMs);
       if (faltan > 105 && faltan <= 120 && (await reclamarEnvio(admin, "turno_2h", t.id, t.fecha, t.usuario_id))) {
         const payload = payloadTurno2h(datosTurno);
         await entregarAviso(
@@ -441,7 +441,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
   }
 
   // h) Avisos de familia. Un fallo acá no tumba lo que ya salió en este tick.
-  if (enVentanaResumenDia(horaAR) || enVentanaTurnoPersona(horaAR) || enVentanaStockPersona(horaAR)) {
+  if (enVentanaResumenDia(horaAR) || enVentanaTurnoPersona(horaAR) || enVentanaStockPersona(horaAR) || turnos.some((t) => t.fecha === hoyAR)) {
     try {
       if (await familiaAvisosDisponible(admin)) {
         await procesarAvisosDeFamilia(admin, {
@@ -568,9 +568,16 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
     }
   }
   const turnosManana = hacerTurnos ? c.turnos.filter((t) => t.fecha === mananaAR && TURNO_HORA.test(t.hora)) : [];
+  // Turnos de hoy en condiciones de "Hoy a las…" (si ya hubo aviso la noche anterior se mira por cuidador, abajo).
+  const ahoraMs = c.ahora.getTime();
+  const turnosHoy = c.turnos.filter(
+    (t) => t.fecha === hoyAR && TURNO_HORA.test(t.hora) && debeAvisarTurnoHoy({ faltanMin: minutosHastaTurno(t.fecha, t.hora, ahoraMs), horaAR, huboAvisoDiaAntes: false })
+  );
   const stock = hacerStock ? c.stockBajo : [];
 
-  const personaIds = [...new Set([...medsDePersona.keys(), ...turnosManana.map((t) => t.usuario_id), ...stock.map((i) => i.usuario_id)])];
+  const personaIds = [
+    ...new Set([...medsDePersona.keys(), ...turnosManana.map((t) => t.usuario_id), ...turnosHoy.map((t) => t.usuario_id), ...stock.map((i) => i.usuario_id)]),
+  ];
   if (personaIds.length === 0) return;
 
   const { data: vinculosData, error: errorVinculos } = await admin
@@ -690,6 +697,37 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
         admin,
         cu.cuidadorId,
         { tipo: "turno_persona_dia_antes", titulo: payload.title, cuerpo: payload.body, url: payload.url, personaId: t.usuario_id, datos: { turnoId: t.id } },
+        payload
+      );
+      resumen.turnoPersona++;
+    }
+  }
+
+  // Turno de HOY de la persona que no tuvo aviso la noche anterior (lo cargaron hoy): "Hoy a las…".
+  for (const t of turnosHoy) {
+    for (const cu of cuidadoresDe.get(t.usuario_id) ?? []) {
+      const silenciado = enSilencioNocturno(prefsDe(cu.cuidadorId), horaAR);
+      if (!cuidadorRecibe("turno_persona_dia_antes", prefsDe(cu.cuidadorId), cu.rol, silenciado)) continue;
+      const ref = refDeterminista(t.usuario_id, cu.cuidadorId, t.id);
+      if (await existeEnvio(admin, "turno_persona_dia_antes", ref, t.fecha)) continue;
+      if (await existeEnvio(admin, "turno_acompanado_dia_antes", ref, t.fecha)) continue;
+      if (!(await reclamarEnvio(admin, "turno_persona_hoy", ref, t.fecha, cu.cuidadorId))) continue;
+      const payload = payloadTurnoPersonaHoy({
+        personaId: t.usuario_id,
+        personaNombre: nombre(t.usuario_id),
+        turnoId: t.id,
+        especialidad: t.especialidad,
+        profesional: t.profesional,
+        hora: t.hora,
+        acompanado: t.acompanado,
+        llevar: t.llevar,
+        rolDestino: cu.rol,
+        relacion: cu.relacion,
+      });
+      await entregarAviso(
+        admin,
+        cu.cuidadorId,
+        { tipo: "turno_persona_hoy", titulo: payload.title, cuerpo: payload.body, url: payload.url, personaId: t.usuario_id, datos: { turnoId: t.id } },
         payload
       );
       resumen.turnoPersona++;

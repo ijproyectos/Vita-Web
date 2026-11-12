@@ -307,6 +307,28 @@ export function payloadCumpleanosPersona(d: {
   };
 }
 
+/** Turno de hoy de la persona que no recibió el aviso de la noche anterior: "Hoy a las 15:30 Elsa tiene Kinesiología". */
+export function payloadTurnoPersonaHoy(t: {
+  personaId: string;
+  personaNombre: string;
+  turnoId: string;
+  especialidad: string;
+  profesional: string | null;
+  hora: string;
+  acompanado?: boolean | null;
+  llevar?: unknown;
+  rolDestino?: "editar" | "ver" | null;
+  relacion?: string | null;
+}): PayloadPush {
+  const detalle = [t.profesional?.trim() || null, t.acompanado ? "pidió compañía" : null].filter(Boolean).join(" · ");
+  return {
+    title: `Hoy a las ${horaCorta(t.hora)} ${comoLlamarla(t.personaNombre, t.relacion).medio} tiene ${t.especialidad}`,
+    body: conLlevar(detalle, t.llevar),
+    url: urlFichaPersona(t.personaId, t.rolDestino),
+    tag: `turno-persona-hoy-${t.turnoId}`,
+  };
+}
+
 /** El día anterior (20:00): "Mañana Elsa tiene Kinesiología". */
 export function payloadTurnoPersonaDiaAntes(t: {
   personaId: string;

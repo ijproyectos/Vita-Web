@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { debeAvisarTurnoHoy } from "./turno-hoy-logica";
+import { debeAvisarTurnoHoy, minutosHastaTurno } from "./turno-hoy-logica";
 
 describe("debeAvisarTurnoHoy", () => {
   it("avisa un turno cargado hoy que todavía no pasó", () => {
@@ -21,5 +21,13 @@ describe("debeAvisarTurnoHoy", () => {
     expect(debeAvisarTurnoHoy({ faltanMin: 600, horaAR: "00:05", huboAvisoDiaAntes: false })).toBe(false);
     expect(debeAvisarTurnoHoy({ faltanMin: 150, horaAR: "05:00", huboAvisoDiaAntes: false })).toBe(true);
     expect(debeAvisarTurnoHoy({ faltanMin: 600, horaAR: "07:00", huboAvisoDiaAntes: false })).toBe(true);
+  });
+});
+
+describe("minutosHastaTurno", () => {
+  it("cuenta en hora argentina y acepta HH:MM:SS", () => {
+    const ahora = new Date("2026-11-12T13:00:00-03:00").getTime();
+    expect(minutosHastaTurno("2026-11-12", "15:30", ahora)).toBe(150);
+    expect(minutosHastaTurno("2026-11-12", "9:00:00", ahora)).toBe(-240);
   });
 });
