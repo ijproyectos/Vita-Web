@@ -33,6 +33,9 @@ const SIN_NAV = [
   "/app/vita-plus",
 ];
 
+// Rutas con un segmento variable en el medio (no sirven con startsWith).
+const SIN_NAV_PATRONES = [/^\/app\/turnos\/[^/]+\/editar$/];
+
 // Pulsación larga en "Perfil" (V7): abre el selector de perfiles sin entrar a la pantalla.
 const MS_PULSACION_LARGA = 480;
 
@@ -50,7 +53,7 @@ export function BottomNav({
   const { abrir } = useChatOverlay();
   const [selectorAbierto, setSelectorAbierto] = useState(false);
 
-  if (oculto || SIN_NAV.some((p) => pathname.startsWith(p))) return null;
+  if (oculto || SIN_NAV.some((p) => pathname.startsWith(p)) || SIN_NAV_PATRONES.some((r) => r.test(pathname))) return null;
 
   const izquierda = ITEMS.slice(0, 2);
   const derecha = ITEMS.slice(2);
