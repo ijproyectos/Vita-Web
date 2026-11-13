@@ -1,6 +1,6 @@
 {
   "name": "web",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "evals": "tsx evals/correr.ts"
+    "evals": "tsx evals/correr.ts",
+    "eval:chat": "tsx evals/chat/ejecutar.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

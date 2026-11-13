@@ -40,3 +40,6 @@ pantallas/Vitaoriginal/*.zip
 # Local Netlify folder
 .netlify
 testsprite_tests/tmp/
+
+# Reportes del eval del chat (generados)
+apps/web/evals/chat/resultados/
