@@ -7,6 +7,7 @@ import { obtenerUsoHoy } from "@/lib/uso-ia/nucleo";
 import type { UsoDiarioConEstado } from "@/lib/uso-ia/tipos";
 import type { MensajeChat } from "@/lib/chat/tipos";
 import { deshacerMemoria } from "@/lib/memoria/nucleo";
+import { esMotivoValido, faltaTablaValoraciones } from "@/lib/chat/valoraciones";
 
 // Server Actions consumidas por el overlay de chat (componente cliente,
 // no una página) — reemplazan el fetch en el server component que hacía
@@ -63,5 +64,38 @@ export async function deshacerMemoriaAction(
     return r === "no_encontrado" ? { status: "error", mensaje: "Ese recuerdo ya cambió o se borró: mirá cómo quedó en Privacidad." } : error;
   } catch {
     return error;
+  }
+}
+
+/**
+ * 👍/👎 a una respuesta de vita (migración 060). `valor` 0 quita la valoración. Sesión del usuario (RLS: solo mensajes del
+ * asistente propios). Sin la tabla devuelve `noDisponible` y el cliente esconde los botones. Nunca lanza.
+ */
+export async function valorarRespuestaAction(
+  mensajeId: string,
+  valor: 1 | -1 | 0,
+  motivo?: string
+): Promise<{ status: "success" } | { status: "error"; noDisponible?: boolean }> {
+  try {
+    if (typeof mensajeId !== "string" || !UUID_RE.test(mensajeId)) return { status: "error" };
+    if (valor !== 1 && valor !== -1 && valor !== 0) return { status: "error" };
+    const usuario = await requireUser();
+    const supabase = await createClient();
+    if (valor === 0) {
+      const { error } = await supabase.from("chat_valoraciones").delete().eq("usuario_id", usuario.id).eq("mensaje_id", mensajeId);
+      if (error) return { status: "error", noDisponible: faltaTablaValoraciones(error) };
+      return { status: "success" };
+    }
+    const motivoLimpio = valor === -1 && esMotivoValido(motivo) ? motivo : null;
+    const { error } = await supabase
+      .from("chat_valoraciones")
+      .upsert(
+        { usuario_id: usuario.id, mensaje_id: mensajeId, valor, motivo: motivoLimpio, updated_at: new Date().toISOString() },
+        { onConflict: "usuario_id,mensaje_id" }
+      );
+    if (error) return { status: "error", noDisponible: faltaTablaValoraciones(error) };
+    return { status: "success" };
+  } catch {
+    return { status: "error" };
   }
 }

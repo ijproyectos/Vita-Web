@@ -64,6 +64,10 @@ import { createClient } from "@supabase/supabase-js";
  * lista) y cada función de datos vuelve a exigirlo. Solo ejecuta las RPC `admin_*` de la migración 045 (service_role, sin texto
  * de usuarios: ni mensajes, ni recuerdos, ni datos de salud) y es de solo lectura salvo la fila de auditoría.
  *
+ * Métricas del chat en el panel (`lib/admin/chat.ts`, página `/adminvita/chat`): lectura acotada (tope de filas, sin texto de
+ * mensajes) de `registros_chat` y de `chat_valoraciones` (migración 060, solo service_role la lee fuera del dueño), siempre
+ * DESPUÉS de `requireAdmin()`. Solo lectura; si falta la tabla de valoraciones el panel degrada sin lanzar.
+ *
  * Gestión del panel (migración 047): `lib/admin/administradores.ts` (alta/baja de administradores, solo dueños de ADMIN_EMAILS),
  * `lib/admin/suspensiones.ts` (Auth Admin API `updateUserById` con `ban_duration` + RPC `admin_suspender_usuario` /
  * `admin_reactivar_usuario`; nunca a un dueño ni a un administrador), `lib/admin/envios-masivos.ts` (crear/cancelar un envío

@@ -427,7 +427,8 @@ export async function POST(request: Request) {
             medicion.errorCodigo = directa.codigo ?? null;
             if (directa.accionUI) enviar({ action: directa.accionUI });
             enviar({ chunk: directa.texto });
-            await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", directa.texto, directa.accionUI ? tarjetasParaGuardar([directa.accionUI]) : []);
+            const idDirecta = await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", directa.texto, directa.accionUI ? tarjetasParaGuardar([directa.accionUI]) : []);
+            if (idDirecta) enviar({ mensajeId: idDirecta });
             enviarFin();
             return;
           }
@@ -656,8 +657,10 @@ export async function POST(request: Request) {
         // Una respuesta que fue solo tarjetas (sin texto) también se guarda, con el contenido vacío.
         const tarjetasAGuardar = tarjetasParaGuardar(tarjetasDelTurno);
         if (textoAcumulado || tarjetasAGuardar.length > 0) {
-          await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado, tarjetasAGuardar);
+          const idRespuesta = await chat.guardarMensaje(supabase, user.id, sesionId, "assistant", textoAcumulado, tarjetasAGuardar);
           respuestaGuardada = true;
+          // El cliente necesita el id guardado para poder valorar la respuesta (👍/👎) sin recargar el historial.
+          if (idRespuesta) enviar({ mensajeId: idRespuesta });
           // La respuesta salió completa y quedó guardada: recién ahora cuenta como "ya se lo pregunté".
           if (contradiccionesAMarcar.length > 0 && !fallaPorTiempo && !cortePorTiempo) await marcarContradiccionesPreguntadas(supabase, contradiccionesAMarcar);
         }
