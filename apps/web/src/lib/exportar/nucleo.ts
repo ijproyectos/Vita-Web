@@ -105,6 +105,8 @@ export type HistorialExportado = {
   recuerdos_de_vita: RecuerdoExportado[];
   /** Resumen de las charlas con vita (solo del dueño). null si no hay o falta la migración 041. */
   resumen_de_charlas_con_vita: ResumenExportado | null;
+  /** Tus 👍/👎 a las respuestas de vita (sin el texto de la respuesta). Vacío sin la migración 060. */
+  valoraciones_de_respuestas: { valor: 1 | -1; motivo: string | null; respuesta_del: string }[];
 };
 
 type Pagina = PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
@@ -317,6 +319,20 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
     resumenCharlas = null;
   }
 
+  // Valoraciones del chat (060): sin la migración o ante cualquier falla de lectura no se exporta nada.
+  let valoraciones: HistorialExportado["valoraciones_de_respuestas"] = [];
+  try {
+    const filas = await leerTodas<{ valor: number; motivo: string | null; mensaje_id: string }>("tus valoraciones", (d, h) =>
+      supabase.from("chat_valoraciones").select("valor, motivo, mensaje_id").eq("usuario_id", usuarioId).order("created_at", { ascending: true }).range(d, h)
+    );
+    const fechaPorMensaje = new Map(mensajes.map((m) => [m.id, m.created_at]));
+    valoraciones = filas
+      .filter((f) => (f.valor === 1 || f.valor === -1) && fechaPorMensaje.has(f.mensaje_id))
+      .map((f) => ({ valor: f.valor as 1 | -1, motivo: f.motivo, respuesta_del: fechaPorMensaje.get(f.mensaje_id) as string }));
+  } catch {
+    valoraciones = [];
+  }
+
   const nombrePorMedicamento = new Map(medicamentos.map((m) => [m.id, m.nombre]));
 
   const mensajesPorSesion = new Map<string, MensajeChat[]>();
@@ -410,5 +426,6 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
       .filter((c) => c.mensajes.length > 0),
     recuerdos_de_vita: recuerdos,
     resumen_de_charlas_con_vita: resumenCharlas,
+    valoraciones_de_respuestas: valoraciones,
   };
 }

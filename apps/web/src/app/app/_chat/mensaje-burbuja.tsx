@@ -7,6 +7,7 @@ import { VitaAvatar } from "@/components/vita/v-mark";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { datosDeMemoria, TarjetaMemoria } from "./tarjeta-memoria";
+import { ValoracionRespuesta } from "./valoracion-respuesta";
 
 export type MensajeChatUI = {
   role: "user" | "assistant";
@@ -29,6 +30,8 @@ export type MensajeChatUI = {
   sinRespuesta?: boolean;
   // Respuesta de vita que se cortó a mitad del stream: se conserva el texto parcial.
   interrumpido?: boolean;
+  /** Id guardado (mensajes_chat.id) de una respuesta de vita: del historial o del evento `mensajeId` del stream. Habilita 👍/👎. */
+  id?: string;
 };
 
 // Burbujas del chat con vita — porta Message/ActionCard de VitaChat.jsx.
@@ -71,6 +74,7 @@ export function MensajeBurbuja({ m, cargando, alCerrar, esPropio, alReintentar, 
       {agruparTarjetas(m.tarjetas ?? []).map((t, i) => (
         <TarjetaAccion key={`${t.type}-${i}`} accion={t} alCerrar={alCerrar} esPropio={esPropio} guardadoEn={m.guardado ? m.timestamp : undefined} />
       ))}
+      {m.id && !cargando && !m.bienvenida && <ValoracionRespuesta key={m.id} mensajeId={m.id} />}
       {m.opciones && m.opciones.length > 0 && alElegirOpcion && (
         <div className="flex flex-wrap gap-2 pl-9" role="group" aria-label="Respuestas rápidas">
           {m.opciones.map((o) => (

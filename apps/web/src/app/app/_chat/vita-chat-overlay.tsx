@@ -48,7 +48,7 @@ function moodValido(mood: unknown): EstadoAvatar {
 
 function aMensajeUI(m: MensajeChat): MensajeChatUI {
   const tarjetas = leerTarjetas(m.tarjetas);
-  return { role: m.role, content: m.contenido, timestamp: m.created_at, ...(tarjetas.length ? { tarjetas, guardado: true } : {}) };
+  return { role: m.role, content: m.contenido, timestamp: m.created_at, ...(m.role === "assistant" && m.id ? { id: m.id } : {}), ...(tarjetas.length ? { tarjetas, guardado: true } : {}) };
 }
 
 function mensajeBienvenida(): MensajeChatUI {
@@ -390,10 +390,22 @@ export function VitaChatOverlay({
             | { action: { type: string; [clave: string]: unknown } }
             | { error: string; sinReintento?: boolean }
             | { session: string }
-            | { uso: UsoDiario };
+            | { uso: UsoDiario }
+            | { mensajeId: string };
 
           if ("session" in evento) {
             // El servidor siempre escribe en la conversación continua: el cliente no necesita el id de sesión.
+          } else if ("mensajeId" in evento) {
+            // Id de la respuesta recién guardada (llega al final, antes de [DONE]): habilita 👍/👎 sobre esa burbuja.
+            const idGuardado = evento.mensajeId;
+            if (typeof idGuardado === "string") {
+              setMensajes((prev) => {
+                const copia = [...prev];
+                const ultimo = copia[copia.length - 1];
+                if (ultimo?.role === "assistant") copia[copia.length - 1] = { ...ultimo, id: idGuardado };
+                return copia;
+              });
+            }
           } else if ("uso" in evento) {
             setUso(evento.uso);
           } else if ("chunk" in evento) {

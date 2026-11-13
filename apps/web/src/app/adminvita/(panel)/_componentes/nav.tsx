@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/adminvita", etiqueta: "Resumen", exacto: true },
   { href: "/adminvita/usuarios", etiqueta: "Usuarios", exacto: false },
   { href: "/adminvita/ia", etiqueta: "IA y costos", exacto: false },
+  { href: "/adminvita/chat", etiqueta: "Chat", exacto: false },
   { href: "/adminvita/vita-plus", etiqueta: "vita+", exacto: false },
   { href: "/adminvita/codigos", etiqueta: "Códigos", exacto: false },
   { href: "/adminvita/notificaciones", etiqueta: "Notificaciones", exacto: false },
