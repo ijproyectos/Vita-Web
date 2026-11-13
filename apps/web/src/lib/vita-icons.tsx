@@ -69,6 +69,8 @@ import {
   ArrowUpRight,
   RefreshCw,
   CalendarDays,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -153,6 +155,9 @@ const MAPA: Record<string, ComponentType<LucideProps>> = {
   "bell-off": BellOff,
   chart: ChartLine,
   "wifi-off": WifiOff,
+  // Valoración de las respuestas de vita (060).
+  "thumbs-up": ThumbsUp,
+  "thumbs-down": ThumbsDown,
 };
 
 export function VitaIcon({
