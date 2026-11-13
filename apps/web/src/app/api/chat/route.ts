@@ -139,6 +139,33 @@ async function construirContextoCumple(
   }
 }
 
+type MemoriaBruta = {
+  estadoMem: Awaited<ReturnType<typeof estadoMemoria>>;
+  memorias: Awaited<ReturnType<typeof cargarMemoriasParaContexto>>;
+  resumen: string;
+  contradicciones: Awaited<ReturnType<typeof listarContradicciones>> | null;
+};
+
+// Lecturas de memoria (fases 2 a 4) sin armar texto todavía: el armado necesita `familia` y se hace después.
+// Primero el estado (decide si hay algo que leer); con la memoria activa, recuerdos, resumen y contradicciones
+// son independientes entre sí y van en paralelo. Ninguna lanza (cada una degrada por su cuenta).
+async function leerMemoriaBruta(
+  supabase: Awaited<ReturnType<typeof createClientConDispositivo>>,
+  usuarioId: string,
+  modoSimple: boolean
+): Promise<MemoriaBruta> {
+  const estadoMem = await estadoMemoria(supabase, usuarioId);
+  if (!estadoMem.disponible || !estadoMem.activa) return { estadoMem, memorias: [], resumen: "", contradicciones: null };
+  const [memorias, resumen, contradicciones] = await Promise.all([
+    cargarMemoriasParaContexto(supabase, usuarioId),
+    cargarContextoResumen(supabase, usuarioId),
+    debeMostrarContradicciones({ modoSimple, disponible: estadoMem.disponible, activa: estadoMem.activa })
+      ? listarContradicciones(supabase, usuarioId)
+      : Promise.resolve(null),
+  ]);
+  return { estadoMem, memorias, resumen, contradicciones };
+}
+
 function eventoSSE(data: unknown): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
@@ -356,23 +383,28 @@ export async function POST(request: Request) {
           resueltoSinModelo: false,
         });
         if (cuentaInteraccion && !confirmacionId && (await sinCupoDeInteracciones())) return;
-        let mensajeOrigenId: string | null = null;
-        if (previo.estado === "nuevo") mensajeOrigenId = await chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje);
+        // Lecturas independientes en paralelo (antes eran ~10 awaits en serie). Ya pasaron todas las compuertas
+        // (auth, suspensión, límites, cupo), así que lo que sigue solo lee, salvo guardar el mensaje del usuario.
+        // El mensaje se guarda en paralelo con la lista de familia; el historial se lee DESPUÉS de guardarlo (tiene que
+        // incluirlo). Con el botón Confirmar el servidor puede resolver sin modelo: ahí no se adelanta nada más.
+        const guardarP: Promise<string | null> =
+          previo.estado === "nuevo" ? chat.guardarMensaje(supabase, user.id, sesionId, "user", mensaje) : Promise.resolve(null);
+        const familiaP = (async (): Promise<MiembroFamilia[]> => {
+          try {
+            return modoSimple ? [] : await listarFamilia(supabase);
+          } catch {
+            // Sin la lista el chat sigue, solo con la cuenta propia.
+            return [];
+          }
+        })();
+        const hoyTempranoP = confirmacionId ? null : construirContextoHoy(supabase, user.id);
+        const memoriaTempranaP = confirmacionId || modoSimple ? null : leerMemoriaBruta(supabase, user.id, modoSimple);
+        const colaTempranaP = confirmacionId ? null : guardarP.then(() => chat.listarCola(supabase, user.id, MAX_MENSAJES_HISTORIAL));
+        // Si guardar falla antes de que se espere la cola, que no quede un rechazo sin atender.
+        colaTempranaP?.catch(() => {});
 
-        // El modelo no sabe qué día es: sin esto resolvía "mañana" con su
-        // propio año de referencia y agendaba turnos un año en el pasado
-        // (que después no aparecían en la Rutina).
-        // Familia: el modelo puede actuar sobre las personas que el usuario
-        // cuida (vínculos reales de listar_familia, con la sesión: nunca se
-        // confía en un id del cliente ni del modelo). El cliente manda el id
-        // del perfil abierto en pantalla (la cookie no llega a esta ruta,
-        // path /app); solo cuenta si es el propio usuario o un miembro.
-        let familia: MiembroFamilia[] = [];
-        try {
-          familia = modoSimple ? [] : await listarFamilia(supabase);
-        } catch {
-          // Sin la lista el chat sigue, solo con la cuenta propia.
-        }
+        // El id del mensaje guardado es el origen de los recuerdos que vita saque de él (para poder olvidarlos).
+        const [mensajeOrigenId, familia] = await Promise.all([guardarP, familiaP]);
         const abierto =
           !modoSimple && typeof perfilActivoId === "string" && perfilActivoId !== user.id
             ? familia.find((f) => f.id === perfilActivoId)
@@ -406,7 +438,25 @@ export async function POST(request: Request) {
         // El historial se reconstruye SIEMPRE desde la DB (fuente de
         // verdad), nunca se confía en lo que mande el cliente. Es la cola del
         // hilo continuo (últimos 7 días, todas las sesiones), no una sesión suelta.
-        const mensajesGuardados = await chat.listarCola(supabase, user.id, MAX_MENSAJES_HISTORIAL);
+        const contextoPerfil = construirContextoPersonas(user.id, familia, abierto);
+
+        // El mensaje se clasifica UNA vez por request (sí/no/otro) y es lo que
+        // usa pedidos.ts. Un "no" invalida TODAS las confirmaciones pendientes
+        // ANTES de llamar al modelo: un "ok" posterior y no relacionado no puede
+        // ejecutar una acción vieja.
+        const respuestaUsuario = clasificarRespuesta(
+          mensaje,
+          familia.map((f) => f.nombre)
+        );
+        const purgaP = respuestaUsuario === "no" ? purgarPendientes(supabase, user.id) : Promise.resolve();
+
+        const [mensajesGuardados, contextoHoy, contextoCumple, memoriaBruta] = await Promise.all([
+          colaTempranaP ?? chat.listarCola(supabase, user.id, MAX_MENSAJES_HISTORIAL),
+          hoyTempranoP ?? construirContextoHoy(supabase, user.id),
+          construirContextoCumple(supabase, user.id, familia),
+          modoSimple ? Promise.resolve(null) : (memoriaTempranaP ?? leerMemoriaBruta(supabase, user.id, modoSimple)),
+          purgaP,
+        ]);
         // Solo los últimos N (ya vienen acotados), y la lista tiene que arrancar con un turno del
         // usuario (la API lo exige): se recorta del principio hasta lograrlo.
         const recientes = mensajesGuardados.slice(-MAX_MENSAJES_HISTORIAL);
@@ -426,29 +476,13 @@ export async function POST(request: Request) {
           }
         }
 
-        const contextoPerfil = construirContextoPersonas(user.id, familia, abierto);
-
-        // El mensaje se clasifica UNA vez por request (sí/no/otro) y es lo que
-        // usa pedidos.ts. Un "no" invalida TODAS las confirmaciones pendientes
-        // ANTES de llamar al modelo: un "ok" posterior y no relacionado no puede
-        // ejecutar una acción vieja.
-        const respuestaUsuario = clasificarRespuesta(
-          mensaje,
-          familia.map((f) => f.nombre)
-        );
-        if (respuestaUsuario === "no") await purgarPendientes(supabase, user.id);
-
-        const contextoHoy = await construirContextoHoy(supabase, user.id);
-        const contextoCumple = await construirContextoCumple(supabase, user.id, familia);
-
         // Prompt caching: el bloque estático (reglas + tools, que se renderizan antes) lleva el breakpoint; todo
         // lo volátil (Personas, Hoy, fecha) va en un segundo bloque SIN cache_control, después del breakpoint.
         // Memoria (fase 2): estado + recuerdos vigentes, con tope en tokens, en el bloque DINÁMICO. El modo simple no la usa.
         // Sin la migración 038 queda vacío y el chat funciona igual.
         let textoMemoria = "";
-        if (!modoSimple) {
-          const estadoMem = await estadoMemoria(supabase, user.id);
-          const memorias = estadoMem.disponible && estadoMem.activa ? await cargarMemoriasParaContexto(supabase, user.id) : [];
+        if (!modoSimple && memoriaBruta) {
+          const { estadoMem, memorias, resumen, contradicciones } = memoriaBruta;
           textoMemoria = contextoMemoria({
             disponible: estadoMem.disponible,
             activa: estadoMem.activa,
@@ -457,13 +491,13 @@ export async function POST(request: Request) {
           });
           // Resumen de charlas anteriores (fase 3): solo de la cuenta logueada y solo con la memoria activa. Va en el
           // bloque dinámico, saneado y con tope; sin la migración 041 queda vacío.
-          if (estadoMem.disponible && estadoMem.activa) textoMemoria += await cargarContextoResumen(supabase, user.id);
+          if (estadoMem.disponible && estadoMem.activa) textoMemoria += resumen;
           // Contradicciones por confirmar (fase 4, migración 043; máx. 2): solo en el chat normal y con la memoria activa. Una
           // vez preguntadas siguen visibles 30 min (para poder resolverlas cuando contesta) y después se ocultan. Se marcan
           // como preguntadas SOLO si la respuesta sale completa (más abajo): una falla del modelo no gasta el intento.
-          if (debeMostrarContradicciones({ modoSimple, disponible: estadoMem.disponible, activa: estadoMem.activa })) {
+          if (contradicciones) {
             const ahoraContexto = new Date();
-            const porConfirmar = (await listarContradicciones(supabase, user.id))
+            const porConfirmar = contradicciones
               .map((c) => ({ c, v: visibilidadContradiccion(c, ahoraContexto) }))
               .filter((x) => x.v.visible)
               .slice(0, MAX_CONTRADICCIONES_CONTEXTO);
@@ -489,6 +523,12 @@ export async function POST(request: Request) {
           if (turno > 0 && !alcanzaParaOtraVuelta(restanteMs(inicioMs, performance.now()))) {
             cortePorTiempo = true;
             break;
+          }
+          if (turno === 0) {
+            // Duración de la preparación (sin datos de usuario): aparece en los logs de la función.
+            console.info(
+              JSON.stringify({ evento: "chat_preparacion", ms: Math.round(performance.now() - inicioMs), modo, confirmacion: !!confirmacionId })
+            );
           }
           const respuesta = anthropic.messages.stream(
             {
