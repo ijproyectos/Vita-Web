@@ -11,12 +11,11 @@ import { cn } from "@/lib/utils";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
-import { usePosponer } from "@/lib/modo-simple/usar-posponer";
 import { olvidarModoSimple, recordarModoSimple } from "@/lib/modo-simple/recordar";
 import { volverAMiPerfilAction } from "@/app/app/familia/actions";
 import { VELOCIDAD_VOZ_LENTA, type PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { BarraSinConexion } from "@/components/vita/barra-sin-conexion";
-import { cancelarPosposicionAction, posponerDosisAction, posponerMedicionAction } from "@/lib/notificaciones/actions";
+import { posponerDosisAction, posponerMedicionAction } from "@/lib/notificaciones/actions";
 import { usePushActivo } from "@/lib/notificaciones/usar-push-activo";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import {
@@ -130,8 +129,6 @@ export function Pantalla({
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
   const { silenciada, alternar: alternarSilencio } = useSilencioVita({ porDefecto: false });
   const [charlaAbierta, setCharlaAbierta] = useState(false);
-  const posponer = usePosponer(grupo.map((m) => m.id).join(","), config.posponer_min);
-  const posponerMedir = usePosponer(medirAhora ? `medir:${medirAhora.clave}` : "", config.posponer_min);
   const pushActivo = usePushActivo();
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
@@ -182,7 +179,6 @@ export function Pantalla({
     // "¡Listo!" al instante (optimista): el servidor guarda por detrás y, si
     // falla, se vuelve atrás con el aviso.
     setConfirmadoLocal(true);
-    posponer.cancelar();
     startTransition(async () => {
       try {
         // Todo el grupo en una sola acción (usa marcarTomado por dentro: no
@@ -204,17 +200,19 @@ export function Pantalla({
     });
   }
 
-  // "Más tarde" también se registra en el servidor: así el cron vuelve a mandar
-  // el aviso a los 15/30/60 min (los que eligió quien configuró el modo simple) aunque esta pantalla ya no esté abierta. Si el
-  // registro falla, el posponer local sigue valiendo (la tarjeta reaparece).
-  function posponerAqui() {
-    posponer.posponer();
-    void posponerDosisAction(grupo.map((m) => m.id), config.posponer_min).catch(() => {});
+  // "Posponer": la tarjeta queda en pantalla (decisión 2026-11-15) y el servidor
+  // programa el aviso al celular para dentro de N minutos (los del cuidador).
+  function avisarPospuesto(r: { status: "success" | "error" }) {
+    const n = config.posponer_min;
+    if (r.status === "error") toast.error("No pude programar el aviso. Probá de nuevo.");
+    else if (pushActivo) toast.success(`Listo. Te aviso de nuevo en ${n} minutos.`);
+    else toast.info("Listo. Para que te avise al celular, activá los avisos.");
   }
 
-  function verAhora() {
-    posponer.cancelar();
-    void cancelarPosposicionAction(grupo.map((m) => m.id)).catch(() => {});
+  function posponerAqui() {
+    void posponerDosisAction(grupo.map((m) => m.id), config.posponer_min)
+      .then(avisarPospuesto)
+      .catch(() => avisarPospuesto({ status: "error" }));
   }
 
   // "No la tomé": se pregunta antes (no se deshace desde acá) y deja de pedirla
@@ -222,7 +220,6 @@ export function Pantalla({
   function noTome() {
     const deOlvidadas = preguntarNo === "olvidadas";
     setPreguntarNo(null);
-    if (!deOlvidadas) posponer.cancelar();
     startTransition(async () => {
       try {
         const r = deOlvidadas
@@ -257,8 +254,9 @@ export function Pantalla({
 
   function posponerMedicion() {
     if (!medirAhora) return;
-    posponerMedir.posponer();
-    void posponerMedicionAction(medirAhora.monitoreoId, medirAhora.hora, config.posponer_min).catch(() => {});
+    void posponerMedicionAction(medirAhora.monitoreoId, medirAhora.hora, config.posponer_min)
+      .then(avisarPospuesto)
+      .catch(() => avisarPospuesto({ status: "error" }));
   }
 
   // "Me equivoqué": vuelve a la tarjeta enseguida y desmarca en el servidor.
@@ -359,7 +357,7 @@ export function Pantalla({
 
   const mostrarTarjeta = fase === "esperando" || fase === "alertado";
   const hayRemedio = mostrarTarjeta || fase === "confirmado";
-  const mostrarMedir = !!medirAhora && !posponerMedir.posponido;
+  const mostrarMedir = !!medirAhora;
   // Lo de ahora: remedio y/o medición. Sin nada de eso, el turno grande ocupa el lugar del descanso.
   const nadaPendiente = !hayRemedio && !mostrarMedir;
   const franja = olvidadas.length > 0 && (
@@ -415,20 +413,7 @@ export function Pantalla({
               "¡Muy bien!" con "Me equivoqué" hasta que la página se recarga. */}
           {fase === "confirmado" && <TarjetaConfirmada grupo={grupo} onDeshacer={deshacer} />}
 
-          {mostrarTarjeta && posponer.posponido && (
-            <TarjetaPospuesta
-              grupo={grupo}
-              minutos={posponer.minutosRestantes}
-              confirmando={pendiente}
-              onConfirmar={confirmar}
-              onVolver={verAhora}
-              conAviso={pushActivo}
-            >
-              {franja}
-            </TarjetaPospuesta>
-          )}
-
-          {mostrarTarjeta && !posponer.posponido && (
+          {mostrarTarjeta && (
             <TarjetaGrupo
               grupo={grupo}
               momento={momento}
@@ -508,61 +493,6 @@ export function Pantalla({
           onAyudaSinContacto={() => setAyudaAbierta(true)}
         />
       )}
-    </div>
-  );
-}
-
-// Tarjeta mientras la dosis está pospuesta: no se pierde, se puede confirmar
-// igual, y "Ver ahora" cancela la espera.
-function TarjetaPospuesta({
-  grupo,
-  minutos,
-  confirmando,
-  onConfirmar,
-  onVolver,
-  conAviso,
-  children,
-}: {
-  grupo: Dosis[];
-  minutos: number;
-  confirmando: boolean;
-  onConfirmar: () => void;
-  onVolver: () => void;
-  /** Hay un push activo en este celular: el aviso de nuevo llega de verdad. */
-  conAviso: boolean;
-  children?: React.ReactNode;
-}) {
-  const n = grupo.length;
-  return (
-    <div className="rounded-[28px] bg-card p-5 shadow-card">
-      <div className="flex items-center gap-4">
-        <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep">
-          <VitaIcon name="clock" size={32} strokeWidth={2.4} />
-        </div>
-        <div>
-          <div className="font-heading text-[24px] font-extrabold leading-tight tracking-[-0.03em]">
-            {conAviso ? "Te aviso de nuevo" : "Te la muestro de nuevo"} en {minutos} min
-          </div>
-          <div className="mt-0.5 text-[15px] font-semibold text-subtle">{listaHablada(grupo.map((m) => m.nombre))}</div>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onConfirmar}
-        disabled={confirmando}
-        className="mt-5 flex h-[72px] w-full items-center justify-center gap-3 rounded-full bg-teal-deep text-[22px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--teal-deep)_32%,transparent)] disabled:opacity-70"
-      >
-        <VitaIcon name="check" size={30} strokeWidth={3} />
-        {n === 1 ? "Ya la tomé" : "Ya las tomé"}
-      </button>
-      <button
-        type="button"
-        onClick={onVolver}
-        className="mt-3 flex h-[52px] w-full items-center justify-center rounded-full bg-secondary text-[16px] font-bold text-slate-brand"
-      >
-        Verlas ahora
-      </button>
-      {children}
     </div>
   );
 }
