@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
+import { fechaEnAR } from "@/lib/tiempo-ar";
 import { estaSuspendida, MENSAJE_CUENTA_SUSPENDIDA } from "@/lib/suspensiones/guardia";
 import { borrarSuscripcion, guardarSuscripcion } from "./push";
 import { listarFamilia } from "@/lib/familia/nucleo";
@@ -200,6 +201,34 @@ export async function posponerDosisAction(medicamentoIds: string[], minutos: num
     const supabase = await createClient();
     const r = await posponerDosis(supabase, usuario.id, medicamentoIds, minutos);
     if (!r.ok) return { status: "error", message: "No pudimos programar el aviso." };
+  } catch {
+    return { status: "error", message: "No pudimos programar el aviso." };
+  }
+  return { status: "success" };
+}
+
+/**
+ * "Posponer N minutos" de "Es hora de medirte…" (modo simple): el cron vuelve a
+ * mandar "Hora de medir…" cuando vence, si no se anotó. Sin la migración 061
+ * devuelve error y la tarjeta igual se oculta en este celular.
+ */
+export async function posponerMedicionAction(monitoreoId: string, hora: string, minutos: number = MINUTOS_POSPONER_SERVIDOR): Promise<EstadoPush> {
+  const usuario = await requireUser();
+  if (!POSPONER_PERMITIDOS.includes(minutos)) return { status: "error", message: "El tiempo elegido no es válido." };
+  if (typeof monitoreoId !== "string" || !UUID.test(monitoreoId) || typeof hora !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) {
+    return { status: "error", message: "La medición no es válida." };
+  }
+  try {
+    const supabase = await createClient();
+    const ahora = new Date();
+    const { error } = await supabase.from("posposiciones_medicion").insert({
+      monitoreo_id: monitoreoId,
+      usuario_id: usuario.id,
+      fecha: fechaEnAR(ahora),
+      hora,
+      hasta: new Date(ahora.getTime() + minutos * 60_000).toISOString(),
+    });
+    if (error) return { status: "error", message: "No pudimos programar el aviso." };
   } catch {
     return { status: "error", message: "No pudimos programar el aviso." };
   }

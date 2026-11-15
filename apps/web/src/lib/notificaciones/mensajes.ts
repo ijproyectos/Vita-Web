@@ -256,6 +256,8 @@ export function payloadResumenDia(d: {
   pendientes: { nombre: string; hora: string }[];
   /** Las que la persona dijo "No la tomé" (057). */
   noTomadas?: { nombre: string; hora: string }[];
+  /** Horarios de su plan de monitoreo que pasaron sin anotar ("la presión", "09:00"). */
+  medicionesSinAnotar?: { que: string; hora: string }[];
   fechaAR: string;
   rolDestino?: "editar" | "ver" | null;
   relacion?: string | null;
@@ -267,9 +269,11 @@ export function payloadResumenDia(d: {
     return `${primeras.join(", ")}${resto > 0 ? ` y ${resto} más` : ""}`;
   };
   const noTomadas = d.noTomadas ?? [];
+  const sinAnotar = (d.medicionesSinAnotar ?? []).map((m) => ({ nombre: m.que, hora: m.hora }));
   const partes = [
     d.pendientes.length > 0 ? `Quedó sin tomar: ${lista(d.pendientes)}.` : null,
     noTomadas.length > 0 ? `Dijo que no tomó: ${lista(noTomadas)}.` : null,
+    sinAnotar.length > 0 ? `No anotó ${lista(sinAnotar)}.` : null,
   ].filter(Boolean);
   const cuerpo = partes.length === 0 ? `Buen día para ${quien.medio}: completó todas sus tomas.` : partes.join(" ");
   return {
