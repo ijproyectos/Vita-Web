@@ -13,6 +13,8 @@ import {
   separarDosis,
 } from "@/lib/inventario/tipos";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
+import { cuotaConteoPastillas, registrarConteoPastillas } from "@/lib/plan-gratis/nucleo";
+import { MENSAJE_LIMITE_CONTEOS } from "@/lib/plan-gratis/logica";
 
 export type EstadoConteo =
   | { status: "idle" }
@@ -35,7 +37,14 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
   // requireUser fuera del try: su redirect("/login") lanza NEXT_REDIRECT y
   // el catch lo convertiría en un mensaje en vez de redirigir.
   const usuario = await requireUser();
+  // El conteo con foto es de la persona del perfil activo (plan gratis: 1 por mes, migración 061).
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "manual", message: destino.message };
+  const personaId = destino.perfil.id;
   try {
+    const supabase = await createClient();
+    const cuota = await cuotaConteoPastillas(supabase, personaId);
+    if (cuota.limitada && cuota.alcanzada) return { status: "manual", message: MENSAJE_LIMITE_CONTEOS };
 
     const frente = formData.get("frente");
     if (!(frente instanceof File) || frente.size === 0) {
@@ -58,6 +67,8 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
     const resultado = await contarPastillasEnFoto(usuario.id, await codificar(frente), dorso ? await codificar(dorso) : null);
 
     if (!resultado.ok) return { status: "manual", message: resultado.error };
+    // Solo un conteo exitoso gasta el cupo del mes: los fallos de la IA no cuentan.
+    await registrarConteoPastillas(supabase, personaId);
     return { status: "contado", conteo: resultado.datos };
   } catch (e) {
     return {

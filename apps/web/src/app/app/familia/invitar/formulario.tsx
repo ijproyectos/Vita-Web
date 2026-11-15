@@ -9,6 +9,7 @@ import { RELACIONES_CUIDADOR, type ColorPerfil, type RolVinculo } from "@/lib/fa
 import { AvatarPersona } from "@/components/vita/avatar-persona";
 import { TarjetasPermiso } from "@/components/vita/tarjetas-permiso";
 import { mensajeInvitacionCuidador } from "@/lib/acceso-codigo/enlace";
+import { TarjetaLimitePlan } from "@/components/vita/tarjeta-limite-plan";
 import { invitarCuidadorAction, type ResultadoInvitar } from "../actions";
 
 export type PersonaInvitable = { id: string; nombre: string; sub: string; color: ColorPerfil; propia: boolean };
@@ -18,7 +19,16 @@ const CAMPO =
   "w-full rounded-full bg-card px-[18px] py-[15px] text-[14.5px] font-semibold shadow-item outline-none placeholder:font-medium placeholder:text-faint focus:shadow-[0_0_0_2px_var(--primary)]";
 const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
 
-export function FormularioInvitar({ personas, personaInicial }: { personas: PersonaInvitable[]; personaInicial: string }) {
+export function FormularioInvitar({
+  personas,
+  personaInicial,
+  sinCupo = [],
+}: {
+  personas: PersonaInvitable[];
+  personaInicial: string;
+  /** Plan gratis: personas que ya tienen su cuidador (aceptado o invitación pendiente). */
+  sinCupo?: string[];
+}) {
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
@@ -203,6 +213,12 @@ export function FormularioInvitar({ personas, personaInicial }: { personas: Pers
         <TarjetasPermiso valor={rol} onChange={setRol} etiqueta="Permiso" puedeAdministrarCuidadores={!persona.propia} />
       </div>
 
+      {sinCupo.includes(personaId) ? (
+        <TarjetaLimitePlan
+          titulo={persona.propia ? "Ya tenés un cuidador" : `${persona.nombre.split(" ")[0]} ya tiene un cuidador`}
+          texto="El plan gratis incluye 1 cuidador por persona. Con vita+ podés sumar todos los que quieras, y los que ya están se quedan."
+        />
+      ) : (
       <button
         type="button"
         onClick={crear}
@@ -214,6 +230,7 @@ export function FormularioInvitar({ personas, personaInicial }: { personas: Pers
       >
         {pendiente ? "Creando…" : "Crear invitación"}
       </button>
+      )}
     </div>
   );
 }

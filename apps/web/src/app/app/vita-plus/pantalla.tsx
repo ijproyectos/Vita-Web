@@ -18,10 +18,13 @@ import {
   type PlanVitaPlus,
 } from "@/lib/vita-plus/planes";
 
+// Lo que vita+ desbloquea frente al plan gratis (lib/plan-gratis/logica.ts): cuidadores ilimitados, conteos de
+// pastillas con foto y estudios sin tope mensual, y más respuestas por día con vita.
 const BENEFICIOS = [
-  "Historia clínica de cada uno, también de tus hijos",
-  "Resumen para llevar al médico",
-  "Aviso de remedios por terminarse",
+  "Cuidadores sin límite para cada persona (gratis: 1)",
+  "Conteo de pastillas con foto sin tope (gratis: 1 por mes)",
+  "Estudios médicos sin tope (gratis: 1 por mes)",
+  "Más respuestas por día con vita (gratis: 5)",
 ];
 
 const PLANES = [PLANES_VITA_PLUS.anual, PLANES_VITA_PLUS.mensual];

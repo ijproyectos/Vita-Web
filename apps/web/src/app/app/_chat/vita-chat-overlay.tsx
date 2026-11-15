@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { clasificarFinDeStream } from "@/lib/chat/fin-stream";
@@ -734,6 +735,13 @@ export function VitaChatOverlay({
             >
               {uso.consultas && uso.restantes > 0 ? textoConsultas(uso) : textoRestante(uso)}
             </p>
+            {uso.consultas?.gratis && uso.consultas.restantes <= 2 && (
+              <p className="mt-0.5 text-center text-[11.5px]">
+                <Link href="/app/vita-plus" onClick={cerrarChat} className="font-bold text-teal-deep underline underline-offset-2">
+                  Con vita+ tenés más respuestas por día
+                </Link>
+              </p>
+            )}
           </div>
         )}
 

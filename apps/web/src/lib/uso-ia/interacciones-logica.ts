@@ -9,12 +9,13 @@ export const LIMITE_INTERACCIONES_MIN = 1;
 export const LIMITE_INTERACCIONES_MAX = 1000;
 export const MOTIVO_LIMITE_MAX = 200;
 
-export type Consultas = { usadas: number; limite: number; restantes: number };
+/** `gratis` = la cuenta no tiene vita+ (tope del plan gratis aplicado): la UI ofrece vita+ al acercarse al límite. */
+export type Consultas = { usadas: number; limite: number; restantes: number; gratis?: boolean };
 
-export function calcularConsultas(usadas: number, limite: number): Consultas {
+export function calcularConsultas(usadas: number, limite: number, gratis = false): Consultas {
   const u = Number.isFinite(usadas) && usadas > 0 ? Math.floor(usadas) : 0;
   const l = Number.isFinite(limite) && limite > 0 ? Math.floor(limite) : 0;
-  return { usadas: u, limite: l, restantes: Math.max(0, l - u) };
+  return { usadas: u, limite: l, restantes: Math.max(0, l - u), ...(gratis ? { gratis: true } : {}) };
 }
 
 /**
@@ -51,7 +52,7 @@ export type ResultadoConsumo =
  * Interpreta la respuesta de la RPC `consumir_interaccion`. FALLA ABIERTO: cualquier forma inesperada o error del
  * contador deja pasar el turno (una falla de contabilidad nunca bloquea el chat).
  */
-export function interpretarConsumo(data: unknown, huboError: boolean): ResultadoConsumo {
+export function interpretarConsumo(data: unknown, huboError: boolean, gratis = false): ResultadoConsumo {
   if (huboError) return { permitido: true, consultas: null };
   const fila = Array.isArray(data) ? data[0] : data;
   if (!fila || typeof fila !== "object") return { permitido: true, consultas: null };
@@ -61,14 +62,17 @@ export function interpretarConsumo(data: unknown, huboError: boolean): Resultado
   if (typeof f.c_permitido !== "boolean" || !Number.isFinite(usadas) || !Number.isFinite(limite)) {
     return { permitido: true, consultas: null };
   }
-  const consultas = calcularConsultas(usadas, limite);
+  const consultas = calcularConsultas(usadas, limite, gratis);
   if (f.c_permitido) return { permitido: true, consultas };
   return { permitido: false, consultas };
 }
 
 /** Mensaje al llegar al tope. El modo simple no usa palabras técnicas ni manda a escribir un correo. */
-export function mensajeLimiteInteracciones(limite: number, modoSimple: boolean): string {
+export function mensajeLimiteInteracciones(limite: number, modoSimple: boolean, gratis = false): string {
   if (modoSimple) return "Por hoy ya hablamos todo lo que podía. Mañana seguimos.";
+  if (gratis) {
+    return `Llegaste a las ${limite} respuestas de hoy del plan gratis. Con vita+ tenés más respuestas por día: lo ves en Perfil, vita+ (/app/vita-plus). Mañana a la medianoche se renueva.`;
+  }
   return `Llegaste a las ${limite} consultas de hoy con vita. Mañana a la medianoche se renueva. Si necesitás más, escribinos a ${CORREO_SOPORTE}.`;
 }
 
@@ -80,6 +84,7 @@ export function eventosPorLimiteInteracciones(params: {
   limite: number;
   modoSimple: boolean;
   textoEmergencia: string | null;
+  gratis?: boolean;
 }): ({ chunk: string } | { error: string; sinReintento: true })[] {
   const eventos: ({ chunk: string } | { error: string; sinReintento: true })[] = [];
   if (params.textoEmergencia) eventos.push({ chunk: params.textoEmergencia });
@@ -89,6 +94,11 @@ export function eventosPorLimiteInteracciones(params: {
 
 /** Texto corto del indicador, en palabras de todos los días. */
 export function textoConsultasRestantes(c: Consultas): string {
+  if (c.gratis) {
+    if (c.restantes <= 0) return "Llegaste a las respuestas de hoy del plan gratis. Se renuevan a la medianoche.";
+    if (c.restantes === 1) return "Te queda 1 respuesta hoy en el plan gratis";
+    return `Te quedan ${c.restantes} respuestas hoy en el plan gratis`;
+  }
   if (c.restantes <= 0) return "Llegaste al límite de consultas de hoy. Se renueva a la medianoche.";
   if (c.restantes === 1) return "Te queda 1 consulta hoy";
   return `Te quedan ${c.restantes} consultas hoy`;

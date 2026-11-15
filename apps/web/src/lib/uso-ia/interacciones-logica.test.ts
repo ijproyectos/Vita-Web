@@ -142,3 +142,36 @@ describe("formulario del panel", () => {
     expect(validarLimiteAdmin({ limite: "", motivo: "x", volverAlGeneral: true })).toEqual({ ok: true, limite: null, motivo: "" });
   });
 });
+
+describe("plan gratis (chat)", () => {
+  it("la cuenta gratis queda marcada en las consultas y el texto habla del plan gratis", () => {
+    const c = calcularConsultas(3, 5, true);
+    expect(c).toEqual({ usadas: 3, limite: 5, restantes: 2, gratis: true });
+    expect(textoConsultasRestantes(c)).toBe("Te quedan 2 respuestas hoy en el plan gratis");
+    expect(textoConsultasRestantes(calcularConsultas(4, 5, true))).toBe("Te queda 1 respuesta hoy en el plan gratis");
+  });
+  it("vita+ no lleva la marca y el texto no cambia", () => {
+    expect(calcularConsultas(3, 15)).toEqual({ usadas: 3, limite: 15, restantes: 12 });
+    expect(textoConsultasRestantes(calcularConsultas(3, 15))).toBe("Te quedan 12 consultas hoy");
+  });
+  it("interpretarConsumo propaga la marca gratis", () => {
+    const r = interpretarConsumo([{ c_permitido: false, c_usadas: 5, c_limite: 5 }], false, true);
+    expect(r.permitido).toBe(false);
+    expect(r.consultas?.gratis).toBe(true);
+  });
+  it("el mensaje de tope gratis nombra el plan y manda a vita+", () => {
+    const m = mensajeLimiteInteracciones(5, false, true);
+    expect(m).toContain("5 respuestas de hoy del plan gratis");
+    expect(m).toContain("/app/vita-plus");
+  });
+  it("el modo simple conserva su mensaje sin palabras técnicas, también en gratis", () => {
+    expect(mensajeLimiteInteracciones(5, true, true)).toBe("Por hoy ya hablamos todo lo que podía. Mañana seguimos.");
+  });
+  it("una emergencia sale primero con el tope gratis", () => {
+    const e = detectarEmergencia("tengo dolor en el pecho y me falta el aire");
+    const texto = e ? textoEmergencia(e) : null;
+    const eventos = eventosPorLimiteInteracciones({ limite: 5, modoSimple: false, textoEmergencia: texto, gratis: true });
+    if (texto) expect(eventos[0]).toEqual({ chunk: texto });
+    expect(eventos[eventos.length - 1]).toMatchObject({ sinReintento: true });
+  });
+});

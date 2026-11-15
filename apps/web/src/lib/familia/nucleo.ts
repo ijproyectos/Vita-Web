@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DOMINIO_CUENTA_POR_CODIGO } from "@/lib/acceso-codigo/tipos";
 import type { Condicion } from "@/lib/perfil/tipos";
 import { nombreConMayuscula } from "@/lib/perfil/formato";
+import { MENSAJE_LIMITE_CUIDADORES } from "@/lib/plan-gratis/logica";
 import { aplicaHoy, esDosisVencida, fechaAyerEnAR, fechaEnAR, filtrarDosisDeAyerVencidas, FIN_VENTANA_MEDIANOCHE, horaEnAR, omitidasPorFecha } from "@/lib/medicamentos/nucleo";
 import type { Medicamento } from "@/lib/medicamentos/tipos";
 import {
@@ -344,6 +345,8 @@ const MENSAJES_INVITACION: Record<string, string> = {
   rol_invalido: "Elegí un permiso.",
   email_invalido: "Ingresá un email válido.",
   ya_es_cuidador: "Esa persona ya la cuida o es la misma persona.",
+  // Plan gratis (migración 061): el trigger de vinculos_cuidador rechaza el alta de un segundo cuidador.
+  limite_cuidadores: MENSAJE_LIMITE_CUIDADORES,
 };
 
 /**

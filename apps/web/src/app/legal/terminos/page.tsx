@@ -120,7 +120,7 @@ export default function TerminosPage() {
           </li>
           <li>
             Hay un límite diario de uso de la inteligencia artificial por persona, que incluye una cantidad máxima de consultas
-            por día a vita (15, salvo que te asignemos otro número; también rige con vita+). Cuando se alcanza, esas funciones
+            por día a vita (15 con vita+, salvo que te asignemos otro número; 5 en el plan gratis). Cuando se alcanza, esas funciones
             quedan pausadas hasta la medianoche (hora de Argentina); el resto de la aplicación sigue funcionando.
           </li>
         </Lista>
@@ -176,8 +176,12 @@ export default function TerminosPage() {
           </li>
         </Lista>
         <p>
-          Por ahora vita+ no habilita funciones exclusivas; las que incluya en el futuro se informarán en la
-          aplicación antes de depender de la suscripción. Podemos cambiar los precios para nuevas suscripciones; si
+          El plan gratis incluye: 1 cuidador por persona, 1 conteo de pastillas con foto por mes, 1 estudio médico cargado
+          por mes (por persona, mes calendario de Argentina) y 5 respuestas por día de vita. vita+ quita esos topes de
+          cuidadores, conteos con foto y estudios, y sube las respuestas diarias; para las funciones por persona, alcanza
+          con que la propia persona o alguno de sus administradores tenga vita+. Quienes ya tenían más de un cuidador
+          lo conservan. Las funciones que vita+ incluya en el futuro se informarán en la aplicación antes de depender de
+          la suscripción. Podemos cambiar los precios para nuevas suscripciones; si
           cambia el de una vigente, te lo avisamos con anticipación y podés cancelar sin costo.
         </p>
         <p>

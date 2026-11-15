@@ -63,6 +63,7 @@ const MENSAJE_POR_MOTIVO_CODIGO: Record<MotivoReclamoElderRechazado, string> = {
   ya_vinculado: "Ya estás vinculado con esa persona.",
   autovinculo_no_permitido:
     "No podés usar un código que generaste vos. Pasáselo a la persona que cuidás para que lo ingrese en su celular.",
+  limite_cuidadores: "El plan gratis incluye 1 cuidador por persona. Con vita+ podés sumar todos los que quieras.",
   error_desconocido: "No pudimos procesar el código. Probá de nuevo en unos minutos.",
 };
 

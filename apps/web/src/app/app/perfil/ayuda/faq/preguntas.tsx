@@ -9,7 +9,7 @@ import { CORREO_SOPORTE } from "@/lib/legal/datos";
 type Pregunta = { q: string; a: string; link?: { texto: string; href: string } };
 
 // Copy del V7 (VitaApp › Ayuda › Preguntas frecuentes), ajustado a lo que vita
-// hace hoy: sin planes de pago (vita+ todavía no está disponible).
+// hace hoy: plan gratis con topes (cuidadores, conteos con foto, estudios y respuestas diarias) y vita+.
 const GRUPOS: { titulo: string; items: Pregunta[] }[] = [
   {
     titulo: "Remedios y avisos",
@@ -72,6 +72,20 @@ const GRUPOS: { titulo: string; items: Pregunta[] }[] = [
         q: "¿Cómo cargo un estudio?",
         a: "En Mi Salud tocá el + y elegí Estudio. Podés sacarle una foto al papel o subir el PDF; vita completa el tipo, la fecha y los valores.",
         link: { texto: "Agregar estudio", href: "/app/mi-salud/agregar-estudio" },
+      },
+    ],
+  },
+  {
+    titulo: "Plan gratis y vita+",
+    items: [
+      {
+        q: "¿Qué incluye el plan gratis?",
+        a: "1 cuidador por persona, 1 conteo de pastillas con foto por mes, 1 estudio cargado por mes y 5 respuestas por día con vita. Cargar las pastillas a mano no tiene tope. Los topes mensuales se renuevan el día 1 y los diarios, a la medianoche.",
+      },
+      {
+        q: "¿Qué cambia con vita+?",
+        a: "Cuidadores, conteos con foto y estudios sin tope, y más respuestas por día con vita. Para una persona a tu cargo alcanza con que vos tengas vita+ siendo su Admin.",
+        link: { texto: "Ver vita+", href: "/app/vita-plus" },
       },
     ],
   },

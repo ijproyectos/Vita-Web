@@ -4,6 +4,7 @@ import * as familiaNucleo from "@/lib/familia/nucleo";
 import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { colorPorDefecto } from "@/lib/familia/colores";
 import { TopBar } from "../../top-bar";
+import { cupoCuidadoresDe } from "@/lib/plan-gratis/nucleo";
 import { FormularioInvitar, type PersonaInvitable } from "./formulario";
 
 // V7 "fam-invite": nombre, relación, a quién va a cuidar y permiso. Solo se
@@ -40,13 +41,17 @@ export default async function InvitarCuidadorPage(props: PageProps<"/app/familia
       .filter((o): o is PersonaInvitable => o !== null),
   ];
 
+  // Plan gratis (migración 061): quién ya tiene su cuidador. Sin la migración, nadie queda sin cupo.
+  const cupos = await Promise.all(opciones.map(async (o) => ({ id: o.id, cupo: await cupoCuidadoresDe(supabase, o.id) })));
+  const sinCupo = cupos.filter((c) => c.cupo.limitado && c.cupo.alcanzado).map((c) => c.id);
+
   const pedida = typeof persona === "string" ? persona : activo.id;
   const inicial = opciones.find((o) => o.id === pedida)?.id ?? opciones[0].id;
 
   return (
     <div className="flex flex-col gap-[22px] px-[18px] pb-10 pt-1.5">
       <TopBar volverA="/app/familia" eyebrow="Familia" title="Invitar a un cuidador" />
-      <FormularioInvitar personas={opciones} personaInicial={inicial} />
+      <FormularioInvitar personas={opciones} personaInicial={inicial} sinCupo={sinCupo} />
     </div>
   );
 }
