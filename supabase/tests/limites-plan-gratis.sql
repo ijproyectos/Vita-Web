@@ -220,7 +220,7 @@ begin;
   begin
     -- un uso del mes pasado no cuenta
     insert into public.usos_funciones (usuario_id, funcion, created_at) values (e, 'contar_pastillas', public._inicio_mes_ar() - interval '1 minute');
-    if (select count(*) from public.usos_funciones u where u.usuario_id = e and u.created_at >= public._inicio_mes_ar()) <> 1 then
+    if (select count(*) from public.usos_funciones u where u.usuario_id = e and u.funcion = 'contar_pastillas' and u.created_at >= public._inicio_mes_ar()) <> 1 then
       raise exception 'FAIL: el borde del mes (AR) no separa los usos';
     end if;
     raise notice 'PASS: el mes calendario (AR) separa los usos';
