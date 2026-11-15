@@ -598,10 +598,9 @@ export function BarraInferior({
           className="absolute left-1/2 top-[-34px] flex -translate-x-1/2 flex-col items-center gap-1 transition-transform active:scale-[0.95] motion-reduce:transition-none"
         >
           <span
-            className={cn(
-              "flex size-[76px] items-center justify-center overflow-hidden rounded-full bg-card shadow-nav ring-[3px] ring-primary",
-              sugerencia && "shadow-[0_0_0_9px_color-mix(in_srgb,var(--primary)_18%,transparent)]"
-            )}
+            className="flex size-[76px] items-center justify-center overflow-hidden rounded-full bg-card shadow-nav ring-[3px] ring-primary"
+            // Halo cuando vita pide algo: borde teal + aro suave (sombra, así no mueve el layout).
+            style={sugerencia ? { boxShadow: "0 0 0 3px var(--primary), 0 0 0 9px color-mix(in srgb, var(--primary) 18%, transparent)" } : undefined}
           >
             <VitaAvatar size={64} estado={estado} interactivo={false} />
           </span>
@@ -696,6 +695,7 @@ export function FilaTurno({ turno, href }: { turno: TurnoSimple; href?: string }
   const hoy = turno.dia === "hoy";
   const [a, m, d] = turno.fecha.split("-").map(Number);
   const diaSemana = DIA_CORTO[new Date(Date.UTC(a, m - 1, d)).getUTCDay()] ?? "";
+  // "10" para una hora en punto, "14:30" si no (sin "h": no entra en el cuadrito).
   const horaTexto = horaCorta(turno.hora).replace(/:00$/, "");
   const clases = cn(
     "flex min-h-[76px] items-center gap-3.5 rounded-[22px] border-2 px-3.5 py-3 text-left transition-transform active:scale-[0.99] motion-reduce:transition-none",
@@ -706,12 +706,14 @@ export function FilaTurno({ turno, href }: { turno: TurnoSimple; href?: string }
       <span
         aria-hidden
         className={cn(
-          "flex size-[52px] shrink-0 flex-col items-center justify-center rounded-[14px] leading-none",
+          "flex h-[54px] w-[62px] shrink-0 flex-col items-center justify-center rounded-[14px] leading-none",
           hoy ? "bg-primary-foreground/15 text-primary-foreground" : "bg-card text-persona-violeta-deep"
         )}
       >
         <span className="text-[12px] font-extrabold">{hoy ? "HOY" : diaSemana}</span>
-        <span className="mt-0.5 font-heading text-[20px] font-extrabold">{hoy ? `${horaTexto} h` : d}</span>
+        <span className={cn("mt-1 font-heading font-extrabold tabular-nums", hoy && horaTexto.length > 2 ? "text-[17px]" : "text-[20px]")}>
+          {hoy ? (horaTexto.length > 2 ? horaTexto : `${horaTexto} h`) : d}
+        </span>
       </span>
       <span className="min-w-0 flex-1">
         <span className="block font-heading text-[20px] font-extrabold leading-tight tracking-[-0.02em]">

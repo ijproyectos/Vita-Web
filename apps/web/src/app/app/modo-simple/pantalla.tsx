@@ -368,8 +368,12 @@ export function Pantalla({
   // Con una pastilla pendiente, el botón de vita escucha "ya la tomé" (el mismo de antes, movido).
   const escuchaPastilla = mostrarTarjeta && !silenciada && config.charlar;
   const n = grupo.length;
+  // Medición sola: el botón de vita le pide el número (abre la charla, que ofrece "¿Lo anoto así?").
+  const pideMedicion = !hayRemedio && mostrarMedir && config.charlar;
   const sugerencia = !escuchaPastilla
-    ? null
+    ? pideMedicion
+      ? "Decime el número"
+      : null
     : estadoVoz === "inactivo"
       ? n === 1
         ? "Decime «ya la tomé»"
@@ -379,7 +383,9 @@ export function Pantalla({
         : "Te escucho…";
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-cream">
+    <div className="fixed inset-0 z-30 bg-cream">
+      {/* Mismo ancho que el resto de la app (max-w-md), centrado: en una pantalla ancha no se estira. */}
+      <div className="relative mx-auto flex h-full w-full max-w-md flex-col">
       <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-[max(1.25rem,env(safe-area-inset-top))]">
         <BarraSinConexion grande />
         <Cabecera
@@ -450,7 +456,6 @@ export function Pantalla({
               minutosPosponer={config.posponer_min}
               conVita={config.charlar}
               onAnotar={() => setTeclado({ tipo: medirAhora.tipo, ultimo: ultimaDe(medirAhora.tipo) })}
-              onDecirle={() => abrirCharla()}
               onPosponer={posponerMedicion}
             >
               {!hayRemedio && franja}
@@ -471,6 +476,7 @@ export function Pantalla({
         conCharla={config.charlar}
         sugerencia={sugerencia}
       />
+      </div>
 
       <SheetAjustes
         open={ajustesAbiertos}
@@ -720,7 +726,6 @@ function TarjetaMedirAhora({
   minutosPosponer,
   conVita,
   onAnotar,
-  onDecirle,
   onPosponer,
   children,
 }: {
@@ -731,13 +736,12 @@ function TarjetaMedirAhora({
   /** "Hablar con Vita" habilitado en Configurar modo simple. */
   conVita: boolean;
   onAnotar: () => void;
-  onDecirle: () => void;
   onPosponer: () => void;
   children?: React.ReactNode;
 }) {
   const icono = (
     <span aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-destructive/10 text-destructive">
-      <VitaIcon name={medir.tipo === "glucemia" ? "droplet" : "heart"} size={28} />
+      <VitaIcon name={ICONO_MEDIR[medir.tipo]} size={28} />
     </span>
   );
   if (compacta) {
@@ -768,22 +772,12 @@ function TarjetaMedirAhora({
           </p>
         </div>
       </div>
-      {conVita && (
-        <button
-          type="button"
-          onClick={onDecirle}
-          className="mt-1 flex h-[64px] items-center justify-center gap-2 rounded-full bg-primary text-[21px] font-extrabold text-primary-foreground shadow-cta active:scale-[0.98] motion-reduce:transform-none"
-        >
-          <VitaIcon name="mic" size={24} />
-          Decírselo a vita
-        </button>
-      )}
       <button
         type="button"
         onClick={onAnotar}
-        className={conVita ? secundario : "mt-1 flex h-[64px] items-center justify-center gap-2 rounded-full bg-primary text-[21px] font-extrabold text-primary-foreground shadow-cta active:scale-[0.98] motion-reduce:transform-none"}
+        className="mt-1 flex h-[64px] items-center justify-center gap-2 rounded-full bg-primary text-[21px] font-extrabold text-primary-foreground shadow-cta active:scale-[0.98] motion-reduce:transform-none"
       >
-        {conVita ? "Escribir el número" : "Anotar ahora"}
+        Escribir el número
       </button>
       {puedePosponer && (
         <button type="button" onClick={onPosponer} className={secundario}>
@@ -795,6 +789,13 @@ function TarjetaMedirAhora({
     </section>
   );
 }
+
+const ICONO_MEDIR: Record<TipoMedirSimple, string> = {
+  presion: "heart",
+  glucemia: "droplet",
+  peso: "scale",
+  temperatura: "thermometer",
+};
 
 /** "09:00" -> "9:00". */
 function horaCortaMedir(hhmm: string): string {
