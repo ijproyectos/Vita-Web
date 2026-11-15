@@ -65,6 +65,7 @@ export type MedicionChat = {
   sesionId: string | null;
   vueltas: number;
   tools: string[];
+  /** Primer evento de salida del modelo de CUALQUIER tipo (texto, tool_use o thinking), no solo texto. */
   primerTokenMs: number | null;
   tokensEntrada: number;
   tokensSalida: number;

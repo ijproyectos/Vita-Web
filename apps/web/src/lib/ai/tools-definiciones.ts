@@ -372,8 +372,20 @@ const PROPIEDAD_CONFIRMADO = {
     "Solo para escribir en OTRA persona: true si el usuario ya confirmó explícitamente, en un mensaje anterior, esta acción exacta para esa persona. Es solo una indicación: el servidor exige su propia confirmación (botones que la app le muestra al usuario) y no ejecuta nada sin ella. No preguntes por texto antes de llamar a la tool: llamala directo con persona_id y el servidor pide la confirmación.",
 } as const;
 
+// Tools de escritura con input grande: su JSON se transmite de a pedazos (`eager_input_streaming`) en vez de
+// esperar a tenerlo entero. La route igual ejecuta recién tras `finalMessage()` y valida el input como siempre.
+const TOOLS_INPUT_EN_STREAMING = new Set([
+  "add_medication",
+  "update_schedule",
+  "add_measurement",
+  "update_appointment",
+  "add_appointment",
+  "update_health_profile",
+]);
+
 // Suma `persona_id` (y `confirmado` en las de escritura) a las tools con destino.
 const conPersona = (t: Anthropic.Tool): Anthropic.Tool => {
+  if (TOOLS_INPUT_EN_STREAMING.has(t.name)) t = { ...t, eager_input_streaming: true };
   if (!TOOLS_CON_DESTINO.has(t.name)) return t;
   const schema = t.input_schema as { properties?: Record<string, unknown> };
   return {

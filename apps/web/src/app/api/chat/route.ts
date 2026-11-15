@@ -543,8 +543,11 @@ export async function POST(request: Request) {
           );
 
           medicion.vueltas++;
+          // Primer evento de salida de CUALQUIER tipo de bloque (texto, tool_use, thinking), no solo texto.
+          respuesta.on("streamEvent", (ev) => {
+            if (ev.type === "content_block_start") medicion.primerTokenMs ??= performance.now() - inicioMs;
+          });
           respuesta.on("text", (texto) => {
-            medicion.primerTokenMs ??= performance.now() - inicioMs;
             textoAcumulado += texto;
             enviar({ chunk: texto });
           });

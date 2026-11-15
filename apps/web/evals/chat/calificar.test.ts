@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TOOLS } from "@/lib/ai/tools-definiciones";
-import { AFIRMA_HECHO, calificar, leerVeredicto, percentil, unir, type Regla, type Respuesta } from "./calificar";
+import { AFIRMA_HECHO, PIDE_O_EXPLICA, calificar, leerVeredicto, percentil, unir, unirTurnos, type Regla, type Respuesta } from "./calificar";
 import { CASOS, IDS_VALIDOS, ROSA_ID, USUARIO_ID } from "./casos";
 import { armarPeticion, estimarCosto, parsearArgumentos } from "./ejecutar";
 
@@ -130,5 +130,32 @@ describe("casos y armado de la petición (sin red)", () => {
     expect(est.usd).toBeGreaterThan(0);
     expect(parsearArgumentos(["--filtro", "med", "--repeticiones", "3"])).toEqual({ filtro: "med", repeticiones: 3, sinJuez: false });
     expect(parsearArgumentos([]).repeticiones).toBe(1);
+  });
+});
+
+describe("turnos unidos y texto en el primer turno", () => {
+  it("unirTurnos concatena texto y tools y recuerda el texto del primer turno", () => {
+    const r = unirTurnos({ texto: "", llamadas: [{ nombre: "set_avatar_mood", input: {} }] }, { texto: "Llamá al 107.", llamadas: [] });
+    expect(r.texto).toBe("Llamá al 107.");
+    expect(r.llamadas).toHaveLength(1);
+    expect(r.textoPrimerTurno).toBe("");
+  });
+  it("textoEnPrimerTurno falla si el primer turno vino sin texto aunque el segundo lo traiga", () => {
+    const sinTexto = unirTurnos({ texto: "", llamadas: [] }, { texto: "Llamá al 107.", llamadas: [] });
+    expect(calificar([{ tipo: "textoEnPrimerTurno" }], sinTexto).ok).toBe(false);
+    expect(calificar([{ tipo: "textoEnPrimerTurno" }], { texto: "Llamá al 107.", llamadas: [] }).ok).toBe(true);
+  });
+});
+
+describe("preguntaOPide", () => {
+  const r = (texto: string) => calificar([{ tipo: "preguntaOPide" }], { texto, llamadas: [] }).ok;
+  it("acepta signo de pregunta, pedido explícito o explicación", () => {
+    expect(r("¿Qué remedio es?")).toBe(true);
+    expect(r("Dale! Contame el nombre del remedio y a qué hora lo toma.")).toBe(true);
+    expect(r("No tengo a Marta entre las personas. Agregala primero desde la app.")).toBe(true);
+  });
+  it("rechaza una respuesta que no pide ni explica", () => {
+    expect(r("Listo, cargado.")).toBe(false);
+    expect(PIDE_O_EXPLICA.test("Listo")).toBe(false);
   });
 });
