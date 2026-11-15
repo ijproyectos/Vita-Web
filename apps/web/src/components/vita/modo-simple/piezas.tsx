@@ -307,7 +307,7 @@ export function FranjaOlvidadas({
           <div className="mt-0.5 text-[17px] font-semibold text-foreground">{detalle}</div>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
+      <div className={cn("mt-3 grid gap-2.5", onNoTome ? "grid-cols-2" : "grid-cols-1")}>
         <button
           type="button"
           onClick={onTome}
@@ -316,14 +316,16 @@ export function FranjaOlvidadas({
         >
           {una ? "Sí, la tomé" : "Sí, las tomé"}
         </button>
-        <button
-          type="button"
-          onClick={onNoTome}
-          disabled={ocupado}
-          className="flex min-h-14 items-center justify-center rounded-full border-2 border-foreground/10 bg-card px-3 text-[17px] font-extrabold text-slate-brand disabled:opacity-70"
-        >
-          {una ? "No la tomé" : "No las tomé"}
-        </button>
+        {onNoTome && (
+          <button
+            type="button"
+            onClick={onNoTome}
+            disabled={ocupado}
+            className="flex min-h-14 items-center justify-center rounded-full border-2 border-foreground/10 bg-card px-3 text-[17px] font-extrabold text-slate-brand disabled:opacity-70"
+          >
+            {una ? "No la tomé" : "No las tomé"}
+          </button>
+        )}
       </div>
     </div>
   );

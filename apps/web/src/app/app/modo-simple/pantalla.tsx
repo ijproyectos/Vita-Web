@@ -121,8 +121,8 @@ export function Pantalla({
   // puramente transitoria y nunca la manda el servidor.
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
   const [guardado, setGuardado] = useState(false);
-  // "No la tomé" siempre pregunta antes: para la tarjeta o para las olvidadas.
-  const [preguntarNo, setPreguntarNo] = useState<null | "grupo" | "olvidadas">(null);
+  // "No la tomé" (dicho al botón de vita) siempre pregunta antes.
+  const [preguntarNo, setPreguntarNo] = useState(false);
   // Lo que dijo con el botón de vita y no era ni "ya la tomé" ni "más tarde" ni "no": lo responde la charla.
   const [preguntaCharla, setPreguntaCharla] = useState<string | undefined>(undefined);
   const hayGrupo = grupo.length > 0;
@@ -218,13 +218,10 @@ export function Pantalla({
   // "No la tomé": se pregunta antes (no se deshace desde acá) y deja de pedirla
   // hoy. El cuidador se entera en el resumen de la noche, no en el momento.
   function noTome() {
-    const deOlvidadas = preguntarNo === "olvidadas";
-    setPreguntarNo(null);
+    setPreguntarNo(false);
     startTransition(async () => {
       try {
-        const r = deOlvidadas
-          ? await marcarGrupoNoTomadoAction(olvidadas.map((o) => o.id))
-          : await marcarGrupoNoTomadoAction(grupo.map((m) => m.id), fechaDosis ?? undefined);
+        const r = await marcarGrupoNoTomadoAction(grupo.map((m) => m.id), fechaDosis ?? undefined);
         if (r.status === "error") {
           toast.error(r.message);
           return;
@@ -289,7 +286,7 @@ export function Pantalla({
       const intencion = interpretarVozPendiente(texto);
       if (intencion === "tome") confirmar();
       else if (intencion === "posponer" && config.posponer) posponerAqui();
-      else if (intencion === "no_tome") setPreguntarNo("grupo");
+      else if (intencion === "no_tome") setPreguntarNo(true);
       else if (texto.trim()) abrirCharla(texto.trim());
       else toast.info("No te escuché. Tocá de nuevo y decime «ya la tomé».");
     },
@@ -361,7 +358,7 @@ export function Pantalla({
   // Lo de ahora: remedio y/o medición. Sin nada de eso, el turno grande ocupa el lugar del descanso.
   const nadaPendiente = !hayRemedio && !mostrarMedir;
   const franja = olvidadas.length > 0 && (
-    <FranjaOlvidadas olvidadas={olvidadas} ocupado={pendiente} onTome={tomeOlvidadas} onNoTome={() => setPreguntarNo("olvidadas")} />
+    <FranjaOlvidadas olvidadas={olvidadas} ocupado={pendiente} onTome={tomeOlvidadas} />
   );
   // Con una pastilla pendiente, el botón de vita escucha "ya la tomé" (el mismo de antes, movido).
   const escuchaPastilla = mostrarTarjeta && !silenciada && config.charlar;
@@ -473,12 +470,7 @@ export function Pantalla({
       {flujoAyuda && (
         <FlujoAyuda telefono={telefonoAyuda} contacto={nombreAyuda} onCerrar={() => setFlujoAyuda(false)} onAvisados={setAyudaPedida} />
       )}
-      <SheetNoTome
-        open={preguntarNo !== null}
-        onOpenChange={(abierto) => !abierto && setPreguntarNo(null)}
-        cuantas={preguntarNo === "olvidadas" ? olvidadas.length : grupo.length}
-        onSi={noTome}
-      />
+      <SheetNoTome open={preguntarNo} onOpenChange={setPreguntarNo} cuantas={grupo.length} onSi={noTome} />
       {charlaAbierta && (
         <CharlaSimple
           nombre={nombre}
