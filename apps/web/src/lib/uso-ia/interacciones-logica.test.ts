@@ -175,3 +175,20 @@ describe("plan gratis (chat)", () => {
     expect(eventos[eventos.length - 1]).toMatchObject({ sinReintento: true });
   });
 });
+
+describe("límite del chat con el plan gratis: mensaje con vita+", () => {
+  it("gratis ofrece vita+ con el link", () => {
+    const eventos = eventosPorLimiteInteracciones({ limite: 5, modoSimple: false, textoEmergencia: null, gratis: true });
+    const e = eventos[0] as { error: string };
+    expect(e.error).toContain("plan gratis");
+    expect(e.error).toContain("/app/vita-plus");
+  });
+  it("sin gratis sigue el mensaje general (soporte)", () => {
+    const e = eventosPorLimiteInteracciones({ limite: 15, modoSimple: false, textoEmergencia: null })[0] as { error: string };
+    expect(e.error).not.toContain("/app/vita-plus");
+  });
+  it("modo simple no usa el mensaje de venta aunque sea gratis", () => {
+    const e = eventosPorLimiteInteracciones({ limite: 5, modoSimple: true, textoEmergencia: null, gratis: true })[0] as { error: string };
+    expect(e.error).not.toContain("vita+");
+  });
+});

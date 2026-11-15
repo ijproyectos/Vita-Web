@@ -330,6 +330,7 @@ export async function POST(request: Request) {
           limite: consumo.consultas.limite,
           modoSimple,
           textoEmergencia: emergencia ? textoEmergencia(emergencia) : null,
+          gratis: consumo.consultas.gratis === true,
         })) {
           enviar(evento);
         }

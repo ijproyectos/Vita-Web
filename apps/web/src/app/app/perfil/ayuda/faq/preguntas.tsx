@@ -80,7 +80,7 @@ const GRUPOS: { titulo: string; items: Pregunta[] }[] = [
     items: [
       {
         q: "¿Qué incluye el plan gratis?",
-        a: "1 cuidador por persona, 1 conteo de pastillas con foto por mes, 1 estudio cargado por mes y 5 respuestas por día con vita. Cargar las pastillas a mano no tiene tope. Los topes mensuales se renuevan el día 1 y los diarios, a la medianoche.",
+        a: "1 cuidador por persona, 1 conteo de pastillas con foto por mes, 1 estudio analizado por mes (borrarlo no devuelve el cupo) y 5 respuestas por día con vita. Cargar las pastillas a mano no tiene tope. Los topes mensuales se renuevan el día 1 y los diarios, a la medianoche.",
       },
       {
         q: "¿Qué cambia con vita+?",

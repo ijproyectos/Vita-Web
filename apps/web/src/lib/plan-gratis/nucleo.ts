@@ -6,7 +6,6 @@ import {
   cuotaMensual,
   cupoCuidadores,
   ESTUDIOS_MES_GRATIS,
-  inicioMesAR,
   rpcInexistente,
   type CuotaMensual,
   type CupoCuidadores,
@@ -40,47 +39,65 @@ export async function esPlusDePersona(supabase: Cliente, personaId: string): Pro
   }
 }
 
-/** Cuota del mes de conteos de pastillas con foto para una persona. */
-export async function cuotaConteoPastillas(supabase: Cliente, personaId: string): Promise<CuotaMensual> {
+type FuncionConCosto = "contar_pastillas" | "analizar_estudio";
+
+/** Cuota del mes de una función con costo (para mostrar y para un chequeo previo; el cobro real es `consumirUso`). */
+async function cuotaDeFuncion(supabase: Cliente, personaId: string, funcion: FuncionConCosto, limite: number): Promise<CuotaMensual> {
   try {
     if (await esPlusDePersona(supabase, personaId)) return { limitada: false };
-    const { data, error } = await supabase.rpc("usos_funcion_mes", { p_persona: personaId, p_funcion: "contar_pastillas" });
+    const { data, error } = await supabase.rpc("usos_funcion_mes", { p_persona: personaId, p_funcion: funcion });
     if (error || typeof data !== "number") {
       avisar("no se pudo contar los usos del mes", error);
       return { limitada: false };
     }
-    return cuotaMensual({ plus: false, usados: data, limite: CONTEOS_FOTO_MES_GRATIS });
+    return cuotaMensual({ plus: false, usados: data, limite });
   } catch {
     return { limitada: false };
   }
 }
 
-/** Anota un conteo con foto EXITOSO. Nunca lanza ni bloquea: una falla de contabilidad no le quita el conteo a la persona. */
-export async function registrarConteoPastillas(supabase: Cliente, personaId: string): Promise<void> {
+/** Cuota del mes de conteos de pastillas con foto para una persona. */
+export function cuotaConteoPastillas(supabase: Cliente, personaId: string): Promise<CuotaMensual> {
+  return cuotaDeFuncion(supabase, personaId, "contar_pastillas", CONTEOS_FOTO_MES_GRATIS);
+}
+
+/** Cuota del mes de estudios analizados (cada análisis con IA cuenta; borrar el estudio no lo devuelve). */
+export function cuotaEstudios(supabase: Cliente, personaId: string): Promise<CuotaMensual> {
+  return cuotaDeFuncion(supabase, personaId, "analizar_estudio", ESTUDIOS_MES_GRATIS);
+}
+
+export type UsoConsumido = { permitido: boolean; usoId: number | null };
+
+/**
+ * Chequea y registra el uso en UN paso atómico (RPC `consumir_uso_funcion`), ANTES de llamar a la IA. Con vita+ no
+ * se cuenta. FALLA ABIERTO: sin la 061 o ante un error, permite y no hay nada que devolver. Si la IA falla después,
+ * llamar a `devolverUso` con el `usoId`.
+ */
+export async function consumirUso(supabase: Cliente, personaId: string, funcion: FuncionConCosto): Promise<UsoConsumido> {
   try {
-    const { error } = await supabase.rpc("registrar_uso_funcion", { p_persona: personaId, p_funcion: "contar_pastillas" });
-    if (error && !rpcInexistente(error)) console.warn("plan gratis: no se pudo anotar el conteo", error.code ?? "");
+    if (await esPlusDePersona(supabase, personaId)) return { permitido: true, usoId: null };
+    const tope = funcion === "contar_pastillas" ? CONTEOS_FOTO_MES_GRATIS : ESTUDIOS_MES_GRATIS;
+    const { data, error } = await supabase.rpc("consumir_uso_funcion", { p_persona: personaId, p_funcion: funcion, p_tope: tope });
+    const fila = Array.isArray(data) ? data[0] : data;
+    if (error || !fila || typeof fila !== "object" || typeof (fila as { c_permitido?: unknown }).c_permitido !== "boolean") {
+      if (error && !rpcInexistente(error)) avisar("no se pudo registrar el uso", error);
+      return { permitido: true, usoId: null };
+    }
+    const f = fila as { c_permitido: boolean; c_id?: unknown };
+    return { permitido: f.c_permitido, usoId: typeof f.c_id === "number" ? f.c_id : null };
+  } catch {
+    return { permitido: true, usoId: null };
+  }
+}
+
+/** Devuelve un uso cuando la IA falló, para que un fallo no consuma el cupo. Nunca lanza. */
+export async function devolverUso(supabase: Cliente, usoId: number | null): Promise<void> {
+  if (usoId === null) return;
+  try {
+    const { error } = await supabase.rpc("devolver_uso_funcion", { p_id: usoId });
+    if (error) console.warn("plan gratis: no se pudo devolver el uso", error.code ?? "");
   } catch {
     /* best-effort */
-  }
-}
-
-/** Cuota del mes de estudios: se cuentan los estudios creados este mes (AR) de la persona. */
-export async function cuotaEstudios(supabase: Cliente, personaId: string, ahora: Date = new Date()): Promise<CuotaMensual> {
-  try {
-    if (await esPlusDePersona(supabase, personaId)) return { limitada: false };
-    const { count, error } = await supabase
-      .from("estudios")
-      .select("id", { count: "exact", head: true })
-      .eq("usuario_id", personaId)
-      .gte("created_at", inicioMesAR(ahora).toISOString());
-    if (error || typeof count !== "number") {
-      avisar("no se pudieron contar los estudios del mes", error);
-      return { limitada: false };
-    }
-    return cuotaMensual({ plus: false, usados: count, limite: ESTUDIOS_MES_GRATIS });
-  } catch {
-    return { limitada: false };
   }
 }
 

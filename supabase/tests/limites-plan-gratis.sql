@@ -109,6 +109,19 @@ begin;
       values (e, c1, '', 'aceptado', now(), 'ver');
     raise notice 'PASS: una invitación vencida no cuenta';
 
+    -- revivir una invitación vencida (como hace invitar_cuidador) con el cupo ya ocupado: se bloquea
+    update public.vinculos_cuidador set expira_at = now() - interval '1 hour'
+      where elder_id = e and estado = 'pendiente' and email_invitado = 'vieja@example.com';
+    bloqueado := false;
+    begin
+      update public.vinculos_cuidador set expira_at = now() + interval '7 days', token = 'nuevo-token-revivido'
+        where elder_id = e and estado = 'pendiente' and email_invitado = 'vieja@example.com';
+    exception when others then
+      bloqueado := sqlerrm = 'limite_cuidadores';
+    end;
+    if not bloqueado then raise exception 'FAIL: revivir una invitación vencida salta el tope'; end if;
+    raise notice 'PASS: revivir una invitación pendiente vencida se bloquea';
+
     -- con vita+ de la persona no hay tope, y si después lo pierde conserva a todos (no se quita a nadie)
     delete from public.vinculos_cuidador where elder_id = e;
     insert into public.vita_plus_vigencia (usuario_id, vence_at, permanente) values (e, now() + interval '5 days', false);
@@ -174,16 +187,32 @@ begin;
   select set_config('request.jwt.claims', json_build_object('sub', :elder_id, 'role', 'authenticated')::text, true);
   set local role authenticated;
   do $$
-  declare e uuid := current_setting('t.e')::uuid; o uuid := current_setting('t.c2')::uuid; n int;
+  declare e uuid := current_setting('t.e')::uuid; o uuid := current_setting('t.c2')::uuid; r record;
   begin
     if public.usos_funcion_mes(e, 'contar_pastillas') <> 0 then raise exception 'FAIL: arranca distinto de 0'; end if;
-    if not public.registrar_uso_funcion(e, 'contar_pastillas') then raise exception 'FAIL: no registra el uso propio'; end if;
+    select * into r from public.consumir_uso_funcion(e, 'contar_pastillas', 1);
+    if not r.c_permitido or r.c_usados <> 1 or r.c_id is null then raise exception 'FAIL: no registra el uso propio'; end if;
     if public.usos_funcion_mes(e, 'contar_pastillas') <> 1 then raise exception 'FAIL: no cuenta el uso'; end if;
-    if public.registrar_uso_funcion(e, 'otra_cosa') then raise exception 'FAIL: acepta una función inválida'; end if;
+    -- tope alcanzado: no registra
+    select * into r from public.consumir_uso_funcion(e, 'contar_pastillas', 1);
+    if r.c_permitido or r.c_id is not null or public.usos_funcion_mes(e, 'contar_pastillas') <> 1 then
+      raise exception 'FAIL: pasa el tope de 1 por mes';
+    end if;
+    -- devolver: libera el cupo (solo quien lo registró)
+    select * into r from public.consumir_uso_funcion(e, 'analizar_estudio', 1);
+    if not r.c_permitido then raise exception 'FAIL: no registra el análisis'; end if;
+    if not public.devolver_uso_funcion(r.c_id) then raise exception 'FAIL: no devuelve el uso'; end if;
+    if public.devolver_uso_funcion(r.c_id) then raise exception 'FAIL: devuelve dos veces'; end if;
+    select * into r from public.consumir_uso_funcion(e, 'analizar_estudio', 1);
+    if not r.c_permitido then raise exception 'FAIL: tras devolver no hay cupo'; end if;
+    if (select count(*) from public.usos_funciones where usuario_id = e and funcion = 'analizar_estudio') <> 1 then
+      raise exception 'FAIL: borrar el estudio no debe tocar usos_funciones (hay 1 uso)';
+    end if;
+    if (select c_permitido from public.consumir_uso_funcion(e, 'otra_cosa', 1)) then raise exception 'FAIL: acepta una función inválida'; end if;
     -- sobre otra persona sin vínculo: sin permiso
-    if public.registrar_uso_funcion(o, 'contar_pastillas') then raise exception 'FAIL: registra sobre una persona ajena'; end if;
+    if (select c_permitido from public.consumir_uso_funcion(o, 'contar_pastillas', 1)) then raise exception 'FAIL: registra sobre una persona ajena'; end if;
     if public.usos_funcion_mes(o, 'contar_pastillas') is not null then raise exception 'FAIL: cuenta usos de una persona ajena'; end if;
-    raise notice 'PASS: registrar_uso_funcion / usos_funcion_mes respetan quién pregunta';
+    raise notice 'PASS: consumir_uso_funcion / devolver_uso_funcion / usos_funcion_mes respetan tope y quién pregunta';
   end $$;
   reset role;
   do $$

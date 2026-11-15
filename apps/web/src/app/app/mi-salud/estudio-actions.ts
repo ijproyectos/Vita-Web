@@ -8,7 +8,7 @@ import { extraerDatosEstudio, TIPOS_SOPORTADOS } from "@/lib/estudios/extraer";
 import { TAMANIO_MAXIMO_BYTES, type DatosExtraidos } from "@/lib/estudios/tipos";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
 import type { EstadoAccion } from "@/lib/acciones";
-import { cuotaEstudios } from "@/lib/plan-gratis/nucleo";
+import { consumirUso, devolverUso } from "@/lib/plan-gratis/nucleo";
 import { MENSAJE_LIMITE_ESTUDIOS } from "@/lib/plan-gratis/logica";
 
 export type ResultadoAnalisis =
@@ -37,16 +37,23 @@ export async function analizarEstudioAction(formData: FormData): Promise<Resulta
   if (!TIPOS_SOPORTADOS.includes(archivo.type)) {
     return { status: "error", message: "Ese formato no lo puedo leer. Probá con una foto JPG/PNG o un PDF." };
   }
+  let usoId: number | null = null;
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
   try {
-    const supabase = await createClient();
-    // Plan gratis: 1 estudio por mes por persona (se mira ANTES de subir y de gastar IA; migración 061).
-    const cuota = await cuotaEstudios(supabase, destino.perfil.id);
-    if (cuota.limitada && cuota.alcanzada) return { status: "error", message: MENSAJE_LIMITE_ESTUDIOS };
+    supabase = await createClient();
+    // Plan gratis (migración 061): 1 análisis por mes por persona. Se chequea y se anota en un solo paso ANTES de
+    // subir y de gastar IA, así no se puede superar en paralelo ni "recuperar" borrando el estudio después.
+    const uso = await consumirUso(supabase, destino.perfil.id, "analizar_estudio");
+    if (!uso.permitido) return { status: "error", message: MENSAJE_LIMITE_ESTUDIOS };
+    usoId = uso.usoId;
     const { path, tipo } = await estudiosNucleo.subirArchivo(supabase, destino.perfil.id, archivo);
     const base64 = Buffer.from(await archivo.arrayBuffer()).toString("base64");
     const resultado = await extraerDatosEstudio(usuario.id, base64, tipo);
+    // Si la lectura falló no se gastó IA: no consume el cupo (el estudio se completa a mano).
+    if (!resultado.ok) await devolverUso(supabase, usoId);
     return { status: "success", path, tipo, datos: resultado.ok ? estudiosNucleo.sanearExtraccion(resultado.datos) : null };
   } catch (e) {
+    if (supabase) await devolverUso(supabase, usoId);
     return { status: "error", message: e instanceof Error ? e.message : "No se pudo subir el estudio." };
   }
 }
@@ -78,12 +85,7 @@ export async function guardarEstudioAction(datos: DatosGuardarEstudio): Promise<
   const texto = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
   try {
     const supabase = await createClient();
-    // Se vuelve a mirar al guardar: dos análisis en paralelo no pueden dejar pasar dos estudios.
-    const cuota = await cuotaEstudios(supabase, pid);
-    if (cuota.limitada && cuota.alcanzada) {
-      await estudiosNucleo.descartarArchivo(supabase, pid, datos.path).catch(() => undefined);
-      return { status: "error", message: MENSAJE_LIMITE_ESTUDIOS };
-    }
+    // La cuota se cobra al ANALIZAR (paso 1), que es lo que gasta IA: acá no se vuelve a contar.
     await estudiosNucleo.agregar(supabase, pid, {
       archivoPath: datos.path,
       archivoTipo: datos.tipo,

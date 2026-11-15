@@ -43,6 +43,14 @@ export function limiteChatEfectivo(args: { plus: boolean; configurado: number })
   return args.plus ? c : Math.min(LIMITE_CHAT_GRATIS, c);
 }
 
+/**
+ * Tope del chat para quien chatea, según `leerVitaPlus` (true / false / null = no se pudo saber). Ante la duda NO se
+ * limita (null): una falla transitoria de la base nunca debe tratar como gratis a quien paga.
+ */
+export function topeChatSegunPlan(plus: boolean | null): number | null {
+  return plus === false ? LIMITE_CHAT_GRATIS : null;
+}
+
 export type CuotaMensual =
   | { limitada: false }
   | { limitada: true; limite: number; usados: number; restantes: number; alcanzada: boolean };

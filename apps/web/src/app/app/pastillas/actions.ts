@@ -13,7 +13,7 @@ import {
   separarDosis,
 } from "@/lib/inventario/tipos";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
-import { cuotaConteoPastillas, registrarConteoPastillas } from "@/lib/plan-gratis/nucleo";
+import { consumirUso, devolverUso } from "@/lib/plan-gratis/nucleo";
 import { MENSAJE_LIMITE_CONTEOS } from "@/lib/plan-gratis/logica";
 
 export type EstadoConteo =
@@ -41,10 +41,10 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
   const destino = await perfilActivoEditable();
   if (!destino.ok) return { status: "manual", message: destino.message };
   const personaId = destino.perfil.id;
+  let usoId: number | null = null;
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
   try {
-    const supabase = await createClient();
-    const cuota = await cuotaConteoPastillas(supabase, personaId);
-    if (cuota.limitada && cuota.alcanzada) return { status: "manual", message: MENSAJE_LIMITE_CONTEOS };
+    supabase = await createClient();
 
     const frente = formData.get("frente");
     if (!(frente instanceof File) || frente.size === 0) {
@@ -60,17 +60,25 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
       }
     }
 
+    // Chequeo + registro atómico ANTES de la IA (no se puede superar en paralelo). Si la IA falla se devuelve.
+    const uso = await consumirUso(supabase, personaId, "contar_pastillas");
+    if (!uso.permitido) return { status: "manual", message: MENSAJE_LIMITE_CONTEOS };
+    usoId = uso.usoId;
+
     const codificar = async (f: File) => ({
       base64: Buffer.from(await f.arrayBuffer()).toString("base64"),
       mediaType: f.type,
     });
     const resultado = await contarPastillasEnFoto(usuario.id, await codificar(frente), dorso ? await codificar(dorso) : null);
 
-    if (!resultado.ok) return { status: "manual", message: resultado.error };
-    // Solo un conteo exitoso gasta el cupo del mes: los fallos de la IA no cuentan.
-    await registrarConteoPastillas(supabase, personaId);
+    if (!resultado.ok) {
+      // Solo un conteo exitoso gasta el cupo del mes: los fallos de la IA no cuentan.
+      await devolverUso(supabase, usoId);
+      return { status: "manual", message: resultado.error };
+    }
     return { status: "contado", conteo: resultado.datos };
   } catch (e) {
+    if (supabase) await devolverUso(supabase, usoId);
     return {
       status: "manual",
       message: e instanceof Error ? `No pude contar la foto (${e.message}). Cargá la cantidad a mano.` : "No pude contar la foto. Cargá la cantidad a mano.",

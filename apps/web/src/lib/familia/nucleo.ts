@@ -381,7 +381,9 @@ export async function invitarCuidador(
         relacion: datos.relacion,
       });
       return { status: "success", vinculoId: v.id, token: v.token, expiraAt: v.expira_at, codigo: null };
-    } catch {
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : "";
+      if (motivo.includes("limite_cuidadores")) return { status: "error", message: MENSAJE_LIMITE_CUIDADORES };
       return { status: "error", message: "No pudimos crear la invitación. Probá de nuevo." };
     }
   }

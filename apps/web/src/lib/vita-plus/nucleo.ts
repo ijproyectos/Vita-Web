@@ -80,16 +80,25 @@ export async function obtenerEstadoVitaPlus(supabase: Cliente): Promise<EstadoVi
  * logueada. Ante cualquier fallo devuelve false.
  */
 export async function esVitaPlus(supabase: Cliente, usuarioId: string): Promise<boolean> {
+  return (await leerVitaPlus(supabase, usuarioId)) === true;
+}
+
+/**
+ * Igual que `esVitaPlus` pero distingue el error: true = vita+, false = la base confirma que no, null = no se pudo
+ * saber. Para limitar funciones a quien NO paga hay que usar esta (un error no puede contar como gratis).
+ */
+export async function leerVitaPlus(supabase: Cliente, usuarioId: string): Promise<boolean | null> {
   try {
     const { data, error } = await supabase.from("vita_plus_vigencia").select("*").eq("usuario_id", usuarioId).maybeSingle();
-    if (error || !data) return false;
+    if (error) return null;
+    if (!data) return false;
     const fila = data as { vence_at: unknown; permanente?: unknown };
     // Sin la 046 la columna `permanente` no existe y `fila.permanente` es undefined: se decide por `vence_at`.
     if (fila.permanente === true) return true;
     const vence = Date.parse(String(fila.vence_at));
     return Number.isFinite(vence) && vence > new Date().getTime();
   } catch {
-    return false;
+    return null;
   }
 }
 

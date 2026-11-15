@@ -3,6 +3,7 @@ import {
   cuotaMensual,
   cupoCuidadores,
   inicioMesAR,
+  topeChatSegunPlan,
   inicioMesSiguienteAR,
   LIMITE_CHAT_GRATIS,
   limiteChatEfectivo,
@@ -103,5 +104,15 @@ describe("migración sin aplicar", () => {
   it("otros errores no", () => {
     expect(rpcInexistente({ code: "23505" })).toBe(false);
     expect(rpcInexistente(null)).toBe(false);
+  });
+});
+
+describe("tope del chat según el plan (fail-open para quien paga)", () => {
+  it("solo se limita cuando la base confirma que no tiene vita+", () => {
+    expect(topeChatSegunPlan(false)).toBe(5);
+    expect(topeChatSegunPlan(true)).toBeNull();
+  });
+  it("un error al leer el plan (null) no limita", () => {
+    expect(topeChatSegunPlan(null)).toBeNull();
   });
 });

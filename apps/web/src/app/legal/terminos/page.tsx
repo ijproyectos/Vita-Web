@@ -176,8 +176,8 @@ export default function TerminosPage() {
           </li>
         </Lista>
         <p>
-          El plan gratis incluye: 1 cuidador por persona, 1 conteo de pastillas con foto por mes, 1 estudio médico cargado
-          por mes (por persona, mes calendario de Argentina) y 5 respuestas por día de vita. vita+ quita esos topes de
+          El plan gratis incluye: 1 cuidador por persona, 1 conteo de pastillas con foto por mes, 1 estudio médico analizado
+          por mes (borrarlo no devuelve el cupo; por persona, mes calendario de Argentina) y 5 respuestas por día de vita. vita+ quita esos topes de
           cuidadores, conteos con foto y estudios, y sube las respuestas diarias; para las funciones por persona, alcanza
           con que la propia persona o alguno de sus administradores tenga vita+. Quienes ya tenían más de un cuidador
           lo conservan. Las funciones que vita+ incluya en el futuro se informarán en la aplicación antes de depender de

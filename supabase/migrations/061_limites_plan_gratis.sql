@@ -6,7 +6,8 @@
 -- Decisión del dueño (2026-11-15). Si la persona NO tiene vita+:
 --   1. Chat con vita: máximo 5 respuestas por día (se combina con el límite de 049: gratis = min(5, el configurado)).
 --   2. Conteo de pastillas con foto (IA): 1 por mes calendario (Argentina). La carga manual no tiene tope.
---   3. Estudios médicos: 1 por mes calendario (Argentina), contados desde `estudios` (no hay tabla nueva).
+--   3. Estudios médicos: 1 análisis con IA por mes calendario (Argentina), contado en `usos_funciones` al momento de
+--      analizar (tope del gasto de IA): borrar el estudio después NO devuelve el cupo.
 --   4. Cuidadores: 1 por persona en total (aceptados + invitaciones pendientes vigentes; no cuentan los revocados).
 --
 -- Quién cuenta como "vita+" para las reglas 2, 3 y 4 (`es_vita_plus_de`): la propia persona O cualquiera de sus
@@ -14,18 +15,22 @@
 -- vita+ de quien lo administra. La regla 1 (chat) mira solo la cuenta que chatea (se resuelve en la app).
 --
 -- Qué agrega:
---   * usos_funciones: registro de usos de funciones con costo (hoy solo 'contar_pastillas'). RLS: la persona lee los
---     suyos; sin policies de escritura (se escribe con la RPC registrar_uso_funcion).
+--   * usos_funciones: registro de usos de funciones con costo ('contar_pastillas', 'analizar_estudio'). RLS: la
+--     persona lee los suyos; sin policies de escritura (se escribe con la RPC consumir_uso_funcion).
 --   * es_vita_plus_de(uuid): ver arriba. SECURITY DEFINER, search_path vacío. Un usuario autenticado solo puede
 --     preguntar por sí mismo o por una persona de la que es cuidador aceptado (si no, responde false: no es un oráculo).
---   * registrar_uso_funcion / usos_funcion_mes: escribir y contar el mes en curso (Argentina) de una persona; solo
---     ella o un cuidador con rol 'editar'.
+--   * consumir_uso_funcion: chequea el tope del mes (Argentina) y registra el uso en UN solo paso atómico (lock
+--     asesor por persona+función), así dos pedidos en paralelo no pasan el tope. Se llama ANTES de la IA; si la IA
+--     falla, devolver_uso_funcion borra esa fila (solo quien la registró, dentro de los 10 minutos).
+--     usos_funcion_mes cuenta el mes en curso. Solo la persona o un cuidador con rol 'editar'.
 --   * cupo_cuidadores(uuid): para la pantalla de invitar (plan y cuántos cuidadores cuentan hoy).
 --   * Trigger bloquear_exceso_cuidadores en vinculos_cuidador: es el cierre a nivel base de datos. Cubre invitar_cuidador,
 --     el insert directo del elder (policy vinculos_all_elder), reclamar_vinculo_como_elder (el código iniciado por un
 --     cuidador fija elder_id al reclamarlo) y la reactivación de un vínculo revocado. NO se dispara al aceptar una
 --     invitación (reclamar_invitacion_cuidador: la fila pendiente ya contaba) ni al reemitir una invitación al mismo
---     mail. La primera fila de un perfil gestionado (el creador) siempre entra: ese perfil no tiene ninguna otra.
+--     mail. SÍ cuenta como alta revivir una invitación pendiente VENCIDA (invitar_cuidador le renueva token y
+--     vencimiento: expira_at pasa de pasado a futuro). Se toma un lock asesor por persona antes de contar, así
+--     dos altas en paralelo no pasan el tope. La primera fila de un perfil gestionado (el creador) siempre entra: ese perfil no tiene ninguna otra.
 --     Las personas que ya tienen más de un cuidador los conservan: el trigger solo mira altas nuevas.
 --     Error: `limite_cuidadores` (la app lo traduce a un mensaje).
 --     asignar_codigo_invitacion no crea vínculos (solo pone el código a una fila que invitar_cuidador ya validó), así
@@ -38,7 +43,8 @@
 -- Rollback:
 --   drop trigger if exists bloquear_exceso_cuidadores on public.vinculos_cuidador;
 --   drop function if exists public.bloquear_exceso_cuidadores(), public.cupo_cuidadores(uuid),
---     public.usos_funcion_mes(uuid, text), public.registrar_uso_funcion(uuid, text), public.es_vita_plus_de(uuid),
+--     public.usos_funcion_mes(uuid, text), public.consumir_uso_funcion(uuid, text, int),
+--     public.devolver_uso_funcion(bigint), public.es_vita_plus_de(uuid),
 --     public._plan_plus_de(uuid);
 --   drop table if exists public.usos_funciones;
 --   -- y volver a crear consumir_interaccion / interacciones_hoy de 049 (3 argumentos).
@@ -117,7 +123,8 @@ grant execute on function public.es_vita_plus_de(uuid) to authenticated, service
 create table if not exists public.usos_funciones (
   id bigint generated always as identity primary key,
   usuario_id uuid not null references auth.users (id) on delete cascade, -- la persona a la que pertenece el dato
-  funcion text not null check (funcion in ('contar_pastillas')),
+  funcion text not null check (funcion in ('contar_pastillas', 'analizar_estudio')),
+  registrado_por uuid, -- quién lo registró (la persona o su Admin): solo esa cuenta puede devolverlo
   created_at timestamptz not null default now()
 );
 
@@ -145,22 +152,62 @@ $$;
 revoke all on function public._inicio_mes_ar() from public, anon;
 grant execute on function public._inicio_mes_ar() to authenticated, service_role;
 
--- Solo la persona o un cuidador Admin puede registrar / consultar. true = registrado.
-create or replace function public.registrar_uso_funcion(p_persona uuid, p_funcion text)
+-- Chequea el tope y registra el uso en un solo paso. p_tope null = sin tope (igual registra). Solo la persona o un
+-- cuidador Admin. El lock asesor serializa los pedidos de la misma persona+función dentro de la transacción.
+create or replace function public.consumir_uso_funcion(p_persona uuid, p_funcion text, p_tope int default null)
+returns table (c_permitido boolean, c_usados int, c_limite int, c_id bigint)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_usados int;
+  v_id bigint;
+begin
+  if auth.uid() is null or p_persona is null or p_funcion not in ('contar_pastillas', 'analizar_estudio') then
+    return query select false, 0, coalesce(p_tope, 0), null::bigint;
+    return;
+  end if;
+  if auth.uid() <> p_persona and not public.puede_editar_de(p_persona) then
+    return query select false, 0, coalesce(p_tope, 0), null::bigint;
+    return;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('uso:' || p_persona::text || ':' || p_funcion));
+
+  select count(*)::int into v_usados
+  from public.usos_funciones u
+  where u.usuario_id = p_persona and u.funcion = p_funcion and u.created_at >= public._inicio_mes_ar();
+
+  if p_tope is not null and v_usados >= p_tope then
+    return query select false, v_usados, p_tope, null::bigint;
+    return;
+  end if;
+
+  insert into public.usos_funciones (usuario_id, funcion, registrado_por)
+  values (p_persona, p_funcion, auth.uid())
+  returning id into v_id;
+  return query select true, v_usados + 1, coalesce(p_tope, 0), v_id;
+end;
+$$;
+
+-- Deshace un uso cuando la IA falló: solo quien lo registró y recién hecho (10 minutos).
+create or replace function public.devolver_uso_funcion(p_id bigint)
 returns boolean
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_borradas int;
 begin
-  if auth.uid() is null or p_persona is null or p_funcion is distinct from 'contar_pastillas' then
+  if auth.uid() is null or p_id is null then
     return false;
   end if;
-  if auth.uid() <> p_persona and not public.puede_editar_de(p_persona) then
-    return false;
-  end if;
-  insert into public.usos_funciones (usuario_id, funcion) values (p_persona, p_funcion);
-  return true;
+  delete from public.usos_funciones u
+  where u.id = p_id and u.registrado_por = auth.uid() and u.created_at > now() - interval '10 minutes';
+  get diagnostics v_borradas = row_count;
+  return v_borradas > 0;
 end;
 $$;
 
@@ -186,8 +233,8 @@ begin
 end;
 $$;
 
-revoke all on function public.registrar_uso_funcion(uuid, text), public.usos_funcion_mes(uuid, text) from public, anon;
-grant execute on function public.registrar_uso_funcion(uuid, text), public.usos_funcion_mes(uuid, text) to authenticated, service_role;
+revoke all on function public.consumir_uso_funcion(uuid, text, int), public.devolver_uso_funcion(bigint), public.usos_funcion_mes(uuid, text) from public, anon;
+grant execute on function public.consumir_uso_funcion(uuid, text, int), public.devolver_uso_funcion(bigint), public.usos_funcion_mes(uuid, text) to authenticated, service_role;
 
 -- 3 · Cuidadores: cuántos cuentan hoy y cierre a nivel base ------------------------------------------------------
 
@@ -247,8 +294,11 @@ begin
   if tg_op = 'INSERT' then
     v_alta := true;
   else
-    -- Reclamo de un código (elder_id pasa de null a una persona) o reactivación de un vínculo revocado.
-    v_alta := old.elder_id is null or old.estado = 'revocado';
+    -- Reclamo de un código (elder_id pasa de null a una persona), reactivación de un vínculo revocado o revivir una
+    -- invitación pendiente vencida (invitar_cuidador le renueva expira_at: pasa de pasado a futuro).
+    v_alta := old.elder_id is null
+      or old.estado = 'revocado'
+      or (old.estado = 'pendiente' and new.estado = 'pendiente' and old.expira_at < now() and new.expira_at >= now());
   end if;
   if not v_alta then
     return new;
@@ -258,6 +308,8 @@ begin
   if public._plan_plus_de(new.elder_id) then
     return new;
   end if;
+  -- Un lock por persona: dos altas en paralelo se serializan y la segunda ve a la primera.
+  perform pg_advisory_xact_lock(hashtext('cuidadores:' || new.elder_id::text));
   if public._cuidadores_que_cuentan(new.elder_id, new.id) >= 1 then
     raise exception 'limite_cuidadores';
   end if;
@@ -269,7 +321,7 @@ revoke all on function public.bloquear_exceso_cuidadores() from public, anon, au
 
 drop trigger if exists bloquear_exceso_cuidadores on public.vinculos_cuidador;
 create trigger bloquear_exceso_cuidadores
-  before insert or update of elder_id, estado on public.vinculos_cuidador
+  before insert or update of elder_id, estado, expira_at on public.vinculos_cuidador
   for each row execute function public.bloquear_exceso_cuidadores();
 
 -- 4 · Chat: tope adicional para cuentas gratis -------------------------------------------------------------------

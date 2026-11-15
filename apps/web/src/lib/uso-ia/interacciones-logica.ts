@@ -88,7 +88,7 @@ export function eventosPorLimiteInteracciones(params: {
 }): ({ chunk: string } | { error: string; sinReintento: true })[] {
   const eventos: ({ chunk: string } | { error: string; sinReintento: true })[] = [];
   if (params.textoEmergencia) eventos.push({ chunk: params.textoEmergencia });
-  eventos.push({ error: mensajeLimiteInteracciones(params.limite, params.modoSimple), sinReintento: true });
+  eventos.push({ error: mensajeLimiteInteracciones(params.limite, params.modoSimple, params.gratis === true), sinReintento: true });
   return eventos;
 }
 

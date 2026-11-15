@@ -1,8 +1,8 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { esVitaPlus } from "@/lib/vita-plus/nucleo";
-import { LIMITE_CHAT_GRATIS, rpcInexistente } from "@/lib/plan-gratis/logica";
+import { leerVitaPlus } from "@/lib/vita-plus/nucleo";
+import { rpcInexistente, topeChatSegunPlan } from "@/lib/plan-gratis/logica";
 import { fechaISOEnAR } from "@/lib/rutina/formato";
 import {
   calcularConsultas,
@@ -18,12 +18,14 @@ import {
 
 /**
  * Tope extra del plan gratis (migración 061): 5 respuestas por día para quien NO tiene vita+ (la propia cuenta que
- * chatea; el efectivo es min(5, límite configurado)). null = vita+ (rige el límite configurado). Lee `esVitaPlus`,
- * el único punto de lectura de vita+.
+ * chatea; el efectivo es min(5, límite configurado)). null = vita+ o no se pudo saber (rige el límite
+ * configurado: ante un error de la base no se limita a quien paga, se deja un warning). Lee `leerVitaPlus`.
  */
 async function topeDelPlan(admin: ReturnType<typeof createAdminClient>, usuarioId: string): Promise<number | null> {
   try {
-    return (await esVitaPlus(admin, usuarioId)) ? null : LIMITE_CHAT_GRATIS;
+    const plus = await leerVitaPlus(admin, usuarioId);
+    if (plus === null) console.warn("plan gratis: no se pudo leer vita+ para el chat (se deja pasar)");
+    return topeChatSegunPlan(plus);
   } catch {
     return null;
   }
