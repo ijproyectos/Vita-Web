@@ -63,6 +63,7 @@ export type MotivoReclamoElderRechazado =
   | "codigo_expirado"
   | "ya_vinculado"
   | "autovinculo_no_permitido"
+  | "limite_cuidadores"
   | "error_desconocido";
 
 /**

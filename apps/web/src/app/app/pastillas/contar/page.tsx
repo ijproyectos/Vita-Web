@@ -7,6 +7,8 @@ import { obtenerPerfilActivo } from "@/lib/familia/perfil-activo";
 import { BannerPerfil } from "@/components/vita/banner-perfil";
 import { destinoSeguro } from "@/lib/navegacion/destino-seguro";
 import { seCuentaConFoto } from "@/lib/medicamentos/forma";
+import { cuotaConteoPastillas } from "@/lib/plan-gratis/nucleo";
+import { textoCuotaConteos } from "@/lib/plan-gratis/logica";
 import { FlujoContar, type OpcionMedicamento } from "./flujo-contar";
 
 export default async function ContarPastillasPage(props: PageProps<"/app/pastillas/contar">) {
@@ -49,12 +51,16 @@ export default async function ContarPastillasPage(props: PageProps<"/app/pastill
   // solo la representante del grupo) — se resuelve a la opción del grupo.
   const grupoPreseleccionado = grupos.find((g) => preseleccionado && g.medicamentoIds.includes(preseleccionado));
 
+  const cuota = await cuotaConteoPastillas(supabase, activo.id);
+  const cupoFoto = cuota.limitada ? { alcanzada: cuota.alcanzada, texto: textoCuotaConteos(cuota) } : null;
+
   return (
     <div className="flex flex-col gap-[18px] px-[18px] pt-1.5">
       <TopBar volverA={volverA} eyebrow="Medicamentos" title="Contar pastillas" />
       <BannerPerfil perfil={activo} accion="cargar" />
       <FlujoContar opciones={opciones} inicialId={grupoPreseleccionado?.representanteId ?? ""}
         nombreInicial={nombreInicial}
+        cupoFoto={cupoFoto}
         volverA={volverA === "/app/agregar-medicamento" ? "/app/medicamentos" : volverA}
       />
     </div>

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import type { ConteoPastillas } from "@/lib/inventario/contar";
+import { LineaCupoPlan, TarjetaLimitePlan } from "@/components/vita/tarjeta-limite-plan";
 import {
   contarFotoAction,
   guardarInventarioAction,
@@ -42,6 +43,7 @@ export function FlujoContar({
   inicialId,
   nombreInicial = "",
   volverA = "/app/medicamentos",
+  cupoFoto = null,
 }: {
   opciones: OpcionMedicamento[];
   inicialId: string;
@@ -49,6 +51,8 @@ export function FlujoContar({
   nombreInicial?: string;
   /** Destino tras guardar el stock. */
   volverA?: string;
+  /** Plan gratis: cuánto queda del conteo con foto de este mes (null = vita+ o sin dato: sin tope). */
+  cupoFoto?: { alcanzada: boolean; texto: string | null } | null;
 }) {
   const router = useRouter();
 
@@ -145,7 +149,16 @@ export function FlujoContar({
         </select>
       </label>
 
+      {cupoFoto?.alcanzada && (
+        <TarjetaLimitePlan
+          titulo="Este mes ya usaste tu conteo con foto"
+          texto="Con vita+ podés contar las pastillas con foto las veces que quieras. Mientras tanto, cargá la cantidad a mano acá abajo."
+        />
+      )}
+      {cupoFoto && !cupoFoto.alcanzada && <LineaCupoPlan texto={cupoFoto.texto} />}
+
       {/* Pasos foto: frente (cuenta) + dorso (nombre y dosis) */}
+      {!cupoFoto?.alcanzada && (
       <form action={contarAction} className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
           <SlotFoto
@@ -180,6 +193,7 @@ export function FlujoContar({
           </p>
         )}
       </form>
+      )}
 
       {/* Resultado editable / carga manual — siempre visible, nunca auto-guarda */}
       <form action={guardarAction} className="flex flex-col gap-3.5 rounded-[20px] bg-card p-4.5 shadow-card">

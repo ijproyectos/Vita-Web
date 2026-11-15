@@ -117,7 +117,7 @@ export default async function UsuariosPage({ searchParams }: PageProps<"/adminvi
                     <ChipInactividad dias={u.diasInactivo} />
                   </td>
                   <td className={TD}>
-                    {u.vitaPlus ? <Etiqueta tono="ok">{resumenVitaPlus(u).etiqueta}</Etiqueta> : <span className="text-subtle">—</span>}
+                    {u.vitaPlus ? <Etiqueta tono="ok">{resumenVitaPlus(u).etiqueta}</Etiqueta> : <span className="text-subtle">Gratis</span>}
                     {u.vitaPlus && resumenVitaPlus(u).detalle ? <div className="text-xs text-subtle">{resumenVitaPlus(u).detalle}</div> : null}
                   </td>
                   <td className={TD}>

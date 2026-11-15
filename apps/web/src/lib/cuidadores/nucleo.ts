@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { MENSAJE_LIMITE_CUIDADORES } from "@/lib/plan-gratis/logica";
 import { esDosisVencida, fechaEnAR, horaEnAR, idsOmitidas, listarHoy, listarVencidasDeAyer } from "@/lib/medicamentos/nucleo";
 import type {
   DosisVencidaCuidador,
@@ -264,6 +265,9 @@ export async function reclamarVinculoComoElder(
     }
     if (motivo === "ya_vinculado") {
       return { error: "ya_vinculado", mensaje: "Ya estás vinculado con esa persona." };
+    }
+    if (motivo.includes("limite_cuidadores")) {
+      return { error: "limite_cuidadores", mensaje: MENSAJE_LIMITE_CUIDADORES };
     }
     if (motivo === "autovinculo_no_permitido") {
       return {
