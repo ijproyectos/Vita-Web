@@ -77,6 +77,7 @@ export function Pantalla({
   medsHoy,
   telefonoAyuda,
   nombreAyuda,
+  tieneFamilia = true,
 }: {
   /** Cuenta logueada: el modo simple queda recordado solo para ella. */
   usuarioId: string;
@@ -86,6 +87,8 @@ export function Pantalla({
   /** A quién llama Ayuda (Configurar modo simple o contacto de emergencia), o null si no hay. */
   telefonoAyuda: string | null;
   nombreAyuda: string | null;
+  /** Alguien la cuida en vita: Ayuda avisa a la familia. Si no, Ayuda llama directo al contacto. */
+  tieneFamilia?: boolean;
   /** Qué ve la persona (Configurar modo simple; defaults si no hay fila). */
   config: PrefsModoSimple;
   /** Turno de hoy o de mañana (null = ninguno, o la sección está apagada). */
@@ -387,9 +390,10 @@ export function Pantalla({
           saludo={saludo}
           nombre={nombre}
           fechaTexto={fechaTexto}
-          onAyuda={() => setFlujoAyuda(true)}
-          // Sin teléfono: el botón abre el flujo (avisar a la familia) en vez de llamar directo.
-          telefono={null}
+          // Con familia en vita: el flujo (avisar y ofrecer llamar). Sin nadie vinculado: llama
+          // directo al contacto de emergencia (`tel:`), o explica dónde cargarlo si no hay.
+          onAyuda={() => (tieneFamilia ? setFlujoAyuda(true) : setAyudaAbierta(true))}
+          telefono={tieneFamilia ? null : telefonoAyuda}
           contacto={nombreAyuda}
           conAyuda={config.ayuda}
         />

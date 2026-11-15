@@ -12,6 +12,7 @@ import { filasHoy } from "@/lib/modo-simple/seleccion";
 import type { PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { Pantalla } from "./pantalla";
 import { conRespaldo } from "@/lib/con-respaldo";
+import { listarMisCuidadores } from "@/lib/familia/nucleo";
 
 // Mismo margen de gracia que va a usar el cron de dosis vencidas (PR5,
 // `detectarDosisVencidas(admin, ahora, graciaMin=30)` en el diseño) — acá
@@ -28,10 +29,12 @@ export default async function ModoSimplePage() {
   const usuario = await requireUser();
   const supabase = await createClient();
 
-  const [hoy, perfil, config] = await Promise.all([
+  const [hoy, perfil, config, cuidadores] = await Promise.all([
     medicamentos.listarHoy(supabase, usuario.id),
     conRespaldo(obtenerPerfilCacheado(usuario.id), null, "el perfil"),
     obtenerPrefs(supabase, usuario.id),
+    // Sin nadie que la cuide en vita, Ayuda llama directo al contacto de emergencia.
+    conRespaldo(listarMisCuidadores(supabase), [], "los cuidadores"),
   ]);
   const ahoraHHMM = medicamentos.horaEnAR();
   const [turno, mediciones, medirHoy, turnoProximo] = await Promise.all([
@@ -70,6 +73,7 @@ export default async function ModoSimplePage() {
     telefonoAyuda: config.llamar_telefono ?? (perfil?.contacto_emergencia_telefono?.trim() || null),
     nombreAyuda: config.llamar_telefono ? config.llamar_nombre : perfil?.contacto_emergencia_nombre?.trim() || null,
     config: config satisfies PrefsModoSimple,
+    tieneFamilia: cuidadores.length > 0,
     turno,
     mediciones,
     medirAhora: medirQueToca(medirHoy, ahoraHHMM),
