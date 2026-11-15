@@ -11,6 +11,8 @@ import { horaCorta } from "@/lib/notificaciones/mensajes";
 import type { FilaHoy } from "@/lib/modo-simple/seleccion";
 import { marcarGrupoNoTomadoAction, marcarGrupoTomadoAction } from "../rutina/actions";
 
+import { RUTA_TURNO_SIMPLE } from "./turno/ruta";
+
 export const RUTA_RUTINA_SIMPLE = "/app/modo-simple/rutina";
 
 
@@ -44,7 +46,7 @@ export function ListaHoyInteractiva({ filas, abrirId, extras = [] }: { filas: Fi
 
   return (
     <>
-      <TarjetaHoy filas={filas} onTocar={setFilaElegida} extras={extras} onTocarExtra={(x) => x.tipoMedir && setMedir(x)} />
+      <TarjetaHoy filas={filas} onTocar={setFilaElegida} extras={extras} onTocarExtra={(x) => (x.tipo === "turno" ? router.push(`${RUTA_TURNO_SIMPLE}?desde=rutina`) : x.tipoMedir && setMedir(x))} />
       <SheetFila fila={filaElegida} onCerrar={() => setFilaElegida(null)} onAccion={accionFila} />
       {medir?.tipoMedir && <TecladoMedicion tipo={medir.tipoMedir} onCerrar={() => setMedir(null)} />}
     </>

@@ -419,7 +419,6 @@ export function Pantalla({
               momento={momento}
               alertado={fase === "alertado"}
               deAyer={!!fechaDosis}
-              onNoTome={() => setPreguntarNo("grupo")}
               confirmando={pendiente}
               silenciada={silenciada}
               conVoz={config.voz}
