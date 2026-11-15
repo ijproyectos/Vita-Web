@@ -55,7 +55,7 @@ export default async function ModoSimplePage() {
     .filter((m) => !omitidasAyer.has(m.id))
     .sort((a, b) => a.hora_programada.localeCompare(b.hora_programada));
   const fechaDosis = deAyer.length > 0 ? medicamentos.fechaAyerEnAR() : null;
-  const { resto, invalidas } = pendienteHoy;
+  const { resto } = pendienteHoy;
   const enGrupo = deAyer.length > 0 ? deAyer : pendienteHoy.enGrupo;
   const primera = deAyer.length > 0 ? deAyer[0] : pendienteHoy.primera;
   const momento = deAyer.length > 0 ? momentoDelDia(deAyer[0].hora_programada) : pendienteHoy.momento;
@@ -77,9 +77,18 @@ export default async function ModoSimplePage() {
     medsHoy: hoy.map((m) => ({ nombre: m.nombre, hora_programada: m.hora_programada, tomado: m.tomado })),
   };
 
-  // Lista "Hoy" (todas las tomas del día con su estado). Con una dosis de ayer en la tarjeta,
-  // ninguna de hoy es "ahora".
+  // Dosis de hoy de una hora anterior sin marcar: "Te olvidaste…" (con una dosis de ayer en la
+  // tarjeta, ninguna de hoy es "ahora").
   const filas = filasHoy(hoy, omitidasHoy, new Set(fechaDosis ? [] : enGrupo.map((m) => m.id)), ahoraHHMM);
+  const olvidadas = filas.filter((f) => f.estado === "se-paso").map((f) => ({ id: f.id, nombre: f.nombre, hora: f.hora }));
+  // Lo próximo de hoy (pastilla o medición) para "La próxima es a las X".
+  const proximaHora =
+    [
+      ...resto.map((m) => normalizarHora(m.hora_programada) ?? ""),
+      ...medirHoy.filter((i) => i.valor === null).map((i) => i.hora),
+    ]
+      .filter((h) => h > ahoraHHMM)
+      .sort()[0] ?? null;
   const vencida = deAyer.length > 0 || (primera ? medicamentos.esDosisVencida(primera.hora_programada, ahoraHHMM, GRACIA_MIN) : false);
   // Los recordatorios del familiar son de las dosis de hoy: con una de ayer en pantalla no se muestran.
   const recordatorios =
@@ -93,7 +102,6 @@ export default async function ModoSimplePage() {
       // del grupo anterior.
       key={(fechaDosis ? "ayer:" : "") + (enGrupo.map((m) => m.id).join(",") || "descanso")}
       fechaDosis={fechaDosis}
-      filas={filas}
       {...cabecera}
       grupo={enGrupo.map((m) => ({
         id: m.id,
@@ -103,14 +111,8 @@ export default async function ModoSimplePage() {
         horaProgramada: m.hora_programada,
       }))}
       momento={momento}
-      siguientes={resto.filter((m) => (normalizarHora(m.hora_programada) ?? "") > ahoraHHMM).slice(0, 3).map((m) => ({
-        id: m.id,
-        nombre: m.nombre,
-        horaProgramada: m.hora_programada,
-        momento: momentoDelDia(m.hora_programada),
-      }))}
-      porCorregir={invalidas.map((m) => ({ id: m.id, nombre: m.nombre }))}
-      hayMedsHoy={hoy.length > 0}
+      olvidadas={olvidadas}
+      proximaHora={proximaHora}
       vencida={vencida}
       recordatorios={recordatorios}
     />

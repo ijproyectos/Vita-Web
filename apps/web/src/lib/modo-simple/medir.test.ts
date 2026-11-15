@@ -62,18 +62,30 @@ describe("medirQueToca", () => {
   it("si se pasaron dos, la más reciente; anotada no toca", () => {
     expect(medirQueToca(items, "22:00")?.hora).toBe("21:00");
     const anotadas = medirDelDia([plan()], [medicion("presion", "21:05", 130, 80)], "miercoles", HOY);
-    expect(medirQueToca(anotadas, "22:00")?.hora).toBe("09:00");
+    expect(medirQueToca(anotadas, "22:00")).toBeNull();
+    expect(medirQueToca(anotadas, "10:30")?.hora).toBe("09:00");
+  });
+  it("se ve 2 h desde su hora y después desaparece", () => {
+    expect(medirQueToca(items, "10:59")?.hora).toBe("09:00");
+    expect(medirQueToca(items, "11:00")).toBeNull();
+    expect(medirQueToca(items, "15:00")).toBeNull();
   });
 });
 
 describe("turnoHoyOManana", () => {
   const t = (fecha: string, hora: string) => ({ fecha, hora });
-  it("el de hoy desaparece cuando pasa su hora y queda el de mañana", () => {
+  it("el de hoy desaparece cuando pasa su hora", () => {
     const lista = [t(HOY, "10:00:00"), t("2026-11-12", "09:00:00")];
     expect(turnoHoyOManana(lista, HOY, "2026-11-12", "09:59")).toBe(lista[0]);
     expect(turnoHoyOManana(lista, HOY, "2026-11-12", "10:00")).toBe(lista[0]);
-    expect(turnoHoyOManana(lista, HOY, "2026-11-12", "10:01")).toBe(lista[1]);
+    expect(turnoHoyOManana(lista, HOY, "2026-11-12", "10:01")).toBeNull();
     expect(turnoHoyOManana([t(HOY, "10:00:00")], HOY, "2026-11-12", "11:00")).toBeNull();
+  });
+  it("el de mañana aparece recién a las 20 h", () => {
+    const lista = [t("2026-11-12", "09:00:00")];
+    expect(turnoHoyOManana(lista, HOY, "2026-11-12", "19:59")).toBeNull();
+    expect(turnoHoyOManana(lista, HOY, "2026-11-12", "20:00")).toBe(lista[0]);
+    expect(turnoHoyOManana(lista, HOY, "2026-11-12", "23:59")).toBe(lista[0]);
   });
 });
 

@@ -35,6 +35,7 @@ export async function turnoParaMostrar(supabase: Cliente, usuarioId: string): Pr
     if (!t) return null;
     return {
       dia: t.fecha === hoy ? "hoy" : "manana",
+      fecha: t.fecha,
       hora: t.hora.slice(0, 5),
       especialidad: t.especialidad,
       profesional: t.profesional?.trim() || null,

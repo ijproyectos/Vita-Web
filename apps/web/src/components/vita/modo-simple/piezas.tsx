@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { VitaIcon } from "@/lib/vita-icons";
 import { VitaAvatar } from "@/components/vita/v-mark";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
@@ -43,12 +44,6 @@ export const DEL_MOMENTO: Record<MomentoDia, string> = {
   noche: "de la noche",
 };
 
-const ICONO_MOMENTO: Record<MomentoDia, string> = {
-  "mañana": "sunrise",
-  mediodia: "sun",
-  tarde: "sunset",
-  noche: "moon",
-};
 
 export function listaHablada(nombres: string[]): string {
   if (nombres.length <= 1) return nombres[0] ?? "";
@@ -179,7 +174,6 @@ export function TarjetaGrupo({
   momento,
   alertado,
   confirmando,
-  escuchandoVoz,
   silenciada,
   conVoz = true,
   puedePosponer = true,
@@ -187,9 +181,9 @@ export function TarjetaGrupo({
   onConfirmar,
   onEscuchar,
   onPosponer,
-  onAlternarVoz,
   deAyer = false,
   onNoTome,
+  children,
 }: {
   grupo: Dosis[];
   momento: MomentoDia | null;
@@ -199,7 +193,6 @@ export function TarjetaGrupo({
   /** "No la tomé": sin él no se muestra (p. ej. en la vista previa vieja). */
   onNoTome?: () => void;
   confirmando: boolean;
-  escuchandoVoz: boolean;
   silenciada: boolean;
   /** "Leerle los avisos" de Configurar modo simple. */
   conVoz?: boolean;
@@ -208,7 +201,8 @@ export function TarjetaGrupo({
   onConfirmar: () => void;
   onEscuchar: () => void;
   onPosponer: () => void;
-  onAlternarVoz: () => void;
+  /** Franja "Te olvidaste…" (dosis anteriores sin marcar), al pie de la misma tarjeta. */
+  children?: React.ReactNode;
 }) {
   const n = grupo.length;
   return (
@@ -243,33 +237,20 @@ export function TarjetaGrupo({
         type="button"
         onClick={onConfirmar}
         disabled={confirmando}
-        className="mt-5 flex h-[76px] w-full items-center justify-center gap-3 rounded-full bg-teal-deep text-[24px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--teal-deep)_32%,transparent)] transition-transform active:scale-[0.98] disabled:opacity-70 motion-reduce:transition-none"
+        className="mt-5 flex h-[70px] w-full items-center justify-center gap-3 rounded-full bg-teal-deep text-[24px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--teal-deep)_32%,transparent)] transition-transform active:scale-[0.98] disabled:opacity-70 motion-reduce:transition-none"
       >
         <VitaIcon name="check" size={32} strokeWidth={3} />
-        {n === 1 ? "Ya la tomé" : `Ya tomé las ${n}`}
+        {n === 1 ? "Ya la tomé" : "Ya las tomé"}
       </button>
       {puedePosponer && (
         <button
           type="button"
           onClick={onPosponer}
           disabled={confirmando}
-          className="mt-3 flex h-[64px] w-full items-center justify-center gap-2.5 rounded-full border-2 border-foreground/10 bg-card text-[19px] font-extrabold transition-transform active:scale-[0.98] disabled:opacity-70 motion-reduce:transition-none"
+          className="mt-3 flex h-[58px] w-full items-center justify-center gap-2.5 rounded-full border-2 border-foreground/10 bg-card text-[19px] font-extrabold transition-transform active:scale-[0.98] disabled:opacity-70 motion-reduce:transition-none"
         >
           <VitaIcon name="clock" size={24} strokeWidth={2.4} />
-          Más tarde · en {minutosPosponer} min
-        </button>
-      )}
-      {!silenciada && (
-        <button
-          type="button"
-          onClick={onAlternarVoz}
-          className={cn(
-            "mt-3 flex h-[56px] w-full items-center justify-center gap-2 rounded-full text-[16px] font-bold text-teal-deep",
-            escuchandoVoz ? "bg-persona-1-tint" : "bg-secondary"
-          )}
-        >
-          <VitaIcon name="mic" size={19} />
-          {escuchandoVoz ? "Escuchando…" : "Tocá y decí \"sí\""}
+          Posponer {minutosPosponer} minutos
         </button>
       )}
       {onNoTome && (
@@ -282,33 +263,73 @@ export function TarjetaGrupo({
           {n === 1 ? "No la tomé" : "No las tomé"}
         </button>
       )}
+      {children}
+    </div>
+  );
+}
+
+/** Dosis de hoy que quedaron sin marcar (de una hora anterior a la de la tarjeta). */
+export type Olvidada = { id: string; nombre: string; hora: string };
+
+/** "Te olvidaste la de las 9:00 · Enalapril" o "Te olvidaste 2: Enalapril y Metformina". */
+export function tituloOlvidadas(olvidadas: Olvidada[]): { titulo: string; detalle: string } {
+  const horas = new Set(olvidadas.map((o) => o.hora));
+  const nombres = listaHablada(olvidadas.map((o) => o.nombre));
+  if (olvidadas.length === 1 || horas.size === 1) {
+    return { titulo: `Te olvidaste ${olvidadas.length === 1 ? "la" : "las"} de las ${horaCorta(olvidadas[0].hora)}`, detalle: nombres };
+  }
+  return { titulo: `Te olvidaste ${olvidadas.length}`, detalle: nombres };
+}
+
+/**
+ * Franja compacta al pie de la tarjeta: botones PROPIOS para lo olvidado, así
+ * "Ya la tomé" de la tarjeta nunca marca algo que no se tomó.
+ */
+export function FranjaOlvidadas({
+  olvidadas,
+  ocupado = false,
+  onTome,
+  onNoTome,
+}: {
+  olvidadas: Olvidada[];
+  ocupado?: boolean;
+  onTome?: () => void;
+  onNoTome?: () => void;
+}) {
+  const { titulo, detalle } = tituloOlvidadas(olvidadas);
+  const una = olvidadas.length === 1;
+  return (
+    <div className="mt-5 border-t border-foreground/10 pt-4 text-left">
+      <div className="flex items-start gap-2.5 text-aviso-ink">
+        <VitaIcon name="alert-triangle" size={22} strokeWidth={2.4} className="mt-0.5 shrink-0" />
+        <div className="min-w-0">
+          <div className="text-[19px] font-extrabold leading-tight">{titulo}</div>
+          <div className="mt-0.5 text-[17px] font-semibold text-foreground">{detalle}</div>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onClick={onTome}
+          disabled={ocupado}
+          className="flex min-h-14 items-center justify-center rounded-full bg-aviso-tint px-3 text-[17px] font-extrabold text-aviso-ink disabled:opacity-70"
+        >
+          {una ? "Sí, la tomé" : "Sí, las tomé"}
+        </button>
+        <button
+          type="button"
+          onClick={onNoTome}
+          disabled={ocupado}
+          className="flex min-h-14 items-center justify-center rounded-full border-2 border-foreground/10 bg-card px-3 text-[17px] font-extrabold text-slate-brand disabled:opacity-70"
+        >
+          {una ? "No la tomé" : "No las tomé"}
+        </button>
+      </div>
     </div>
   );
 }
 
 
-export function TarjetaSiguientes({ siguientes, titulo = "Después" }: { siguientes: Siguiente[]; titulo?: string }) {
-  return (
-    <section>
-      <h2 className="eyebrow px-1 pb-2 text-subtle">{titulo}</h2>
-      <ul className="overflow-hidden rounded-[var(--radius-card)] bg-card shadow-card">
-        {siguientes.map((s) => (
-          <li key={s.id} className="flex items-center gap-3.5 px-4 py-3.5 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-tile)] bg-persona-1-tint text-teal-deep">
-              <VitaIcon name={ICONO_MOMENTO[s.momento]} size={24} />
-            </div>
-            <div className="min-w-0">
-              <div className="font-heading text-[19px] font-extrabold tracking-[-0.025em]">{s.nombre}</div>
-              <div className="text-[14px] font-semibold text-subtle">
-                A las {horaCorta(s.horaProgramada)} {DEL_MOMENTO[s.momento]}
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 // Lista "Hoy" (rediseño 2026-11-10): con la misma forma que la Rutina del modo
 // normal (momentos del día, tarjeta por pastilla, círculo de check), pero más
@@ -511,35 +532,37 @@ function FilaExtra({ extra: x, onTocar }: { extra: ExtraHoy; onTocar?: () => voi
   );
 }
 
-export function TarjetaPorCorregir({ items }: { items: PorCorregir[] }) {
-  return (
-    <section>
-      <h2 className="eyebrow flex items-center gap-1.5 px-1 pb-2 text-aviso-ink">
-        <VitaIcon name="alert-triangle" size={14} strokeWidth={2.6} /> Falta corregir la hora
-      </h2>
-      <ul className="overflow-hidden rounded-[var(--radius-card)] bg-aviso-panel shadow-card">
-        {items.map((m) => (
-          <li key={m.id} className="px-4 py-3.5 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-foreground/[0.06]">
-            <div className="font-heading text-[19px] font-extrabold tracking-[-0.025em] text-aviso-panel-ink">{m.nombre}</div>
-            <div className="text-[14px] font-semibold text-aviso-panel-ink">Pedile a quien te cuida que revise el horario.</div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
-export function TarjetaDescanso({ nombre, hayMedsHoy, proximaHora }: { nombre: string; hayMedsHoy: boolean; proximaHora?: string }) {
+export function TarjetaDescanso({ proximaHora, children }: { proximaHora?: string; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-[28px] bg-card px-6 py-9 text-center shadow-card">
       <div className="flex size-20 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep">
-        <VitaIcon name={proximaHora ? "clock" : "check"} size={40} strokeWidth={3} />
+        <VitaIcon name="check" size={40} strokeWidth={3} />
       </div>
-      <div className="font-heading text-[26px] font-extrabold leading-tight tracking-[-0.035em]">
-        {proximaHora ? `Tu próxima toma es a las ${horaCorta(proximaHora)}` : hayMedsHoy ? `Tomaste todo hoy${nombre ? `, ${nombre}` : ""}` : "Hoy no tenés medicación pendiente"}
+      <div className="font-heading text-[26px] font-extrabold leading-tight tracking-[-0.035em]">No tenés nada pendiente</div>
+      <div className="text-[18px] font-semibold text-subtle">
+        {proximaHora ? `La próxima es a las ${horaCorta(proximaHora)}.` : "Te vamos a avisar cuando sea la hora."}
       </div>
-      <div className="text-[16px] font-medium text-subtle">{proximaHora ? "Por ahora no tenés tomas pendientes de confirmar." : "Te vamos a avisar cuando sea la hora."}</div>
+      {children && <div className="w-full">{children}</div>}
     </div>
+  );
+}
+
+/** Link chico a "Tu rutina de hoy". */
+export function EnlaceTodoElDia({ href }: { href?: string }) {
+  const clases = "flex min-h-14 items-center justify-center gap-1.5 text-[19px] font-extrabold text-teal-deep";
+  const contenido = (
+    <>
+      Ver todo el día
+      <VitaIcon name="chevron-right" size={20} strokeWidth={2.6} />
+    </>
+  );
+  return href ? (
+    <Link href={href} className={clases}>
+      {contenido}
+    </Link>
+  ) : (
+    <div className={clases}>{contenido}</div>
   );
 }
 
@@ -551,12 +574,15 @@ export function BarraInferior({
   onHablar,
   onAjustes,
   conCharla = true,
+  sugerencia,
 }: {
   estado: EstadoAvatar;
   onHablar: () => void;
   onAjustes: () => void;
   /** "Hablar con Vita" de Configurar modo simple. */
   conCharla?: boolean;
+  /** Con una pastilla pendiente: "Decime «ya la tomé»" en lugar de "Hablar con Vita", y halo en la mascota. */
+  sugerencia?: string | null;
 }) {
   return (
     <div
@@ -571,10 +597,19 @@ export function BarraInferior({
           onClick={onHablar}
           className="absolute left-1/2 top-[-34px] flex -translate-x-1/2 flex-col items-center gap-1 transition-transform active:scale-[0.95] motion-reduce:transition-none"
         >
-          <span className="flex size-[76px] items-center justify-center overflow-hidden rounded-full bg-card shadow-nav ring-[3px] ring-primary">
+          <span
+            className={cn(
+              "flex size-[76px] items-center justify-center overflow-hidden rounded-full bg-card shadow-nav ring-[3px] ring-primary",
+              sugerencia && "shadow-[0_0_0_9px_color-mix(in_srgb,var(--primary)_18%,transparent)]"
+            )}
+          >
             <VitaAvatar size={64} estado={estado} interactivo={false} />
           </span>
-          <span className="whitespace-nowrap font-heading text-[17px] font-extrabold tracking-[-0.02em]">Hablar con Vita</span>
+          {sugerencia ? (
+            <span className="whitespace-nowrap rounded-full bg-foreground px-3.5 py-1.5 text-[16px] font-extrabold text-background">{sugerencia}</span>
+          ) : (
+            <span className="whitespace-nowrap font-heading text-[17px] font-extrabold tracking-[-0.02em]">Hablar con Vita</span>
+          )}
         </button>
         )}
         <button
@@ -642,6 +677,59 @@ export function TarjetaTurno({ turno }: { turno: TurnoSimple }) {
         </a>
       )}
     </section>
+  );
+}
+
+const DIA_CORTO = ["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"];
+
+/** "Cardiología" -> "cardiología" para "Mañana, cardiología"; respeta siglas ("ORL"). */
+function enMinuscula(texto: string): string {
+  return /^[A-ZÁÉÍÓÚÑ]{2,}\b/.test(texto) ? texto : texto.charAt(0).toLocaleLowerCase("es") + texto.slice(1);
+}
+
+/**
+ * Turno como fila chica arriba de lo que toca ahora. Día anterior: lila claro,
+ * "Mañana, cardiología · A las 10 · Ver qué llevar". Día del turno: lila relleno,
+ * "Hoy, cardiología · Cómo llegar y qué llevar". Abre la pantalla del turno.
+ */
+export function FilaTurno({ turno, href }: { turno: TurnoSimple; href?: string }) {
+  const hoy = turno.dia === "hoy";
+  const [a, m, d] = turno.fecha.split("-").map(Number);
+  const diaSemana = DIA_CORTO[new Date(Date.UTC(a, m - 1, d)).getUTCDay()] ?? "";
+  const horaTexto = horaCorta(turno.hora).replace(/:00$/, "");
+  const clases = cn(
+    "flex min-h-[76px] items-center gap-3.5 rounded-[22px] border-2 px-3.5 py-3 text-left transition-transform active:scale-[0.99] motion-reduce:transition-none",
+    hoy ? "border-persona-violeta-deep bg-persona-violeta-deep text-primary-foreground" : "border-persona-violeta-deep/25 bg-persona-violeta-tint text-foreground"
+  );
+  const contenido = (
+    <>
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-[52px] shrink-0 flex-col items-center justify-center rounded-[14px] leading-none",
+          hoy ? "bg-primary-foreground/15 text-primary-foreground" : "bg-card text-persona-violeta-deep"
+        )}
+      >
+        <span className="text-[12px] font-extrabold">{hoy ? "HOY" : diaSemana}</span>
+        <span className="mt-0.5 font-heading text-[20px] font-extrabold">{hoy ? `${horaTexto} h` : d}</span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-heading text-[20px] font-extrabold leading-tight tracking-[-0.02em]">
+          {hoy ? "Hoy" : "Mañana"}, {enMinuscula(turno.especialidad)}
+        </span>
+        <span className={cn("mt-0.5 block text-[16px] font-semibold", hoy ? "text-primary-foreground/85" : "text-slate-brand")}>
+          {hoy ? "Cómo llegar y qué llevar" : `A las ${horaTexto} · Ver qué llevar`}
+        </span>
+      </span>
+      <VitaIcon name="chevron-right" size={22} strokeWidth={2.6} className="shrink-0" />
+    </>
+  );
+  return href ? (
+    <Link href={href} aria-label={`${hoy ? "Hoy" : "Mañana"} tenés turno: ${turno.especialidad}`} className={clases}>
+      {contenido}
+    </Link>
+  ) : (
+    <div className={clases}>{contenido}</div>
   );
 }
 

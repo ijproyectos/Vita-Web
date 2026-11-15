@@ -54,14 +54,24 @@ function suscribir(cb: () => void) {
   };
 }
 
-function parsear(valor: string | null): Registro | null {
-  if (!valor) return null;
+// Varias tarjetas pueden estar pospuestas a la vez (la pastilla y la medición):
+// se guarda un mapa clave -> hasta. Un registro viejo { clave, hasta } se sigue leyendo.
+function parsear(valor: string | null): Record<string, number> {
+  if (!valor) return {};
   try {
-    const r = JSON.parse(valor) as Partial<Registro>;
-    return typeof r.clave === "string" && typeof r.hasta === "number" ? { clave: r.clave, hasta: r.hasta } : null;
+    const r = JSON.parse(valor) as unknown;
+    if (!r || typeof r !== "object") return {};
+    const viejo = r as Partial<Registro>;
+    if (typeof viejo.clave === "string" && typeof viejo.hasta === "number") return { [viejo.clave]: viejo.hasta };
+    return Object.fromEntries(Object.entries(r as Record<string, unknown>).filter((e): e is [string, number] => typeof e[1] === "number"));
   } catch {
-    return null;
+    return {};
   }
+}
+
+function guardarMapa(mapa: Record<string, number>) {
+  const vigentes = Object.fromEntries(Object.entries(mapa).filter(([, hasta]) => hasta > Date.now()));
+  escribir(Object.keys(vigentes).length ? JSON.stringify(vigentes) : null);
 }
 
 // Reloj de baja frecuencia como store externo: así el componente vuelve a
@@ -85,15 +95,18 @@ export function usePosponer(clave: string, minutos: number = MINUTOS_POSPONER) {
   const guardado = useSyncExternalStore(suscribir, snapshot, () => null);
   const ahora = useSyncExternalStore(suscribirReloj, snapshotReloj, () => 0);
 
-  const registro = parsear(guardado);
-  const hasta = registro && registro.clave === clave ? registro.hasta : null;
+  const hasta = parsear(guardado)[clave] ?? null;
   const posponido = hasta !== null && hasta > ahora;
   const minutosRestantes = hasta !== null && posponido ? Math.max(1, Math.ceil((hasta - ahora) / 60_000)) : 0;
 
   return {
     posponido,
     minutosRestantes,
-    posponer: () => escribir(JSON.stringify({ clave, hasta: Date.now() + minutos * 60_000 } satisfies Registro)),
-    cancelar: () => escribir(null),
+    posponer: () => guardarMapa({ ...parsear(snapshot()), [clave]: Date.now() + minutos * 60_000 }),
+    cancelar: () => {
+      const { [clave]: _quitada, ...resto } = parsear(snapshot());
+      void _quitada;
+      guardarMapa(resto);
+    },
   };
 }

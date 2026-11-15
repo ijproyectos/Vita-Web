@@ -15,6 +15,8 @@ export function esTipoMedirSimple(v: unknown): v is TipoMedirSimple {
 
 export type MedirHoy = {
   clave: string;
+  /** Plan de monitoreo (para posponer en el servidor). */
+  monitoreoId: string;
   tipo: TipoMedirSimple;
   /** "la presión", "la glucemia"… */
   frase: string;
@@ -33,6 +35,7 @@ export function medirDelDia(planes: Monitoreo[], medicionesHoy: Medicion[], dia:
       const tipo = p.tipo as TipoMedirSimple;
       return tramosDeHoy(p.horarios, medicionesHoy.filter((m) => esDeLaMetrica(m, p))).map((t) => ({
         clave: `${p.id}-${t.hora}`,
+        monitoreoId: p.id,
         tipo,
         frase: fraseMedir(p),
         hora: t.hora,
@@ -43,19 +46,39 @@ export function medirDelDia(planes: Monitoreo[], medicionesHoy: Medicion[], dia:
     .sort((a, b) => a.hora.localeCompare(b.hora) || a.frase.localeCompare(b.frase));
 }
 
-/**
- * La que toca ahora, como la tarjeta de una pastilla: la más reciente cuya hora
- * ya llegó y todavía no se anotó. null = nada pendiente.
- */
-export function medirQueToca(items: MedirHoy[], ahoraHHMM: string): MedirHoy | null {
-  const vencidas = items.filter((i) => i.valor === null && i.hora <= ahoraHHMM);
-  return vencidas.length > 0 ? vencidas[vencidas.length - 1] : null;
+/** Cuánto se ve "Es hora de medirte…" desde su hora; después queda como no anotada. */
+export const VENTANA_MEDIR_MIN = 120;
+
+function aMinutos(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
 }
 
 /**
- * Turno para la tarjeta del modo simple: el de hoy solo hasta su hora (después
- * desaparece "Hoy tenés turno"); si no, el de mañana. `turnos` en orden de fecha y hora.
+ * La que toca ahora, como la tarjeta de una pastilla: la más reciente cuya hora
+ * ya llegó hace menos de 2 h y todavía no se anotó. null = nada pendiente.
+ */
+export function medirQueToca(items: MedirHoy[], ahoraHHMM: string): MedirHoy | null {
+  const ahora = aMinutos(ahoraHHMM);
+  const vencidas = items.filter((i) => {
+    if (i.valor !== null) return false;
+    const desde = ahora - aMinutos(i.hora);
+    return desde >= 0 && desde < VENTANA_MEDIR_MIN;
+  });
+  return vencidas.length > 0 ? vencidas[vencidas.length - 1] : null;
+}
+
+/** Desde qué hora del día anterior se muestra el turno de mañana (como el aviso del día antes). */
+export const TURNO_MANANA_DESDE = "20:00";
+
+/**
+ * Turno para el modo simple: el de hoy solo hasta su hora (después desaparece);
+ * el de mañana recién desde las 20 h. `turnos` en orden de fecha y hora.
  */
 export function turnoHoyOManana<T extends { fecha: string; hora: string }>(turnos: T[], hoy: string, manana: string, ahoraHHMM: string): T | null {
-  return turnos.find((t) => (t.fecha === hoy && t.hora.slice(0, 5) >= ahoraHHMM) || t.fecha === manana) ?? null;
+  return (
+    turnos.find(
+      (t) => (t.fecha === hoy && t.hora.slice(0, 5) >= ahoraHHMM) || (t.fecha === manana && ahoraHHMM >= TURNO_MANANA_DESDE)
+    ) ?? null
+  );
 }

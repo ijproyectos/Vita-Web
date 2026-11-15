@@ -31,3 +31,38 @@ export function confirmoPorVoz(texto: string): boolean {
   if (AFIRMACIONES_FRASE.some((f) => conEspacios.includes(` ${f} `))) return true;
   return palabras.some((p) => AFIRMACIONES_SUELTAS.includes(p));
 }
+
+export type IntencionPendiente = "tome" | "posponer" | "no_tome" | "otra";
+
+const POSPONER_FRASE = ["mas tarde", "en un rato", "un rato", "ahora no", "todavia no", "despues", "luego", "esperame", "espera"];
+
+/**
+ * Lo que dijo con una pastilla pendiente (botón de vita de abajo). PURO.
+ * "no_tome" nunca guarda solo: la pantalla pregunta antes. Ante una mezcla
+ * ("no, ya la tomé") devuelve "otra" y lo resuelve la charla.
+ */
+export function interpretarVozPendiente(texto: string): IntencionPendiente {
+  const limpio = normalizar(texto);
+  if (!limpio) return "otra";
+  // "¿Ya tomé?" es una pregunta, no una confirmación (Whisper conserva los signos).
+  if (/[¿?]/.test(texto)) return "otra";
+  const palabras = limpio.split(" ");
+  const conEspacios = ` ${limpio} `;
+  const afirma = AFIRMACIONES_FRASE.some((f) => conEspacios.includes(` ${f} `));
+  const iNo = palabras.indexOf("no");
+  const niega = iNo >= 0 && palabras.slice(iNo + 1, iNo + 5).some((p) => p.startsWith("tom"));
+  if (niega) return afirma ? "otra" : "no_tome";
+  if (POSPONER_FRASE.some((f) => conEspacios.includes(` ${f} `))) return afirma ? "otra" : "posponer";
+  return confirmoPorVoz(texto) ? "tome" : "otra";
+}
+
+/** Las tres preguntas que el modo simple responde sin IA, dichas con otras palabras. PURO. */
+export function preguntaLocal(texto: string): "turno" | "tome" | "toca" | null {
+  const limpio = normalizar(texto);
+  if (!limpio) return null;
+  const conEspacios = ` ${limpio} `;
+  if (/ turno /.test(conEspacios) || conEspacios.includes(" medico ") || conEspacios.includes(" doctor ")) return "turno";
+  if (conEspacios.includes(" ya tome ") || conEspacios.includes(" tome la ") || conEspacios.includes(" tome las ")) return "tome";
+  if (conEspacios.includes(" me toca") || conEspacios.includes(" tengo que tomar ")) return "toca";
+  return null;
+}

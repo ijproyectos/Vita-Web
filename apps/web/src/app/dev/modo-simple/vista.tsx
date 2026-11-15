@@ -1,7 +1,6 @@
 "use client";
 
-import { BarraInferior, Cabecera, TarjetaGrupo, TarjetaHoy, type Dosis } from "@/components/vita/modo-simple/piezas";
-import { AccesoRutinaCompleta } from "@/app/app/modo-simple/lista-hoy";
+import { BarraInferior, Cabecera, EnlaceTodoElDia, FranjaOlvidadas, TarjetaGrupo, TarjetaHoy, type Dosis } from "@/components/vita/modo-simple/piezas";
 import type { FilaHoy } from "@/lib/modo-simple/seleccion";
 
 // Pantalla principal del modo simple con datos de ejemplo y botones inertes (solo para capturas).
@@ -18,6 +17,7 @@ export function VistaPreviaModoSimple({ grupo, filas, alertado, soloLista = fals
       </div>
     );
   }
+  const olvidadas = filas.filter((f) => f.estado === "se-paso").map((f) => ({ id: f.id, nombre: f.nombre, hora: f.hora }));
   return (
     <>
       <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-5">
@@ -28,18 +28,18 @@ export function VistaPreviaModoSimple({ grupo, filas, alertado, soloLista = fals
             momento="mediodia"
             alertado={alertado}
             confirmando={false}
-            escuchandoVoz={false}
             silenciada
             onConfirmar={nada}
             onEscuchar={nada}
             onPosponer={nada}
-            onAlternarVoz={nada}
             onNoTome={nada}
-          />
-          <AccesoRutinaCompleta filas={filas} />
+          >
+            {olvidadas.length > 0 && <FranjaOlvidadas olvidadas={olvidadas} />}
+          </TarjetaGrupo>
+          <EnlaceTodoElDia />
         </div>
       </div>
-      <BarraInferior estado="idle" onHablar={nada} onAjustes={nada} />
+      <BarraInferior estado="idle" onHablar={nada} onAjustes={nada} sugerencia={grupo.length === 1 ? "Decime «ya la tomé»" : "Decime «ya las tomé»"} />
     </>
   );
 }

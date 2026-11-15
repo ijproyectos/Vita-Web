@@ -20,11 +20,10 @@ import { desbloquearVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/habl
 import {
   BarraInferior,
   Cabecera,
+  EnlaceTodoElDia,
+  FilaTurno,
   TarjetaDescanso,
   TarjetaGrupo,
-  TarjetaMediciones,
-  TarjetaSiguientes,
-  TarjetaPorCorregir,
   TarjetaTurno,
   type Dosis,
   type MedicionSimple,
@@ -364,7 +363,7 @@ function VistaPrevia({
               conAyuda={prefs.ayuda}
             />
             <div className="mt-5 flex flex-col gap-4">
-              {prefs.ver_turnos && previa.turno && <TarjetaTurno turno={previa.turno} />}
+              {prefs.ver_turnos && previa.turno && hayGrupo && <FilaTurno turno={previa.turno} />}
               {previa.errorMedicamentos ? (
                 <p className="rounded-[20px] bg-destructive/10 p-4 text-sm text-destructive" role="alert">
                   No pudimos cargar los remedios de hoy. Intentá de nuevo en un momento.
@@ -375,7 +374,6 @@ function VistaPrevia({
                   momento={previa.momento}
                   alertado={false}
                   confirmando={false}
-                  escuchandoVoz={false}
                   silenciada={false}
                   conVoz={prefs.voz}
                   puedePosponer={prefs.posponer}
@@ -383,19 +381,22 @@ function VistaPrevia({
                   onConfirmar={NADA}
                   onEscuchar={NADA}
                   onPosponer={NADA}
-                  onAlternarVoz={NADA}
                 />
+              ) : prefs.ver_turnos && previa.turno ? (
+                <TarjetaTurno turno={previa.turno} />
               ) : (
-                <TarjetaDescanso nombre={nombre} hayMedsHoy={previa.hayMedsHoy} proximaHora={previa.siguientes[0]?.horaProgramada} />
+                <TarjetaDescanso proximaHora={previa.siguientes[0]?.horaProgramada} />
               )}
-              {prefs.ver_mediciones && previa.mediciones && (
-                <TarjetaMediciones titulo={previa.mediciones.titulo} mediciones={previa.mediciones.items} />
-              )}
-              {previa.porCorregir.length > 0 && <TarjetaPorCorregir items={previa.porCorregir} />}
-              {previa.siguientes.length > 0 && <TarjetaSiguientes siguientes={previa.siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
+              <EnlaceTodoElDia />
             </div>
           </div>
-          <BarraInferior estado="idle" onHablar={NADA} onAjustes={NADA} conCharla={prefs.charlar} />
+          <BarraInferior
+            estado="idle"
+            onHablar={NADA}
+            onAjustes={NADA}
+            conCharla={prefs.charlar}
+            sugerencia={hayGrupo ? (previa.grupo.length === 1 ? "Decime «ya la tomé»" : "Decime «ya las tomé»") : null}
+          />
         </div>
       </div>
     </div>
