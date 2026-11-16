@@ -157,5 +157,7 @@ describe("preguntaOPide", () => {
   it("rechaza una respuesta que no pide ni explica", () => {
     expect(r("Listo, cargado.")).toBe(false);
     expect(PIDE_O_EXPLICA.test("Listo")).toBe(false);
+    expect(PIDE_O_EXPLICA.test("No tengo cargada a tu tía Marta como persona a tu cuidado")).toBe(true);
+    expect(PIDE_O_EXPLICA.test("No tengo registrado a Marco")).toBe(true);
   });
 });

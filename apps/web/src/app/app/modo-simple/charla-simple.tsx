@@ -213,7 +213,9 @@ export function CharlaSimple({
     void hablar(texto, turno);
   }
 
-  async function preguntar(texto: string) {
+  // `reintento`: reenvío silencioso que pidió el servidor (corte sin respuesta): mismo mensaje exacto y mismo pedido,
+  // se queda en "pensando" y solo ocurre una vez.
+  async function preguntar(texto: string, reintento?: { pedidoId: string; mensaje: string; previo: string }) {
     const prefijo = prefijoRef.current ? PREFIJO_ANIMO : "";
     const turno = nuevoTurno();
     setAviso(null);
@@ -235,18 +237,23 @@ export function CharlaSimple({
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const timeout = setTimeout(() => ctrl.abort(), TIMEOUT_PEDIDO_MS);
-    let acumulado = "";
+    let acumulado = reintento?.previo ?? ""; // en el reenvío, sigue el texto ya mostrado (p. ej. teléfonos de emergencia)
     let errorServidor: string | null = null;
     let llamarAyuda = false;
     let nombresAvisados: string[] = [];
     let propuesta: MedicionPropuesta | null = null;
     let moodModelo: EstadoAvatar | null = null;
     let cortada = false;
+    let reintentarPedido: string | null = null;
     try {
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensaje: prefijo + texto, sesionId: sesionIdRef.current, modo: "simple" }),
+        body: JSON.stringify(
+          reintento
+            ? { mensaje: reintento.mensaje, pedidoId: reintento.pedidoId, reintento: true, reintentoAuto: true, sesionId: sesionIdRef.current, modo: "simple" }
+            : { mensaje: prefijo + texto, sesionId: sesionIdRef.current, modo: "simple" }
+        ),
         signal: ctrl.signal,
       });
       if (!resp.ok || !resp.body) {
@@ -257,6 +264,7 @@ export function CharlaSimple({
         if (e.tipo === "sesion") sesionIdRef.current = e.id;
         else if (e.tipo === "chunk") acumulado += e.texto;
         else if (e.tipo === "error") errorServidor = e.mensaje;
+        else if (e.tipo === "reintentar") reintentarPedido = e.pedidoId;
         else if (e.tipo === "accion") {
           if (e.accion.type === "ayuda_llamar") {
             llamarAyuda = true;
@@ -276,6 +284,11 @@ export function CharlaSimple({
       clearTimeout(timeout);
     }
     if (turno !== turnoRef.current) return;
+    const pedidoAReintentar = reintentarPedido as string | null;
+    if (pedidoAReintentar && !reintento && !errorServidor) {
+      void preguntar(texto, { pedidoId: pedidoAReintentar, mensaje: prefijo + texto, previo: acumulado });
+      return;
+    }
 
     const propuestaFinal = propuesta as MedicionPropuesta | null;
     if (propuestaFinal) {

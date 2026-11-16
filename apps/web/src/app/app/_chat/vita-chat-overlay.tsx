@@ -320,7 +320,8 @@ export function VitaChatOverlay({
     if (m.pedidoId) enviar(m.content, m.pedidoId, m.confirmacionId);
   }
 
-  async function enviar(texto: string, pedidoReintentado?: string, confirmacionId?: string) {
+  // `auto`: reenvío silencioso que pidió el servidor (corte sin texto ni escrituras): sin burbujas nuevas, sigue el "pensando…".
+  async function enviar(texto: string, pedidoReintentado?: string, confirmacionId?: string, auto = false) {
     const limpio = texto.trim();
     if (!limpio || enviando || sinCupo(uso)) return;
 
@@ -330,7 +331,8 @@ export function VitaChatOverlay({
     let recibioDone = false;
     let huboErrorEvento = false;
     let cortado = false;
-    setMensajes((prev) =>
+    let reintentarAuto: string | null = null; // pedidoId que el servidor pidió reenviar en silencio
+    if (!auto) setMensajes((prev) =>
       pedidoReintentado
         ? [
             ...prev.map((m) => (m.pedidoId === pedidoId ? { ...m, sinRespuesta: false } : m)),
@@ -356,7 +358,7 @@ export function VitaChatOverlay({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, perfilActivoId, confirmacionId }),
+        body: JSON.stringify({ mensaje: limpio, pedidoId, reintento: !!pedidoReintentado, ...(auto ? { reintentoAuto: true } : {}), perfilActivoId, confirmacionId }),
       });
 
       // 429 (demasiados pedidos) u otro error HTTP con mensaje: se muestra tal cual y el mensaje queda
@@ -392,9 +394,13 @@ export function VitaChatOverlay({
             | { error: string; sinReintento?: boolean }
             | { session: string }
             | { uso: UsoDiario }
-            | { mensajeId: string };
+            | { mensajeId: string }
+            | { reintentar: true; pedidoId: string };
 
-          if ("session" in evento) {
+          if ("reintentar" in evento) {
+            // Una sola vez: si el reenvío también se corta, el servidor manda el error amable de siempre.
+            if (!auto && typeof evento.pedidoId === "string") reintentarAuto = evento.pedidoId;
+          } else if ("session" in evento) {
             // El servidor siempre escribe en la conversación continua: el cliente no necesita el id de sesión.
           } else if ("mensajeId" in evento) {
             // Id de la respuesta recién guardada (llega al final, antes de [DONE]): habilita 👍/👎 sobre esa burbuja.
@@ -571,6 +577,7 @@ export function VitaChatOverlay({
       // al final del try: si el stream se corta después de una escritura, el
       // dato ya quedó guardado y la pantalla igual tiene que mostrarlo.
       if (huboEscritura) router.refresh();
+      if (reintentarAuto && !fallo) void enviar(limpio, reintentarAuto, confirmacionId, true);
     }
   }
 

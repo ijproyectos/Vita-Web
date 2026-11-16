@@ -55,3 +55,12 @@ describe("leerEventosChat", () => {
     expect(r.terminoBien).toBe(false);
   });
 });
+
+describe("parsearBloqueSSE reintentar", () => {
+  it("reconoce el pedido de reintento silencioso", () => {
+    expect(parsearBloqueSSE('data: {"reintentar":true,"pedidoId":"abc"}')).toEqual({ tipo: "reintentar", pedidoId: "abc" });
+  });
+  it("ignora un reintentar sin pedidoId", () => {
+    expect(parsearBloqueSSE('data: {"reintentar":true}')).toBeNull();
+  });
+});

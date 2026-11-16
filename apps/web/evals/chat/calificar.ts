@@ -45,7 +45,7 @@ export function textoDeCampo(v: unknown): string {
 }
 
 /** Pedido explícito o explicación de por qué falta algo, sin signo de pregunta ("Contame el nombre…", "No tengo a Marta…"). */
-export const PIDE_O_EXPLICA = /contame|decime|necesito saber|cu[aá]l|qu[eé] remedio|agregal[ao] primero|no tengo a/i;
+export const PIDE_O_EXPLICA = /contame|decime|necesito saber|cu[aá]l|qu[eé] remedio|agregal[ao] primero|no tengo a|no tengo (?:cargad[ao]|registrad[ao]) a/i;
 
 function evaluar(regla: Regla, r: Respuesta): string | null {
   const m = (porDefecto: string) => regla.motivo ?? porDefecto;
