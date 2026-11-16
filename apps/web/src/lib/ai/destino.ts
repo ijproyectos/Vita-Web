@@ -17,6 +17,9 @@ export const TOOLS_DE_ESCRITURA = new Set([
   "add_measurement",
   "update_appointment",
   "delete_appointment",
+  // No escribe datos de salud pero es una acción HACIA AFUERA (push a otra persona): mismo trato que una escritura
+  // sobre un familiar (rol "editar", como el botón Recordarle, y confirmación del servidor).
+  "remind_dose",
 ]);
 
 // Escrituras CLÍNICAS o destructivas: sobre otra persona, la confirmación tiene
@@ -30,6 +33,7 @@ export const TOOLS_CONFIRMACION_ATADA = new Set([
   "update_schedule",
   "update_appointment",
   "delete_appointment",
+  "remind_dose",
 ]);
 
 // Borrar o cambiar el horario de un medicamento pide confirmación del servidor
@@ -52,6 +56,7 @@ export const TOOLS_CON_DESTINO = new Set([
   "list_measurements",
   "list_studies",
   "get_adherence",
+  "get_health_profile",
   // Efectos de interfaz que muestran datos de una persona: llevan el destino
   // para que la tarjeta diga de quién es la rutina.
   "show_today_medications",

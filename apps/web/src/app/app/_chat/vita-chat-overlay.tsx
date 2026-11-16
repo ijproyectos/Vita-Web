@@ -491,6 +491,9 @@ export function VitaChatOverlay({
             if (evento.action.type === "condition_added") {
               toast.success(`"${evento.action.label}" agregada a las condiciones ${de}.`);
             }
+            if (evento.action.type === "reminder_sent") {
+              toast.success(persona ? `Le mandamos el aviso a ${persona}.` : "Aviso enviado.");
+            }
             if (evento.action.type === "allergy_added") {
               toast.success(`"${evento.action.name}" agregada a las alergias ${de}.`);
             }
