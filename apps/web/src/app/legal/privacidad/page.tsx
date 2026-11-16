@@ -205,6 +205,29 @@ export default function PrivacidadPage() {
         </Lista>
       </Seccion>
 
+      <Seccion titulo="6 bis. Observaciones de vita">
+        <p>
+          Una vez por día, vita revisa los datos que cargaste (tomas, stock, mediciones, estudios y turnos) con reglas
+          fijas y puede mostrarte una observación, por ejemplo “queda poco de un remedio” o “tu presión estuvo alta
+          varias veces”. En esta etapa no interviene ninguna inteligencia artificial y no es un diagnóstico: ante
+          cualquier duda, consultalo con tu médico.
+        </p>
+        <Lista>
+          <li>
+            <strong>Quién las ve:</strong> vos y, según el permiso que les diste, las personas que te cuidan (un Lector
+            las ve; un Admin además puede ocultarlas). Podés ocultar cada una con “No me lo muestres más”.
+          </li>
+          <li>
+            <strong>Se borran:</strong> vencen solas y se eliminan a los 30 días de vencer; “Borrar historial” (Todo) las
+            borra, y están incluidas en “Exportar mi historial”.
+          </li>
+          <li>
+            <strong>Avisos:</strong> solo te llega una notificación al celular si tenés activado “Observaciones de vita”
+            en Configurar avisos (máximo una por día).
+          </li>
+        </Lista>
+      </Seccion>
+
       <Seccion titulo="7. Cuánto tiempo conservamos tus datos">
         <p>
           Conservamos tus datos mientras tengas tu cuenta, salvo los mensajes del chat con vita, que se borran solos a los 7 días. Cuando eliminás tu cuenta (Perfil → Privacidad y datos →

@@ -222,7 +222,7 @@ export function reglaPresionAlta(d: DatosPersonaObs): ObservacionNueva[] {
       severidad: "atencion",
       clave: `presion_alta:${semanaISO(d.hoy)}`,
       titulo: "Presión alta en varias mediciones",
-      texto: `En los últimos ${PRESION_VENTANA_DIAS} días hubo ${altas.length} mediciones de presión de ${PRESION_SISTOLICA_ALTA}/${PRESION_DIASTOLICA_ALTA} o más. ${FRASE_MEDICO}`,
+      texto: `Tu presión estuvo alta (${PRESION_SISTOLICA_ALTA} de máxima o ${PRESION_DIASTOLICA_ALTA} de mínima, o más) ${altas.length} veces en los últimos ${PRESION_VENTANA_DIAS} días. ${FRASE_MEDICO}`,
       datos: { cantidad: altas.length, sistolica_maxima: sistolicaMax, diastolica_maxima: diastolicaMax },
       href: "/app/mi-salud/monitoreo",
       vigente_hasta: vigenteHasta(d.hoy),

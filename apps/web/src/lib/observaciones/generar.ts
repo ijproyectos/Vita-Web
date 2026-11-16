@@ -21,6 +21,7 @@ import {
   elegirParaPush,
   payloadObservacion,
   planificarCambios,
+  procesarTolerante,
   textosDeAviso,
   type CandidataPush,
 } from "./generar-logica";
@@ -369,6 +370,8 @@ export type ResumenObservaciones = {
   /** true si la migración 062 todavía no está aplicada: el cron no hace nada. */
   saltado?: "sin_migracion";
   personas: number;
+  /** Personas que fallaron incluso solas y se saltearon (el cursor avanzó igual). */
+  omitidas: number;
   guardadas: number;
   vencidas: number;
   purgadas: number;
@@ -392,7 +395,7 @@ export async function procesarObservaciones(
   const restante = () => presupuesto - (reloj() - inicio);
   const ahora = opciones.ahora ?? new Date();
   const hoy = fechaEnAR(ahora);
-  const resumen: ResumenObservaciones = { ok: true, personas: 0, guardadas: 0, vencidas: 0, purgadas: 0, push: 0, completo: false };
+  const resumen: ResumenObservaciones = { ok: true, personas: 0, omitidas: 0, guardadas: 0, vencidas: 0, purgadas: 0, push: 0, completo: false };
 
   try {
     // ¿Existe la tabla? Sin la migración 062 todo queda en no-op.
@@ -421,11 +424,22 @@ export async function procesarObservaciones(
         resumen.completo = await guardarCursor(admin, hoy, cursor === CURSOR_INICIAL ? await primerUsuario(admin) : cursor, true);
         break;
       }
-      const { datos } = await cargarLote(admin, personas, hoy, ahora);
-      const r = await guardarLote(admin, datos, ahora);
-      resumen.personas += personas.length;
-      resumen.guardadas += r.guardadas;
-      resumen.vencidas += r.vencidas;
+      // Si el lote falla se reintenta persona por persona y solo se omite a la que falla (el cursor avanza igual).
+      const { omitidos } = await procesarTolerante(
+        personas,
+        async (lote) => {
+          const { datos } = await cargarLote(admin, lote, hoy, ahora);
+          const r = await guardarLote(admin, datos, ahora);
+          resumen.guardadas += r.guardadas;
+          resumen.vencidas += r.vencidas;
+        },
+        (_persona, e) => {
+          // Sin datos de la persona: solo el motivo, acotado.
+          console.warn("observaciones: se omitió una persona por un error", e instanceof Error ? e.message.slice(0, 160) : "error desconocido");
+        }
+      );
+      resumen.personas += personas.length - omitidos;
+      resumen.omitidas += omitidos;
       const ultimo = personas[personas.length - 1].id;
       const fin = personas.length < TAMANO_LOTE;
       if (!(await guardarCursor(admin, hoy, ultimo, fin))) throw new Error("No se pudo anotar el avance del lote.");

@@ -403,6 +403,28 @@ const conPersona = (t: Anthropic.Tool): Anthropic.Tool => {
 const TOOLS_CON_PERSONA: Anthropic.Tool[] = TOOLS_BASE.map(conPersona);
 const TOOLS_NUEVAS: Anthropic.Tool[] = TOOLS_NUEVAS_BASE.map(conPersona);
 
+// Se agregan al FINAL de TOOLS (el orden es parte del prefijo cacheado: nunca se reordena).
+const TOOLS_FINALES_BASE: Anthropic.Tool[] = [
+  {
+    name: "remind_dose",
+    description:
+      "Manda a una persona que cuidás (persona_id obligatorio, nunca el usuario) el mismo aviso que el botón Recordarle, por sus dosis de hoy sin tomar. Sin medication_ids = todas las pendientes. No envía solo: el servidor pide la confirmación. El resultado dice si salió; nunca afirmes que avisaste si no lo dice.",
+    input_schema: {
+      type: "object",
+      properties: {
+        medication_ids: { type: "array", items: { type: "string" }, description: "Opcional: ids de list_today_medications de esa persona." },
+      },
+    },
+  },
+  {
+    name: "get_health_profile",
+    description:
+      "Lee alergias, condiciones y datos básicos (edad, género, grupo sanguíneo, peso, altura) de la persona. Usala para preguntas de alergias o condiciones.",
+    input_schema: { type: "object", properties: {} },
+  },
+];
+const TOOLS_FINALES: Anthropic.Tool[] = TOOLS_FINALES_BASE.map(conPersona);
+
 // Memoria de vita (fase 2). Actúan SIEMPRE sobre la cuenta logueada (no aceptan `persona_id`) y no existen en el
 // modo simple. Van al FINAL de TOOLS: el orden del array es parte del prefijo cacheado, así que nunca se reordena.
 const TOOL_RECORDAR: Anthropic.Tool = {
@@ -462,7 +484,7 @@ const TOOL_RESOLVER_CONTRADICCION: Anthropic.Tool = {
   },
 };
 
-export const TOOLS: Anthropic.Tool[] = [...TOOLS_CON_PERSONA, ...TOOLS_MEMORIA, TOOL_RESOLVER_CONTRADICCION, ...TOOLS_NUEVAS];
+export const TOOLS: Anthropic.Tool[] = [...TOOLS_CON_PERSONA, ...TOOLS_MEMORIA, TOOL_RESOLVER_CONTRADICCION, ...TOOLS_NUEVAS, ...TOOLS_FINALES];
 
 // Tools que SOLO existen en el chat de modo simple (`modo: "simple"` en /api/chat). No están en TOOLS: en el
 // modo normal no se ofrecen ni se ejecutan (ver lib/ai/modo-simple.ts).

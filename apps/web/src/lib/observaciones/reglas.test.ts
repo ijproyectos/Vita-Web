@@ -213,6 +213,7 @@ describe("presion_alta", () => {
     expect(r[0]).toMatchObject({ severidad: "atencion", tipo: "presion_alta" });
     expect(r[0].datos).toMatchObject({ cantidad: 3, sistolica_maxima: 150 });
     expect(r[0].texto).toContain("Consultalo con tu médico.");
+    expect(r[0].texto).toBe("Tu presión estuvo alta (140 de máxima o 90 de mínima, o más) 3 veces en los últimos 7 días. Consultalo con tu médico.");
   });
   it("140 exacto y diastólica 90 exacta cuentan; 139/89 no", () => {
     const limite = [medicion("2026-11-18", 140, { valor_secundario: 70 }), medicion("2026-11-17", 120, { valor_secundario: 90 }), medicion("2026-11-16", 139, { valor_secundario: 89 })];

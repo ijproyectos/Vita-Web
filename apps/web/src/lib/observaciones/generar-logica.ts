@@ -7,8 +7,14 @@ import { RETENCION_DIAS_TRAS_VIGENCIA, TIPOS_CON_PUSH } from "./constantes";
 import { textoSeguro } from "./reglas";
 import type { ObservacionNueva, TipoObservacion } from "./tipos";
 
-/** Personas por lote (varias consultas por lote: se mantiene chico para entrar en el presupuesto del cron). */
-export const TAMANO_LOTE = 15;
+/**
+ * Personas por lote. Cada lote hace ~9 lecturas en paralelo (una por tabla) y 1-2 escrituras, estimadas en ~1 s en
+ * total (conservador). Con el presupuesto de 8 s, la reserva de 2,5 s para push y la guarda de 2,5 s antes de otro lote,
+ * entran ~2-3 lotes por tick: ~50-75 personas por tick y ~600-900 por ventana de 12 ticks (08:00-10:59 AR). Es el TECHO
+ * de este diseño: pasado eso hay que ensanchar la ventana del cron o subir `maxDuration` junto con el timeout de Netlify.
+ * Las lecturas paginan de a 1000 filas, así que un lote grande no pierde datos (solo tarda más).
+ */
+export const TAMANO_LOTE = 25;
 /** Presupuesto interno del cron (la función síncrona de Netlify corta a ~10 s). */
 export const PRESUPUESTO_CRON_MS = 8_000;
 /** Tiempo que se reserva al final de cada tick para los push. */
@@ -115,4 +121,35 @@ export function payloadObservacion(args: { titulo: string; cuerpo: string; perso
     url: args.href && args.href.startsWith("/app") ? args.href : "/app/observaciones",
     tag: `observacion-${args.personaId}`,
   };
+}
+
+/**
+ * Procesa `items` de una vez; si el lote falla, reintenta persona por persona y OMITE solo a la que falla (avisando
+ * con `alOmitir`), así una fila rara no frena al resto del día. El procesamiento tiene que ser idempotente (acá lo es:
+ * upsert por clave). Nunca lanza por un item.
+ */
+export async function procesarTolerante<T>(
+  items: T[],
+  procesar: (lote: T[]) => Promise<void>,
+  alOmitir: (item: T, error: unknown) => void
+): Promise<{ omitidos: number }> {
+  try {
+    await procesar(items);
+    return { omitidos: 0 };
+  } catch (errorLote) {
+    if (items.length <= 1) {
+      for (const it of items) alOmitir(it, errorLote);
+      return { omitidos: items.length };
+    }
+  }
+  let omitidos = 0;
+  for (const it of items) {
+    try {
+      await procesar([it]);
+    } catch (e) {
+      omitidos++;
+      alOmitir(it, e);
+    }
+  }
+  return { omitidos };
 }

@@ -8,6 +8,7 @@ import {
   elegirParaPush,
   payloadObservacion,
   planificarCambios,
+  procesarTolerante,
   textosDeAviso,
 } from "./generar-logica";
 import type { ObservacionNueva } from "./tipos";
@@ -103,5 +104,46 @@ describe("textos del aviso", () => {
     expect(payloadObservacion({ titulo: "a", cuerpo: "b", personaId: "p", href: "/app/pastillas" }).url).toBe("/app/pastillas");
     expect(payloadObservacion({ titulo: "a", cuerpo: "b", personaId: "p", href: "https://x.com" }).url).toBe("/app/observaciones");
     expect(payloadObservacion({ titulo: "a", cuerpo: "b", personaId: "p", href: null }).tag).toBe("observacion-p");
+  });
+});
+
+describe("procesarTolerante", () => {
+  it("si el lote entero anda no reintenta ni omite", async () => {
+    const llamadas: number[][] = [];
+    const r = await procesarTolerante([1, 2, 3], async (l) => void llamadas.push(l), () => {});
+    expect(r.omitidos).toBe(0);
+    expect(llamadas).toEqual([[1, 2, 3]]);
+  });
+  it("si el lote falla reintenta de a uno y omite solo al que falla", async () => {
+    const omitidos: number[] = [];
+    const hechos: number[] = [];
+    const r = await procesarTolerante(
+      [1, 2, 3],
+      async (l) => {
+        if (l.includes(2)) throw new Error("fila rara");
+        hechos.push(...l);
+      },
+      (it) => omitidos.push(it)
+    );
+    expect(r.omitidos).toBe(1);
+    expect(omitidos).toEqual([2]);
+    expect(hechos).toEqual([1, 3]);
+  });
+  it("un lote de uno que falla se omite sin reintentar", async () => {
+    let n = 0;
+    const r = await procesarTolerante(
+      [9],
+      async () => {
+        n++;
+        throw new Error("x");
+      },
+      () => {}
+    );
+    expect(r.omitidos).toBe(1);
+    expect(n).toBe(1);
+  });
+  it("si todos fallan omite a todos y no lanza", async () => {
+    const r = await procesarTolerante([1, 2], async () => { throw new Error("x"); }, () => {});
+    expect(r.omitidos).toBe(2);
   });
 });

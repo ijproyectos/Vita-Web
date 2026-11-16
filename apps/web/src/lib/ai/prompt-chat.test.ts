@@ -105,6 +105,8 @@ describe("prompt caching del chat", () => {
         "update_appointment",
         "delete_appointment",
         "add_measurement",
+        "remind_dose",
+        "get_health_profile",
       ]
     `);
   });

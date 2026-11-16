@@ -33,7 +33,8 @@ import { medidoAtDesdeModelo } from "./mapeo";
 import { drogaDeMarca } from "@/lib/medicamentos/catalogo";
 import { mismoRemedioConOtroNombre, normalizarNombreYDroga } from "@/lib/medicamentos/nombre";
 import { esForma } from "@/lib/medicamentos/forma";
-import { acotarLimite, adherenciaParaModelo, estudioParaModelo, medicionParaModelo, monitoreoParaModelo, stockParaModelo, turnoParaModelo } from "./lecturas";
+import { acotarLimite, adherenciaParaModelo, estudioParaModelo, medicionParaModelo, monitoreoParaModelo, perfilSaludParaModelo, stockParaModelo, turnoParaModelo } from "./lecturas";
+import { ejecutarRecordarToma } from "./recordar-toma";
 import { mensajeFaltaConfirmacion, opcionesConfirmarPara, resolverDestino } from "./destino";
 import { ejecutarResolverContradiccion, ejecutarToolMemoria, NOMBRE_TOOL_RESOLVER_CONTRADICCION, NOMBRES_TOOLS_MEMORIA } from "@/lib/memoria/herramientas";
 
@@ -208,6 +209,11 @@ export async function ejecutarTool(
       contenido: mensajeFaltaConfirmacion(destino.persona ?? "esa persona"),
       accionUI: opcionesConfirmarPara(destino.persona ?? "esa persona"),
     };
+  }
+
+  // Recordarle: sale hacia otra persona, así que llega acá solo con la confirmación del servidor ya hecha.
+  if (nombre === "remind_dose") {
+    return ejecutarRecordarToma(ctx.supabase, ctx.usuarioId, ctx.familia.find((f) => f.id === destino.destinoId), input);
   }
 
   let resultado: ResultadoTool;
@@ -436,6 +442,9 @@ async function ejecutarEnDestino(
         const dias = acotarLimite(input.days, 7, 1, 30);
         return adherenciaParaModelo(await medicamentos.calcularAdherencia(supabase, usuarioId, dias), dias);
       });
+
+    case "get_health_profile":
+      return leer("el perfil de salud", async () => perfilSaludParaModelo(await perfilNucleo.obtenerPerfil(supabase, usuarioId)));
 
     case "add_measurement": {
       // Solo las métricas que ofrece la app (sin pulso ni saturación).

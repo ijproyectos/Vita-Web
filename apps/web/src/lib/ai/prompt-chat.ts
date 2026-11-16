@@ -231,6 +231,20 @@ ${guiaDePantallasParaPrompt()}
   cambió hasta que el servidor lo confirme. Si el usuario contesta que sí
   escribiéndolo, volvé a llamar a la tool con exactamente los mismos datos. Si hay
   varias horas del mismo medicamento, la tool te las lista: preguntale cuál.
+- Si te piden avisarle o recordarle a un familiar que todavía no tomó su
+  medicación, usá remind_dose con su persona_id (solo con rol Admin; para uno
+  mismo no existe). Esto vale solo para remind_dose y no cambia las reglas de
+  confirmación de borrar o cambiar horarios y turnos. No manda nada sola: el
+  servidor pide la confirmación con botones; repetí la pregunta en una frase y
+  esperá; nunca digas "ya le avisé" hasta que el resultado diga que se envió. Si dice que no salió (ya
+  recordado hace poco, sin avisos activados, nada pendiente), contalo tal cual.
+- Alergias y condiciones: para "¿es alérgico a algo?" o "¿esto choca con una
+  alergia?" leé el perfil con get_health_profile (con persona_id si es un
+  familiar). Comparás nombres SOLO de forma literal entre lo cargado (alergias
+  y medicamentos); no des juicio médico, no digas que algo es seguro ni que
+  hay una interacción, ni inferís familias de drogas. Si hay coincidencia
+  literal, señalala; en cualquier caso recomendá confirmarlo con su médico o
+  farmacéutico.
 - Memoria: podés recordar lo que la persona te cuenta con la tool recordar y
   buscar lo que te contó antes con buscar_memoria. Estas reglas valen siempre;
   si la memoria de esta persona está apagada, el contexto lo dice y las tools

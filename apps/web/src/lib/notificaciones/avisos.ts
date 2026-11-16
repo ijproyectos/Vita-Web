@@ -205,11 +205,20 @@ export async function actualizarPreferencias(
   usuarioId: string,
   parche: Partial<Pick<PreferenciasAvisos, ClaveBooleana | "espera_cuidador_min" | "silencio_desde" | "silencio_hasta">>
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await supabase
-    .from("preferencias_avisos")
-    .upsert({ usuario_id: usuarioId, ...parche, updated_at: new Date().toISOString() }, { onConflict: "usuario_id" });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  const guardar = (cambios: typeof parche) =>
+    supabase.from("preferencias_avisos").upsert({ usuario_id: usuarioId, ...cambios, updated_at: new Date().toISOString() }, { onConflict: "usuario_id" });
+  const { error } = await guardar(parche);
+  if (!error) return { ok: true };
+  // Sin la migración 062 no existe la columna `observaciones`: como las demás preferencias nuevas, degrada sin error
+  // (el interruptor no se persiste hasta que se aplique) y guarda el resto del parche si lo hay.
+  if ("observaciones" in parche && (error.code === "42703" || error.code === "PGRST204")) {
+    const { observaciones: _omitida, ...resto } = parche;
+    void _omitida;
+    if (Object.keys(resto).length === 0) return { ok: true };
+    const reintento = await guardar(resto);
+    return reintento.error ? { ok: false, error: reintento.error.message } : { ok: true };
+  }
+  return { ok: false, error: error.message };
 }
 
 /**
