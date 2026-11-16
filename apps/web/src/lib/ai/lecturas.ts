@@ -10,6 +10,25 @@ import { ETIQUETA_CONTEXTO, formatearValor, metaDe, type Medicion } from "@/lib/
 import type { Monitoreo } from "@/lib/mediciones/plan";
 import type { Estudio } from "@/lib/estudios/tipos";
 import type { Turno } from "@/lib/turnos/tipos";
+import type { Perfil } from "@/lib/perfil/tipos";
+
+/**
+ * get_health_profile: alergias, condiciones y datos básicos relevantes para la seguridad de un medicamento.
+ * Sin contacto de emergencia, teléfono, obra social ni número de afiliado. Todo texto de la persona va por limpiarDato.
+ */
+export function perfilSaludParaModelo(p: Perfil | null) {
+  if (!p) return { error: "No hay perfil de salud cargado." };
+  const edad = p.edad_rango?.trim() ? limpiarDato(p.edad_rango, 40) : p.fecha_nacimiento ? `nacimiento ${p.fecha_nacimiento.slice(0, 4)}` : null;
+  return {
+    allergies: (p.alergias ?? []).map((a) => limpiarDato(a, 80)),
+    conditions: (p.condiciones ?? []).map((c) => ({ label: limpiarDato(c.label, 80), type: c.tipo, since: c.desde?.trim() ? limpiarDato(c.desde, 30) : null })),
+    age: edad,
+    gender: p.genero?.trim() ? limpiarDato(p.genero, 30) : null,
+    blood_type: p.grupo_sanguineo?.trim() ? limpiarDato(p.grupo_sanguineo, 10) : null,
+    weight_kg: p.peso_kg ?? null,
+    height_cm: p.altura_cm ?? null,
+  };
+}
 
 /** Número entero dentro de [min, max]; si no vino o no es válido, el por defecto. */
 export function acotarLimite(valor: unknown, porDefecto: number, min: number, max: number): number {
