@@ -66,7 +66,21 @@ describe("respuestaFija", () => {
 });
 
 describe("confirmacionAAgregar", () => {
-  it("sin texto previo agrega la fija", () => expect(confirmacionAAgregar("", "Listo, X.")).toBe("Listo, X."));
-  it("con texto previo que no confirma, la separa", () => expect(confirmacionAAgregar("Dale, lo cargo.", "Listo, X.")).toBe("\n\nListo, X."));
-  it("si el modelo ya confirmó, no repite", () => expect(confirmacionAAgregar("Listo, ya lo agendé.", "Listo, X.")).toBe(""));
+  const tools = [{ nombre: "add_medication", accion: med }];
+  const fija = "Listo, agendé Ibuprofeno 400 mg a las 8:00 y 20:00.";
+  it("sin texto previo agrega la fija", () => expect(confirmacionAAgregar("", fija, tools)).toBe(fija));
+  it("un preámbulo no suprime la confirmación con detalle", () => {
+    expect(confirmacionAAgregar("Listo, lo agendo.", fija, tools)).toBe(`\n\n${fija}`);
+    expect(confirmacionAAgregar("Dale, ya lo agendo", fija, tools)).toBe(`\n\n${fija}`);
+  });
+  it("si ya nombra medicamento y horas, no repite", () => {
+    expect(confirmacionAAgregar("Listo, agendé el ibuprofeno a las 8:00 y a las 20:00.", fija, tools)).toBe("");
+  });
+  it("nombra el medicamento pero no la hora: agrega", () => {
+    expect(confirmacionAAgregar("Listo, agendé el Ibuprofeno.", fija, tools)).toBe(`\n\n${fija}`);
+  });
+  it("recordatorio sin detalle propio: siempre agrega", () => {
+    const t = [{ nombre: "remind_dose", accion: { type: "reminder_sent", count: 1, persona: "Marco" } }];
+    expect(confirmacionAAgregar("Le aviso a Marco", "Listo, le mandé el aviso a Marco.", t)).toBe("\n\nListo, le mandé el aviso a Marco.");
+  });
 });

@@ -106,14 +106,51 @@ export function respuestaFija(tools: ToolEjecutada[]): string | null {
   return `Listo, ${listaY(clausulas)}.`;
 }
 
-const YA_CONFIRMA = /\b(list[oa]s?|agend[eé]|anot[eé]|marqu[eé]|guard[eé]|carg[uú]e|agreg[uú]e|mand[eé]|ya (?:est[aá]|qued[oó]))\b/i;
+const norm = (v: string): string =>
+  v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+/** Datos que el texto del modelo tiene que nombrar para que se considere que ya confirmó con detalle. */
+function detallesRequeridos(a: AccionTool): string[] | null {
+  switch (a.type) {
+    case "medication_added":
+      return [s(a.name), ...horas(a.time)];
+    case "appointment_added":
+      return [s(a.specialty), ...horas(a.time).slice(0, 1)];
+    case "measurement_added":
+      return [s(a.name), s(a.value, 30)];
+    case "medication_taken":
+      return [s(a.medication_name), ...horas(a.time).slice(0, 1)];
+    case "all_medications_taken":
+      return [String(a.count)];
+    default:
+      return null; // sin detalle propio: siempre se agrega la fija
+  }
+}
+
+function nombraHora(texto: string, hora: string): boolean {
+  const [h, m] = hora.split(":");
+  return new RegExp(`\\b${h}[:.]${m}\\b|\\b${h}\\s*(?:hs?|horas)\\b|\\ba las ${h}\\b`).test(texto);
+}
 
 /**
- * Qué agregar al texto que el modelo ya escribió en el mismo turno: la confirmación fija completa si no dijo
- * nada, nada si ya confirmó él.
+ * Qué agregar al texto que el modelo ya escribió en el mismo turno: la confirmación fija si no dijo nada, o si su
+ * texto es solo un preámbulo ("Listo, lo agendo"). Solo no se agrega si ya nombra los datos concretos de cada
+ * escritura (por ejemplo el medicamento Y la hora).
  */
-export function confirmacionAAgregar(textoPrevio: string, fija: string): string {
+export function confirmacionAAgregar(textoPrevio: string, fija: string, tools: ToolEjecutada[] = []): string {
   const previo = textoPrevio.trim();
   if (!previo) return fija;
-  return YA_CONFIRMA.test(previo) ? "" : `\n\n${fija}`;
+  const texto = norm(previo);
+  const escrituras = tools.filter((t) => t.accion && !TOOLS_NEUTRAS.has(t.nombre));
+  const cubierto =
+    escrituras.length > 0 &&
+    escrituras.every((t) => {
+      const req = detallesRequeridos(t.accion as AccionTool);
+      if (!req || req.length === 0) return false;
+      return req.every((d) => (/^\d{1,2}:\d{2}$/.test(d) ? nombraHora(texto, d) : d !== "" && texto.includes(norm(d))));
+    });
+  return cubierto ? "" : `\n\n${fija}`;
 }

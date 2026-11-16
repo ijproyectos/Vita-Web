@@ -215,7 +215,7 @@ export function CharlaSimple({
 
   // `reintento`: reenvío silencioso que pidió el servidor (corte sin respuesta): mismo mensaje exacto y mismo pedido,
   // se queda en "pensando" y solo ocurre una vez.
-  async function preguntar(texto: string, reintento?: { pedidoId: string; mensaje: string }) {
+  async function preguntar(texto: string, reintento?: { pedidoId: string; mensaje: string; previo: string }) {
     const prefijo = prefijoRef.current ? PREFIJO_ANIMO : "";
     const turno = nuevoTurno();
     setAviso(null);
@@ -237,7 +237,7 @@ export function CharlaSimple({
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const timeout = setTimeout(() => ctrl.abort(), TIMEOUT_PEDIDO_MS);
-    let acumulado = "";
+    let acumulado = reintento?.previo ?? ""; // en el reenvío, sigue el texto ya mostrado (p. ej. teléfonos de emergencia)
     let errorServidor: string | null = null;
     let llamarAyuda = false;
     let nombresAvisados: string[] = [];
@@ -285,8 +285,8 @@ export function CharlaSimple({
     }
     if (turno !== turnoRef.current) return;
     const pedidoAReintentar = reintentarPedido as string | null;
-    if (pedidoAReintentar && !reintento && !acumulado.trim() && !errorServidor) {
-      void preguntar(texto, { pedidoId: pedidoAReintentar, mensaje: prefijo + texto });
+    if (pedidoAReintentar && !reintento && !errorServidor) {
+      void preguntar(texto, { pedidoId: pedidoAReintentar, mensaje: prefijo + texto, previo: acumulado });
       return;
     }
 

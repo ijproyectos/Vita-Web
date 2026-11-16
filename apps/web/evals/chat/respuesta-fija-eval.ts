@@ -1,7 +1,7 @@
 // Espejo del atajo de producción (lib/ai/respuesta-fija.ts) para el eval: las tools NO se ejecutan, así que la tarjeta
 // que devolvería una escritura exitosa se arma desde el input del modelo. Producción solo usa el atajo cuando la tool
 // salió bien sobre la cuenta propia (una escritura a otra persona pide confirmación del servidor y sigue al modelo).
-import { respuestaFija, type AccionTool, type ToolEjecutada } from "@/lib/ai/respuesta-fija";
+import { confirmacionAAgregar, respuestaFija, type AccionTool, type ToolEjecutada } from "@/lib/ai/respuesta-fija";
 
 type Llamada = { nombre: string; input: Record<string, unknown> };
 
@@ -33,15 +33,16 @@ function accionSintetica(l: Llamada): AccionTool | undefined {
 }
 
 /**
- * Texto que producción diría SIN segunda llamada al modelo para este turno de tools, o null si seguiría el modelo.
+ * Texto a AGREGAR (puede ser "") que producción diría SIN segunda llamada al modelo para este turno de tools, o null si seguiría el modelo.
  * `enlatados`: resultados de tool del caso; uno distinto de "OK." (confirmación pendiente, error, no tiene avisos...) indica
  * que la tool no escribió y por lo tanto no se usa el atajo.
  */
-export function respuestaFijaDeEval(llamadas: Llamada[], enlatados: Record<string, string> = {}): string | null {
+export function respuestaFijaDeEval(llamadas: Llamada[], enlatados: Record<string, string> = {}, textoPrevio = ""): string | null {
   if (llamadas.length === 0) return null;
   const tools: ToolEjecutada[] = llamadas.map((l) => ({
     nombre: l.nombre,
     accion: l.nombre === "set_avatar_mood" || (enlatados[l.nombre] ?? "OK.") === "OK." ? accionSintetica(l) : undefined,
   }));
-  return respuestaFija(tools);
+  const fija = respuestaFija(tools);
+  return fija === null ? null : confirmacionAAgregar(textoPrevio, fija, tools);
 }
