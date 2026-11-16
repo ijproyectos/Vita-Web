@@ -75,6 +75,13 @@ import { createClient } from "@supabase/supabase-js";
  * `lib/admin/acceso.ts` también consulta `admin_es_administrador` con este cliente, pero solo DESPUÉS de `getUser()` y para
  * quien no es dueño. Todo recibe el `Admin` de `requireAdmin()` como prueba previa y queda en `admin_acciones`.
  *
+ * Observaciones de vita, etapa 1 (`lib/observaciones/generar.ts`, invocado solo desde `/api/cron/observaciones`, autenticado por
+ * `x-cron-secret`; migración 062): recorre a TODAS las personas por lotes con un cursor, lee sus medicamentos, tomas, mediciones,
+ * estudios y turnos, evalúa reglas puras (sin IA) y escribe en `observaciones`, que no tiene policy de insert (solo service_role).
+ * Además manda como máximo 1 push por persona y por día (claim-before-send en `envios_avisos`) a la persona y a sus cuidadores con
+ * rol Admin, respetando el interruptor "Observaciones de vita" y el silencio nocturno de cada uno. Cada observación se escribe
+ * siempre sobre el `usuario_id` de la persona leída; nunca devuelve texto de observaciones ni datos de salud, solo conteos.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,

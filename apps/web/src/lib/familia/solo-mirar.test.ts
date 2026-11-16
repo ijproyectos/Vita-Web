@@ -109,6 +109,11 @@ describe("rutaPermitidaSoloMirar", () => {
     expect(rutaPermitidaSoloMirar("/app/vita-plus-x")).toBe(false);
     expect(rutaPermitidaSoloMirar("/application")).toBe(false);
   });
+
+  it("deja abrir lo que vita notó (observaciones) y nada parecido", () => {
+    expect(rutaPermitidaSoloMirar("/app/observaciones")).toBe(true);
+    expect(rutaPermitidaSoloMirar("/app/observaciones-x")).toBe(false);
+  });
 });
 
 describe("contenidoDeRespaldo", () => {

@@ -15,6 +15,9 @@ import { cn } from "@/lib/utils";
 import { VitaIcon } from "@/lib/vita-icons";
 import { EncabezadoPerfil } from "@/components/vita/encabezado-perfil";
 import { TarjetasPedidoAyuda } from "@/components/vita/tarjeta-pedido-ayuda";
+import { TarjetaObservaciones } from "@/components/vita/observaciones-ui";
+import { aItemsObservacion } from "@/lib/observaciones/items";
+import { listarObservaciones } from "@/lib/observaciones/nucleo";
 import { listarPedidosAyudaPendientes } from "@/lib/notificaciones/avisos";
 import { InstalarVita } from "@/components/vita/instalar-vita";
 import { TarjetaAvisosApagados } from "@/components/vita/tarjeta-avisos-apagados";
@@ -52,12 +55,14 @@ export async function InicioSoloMirar({
     listarCuidadoresDe(supabase, pid).catch(() => null),
     listarFamilia(supabase).catch(() => null),
     listarPedidosAyudaPendientes(supabase, usuario.id),
+    // Nunca lanza: sin la migración 062 (o ante un error) queda vacío y la tarjeta no se muestra.
+    listarObservaciones(supabase, pid),
   ]).catch((error: unknown) => {
     console.error("inicio solo mirar: falló una lectura", error);
     return null;
   });
   if (!lecturas) return <RespaldoSoloMirar key={pid} fallo />;
-  const [perfil, miPerfil, medsHoy, deAyer, turnos, cuidadores, familia, pedidosAyuda] = lecturas;
+  const [perfil, miPerfil, medsHoy, deAyer, turnos, cuidadores, familia, pedidosAyuda, observaciones] = lecturas;
   // "No la tomé" (057): se muestra aparte, nunca como sin confirmar. Nunca lanza.
   const omitidasHoy = await medicamentos.idsOmitidas(supabase, medsHoy.map((m) => m.id), medicamentos.fechaEnAR());
 
@@ -116,6 +121,8 @@ export async function InicioSoloMirar({
         <TarjetasPedidoAyuda pedidos={pedidosAyuda} />
 
         <TarjetaAvisosApagados />
+
+        <TarjetaObservaciones items={aItemsObservacion(observaciones)} puedeDescartar={false} />
 
         <Link href="/app/resumen-salud" className="flex items-center justify-between gap-3 rounded-[20px] bg-card p-[18px] shadow-card">
           <div className="flex min-w-0 items-center gap-3">

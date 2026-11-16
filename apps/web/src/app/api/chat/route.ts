@@ -28,7 +28,8 @@ import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicion
 import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { leerPersona, personaSinAvatar } from "@/lib/ai/persona-jarvis";
 import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
-import { SYSTEM_PROMPT, armarSystemChat, bloqueCumpleanos, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
+import { SYSTEM_PROMPT, armarSystemChat, bloqueCumpleanos, bloqueHoy, bloqueObservaciones, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
+import { listarObservaciones } from "@/lib/observaciones/nucleo";
 import {
   ejecutarToolIdempotente,
   normalizarPedidoId,
@@ -140,6 +141,20 @@ async function construirContextoCumple(
       propio: p.id === usuarioId,
     }));
     return bloqueCumpleanos(cumplen);
+  } catch {
+    return "";
+  }
+}
+
+// Observaciones de vita (migración 062) de la persona que el chat tiene abierta, al bloque DINÁMICO. Con RLS (un
+// cuidador lee las de quien cuida); sin la migración o ante un error se omite. Nunca en modo simple.
+async function construirContextoObservaciones(
+  supabase: Awaited<ReturnType<typeof createClientConDispositivo>>,
+  personaId: string,
+  nombreAbierto: string | null
+): Promise<string> {
+  try {
+    return bloqueObservaciones(await listarObservaciones(supabase, personaId, 10), nombreAbierto);
   } catch {
     return "";
   }
@@ -462,10 +477,11 @@ export async function POST(request: Request) {
         );
         const purgaP = respuestaUsuario === "no" ? purgarPendientes(supabase, user.id) : Promise.resolve();
 
-        const [mensajesGuardados, contextoHoy, contextoCumple, memoriaBruta] = await Promise.all([
+        const [mensajesGuardados, contextoHoy, contextoCumple, contextoObservaciones, memoriaBruta] = await Promise.all([
           colaTempranaP ?? chat.listarCola(supabase, user.id, MAX_MENSAJES_HISTORIAL),
           hoyTempranoP ?? construirContextoHoy(supabase, user.id),
           construirContextoCumple(supabase, user.id, familia),
+          modoSimple ? Promise.resolve("") : construirContextoObservaciones(supabase, abierto?.id ?? user.id, abierto ? abierto.nombre : null),
           modoSimple ? Promise.resolve(null) : (memoriaTempranaP ?? leerMemoriaBruta(supabase, user.id, modoSimple)),
           purgaP,
         ]);
@@ -524,6 +540,7 @@ export async function POST(request: Request) {
           contextoPerfil,
           contextoHoy,
           contextoCumple,
+          contextoObservaciones,
           contextoMemoria: textoMemoria,
           ahora: descripcionAhoraEnAR(),
           hoyISO: fechaDeHoyISO(),
