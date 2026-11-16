@@ -107,6 +107,8 @@ export type HistorialExportado = {
   resumen_de_charlas_con_vita: ResumenExportado | null;
   /** Tus 👍/👎 a las respuestas de vita (sin el texto de la respuesta). Vacío sin la migración 060. */
   valoraciones_de_respuestas: { valor: 1 | -1; motivo: string | null; respuesta_del: string }[];
+  /** Lo que vita notó en tus datos (observaciones por reglas, sin IA). Vacío sin la migración 062. */
+  observaciones_de_vita: { tipo: string; severidad: string; titulo: string; texto: string; creada_at: string; vigente_hasta: string; descartada: boolean }[];
 };
 
 type Pagina = PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
@@ -333,6 +335,32 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
     valoraciones = [];
   }
 
+  // Observaciones de vita (062): sin la migración o ante cualquier falla de lectura no se exporta nada.
+  let observaciones: HistorialExportado["observaciones_de_vita"] = [];
+  try {
+    const filas = await leerTodas<{ tipo: string; severidad: string; titulo: string; texto: string; creada_at: string; vigente_hasta: string; descartada_at: string | null }>(
+      "tus observaciones",
+      (d, h) =>
+        supabase
+          .from("observaciones")
+          .select("tipo, severidad, titulo, texto, creada_at, vigente_hasta, descartada_at")
+          .eq("usuario_id", usuarioId)
+          .order("creada_at", { ascending: true })
+          .range(d, h)
+    );
+    observaciones = filas.map((f) => ({
+      tipo: f.tipo,
+      severidad: f.severidad,
+      titulo: f.titulo,
+      texto: f.texto,
+      creada_at: f.creada_at,
+      vigente_hasta: f.vigente_hasta,
+      descartada: f.descartada_at !== null,
+    }));
+  } catch {
+    observaciones = [];
+  }
+
   const nombrePorMedicamento = new Map(medicamentos.map((m) => [m.id, m.nombre]));
 
   const mensajesPorSesion = new Map<string, MensajeChat[]>();
@@ -427,5 +455,6 @@ export async function obtenerHistorial(supabase: Cliente, usuarioId: string): Pr
     recuerdos_de_vita: recuerdos,
     resumen_de_charlas_con_vita: resumenCharlas,
     valoraciones_de_respuestas: valoraciones,
+    observaciones_de_vita: observaciones,
   };
 }

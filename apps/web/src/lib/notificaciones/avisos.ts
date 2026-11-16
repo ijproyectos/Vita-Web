@@ -115,6 +115,8 @@ type FilaPreferencias = {
   resumen_dia?: boolean;
   stock_persona?: boolean;
   turnos_persona?: boolean;
+  // Migración 062: ausente si todavía no está aplicada.
+  observaciones?: boolean;
 };
 
 function desdeFila(f: FilaPreferencias): PreferenciasAvisos {
@@ -129,12 +131,15 @@ function desdeFila(f: FilaPreferencias): PreferenciasAvisos {
     resumen_dia: f.resumen_dia ?? PREFERENCIAS_POR_DEFECTO.resumen_dia,
     stock_persona: f.stock_persona ?? PREFERENCIAS_POR_DEFECTO.stock_persona,
     turnos_persona: f.turnos_persona ?? PREFERENCIAS_POR_DEFECTO.turnos_persona,
+    observaciones: f.observaciones ?? PREFERENCIAS_POR_DEFECTO.observaciones,
   };
 }
 
 const COLUMNAS_PREFS_BASE =
   "usuario_id, silencio_desde, silencio_hasta, espera_cuidador_min, recordatorio_dosis, aviso_turnos, stock_bajo";
 const COLUMNAS_PREFS = `${COLUMNAS_PREFS_BASE}, pendiente_persona, resumen_dia, stock_persona, turnos_persona`;
+// Con la migración 062 (interruptor "Observaciones de vita"). Sin ella se cae a las columnas de la 028 y la 020.
+const COLUMNAS_PREFS_062 = `${COLUMNAS_PREFS}, observaciones`;
 
 /**
  * Preferencias + si las columnas de familia (migración 028) existen. Sin fila
@@ -144,6 +149,13 @@ export async function obtenerPreferenciasConEstado(
   supabase: Cliente,
   usuarioId: string
 ): Promise<{ prefs: PreferenciasAvisos; familiaDisponible: boolean }> {
+  const conObservaciones = await supabase.from("preferencias_avisos").select(COLUMNAS_PREFS_062).eq("usuario_id", usuarioId).maybeSingle();
+  if (!conObservaciones.error) {
+    return {
+      prefs: conObservaciones.data ? desdeFila(conObservaciones.data as unknown as FilaPreferencias) : { ...PREFERENCIAS_POR_DEFECTO },
+      familiaDisponible: true,
+    };
+  }
   const completa = await supabase.from("preferencias_avisos").select(COLUMNAS_PREFS).eq("usuario_id", usuarioId).maybeSingle();
   if (!completa.error) {
     return {
@@ -169,7 +181,8 @@ export async function obtenerPreferenciasDe(
   const mapa = new Map<string, PreferenciasAvisos>();
   if (usuarioIds.length === 0) return mapa;
   let filas: unknown[] | null = null;
-  const completa = await admin.from("preferencias_avisos").select(COLUMNAS_PREFS).in("usuario_id", usuarioIds);
+  const conObservaciones = await admin.from("preferencias_avisos").select(COLUMNAS_PREFS_062).in("usuario_id", usuarioIds);
+  const completa = conObservaciones.error ? await admin.from("preferencias_avisos").select(COLUMNAS_PREFS).in("usuario_id", usuarioIds) : conObservaciones;
   if (!completa.error) filas = completa.data;
   else {
     // Sin la 028: columnas de la 020.

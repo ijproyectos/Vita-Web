@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fechaEnAR } from "@/lib/medicamentos/nucleo";
 import { borrarRecuerdosHasta, invalidarResumen } from "@/lib/memoria/privacidad";
+import { borrarObservacionesDe } from "@/lib/observaciones/nucleo";
 import type { CantidadesBorradas, RangoBorrado } from "./tipos";
 
 type Cliente = SupabaseClient;
@@ -42,6 +43,10 @@ export async function borrarHistorial(supabase: Cliente, usuarioId: string, rang
 
   const mediciones = await supabase.from("mediciones").delete().eq("usuario_id", usuarioId).lt("medido_at", corteTs).select("id");
   if (mediciones.error && !ES_RELACION_INEXISTENTE(mediciones.error)) throw new Error("No se pudieron borrar las mediciones.");
+
+  // Lo que vita notó (062) sale de mediciones, tomas y estudios: con "Todo" se borra también (se vuelve a generar solo con
+  // datos nuevos). Con 6 meses / 1 año lo que hay es de los últimos días y sigue siendo cierto, así que se conserva.
+  if (rango === "all") await borrarObservacionesDe(supabase, usuarioId);
 
   // Estudios: por su fecha (si la tiene) o por la de carga.
   const { data: estudios, error: errEstudios } = await supabase

@@ -67,6 +67,7 @@ const ESTILO_POR_TIPO: Record<string, Estilo> = {
   cumpleanos: { icon: "sparkle", clases: OK.clases },
   cumpleanos_persona: { icon: "sparkle", clases: OK.clases },
   admin_mensaje: { icon: "sparkle", clases: OK.clases },
+  observacion: { icon: "sparkle", clases: ALERTA.clases },
 };
 
 function estiloDe(item: ItemAviso): Estilo {

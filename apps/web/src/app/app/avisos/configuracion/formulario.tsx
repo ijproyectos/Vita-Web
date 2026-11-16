@@ -23,6 +23,7 @@ const FILAS_PROPIAS: { clave: ClaveBooleana; label: string; sub: string }[] = [
   { clave: "recordatorio_dosis", label: "Tus medicamentos", sub: "A horario, con botones para confirmar." },
   { clave: "aviso_turnos", label: "Tus turnos", sub: "El día anterior y 2 horas antes." },
   { clave: "stock_bajo", label: "Remedio por terminarse", sub: "Cuando te queda poco de un remedio." },
+  { clave: "observaciones", label: "Observaciones de vita", sub: "Cuando vita nota algo en tus datos, o en los de quien cuidás." },
 ];
 
 type PersonaCfg = { id: string; nombre: string; relacion: string | null };

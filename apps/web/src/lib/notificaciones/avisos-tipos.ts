@@ -33,6 +33,8 @@ export type TipoAviso =
   | "turno_acompanado_dia_antes"
   // SOS explícito de la persona cuidada (modo simple): no depende de ninguna preferencia.
   | "pedido_ayuda"
+  // Algo que vita notó en los datos de la persona (observaciones por reglas, migración 062).
+  | "observacion"
   // Mensaje enviado a mano por un administrador de vita desde el panel (/adminvita).
   | "admin_mensaje";
 
@@ -73,6 +75,8 @@ export type PreferenciasAvisos = {
   stock_persona: boolean;
   /** Turno de la persona mañana. */
   turnos_persona: boolean;
+  /** "Observaciones de vita" (migración 062): lo que vita nota en los datos, por push. Default prendido. */
+  observaciones: boolean;
 };
 
 /** Sin fila en `preferencias_avisos`: todo activado, sin silencio, 30 min. */
@@ -87,6 +91,7 @@ export const PREFERENCIAS_POR_DEFECTO: PreferenciasAvisos = {
   resumen_dia: true,
   stock_persona: true,
   turnos_persona: false,
+  observaciones: true,
 };
 
 /** Claves booleanas que se pueden cambiar de a una (toggles instantáneos). */
@@ -98,6 +103,7 @@ export const CLAVES_BOOLEANAS = [
   "resumen_dia",
   "stock_persona",
   "turnos_persona",
+  "observaciones",
 ] as const;
 export type ClaveBooleana = (typeof CLAVES_BOOLEANAS)[number];
 
