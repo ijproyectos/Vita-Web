@@ -39,6 +39,7 @@ import {
   UUID_RE,
   clasificarRespuesta,
 } from "@/lib/chat/pedidos";
+import { confirmacionAAgregar, respuestaFija, type ToolEjecutada } from "@/lib/ai/respuesta-fija";
 import { detectarEmergencia, textoEmergencia } from "@/lib/ai/emergencia";
 import * as chat from "@/lib/chat/nucleo";
 import { cargarMemoriasParaContexto, estadoMemoria, listarContradicciones, marcarContradiccionesPreguntadas } from "@/lib/memoria/nucleo";
@@ -197,6 +198,8 @@ export async function POST(request: Request) {
     mensaje?: unknown;
     pedidoId?: string;
     reintento?: boolean;
+    // El cliente reenvía solo, una vez, el pedido que el servidor pidió reintentar en silencio (`{reintentar}`).
+    reintentoAuto?: boolean;
     perfilActivoId?: string;
     confirmacionId?: unknown;
     modo?: unknown;
@@ -313,6 +316,7 @@ export async function POST(request: Request) {
       const temporizadorCorte = setTimeout(() => controlador.abort(), msHastaElCorte(inicioMs, performance.now()));
       let cortePorTiempo = false;
       let fallaPorTiempo = false;
+      let reintentarEnSilencio = false; // corte sin texto ni escrituras: el cliente reenvía el mismo pedido una vez
       let escriturasHechas = 0; // tarjetas de escritura ya emitidas: lo hecho no se pierde si se corta
       let quedaParaConfirmar = false; // ya salió una tarjeta "¿Confirmás?": un corte no la deja sin explicación
 
@@ -600,11 +604,13 @@ export async function POST(request: Request) {
           const soloSinDatos = usosDeTool.every((u) => TOOLS_SIN_DATOS.has(u.name));
 
           const resultadosTool: Anthropic.ToolResultBlockParam[] = [];
+          const ejecutadas: ToolEjecutada[] = [];
           for (const uso of usosDeTool) {
             // Una tool fuera de la lista activa se rechaza aunque el modelo la nombre.
             const bloqueada = resultadoToolBloqueada(modo, uso);
             if (bloqueada) {
               resultadosTool.push(bloqueada);
+              ejecutadas.push({ nombre: uso.name });
               continue;
             }
             const resultado = await ejecutarToolIdempotente(
@@ -623,6 +629,7 @@ export async function POST(request: Request) {
                 mensajeOrigenId,
               }
             );
+            ejecutadas.push({ nombre: uso.name, accion: resultado.accionUI });
             if (resultado.accionUI) {
               enviar({ action: resultado.accionUI });
               tarjetasDelTurno.push(resultado.accionUI);
@@ -635,6 +642,20 @@ export async function POST(request: Request) {
               tool_use_id: uso.id,
               content: resultado.contenido,
             });
+          }
+
+          // Solo escrituras que salieron bien: la confirmación se arma desde sus resultados y no hace falta
+          // otra vuelta del modelo (2-4 s). Con cualquier falla, confirmación pendiente o lectura, sigue el modelo.
+          const fija = respuestaFija(ejecutadas);
+          if (fija) {
+            const textoDelTurno = mensajeFinal.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+            const extra = confirmacionAAgregar(textoDelTurno, fija);
+            if (extra) {
+              textoAcumulado += extra;
+              enviar({ chunk: extra });
+            }
+            if (!ejecutadas.some((t) => t.nombre === "set_avatar_mood")) enviar({ action: { type: "avatar_mood", mood: "happy" } });
+            break;
           }
 
           // Ya respondió en texto y solo pidió efectos de UI: otra llamada al
@@ -650,7 +671,15 @@ export async function POST(request: Request) {
           medicion.resultado = "error";
           medicion.errorCodigo = "tiempo";
           if (!textoAcumulado && escriturasHechas === 0 && !quedaParaConfirmar) {
-            fallaPorTiempo = true;
+            // Sin nada dicho, hecho ni mostrado, y si este pedido no es ya el reintento automático: el servidor
+            // no guarda ningún error y le pide al cliente que reenvíe el mismo pedido una vez (el mensaje ya
+            // quedó guardado: el reintento no lo duplica ni cuenta otra interacción).
+            if (cuerpo.reintentoAuto !== true && tarjetasDelTurno.length === 0) {
+              reintentarEnSilencio = true;
+              medicion.errorCodigo = "tiempo_reintentado";
+            } else {
+              fallaPorTiempo = true;
+            }
           } else {
             const nota = `${textoAcumulado ? "\n\n" : ""}${textoCortePorTiempo(escriturasHechas, quedaParaConfirmar)}`;
             textoAcumulado += nota;
@@ -677,6 +706,7 @@ export async function POST(request: Request) {
           cacheWriteTokens: tokensCacheEscrituraAcumulados,
         });
         if (usoNuevo) enviarUso(usoNuevo);
+        if (reintentarEnSilencio) enviar({ reintentar: true, pedidoId });
         if (fallaPorTiempo) enviar({ error: "Se me hizo largo y no pude responderte. Probá de nuevo." });
         enviarFin();
       } catch (e) {
