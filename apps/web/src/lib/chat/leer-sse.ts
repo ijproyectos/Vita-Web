@@ -9,6 +9,7 @@ export type EventoChat =
   | { tipo: "accion"; accion: AccionChat }
   | { tipo: "sesion"; id: string }
   | { tipo: "uso" }
+  | { tipo: "reintentar"; pedidoId: string }
   | { tipo: "error"; mensaje: string }
   | { tipo: "fin" };
 
@@ -35,6 +36,7 @@ export function parsearBloqueSSE(bloque: string): EventoChat | null {
   const d = dato as Record<string, unknown>;
   if (typeof d.chunk === "string") return { tipo: "chunk", texto: d.chunk };
   if (typeof d.session === "string") return { tipo: "sesion", id: d.session };
+  if (d.reintentar === true && typeof d.pedidoId === "string") return { tipo: "reintentar", pedidoId: d.pedidoId };
   if (typeof d.error === "string") return { tipo: "error", mensaje: d.error };
   if (d.uso && typeof d.uso === "object") return { tipo: "uso" };
   if (d.action && typeof d.action === "object" && typeof (d.action as AccionChat).type === "string") {
