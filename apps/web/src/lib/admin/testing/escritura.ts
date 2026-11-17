@@ -163,8 +163,9 @@ export async function actualizarBug(admin: Admin, id: number, estadoCrudo: unkno
     const antes = data as Bug | null;
     if (!antes) return sinPermiso("Ese bug ya no existe.");
     if (!puedePasarBug(antes.estado, estado)) return sinPermiso(`Un bug ${antes.estado.toLowerCase()} no puede pasar a ${estado.toLowerCase()} directamente.`);
-    const { data: nuevo, error } = await cliente.from("track_bugs").update({ ...v.datos, estado }).eq("id", id).select("*").single();
-    if (error || !nuevo) return { ok: false, mensaje: error?.code === "23503" ? "Ese caso ya no existe." : FALLO };
+    const { data: nuevo, error } = await cliente.from("track_bugs").update({ ...v.datos, estado }).eq("id", id).eq("estado", antes.estado).select("*").maybeSingle();
+    if (error) return { ok: false, mensaje: error.code === "23503" ? "Ese caso ya no existe." : FALLO };
+    if (!nuevo) return sinPermiso("Alguien más cambió este bug. Recargá y probá de nuevo.");
     const cambios = cambiosDeBug(antes, nuevo as Bug);
     if (cambios.length > 0) {
       await cliente.from("track_bug_eventos").insert(
@@ -215,7 +216,7 @@ export async function crearRonda(admin: Admin, crudo: Record<string, unknown>): 
     const { data, error } = await (await db()).from("track_rondas").insert({ ...v.datos, creada_por: admin.email }).select("id").single();
     if (error || !data) return { ok: false, mensaje: FALLO };
     const id = (data as { id: number }).id;
-    await registrarAccionAdmin(admin.email, "track_ronda_creada", String(id), { version_app: v.datos.version_app });
+    await registrarAccionAdmin(admin.email, "track_ronda_creada", String(id), {});
     return { ok: true, mensaje: "Ronda creada.", rondaId: id };
   } catch {
     return { ok: false, mensaje: FALLO };
@@ -377,18 +378,31 @@ export async function registrarAdjunto(
   if (!a.ok) return a;
   try {
     const cliente = await db();
-    const { data: existe } = await cliente.storage.from(BUCKET_ADJUNTOS).exists(e.ruta);
-    if (!existe) return sinPermiso("El archivo no llegó. Probá de nuevo.");
+    const bucket = cliente.storage.from(BUCKET_ADJUNTOS);
+    const { count: yaRegistrado } = await cliente.from("track_adjuntos").select("id", { count: "exact", head: true }).eq("ruta", e.ruta);
+    if ((yaRegistrado ?? 0) > 0) return sinPermiso("Ese archivo ya está registrado.");
+    const { data: info } = await bucket.info(e.ruta);
+    if (!info) return sinPermiso("El archivo no llegó. Probá de nuevo.");
+    // Tamaño y tipo salen del objeto guardado, no de lo que dice el cliente (si el SDK no los trae, valen los validados).
+    const real = validarAdjunto(info.contentType ?? a.datos.mime, info.size ?? a.datos.bytes);
+    if (!real.ok) {
+      await bucket.remove([e.ruta]);
+      return real;
+    }
     const { error } = await cliente.from("track_adjuntos").insert({
       [COLUMNA[e.padre.tipo]]: e.padre.id,
       ruta: e.ruta,
       nombre: texto(e.nombre, 255) || "archivo",
-      mime: a.datos.mime,
-      tamano_bytes: a.datos.bytes,
+      mime: real.datos.mime,
+      tamano_bytes: real.datos.bytes,
       subido_por: admin.email,
     });
     if (error) {
-      await cliente.storage.from(BUCKET_ADJUNTOS).remove([e.ruta]);
+      // Nunca se borra el archivo si otra ficha ya lo usa (unicidad o carrera): solo si ninguna fila tiene esa ruta.
+      if (error.code !== "23505") {
+        const { count } = await cliente.from("track_adjuntos").select("id", { count: "exact", head: true }).eq("ruta", e.ruta);
+        if (count === 0) await bucket.remove([e.ruta]);
+      }
       return { ok: false, mensaje: FALLO };
     }
     return { ok: true, mensaje: "Adjunto subido." };
