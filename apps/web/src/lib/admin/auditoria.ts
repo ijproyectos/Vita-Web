@@ -16,7 +16,11 @@ export type AccionAdmin =
   | "cuenta_reactivada"
   | "limite_interacciones_definido"
   | "envio_masivo_creado"
-  | "envio_masivo_cancelado";
+  | "envio_masivo_cancelado"
+  | "track_bug_creado"
+  | "track_bug_cerrado"
+  | "track_ronda_creada"
+  | "track_ronda_cerrada";
 
 /** Best-effort: una auditoría que falla no tumba la acción (se loguea sin datos). */
 export async function registrarAccionAdmin(
