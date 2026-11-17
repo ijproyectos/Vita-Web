@@ -82,6 +82,13 @@ import { createClient } from "@supabase/supabase-js";
  * rol Admin, respetando el interruptor "Observaciones de vita" y el silencio nocturno de cada uno. Cada observación se escribe
  * siempre sobre el `usuario_id` de la persona leída; nunca devuelve texto de observaciones ni datos de salud, solo conteos.
  *
+ * Testing de vita track en el panel (`lib/admin/testing/{datos,escritura}.ts`, páginas y Server Actions de `/adminvita/testing`;
+ * migración 063, decisión del dueño 2026-11-16): lectura y escritura de las tablas `track_*` (casos, rondas, asignaciones, pruebas,
+ * bugs, historial, reportes, adjuntos; RLS sin policies y sin permisos para anon/authenticated, porque los pacientes también son
+ * `authenticated`) y del bucket privado `track-adjuntos` (URLs firmadas de subida y de lectura). El cliente se crea RECIÉN después
+ * de que `requireAdmin()` validó la sesión y el segundo factor; solo guarda texto que escriben los administradores (nunca datos de
+ * usuarios de vita) y la auditoría de `admin_acciones` no lleva textos libres.
+ *
  * Escritores de contabilidad de SISTEMA (tablas con RLS sin policies, a propósito, para que ni el
  * dueño las lea ni las reescriba): `registrarUsoIA` (`uso_ia_diario`), `registrarRespuestaChat`
  * (`lib/chat/registros.ts`, `registros_chat`: una fila por respuesta de vita con latencia, tokens,
