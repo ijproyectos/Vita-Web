@@ -12,3 +12,6 @@ android/.idea/
 *.jks
 *.keystore
 keystore.properties
+
+# Firebase client config (project ids and API key): keep out of git, copy it in per machine
+android/app/google-services.json
