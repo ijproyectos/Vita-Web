@@ -5,7 +5,8 @@
   "description": "Capacitor shell (Android/iOS) that loads the vita web app",
   "dependencies": {
     "@capacitor/android": "^8.6.2",
-    "@capacitor/core": "^8.6.2"
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/push-notifications": "^8.1.3"
   },
   "devDependencies": {
     "@capacitor/assets": "^4.0.0",

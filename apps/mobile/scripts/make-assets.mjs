@@ -38,4 +38,16 @@ await png("icon-only.png", svg(1024, `<rect width="1024" height="1024" fill="${T
 await png("splash.png", svg(2732, `<rect width="2732" height="2732" fill="${CREAM}"/>${centered(2732, 0.9)}`));
 await png("splash-dark.png", svg(2732, `<rect width="2732" height="2732" fill="#0f1923"/>${centered(2732, 0.9)}`));
 
+// Status-bar notification icon: Android renders it as a white silhouette on a
+// transparent background, so only the "V" is drawn (no dots, no background).
+const vOnly = glyph.split("\n").find((line) => line.includes("<path")) ?? "";
+const statusIcon = (size) =>
+  svg(size, `<g transform="translate(${size / 2} ${size / 2}) scale(${(size * 0.8) / 605}) translate(-624.5 -642)">${vOnly}</g>`);
+const resRoot = fileURLToPath(new URL("../android/app/src/main/res/", import.meta.url));
+for (const [density, size] of [["mdpi", 24], ["hdpi", 36], ["xhdpi", 48], ["xxhdpi", 72], ["xxxhdpi", 96]]) {
+  const dir = `${resRoot}drawable-${density}/`;
+  mkdirSync(dir, { recursive: true });
+  await sharp(statusIcon(size)).png().toFile(`${dir}ic_stat_vita.png`);
+}
+
 console.log("assets written to", out);
