@@ -362,6 +362,21 @@ Una fila por navegador/dispositivo suscripto a Web Push. Ver `017_push_notificac
 
 **RLS**: owner-only (`select`/`insert`/`update`/`delete` con `usuario_id = auth.uid()`). El upsert por `endpoint` pasa por la RPC `registrar_push_suscripcion(...)` (`security definer`, siempre `auth.uid()`) porque un navegador compartido puede cambiar de cuenta y la fila vieja es de otro usuario. Enviar a OTRO usuario requiere `service_role` (cron, y `recordarDosisAlElder` después de validar el vínculo).
 
+## `push_tokens_nativos`
+
+Una fila por token de FCM (app Android de Capacitor). Migración `065_push_tokens_nativos.sql` (escrita, **NO aplicada**). Es el canal nativo de `enviarPush`, al lado de `push_suscripciones`.
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| usuario_id | uuid | references auth.users, on delete cascade; índice |
+| token | text | único |
+| plataforma | text | check `android` / `ios` |
+| app_version | text | |
+| created_at, last_used_at | timestamptz | |
+
+**RLS**: owner-only (`select`/`insert`/`update`/`delete` con `usuario_id = auth.uid()`). El upsert por `token` pasa por la RPC `registrar_push_token_nativo(p_token, p_plataforma, p_app_version)` (`security definer`, siempre `auth.uid()`, `grant` solo a `authenticated`) porque un celular compartido puede cambiar de cuenta. Enviar a OTRO usuario requiere `service_role`, igual que `push_suscripciones`. Tests: `supabase/tests/push-nativo.sql`.
+
 ## `recordatorios_dosis`
 
 "Recordarle" del cuidador al elder por una dosis pendiente. Sirve de rate-limit (1 por dosis cada 15 min) y de fuente del aviso dentro de la app. Ver `017_push_notificaciones.sql`.

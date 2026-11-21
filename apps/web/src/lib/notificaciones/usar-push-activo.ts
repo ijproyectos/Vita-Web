@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { esNativo, leerTokenNativo, permisoNativo } from "./push-nativo";
 
 /**
  * ¿Este navegador tiene una suscripción push activa (permiso concedido + 
@@ -16,6 +17,10 @@ export function usePushActivo(): boolean {
     let cancelado = false;
     void (async () => {
       try {
+        if (esNativo()) {
+          if (!cancelado && (await permisoNativo()) === "granted" && leerTokenNativo() !== null) setActivo(true);
+          return;
+        }
         if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
         if (Notification.permission !== "granted") return;
         const registro = await navigator.serviceWorker.getRegistration("/");

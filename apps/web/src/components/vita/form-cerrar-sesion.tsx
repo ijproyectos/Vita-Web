@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, type ReactNode } from "react";
+import { esNativo, leerTokenNativo, olvidarTokenNativo } from "@/lib/notificaciones/push-nativo";
 
 const ESPERA_MAX_MS = 2500;
 const ESPERA_FETCH_MS = 3000;
@@ -41,6 +42,8 @@ export function FormCerrarSesion({
   }
 
   async function cerrar(form: HTMLFormElement) {
+    // Native app: this device's FCM token (no service worker there).
+    const tokenNativo = esNativo() ? leerTokenNativo() : null;
     const suscripcion = await Promise.race([
       suscripcionLocal().catch(() => null),
       new Promise<null>((resolver) => setTimeout(() => resolver(null), ESPERA_MAX_MS)),
@@ -50,11 +53,13 @@ export function FormCerrarSesion({
     try {
       const datos = new FormData();
       if (suscripcion) datos.set("endpoint", suscripcion.endpoint);
+      if (tokenNativo) datos.set("tokenNativo", tokenNativo);
       const respuesta = await fetch(form.action, { method: "POST", body: datos, credentials: "same-origin", signal: controlador.signal });
       clearTimeout(corte);
       if (!respuesta.ok) throw new Error("signout");
       // The server confirmed: now it is safe to drop the local subscription.
       await suscripcion?.unsubscribe().catch(() => false);
+      if (tokenNativo) olvidarTokenNativo();
       antesDeSalir?.();
       router.replace(destino);
       router.refresh();
@@ -66,6 +71,10 @@ export function FormCerrarSesion({
         // Fill the hidden input right before the native post so the server can delete the row.
         const campo = form.elements.namedItem("endpoint");
         if (campo instanceof HTMLInputElement) campo.value = suscripcion.endpoint;
+      }
+      if (tokenNativo) {
+        const campoNativo = form.elements.namedItem("tokenNativo");
+        if (campoNativo instanceof HTMLInputElement) campoNativo.value = tokenNativo;
       }
       form.submit();
       antesDeSalir?.();
@@ -85,6 +94,7 @@ export function FormCerrarSesion({
       }}
     >
       <input type="hidden" name="endpoint" defaultValue="" />
+      <input type="hidden" name="tokenNativo" defaultValue="" />
       {children}
     </form>
   );
