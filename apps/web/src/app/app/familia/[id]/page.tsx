@@ -16,7 +16,8 @@ import { AccionesMiembro, EditarMiembro } from "./acciones";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
 import { resumenPrefsModoSimple } from "@/lib/modo-simple/resumen-prefs";
 import { HoyPendientes } from "./hoy-pendientes";
-import { resumenHoy } from "@/lib/familia/pendientes-hoy";
+import { horasMalCargadas, resumenHoy } from "@/lib/familia/pendientes-hoy";
+import { HorasMalCargadas } from "./horas-mal-cargadas";
 
 // V7 "fam-perfil": una persona que cuido. Solo se llega con un vínculo
 // aceptado (listar_familia); cualquier otro id es 404.
@@ -43,6 +44,7 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
   // "No la tomé" del modo simple (057): sin la migración el set viene vacío.
   const omitidas = await medicamentosNucleo.idsOmitidas(supabase, dosisHoy.map((m) => m.id), medicamentosNucleo.fechaEnAR());
   const hoy = resumenHoy(dosisHoy, medicamentosNucleo.horaEnAR(), omitidas);
+  const horasMal = puedeEditar ? horasMalCargadas(dosisHoy) : [];
   const emergencia = perfil?.contacto_emergencia_nombre?.trim();
   const emergenciaSub = [perfil?.contacto_emergencia_relacion?.trim(), perfil?.contacto_emergencia_telefono?.trim()].filter(Boolean).join(" · ");
   const meta = [
@@ -86,6 +88,8 @@ export default async function MiembroFamiliaPage(props: PageProps<"/app/familia/
           puedeRecordar={puedeEditar}
         />
       )}
+
+      {horasMal.length > 0 && <HorasMalCargadas elderId={miembro.id} items={horasMal} />}
 
       <section>
         <h2 className="eyebrow px-1 pb-2.5 text-subtle">Su celular</h2>

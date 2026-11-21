@@ -7,9 +7,9 @@ import { VitaIcon } from "@/lib/vita-icons";
 import { ListaHoyInteractiva } from "../lista-hoy";
 import { conRespaldo } from "@/lib/con-respaldo";
 import { obtenerPrefs } from "@/lib/modo-simple/nucleo";
-import { medicionesParaMostrar, medirDeHoy, turnoParaMostrar, turnosDeHoy } from "@/lib/modo-simple/datos";
+import { medicionesParaMostrar, medirDeHoy, turnosDeHoy } from "@/lib/modo-simple/datos";
 import type { ExtraHoy } from "@/components/vita/modo-simple/piezas";
-import { TarjetaMedicionesEnlace, TarjetaTurno } from "./tarjetas";
+import { TarjetaMedicionesEnlace } from "./tarjetas";
 
 
 // "Tu rutina de hoy" del modo simple: todas las tomas del día con su estado,
@@ -29,8 +29,7 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
   const filas = filasHoy(hoy, omitidas, new Set(enGrupo.map((m) => m.id)), ahora);
   // Lo mismo que la pantalla principal muestra de turnos y mediciones (y con la misma configuración).
   const config = await obtenerPrefs(supabase, usuario.id);
-  const [turno, mediciones, turnosHoy, medirHoy] = await Promise.all([
-    config.ver_turnos ? conRespaldo(turnoParaMostrar(supabase, usuario.id), null) : null,
+  const [mediciones, turnosHoy, medirHoy] = await Promise.all([
     config.ver_mediciones ? conRespaldo(medicionesParaMostrar(supabase, usuario.id), null) : null,
     config.ver_turnos ? conRespaldo(turnosDeHoy(supabase, usuario.id), []) : [],
     config.ver_mediciones ? conRespaldo(medirDeHoy(supabase, usuario.id), []) : [],
@@ -44,6 +43,8 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
       titulo: `Turno: ${t.especialidad}`,
       detalle: t.hora < ahora ? "Ya pasó" : t.lugar ?? "Hoy",
       hecho: t.hora < ahora,
+      // Todavía no llegó: tocarlo abre "Cómo llegar y qué llevar".
+      tocable: t.hora >= ahora,
     })),
     ...medirHoy.map((m) => ({
       clave: `medir-${m.clave}`,
@@ -74,10 +75,9 @@ export default async function RutinaSimplePage(props: PageProps<"/app/modo-simpl
           <p className="text-[19px] font-semibold text-slate-brand">Hoy no tenés nada cargado.</p>
         )}
       </div>
-      {(turno || mediciones) && (
+      {mediciones && (
         <div className="mt-6 flex flex-col gap-4">
-          {turno && <TarjetaTurno turno={turno} />}
-          {mediciones && <TarjetaMedicionesEnlace titulo={mediciones.titulo} mediciones={mediciones.items} />}
+          <TarjetaMedicionesEnlace titulo={mediciones.titulo} mediciones={mediciones.items} />
         </div>
       )}
     </main>

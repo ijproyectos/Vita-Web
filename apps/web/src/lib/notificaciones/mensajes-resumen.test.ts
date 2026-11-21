@@ -16,3 +16,14 @@ describe("payloadResumenDia con 'No la tomé'", () => {
     expect(payloadResumenDia({ ...base, tomadas: 4, pendientes: [] }).body).toBe("Buen día para Elsa: completó todas sus tomas.");
   });
 });
+
+describe("payloadResumenDia con mediciones no anotadas", () => {
+  it("las suma al final", () => {
+    const p = payloadResumenDia({ ...base, tomadas: 4, pendientes: [], medicionesSinAnotar: [{ que: "la presión", hora: "09:00" }] });
+    expect(p.body).toBe("No anotó la presión (9:00).");
+  });
+  it("junto con lo que quedó sin tomar", () => {
+    const p = payloadResumenDia({ ...base, pendientes: [{ nombre: "Magnesio", hora: "20:00" }], medicionesSinAnotar: [{ que: "la glucemia", hora: "08:00" }, { que: "la presión", hora: "19:00" }] });
+    expect(p.body).toBe("Quedó sin tomar: Magnesio (20:00). No anotó la glucemia (8:00), la presión (19:00).");
+  });
+});

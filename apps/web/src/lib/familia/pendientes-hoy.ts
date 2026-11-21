@@ -1,5 +1,6 @@
 // "Hoy" de la ficha de una persona a cargo (V7): dosis que ya pasaron y siguen
 // sin confirmar. Lógica pura; `ahora` y `hora_programada` están en hora AR.
+import { normalizarHora } from "@/lib/rutina/momento";
 
 export type DosisHoy = {
   id: string;
@@ -44,4 +45,17 @@ export function resumenHoy(
       return { id: d.id, nombre: d.nombre, meta: cantidad ? `${cantidad} · ${cuando}` : cuando };
     });
   return { subtitulo: `${tomadas} de ${dosis.length} tomadas`, pendientes, noTomadas };
+}
+
+/**
+ * Remedios de hoy con la hora guardada inválida ("9hs", vacío, "25:00"): no
+ * tienen avisos ni aparecen en el modo simple, así que solo los ve el cuidador
+ * para corregirlos. Uno por nombre.
+ */
+export function horasMalCargadas(dosis: Pick<DosisHoy, "id" | "nombre" | "hora_programada">[]): { id: string; nombre: string }[] {
+  const vistos = new Set<string>();
+  return dosis
+    .filter((d) => normalizarHora(d.hora_programada) === null)
+    .filter((d) => (vistos.has(d.nombre) ? false : (vistos.add(d.nombre), true)))
+    .map((d) => ({ id: d.id, nombre: d.nombre }));
 }

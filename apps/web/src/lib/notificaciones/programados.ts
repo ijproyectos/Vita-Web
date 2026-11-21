@@ -12,7 +12,7 @@ import {
   minutosDesde,
   type PreferenciasAvisos,
 } from "./avisos-tipos";
-import { procesarMonitoreos } from "./medir";
+import { medicionesNoAnotadasHoy, procesarMedicionesPospuestas, procesarMonitoreos } from "./medir";
 import { entregarAviso, existeEnvio, familiaAvisosDisponible, obtenerPreferenciasDe, reclamarEnvio } from "./avisos";
 import { debeAvisarTurnoHoy, minutosHastaTurno } from "./turno-hoy-logica";
 import {
@@ -471,6 +471,7 @@ export async function procesarAvisosProgramados(admin: Cliente, ahora: Date = ne
 
   try {
     resumen.medir = await procesarMonitoreos(admin, hoyAR, horaAR, diaHoy);
+    resumen.medir += await procesarMedicionesPospuestas(admin, hoyAR, horaAR);
   } catch (e) {
     resumen.errorMedir = e instanceof Error ? e.message : "Fallo en los avisos de medición.";
   }
@@ -611,6 +612,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
     const ids = [...medsDePersona.values()].flat().map((m) => m.id);
     const tomadas = await tomadasHoyAR(admin, ids, hoyAR);
     const omitidas = await idsOmitidas(admin, ids, hoyAR);
+    const sinAnotar = await medicionesNoAnotadasHoy(admin, [...medsDePersona.keys()], hoyAR, horaAR, diaSemanaDe(c.ahora));
     for (const [personaId, meds] of medsDePersona) {
       const cuidadores = cuidadoresDe.get(personaId);
       if (!cuidadores || meds.length === 0) continue;
@@ -632,6 +634,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
           total: meds.length,
           pendientes,
           noTomadas,
+          medicionesSinAnotar: sinAnotar.get(personaId) ?? [],
           fechaAR: hoyAR,
           rolDestino: cu.rol,
           relacion: cu.relacion,
@@ -645,7 +648,7 @@ async function procesarAvisosDeFamilia(admin: Cliente, c: ContextoFamilia): Prom
             cuerpo: payload.body,
             url: payload.url,
             personaId,
-            datos: { personaId, tomadas: hechas, total: meds.length, tono: pendientes.length > 0 ? "ambar" : "ok" },
+            datos: { personaId, tomadas: hechas, total: meds.length, tono: pendientes.length > 0 || (sinAnotar.get(personaId) ?? []).length > 0 ? "ambar" : "ok" },
           },
           payload
         );

@@ -424,6 +424,22 @@ Feed del centro de notificaciones (`/app/avisos`): una fila por aviso entregado 
 
 **RLS**: select/delete owner-only; insert exige `usuario_id = auth.uid()` y que el medicamento sea propio.
 
+## `posposiciones_medicion` (064, escrita, NO aplicada)
+
+"Posponer N minutos" de "Es hora de medirte…" en el modo simple. Cuando `hasta` pasa (hasta 45 min después) y ese horario del plan sigue sin anotarse, el cron `dosis-vencidas` vuelve a mandar "Hora de medir…" (`procesarMedicionesPospuestas`, dedupe `medicion_pospuesta` por id).
+
+| columna | tipo | notas |
+|---|---|---|
+| id | uuid PK | |
+| monitoreo_id | uuid | references monitoreos, on delete cascade |
+| usuario_id | uuid | references auth.users, on delete cascade |
+| fecha | date | fecha de pared AR |
+| hora | text | "HH:MM" del horario del plan |
+| hasta | timestamptz | |
+| created_at | timestamptz | |
+
+**RLS**: select/delete owner-only; insert exige `usuario_id = auth.uid()` y que el plan sea propio.
+
 ## `preferencias_modo_simple`
 
 (029) Cómo ve la PERSONA su pantalla de modo simple (`/app/modo-simple`); la configura ella o un cuidador Admin desde `/app/familia/[id]/modo-simple`. Sin fila = defaults del código (`lib/modo-simple/tipos.ts`).

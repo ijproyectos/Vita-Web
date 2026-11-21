@@ -1,10 +1,9 @@
 "use client";
 
-import { TarjetaMediciones, TarjetaTurno, type MedicionSimple } from "@/components/vita/modo-simple/piezas";
+import { TarjetaMediciones, type MedicionSimple } from "@/components/vita/modo-simple/piezas";
 import { useState } from "react";
 import { TecladoMedicion } from "../teclado-medicion";
 
-export { TarjetaTurno };
 
 /** Las últimas mediciones; tocar una abre el teclado grande (no el formulario normal). */
 export function TarjetaMedicionesEnlace({ titulo, mediciones }: { titulo: string; mediciones: MedicionSimple[] }) {

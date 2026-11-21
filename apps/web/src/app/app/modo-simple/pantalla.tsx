@@ -8,37 +8,34 @@ import { useRefrescoPeriodico } from "@/components/vita/refresco-periodico";
 import type { EstadoAvatar } from "@/components/vita/estados-avatar";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import type { FilaHoy } from "@/lib/modo-simple/seleccion";
 import { desbloquearVoz, cancelarVoz, obtenerAudioBlob, reproducirBlob } from "@/lib/voz/hablar-cliente";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
-import { usePosponer } from "@/lib/modo-simple/usar-posponer";
 import { olvidarModoSimple, recordarModoSimple } from "@/lib/modo-simple/recordar";
 import { volverAMiPerfilAction } from "@/app/app/familia/actions";
 import { VELOCIDAD_VOZ_LENTA, type PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import { BarraSinConexion } from "@/components/vita/barra-sin-conexion";
-import { cancelarPosposicionAction, posponerDosisAction } from "@/lib/notificaciones/actions";
+import { posponerDosisAction, posponerMedicionAction } from "@/lib/notificaciones/actions";
 import { usePushActivo } from "@/lib/notificaciones/usar-push-activo";
 import type { MomentoDia } from "@/lib/medicamentos/tipos";
 import {
   BarraInferior,
   Cabecera,
+  EnlaceTodoElDia,
+  FilaTurno,
+  FranjaOlvidadas,
   TarjetaDescanso,
   TarjetaGrupo,
-  TarjetaMediciones,
-  TarjetaSiguientes,
-  TarjetaPorCorregir,
   TarjetaTurno,
   fraseAnuncio,
   listaHablada,
   type Dosis,
   type MedicionSimple,
-  type Siguiente,
-  type PorCorregir,
+  type Olvidada,
   type TurnoSimple,
 } from "@/components/vita/modo-simple/piezas";
 import { marcarGrupoNoTomadoAction, marcarGrupoTomadoAction } from "../rutina/actions";
-import { confirmoPorVoz } from "@/lib/modo-simple/confirmacion-voz";
+import { interpretarVozPendiente } from "@/lib/modo-simple/confirmacion-voz";
 import { ActivarNotificaciones } from "@/components/vita/activar-notificaciones";
 import { AvisoRecordatorio } from "@/components/vita/aviso-recordatorio";
 import type { MedHoy, TurnoProximo } from "@/lib/modo-simple/respuestas";
@@ -47,7 +44,8 @@ import { FlujoAyuda, type AyudaPedida } from "./flujo-ayuda";
 import { TecladoMedicion } from "./teclado-medicion";
 import type { MedirHoy, TipoMedirSimple } from "@/lib/modo-simple/medir";
 import { textoAyudaSaben } from "@/lib/modo-simple/charla";
-import { AccesoRutinaCompleta } from "./lista-hoy";
+import { RUTA_RUTINA_SIMPLE } from "./lista-hoy";
+import { RUTA_TURNO_SIMPLE } from "./turno/ruta";
 
 // La confirmación por voz se aparta a propósito del regex del diseño: ese no
 // entendía "sí" con tilde y confirmaba "no sé si la tomé" (ver confirmacion-voz.ts).
@@ -66,12 +64,10 @@ export function Pantalla({
   fechaTexto,
   grupo,
   momento,
-  siguientes,
-  porCorregir,
-  hayMedsHoy,
   vencida,
   fechaDosis = null,
-  filas = [],
+  olvidadas = [],
+  proximaHora = null,
   recordatorios,
   config,
   turno,
@@ -81,6 +77,7 @@ export function Pantalla({
   medsHoy,
   telefonoAyuda,
   nombreAyuda,
+  tieneFamilia = true,
 }: {
   /** Cuenta logueada: el modo simple queda recordado solo para ella. */
   usuarioId: string;
@@ -90,6 +87,8 @@ export function Pantalla({
   /** A quién llama Ayuda (Configurar modo simple o contacto de emergencia), o null si no hay. */
   telefonoAyuda: string | null;
   nombreAyuda: string | null;
+  /** Alguien la cuida en vita: Ayuda avisa a la familia. Si no, Ayuda llama directo al contacto. */
+  tieneFamilia?: boolean;
   /** Qué ve la persona (Configurar modo simple; defaults si no hay fila). */
   config: PrefsModoSimple;
   /** Turno de hoy o de mañana (null = ninguno, o la sección está apagada). */
@@ -105,16 +104,13 @@ export function Pantalla({
   /** Dosis pendientes del momento actual — la tarjeta principal. */
   grupo: Dosis[];
   momento: MomentoDia | null;
-  siguientes: Siguiente[];
-  /** Pendientes con la hora guardada inválida (no se pueden confirmar). */
-  porCorregir: PorCorregir[];
-  /** Había medicación programada hoy (distingue "todo tomado" de "nada cargado"). */
-  hayMedsHoy: boolean;
   vencida: boolean;
   /** Fecha de AYER cuando el grupo son dosis de ayer en la ventana de medianoche; si no, null. */
   fechaDosis?: string | null;
-  /** Lista "Hoy": todas las tomas del día con su estado. */
-  filas?: FilaHoy[];
+  /** Dosis de hoy de una hora anterior que quedaron sin marcar ("Te olvidaste…"). */
+  olvidadas?: Olvidada[];
+  /** "HH:MM" de lo próximo (pastilla o medición) para el descanso; null = nada más hoy. */
+  proximaHora?: string | null;
   /** Un familiar le recordó estas dosis (aviso tranquilo, sin sonido). */
   recordatorios: { medicamentoId: string; nombre: string; horaProgramada: string }[];
 }) {
@@ -128,12 +124,14 @@ export function Pantalla({
   // puramente transitoria y nunca la manda el servidor.
   const [confirmadoLocal, setConfirmadoLocal] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  // "No la tomé" (dicho al botón de vita) siempre pregunta antes.
   const [preguntarNo, setPreguntarNo] = useState(false);
+  // Lo que dijo con el botón de vita y no era ni "ya la tomé" ni "más tarde" ni "no": lo responde la charla.
+  const [preguntaCharla, setPreguntaCharla] = useState<string | undefined>(undefined);
   const hayGrupo = grupo.length > 0;
   const fase: Fase = confirmadoLocal ? "confirmado" : !hayGrupo ? "descanso" : vencida ? "alertado" : "esperando";
-  const { silenciada, alternar: alternarSilencio } = useSilencioVita({ porDefecto: true });
+  const { silenciada, alternar: alternarSilencio } = useSilencioVita({ porDefecto: false });
   const [charlaAbierta, setCharlaAbierta] = useState(false);
-  const posponer = usePosponer(grupo.map((m) => m.id).join(","), config.posponer_min);
   const pushActivo = usePushActivo();
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
   const [ayudaAbierta, setAyudaAbierta] = useState(false);
@@ -184,7 +182,6 @@ export function Pantalla({
     // "¡Listo!" al instante (optimista): el servidor guarda por detrás y, si
     // falla, se vuelve atrás con el aviso.
     setConfirmadoLocal(true);
-    posponer.cancelar();
     startTransition(async () => {
       try {
         // Todo el grupo en una sola acción (usa marcarTomado por dentro: no
@@ -206,24 +203,25 @@ export function Pantalla({
     });
   }
 
-  // "Más tarde" también se registra en el servidor: así el cron vuelve a mandar
-  // el aviso a los 15/30/60 min (los que eligió quien configuró el modo simple) aunque esta pantalla ya no esté abierta. Si el
-  // registro falla, el posponer local sigue valiendo (la tarjeta reaparece).
-  function posponerAqui() {
-    posponer.posponer();
-    void posponerDosisAction(grupo.map((m) => m.id), config.posponer_min).catch(() => {});
+  // "Posponer": la tarjeta queda en pantalla (decisión 2026-11-15) y el servidor
+  // programa el aviso al celular para dentro de N minutos (los del cuidador).
+  function avisarPospuesto(r: { status: "success" | "error" }) {
+    const n = config.posponer_min;
+    if (r.status === "error") toast.error("No pude programar el aviso. Probá de nuevo.");
+    else if (pushActivo) toast.success(`Listo. Te aviso de nuevo en ${n} minutos.`);
+    else toast.info("Listo. Para que te avise al celular, activá los avisos.");
   }
 
-  function verAhora() {
-    posponer.cancelar();
-    void cancelarPosposicionAction(grupo.map((m) => m.id)).catch(() => {});
+  function posponerAqui() {
+    void posponerDosisAction(grupo.map((m) => m.id), config.posponer_min)
+      .then(avisarPospuesto)
+      .catch(() => avisarPospuesto({ status: "error" }));
   }
 
   // "No la tomé": se pregunta antes (no se deshace desde acá) y deja de pedirla
   // hoy. El cuidador se entera en el resumen de la noche, no en el momento.
   function noTome() {
     setPreguntarNo(false);
-    posponer.cancelar();
     startTransition(async () => {
       try {
         const r = await marcarGrupoNoTomadoAction(grupo.map((m) => m.id), fechaDosis ?? undefined);
@@ -237,6 +235,28 @@ export function Pantalla({
         toast.error("No se pudo guardar. Probá de nuevo o avisale a tu familia.");
       }
     });
+  }
+
+  // "Sí, la tomé" de la franja de olvidadas: botones propios, nunca junto con la tarjeta.
+  function tomeOlvidadas() {
+    startTransition(async () => {
+      try {
+        const r = await marcarGrupoTomadoAction(olvidadas.map((o) => o.id), true);
+        if (r.status === "error") toast.error("No se pudo registrar. Probá de nuevo.");
+        else toast.success(olvidadas.length === 1 ? "Listo, la anoté." : "Listo, las anoté.");
+      } catch {
+        toast.error("No se pudo registrar. Probá de nuevo.");
+      } finally {
+        router.refresh();
+      }
+    });
+  }
+
+  function posponerMedicion() {
+    if (!medirAhora) return;
+    void posponerMedicionAction(medirAhora.monitoreoId, medirAhora.hora, config.posponer_min)
+      .then(avisarPospuesto)
+      .catch(() => avisarPospuesto({ status: "error" }));
   }
 
   // "Me equivoqué": vuelve a la tarjeta enseguida y desmarca en el servidor.
@@ -262,13 +282,16 @@ export function Pantalla({
   }, [guardado, router]);
 
   const { estado: estadoVoz, iniciar: iniciarVoz, detener: detenerVoz } = useGrabacionVoz({
+    // El botón de vita de abajo con una pastilla pendiente: "ya la tomé" registra (como antes),
+    // "más tarde" pospone, "no la tomé" pregunta antes y cualquier otra cosa la responde la charla.
     onTranscripcion: (texto) => {
-      if (confirmoPorVoz(texto)) {
-        confirmar();
-      } else {
-        toast.info("No te escuché confirmar — tocá el botón cuando la hayas tomado.");
-      }
       detenerVoz();
+      const intencion = interpretarVozPendiente(texto);
+      if (intencion === "tome") confirmar();
+      else if (intencion === "posponer" && config.posponer) posponerAqui();
+      else if (intencion === "no_tome") setPreguntarNo(true);
+      else if (texto.trim()) abrirCharla(texto.trim());
+      else toast.info("No te escuché. Tocá de nuevo y decime «ya la tomé».");
     },
     onError: (mensaje) => {
       toast.error(mensaje);
@@ -277,11 +300,12 @@ export function Pantalla({
   });
 
   // La charla de voz tiene el micrófono para ella: se corta cualquier escucha de confirmación y el anuncio.
-  function abrirCharla() {
+  function abrirCharla(pregunta?: string) {
     desbloquearVoz();
     cancelarVoz();
     detenerVoz();
     setReproduciendoAudio(false);
+    setPreguntaCharla(pregunta);
     setCharlaAbierta(true);
   }
 
@@ -297,6 +321,7 @@ export function Pantalla({
 
   async function alternarEscuchaVoz() {
     if (silenciada) return;
+    desbloquearVoz();
     if (estadoVoz !== "inactivo") {
       detenerVoz();
       return;
@@ -331,18 +356,44 @@ export function Pantalla({
               : "idle";
 
   const mostrarTarjeta = fase === "esperando" || fase === "alertado";
+  const hayRemedio = mostrarTarjeta || fase === "confirmado";
+  const mostrarMedir = !!medirAhora;
+  // Lo de ahora: remedio y/o medición. Sin nada de eso, el turno grande ocupa el lugar del descanso.
+  const nadaPendiente = !hayRemedio && !mostrarMedir;
+  const franja = olvidadas.length > 0 && (
+    <FranjaOlvidadas olvidadas={olvidadas} ocupado={pendiente} onTome={tomeOlvidadas} />
+  );
+  // Con una pastilla pendiente, el botón de vita escucha "ya la tomé" (el mismo de antes, movido).
+  const escuchaPastilla = mostrarTarjeta && !silenciada && config.charlar;
+  const n = grupo.length;
+  // Medición sola: el botón de vita le pide el número (abre la charla, que ofrece "¿Lo anoto así?").
+  const pideMedicion = !hayRemedio && mostrarMedir && config.charlar;
+  const sugerencia = !escuchaPastilla
+    ? pideMedicion
+      ? "Decime el número"
+      : null
+    : estadoVoz === "inactivo"
+      ? n === 1
+        ? "Decime «ya la tomé»"
+        : "Decime «ya las tomé»"
+      : estadoVoz === "procesando"
+        ? "Un momento…"
+        : "Te escucho…";
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-cream">
+    <div className="fixed inset-0 z-30 bg-cream">
+      {/* Mismo ancho que el resto de la app (max-w-md), centrado: en una pantalla ancha no se estira. */}
+      <div className="relative mx-auto flex h-full w-full max-w-md flex-col">
       <div className="flex-1 overflow-y-auto px-5 pb-[168px] pt-[max(1.25rem,env(safe-area-inset-top))]">
         <BarraSinConexion grande />
         <Cabecera
           saludo={saludo}
           nombre={nombre}
           fechaTexto={fechaTexto}
-          onAyuda={() => setFlujoAyuda(true)}
-          // Sin teléfono: el botón abre el flujo (avisar a la familia) en vez de llamar directo.
-          telefono={null}
+          // Con familia en vita: el flujo (avisar y ofrecer llamar). Sin nadie vinculado: llama
+          // directo al contacto de emergencia (`tel:`), o explica dónde cargarlo si no hay.
+          onAyuda={() => (tieneFamilia ? setFlujoAyuda(true) : setAyudaAbierta(true))}
+          telefono={tieneFamilia ? null : telefonoAyuda}
           contacto={nombreAyuda}
           conAyuda={config.ayuda}
         />
@@ -357,34 +408,19 @@ export function Pantalla({
           <ActivarNotificaciones variante="simple" />
           {recordatorios.length > 0 && <AvisoRecordatorio grande items={recordatorios} />}
 
-          {turno && <TarjetaTurno turno={turno} />}
-
-          {fase === "descanso" && <TarjetaDescanso nombre={nombre} hayMedsHoy={hayMedsHoy} proximaHora={siguientes[0]?.horaProgramada} />}
+          {turno && !nadaPendiente && <FilaTurno turno={turno} href={RUTA_TURNO_SIMPLE} />}
 
           {/* "Ya tomé" transforma la misma tarjeta (no una pantalla aparte): queda
               "¡Muy bien!" con "Me equivoqué" hasta que la página se recarga. */}
           {fase === "confirmado" && <TarjetaConfirmada grupo={grupo} onDeshacer={deshacer} />}
 
-          {mostrarTarjeta && posponer.posponido && (
-            <TarjetaPospuesta
-              grupo={grupo}
-              minutos={posponer.minutosRestantes}
-              confirmando={pendiente}
-              onConfirmar={confirmar}
-              onVolver={verAhora}
-              conAviso={pushActivo}
-            />
-          )}
-
-          {mostrarTarjeta && !posponer.posponido && (
+          {mostrarTarjeta && (
             <TarjetaGrupo
               grupo={grupo}
               momento={momento}
               alertado={fase === "alertado"}
               deAyer={!!fechaDosis}
-              onNoTome={() => setPreguntarNo(true)}
               confirmando={pendiente}
-              escuchandoVoz={estadoVoz !== "inactivo"}
               silenciada={silenciada}
               conVoz={config.voz}
               puedePosponer={config.posponer}
@@ -392,35 +428,40 @@ export function Pantalla({
               onConfirmar={confirmar}
               onEscuchar={alEscuchar}
               onPosponer={posponerAqui}
-              onAlternarVoz={alternarEscuchaVoz}
-            />
+            >
+              {franja}
+            </TarjetaGrupo>
           )}
 
-          {medirAhora && (
-            <TarjetaMedirAhora medir={medirAhora} onAnotar={() => setTeclado({ tipo: medirAhora.tipo, ultimo: ultimaDe(medirAhora.tipo) })} />
+          {mostrarMedir && medirAhora && (
+            <TarjetaMedirAhora
+              medir={medirAhora}
+              compacta={hayRemedio}
+              puedePosponer={config.posponer}
+              minutosPosponer={config.posponer_min}
+              conVita={config.charlar}
+              onAnotar={() => setTeclado({ tipo: medirAhora.tipo, ultimo: ultimaDe(medirAhora.tipo) })}
+              onPosponer={posponerMedicion}
+            >
+              {!hayRemedio && franja}
+            </TarjetaMedirAhora>
           )}
 
-          {mediciones && (
-            <TarjetaMediciones
-              titulo={mediciones.titulo}
-              mediciones={mediciones.items}
-              onTocar={(tipo) => setTeclado({ tipo, ultimo: ultimaDe(tipo) })}
-            />
-          )}
+          {nadaPendiente && turno && <TarjetaTurno turno={turno} />}
+          {nadaPendiente && turno && franja && <div className="rounded-[28px] bg-card px-5 pb-5 shadow-card">{franja}</div>}
+          {nadaPendiente && !turno && <TarjetaDescanso proximaHora={proximaHora ?? undefined}>{franja}</TarjetaDescanso>}
 
-          {porCorregir.length > 0 && <TarjetaPorCorregir items={porCorregir} />}
-
-          {filas.length > 0 ? (
-            // "Después" (lo que sigue, con nombres) queda a la vista; el resto del día está en la rutina completa.
-            <AccesoRutinaCompleta filas={filas}>
-              {siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />}
-            </AccesoRutinaCompleta>
-          ) : (
-            siguientes.length > 0 && <TarjetaSiguientes siguientes={siguientes} titulo={hayGrupo ? "Después" : "Próximas tomas"} />
-          )}
+          <EnlaceTodoElDia href={RUTA_RUTINA_SIMPLE} />
         </div>
       </div>
-      <BarraInferior estado={estadoAvatar} onHablar={abrirCharla} onAjustes={() => setAjustesAbiertos(true)} conCharla={config.charlar} />
+      <BarraInferior
+        estado={estadoAvatar}
+        onHablar={escuchaPastilla ? alternarEscuchaVoz : () => abrirCharla()}
+        onAjustes={() => setAjustesAbiertos(true)}
+        conCharla={config.charlar}
+        sugerencia={sugerencia}
+      />
+      </div>
 
       <SheetAjustes
         open={ajustesAbiertos}
@@ -440,64 +481,13 @@ export function Pantalla({
           config={config}
           medsHoy={medsHoy}
           turnoProximo={turnoProximo}
+          preguntaInicial={preguntaCharla}
           onCerrar={() => setCharlaAbierta(false)}
           telefonoAyuda={telefonoAyuda}
           nombreAyuda={nombreAyuda}
           onAyudaSinContacto={() => setAyudaAbierta(true)}
         />
       )}
-    </div>
-  );
-}
-
-// Tarjeta mientras la dosis está pospuesta: no se pierde, se puede confirmar
-// igual, y "Ver ahora" cancela la espera.
-function TarjetaPospuesta({
-  grupo,
-  minutos,
-  confirmando,
-  onConfirmar,
-  onVolver,
-  conAviso,
-}: {
-  grupo: Dosis[];
-  minutos: number;
-  confirmando: boolean;
-  onConfirmar: () => void;
-  onVolver: () => void;
-  /** Hay un push activo en este celular: el aviso de nuevo llega de verdad. */
-  conAviso: boolean;
-}) {
-  const n = grupo.length;
-  return (
-    <div className="rounded-[28px] bg-card p-5 shadow-card">
-      <div className="flex items-center gap-4">
-        <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-persona-1-tint text-teal-deep">
-          <VitaIcon name="clock" size={32} strokeWidth={2.4} />
-        </div>
-        <div>
-          <div className="font-heading text-[24px] font-extrabold leading-tight tracking-[-0.03em]">
-            {conAviso ? "Te aviso de nuevo" : "Te la muestro de nuevo"} en {minutos} min
-          </div>
-          <div className="mt-0.5 text-[15px] font-semibold text-subtle">{listaHablada(grupo.map((m) => m.nombre))}</div>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onConfirmar}
-        disabled={confirmando}
-        className="mt-5 flex h-[72px] w-full items-center justify-center gap-3 rounded-full bg-teal-deep text-[22px] font-extrabold text-primary-foreground shadow-[0_14px_28px_color-mix(in_srgb,var(--teal-deep)_32%,transparent)] disabled:opacity-70"
-      >
-        <VitaIcon name="check" size={30} strokeWidth={3} />
-        {n === 1 ? "Ya la tomé" : `Ya tomé las ${n}`}
-      </button>
-      <button
-        type="button"
-        onClick={onVolver}
-        className="mt-3 flex h-[52px] w-full items-center justify-center rounded-full bg-secondary text-[16px] font-bold text-slate-brand"
-      >
-        Verlas ahora
-      </button>
     </div>
   );
 }
@@ -652,30 +642,85 @@ function SheetAyudaSinContacto({ open, onOpenChange }: { open: boolean; onOpenCh
   );
 }
 
-// "Es hora de medirte la presión": recordatorio del plan de monitoreo, con la
-// forma de la tarjeta de una pastilla. Abre el teclado grande.
-function TarjetaMedirAhora({ medir, onAnotar }: { medir: MedirHoy; onAnotar: () => void }) {
+// "Es hora de medirte la presión": recordatorio del plan de monitoreo. Junto a
+// una pastilla va compacta (debajo); sola ocupa el lugar principal.
+function TarjetaMedirAhora({
+  medir,
+  compacta,
+  puedePosponer,
+  minutosPosponer,
+  conVita,
+  onAnotar,
+  onPosponer,
+  children,
+}: {
+  medir: MedirHoy;
+  compacta: boolean;
+  puedePosponer: boolean;
+  minutosPosponer: number;
+  /** "Hablar con Vita" habilitado en Configurar modo simple. */
+  conVita: boolean;
+  onAnotar: () => void;
+  onPosponer: () => void;
+  children?: React.ReactNode;
+}) {
+  const icono = (
+    <span aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-destructive/10 text-destructive">
+      <VitaIcon name={ICONO_MEDIR[medir.tipo]} size={28} />
+    </span>
+  );
+  if (compacta) {
+    return (
+      <section className="flex items-center gap-3.5 rounded-[24px] bg-card p-4 shadow-card">
+        {icono}
+        <h2 className="min-w-0 flex-1 font-heading text-[20px] font-extrabold leading-tight tracking-[-0.02em] text-balance">Es hora de medirte {medir.frase}</h2>
+        <button
+          type="button"
+          onClick={onAnotar}
+          className="flex min-h-14 shrink-0 items-center justify-center rounded-full bg-primary px-4 text-[17px] font-extrabold text-primary-foreground active:scale-[0.98] motion-reduce:transform-none"
+        >
+          Anotar ahora
+        </button>
+      </section>
+    );
+  }
+  const secundario =
+    "flex h-[58px] items-center justify-center gap-2.5 rounded-full border-2 border-foreground/10 bg-card text-[19px] font-extrabold active:scale-[0.98] motion-reduce:transform-none";
   return (
-    <section className="flex flex-col gap-4 rounded-[28px] bg-card p-5 shadow-card ring-2 ring-primary/30">
+    <section className="flex flex-col gap-3 rounded-[28px] bg-card p-5 shadow-card ring-2 ring-primary/30">
       <div className="flex items-center gap-3.5">
-        <span aria-hidden className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-destructive/10 text-destructive">
-          <VitaIcon name={medir.tipo === "glucemia" ? "droplet" : "heart"} size={28} />
-        </span>
+        {icono}
         <div className="min-w-0">
           <h2 className="font-heading text-[25px] font-extrabold leading-tight tracking-[-0.02em] text-balance">Es hora de medirte {medir.frase}</h2>
-          <p className="mt-0.5 text-[17px] font-semibold text-subtle">A las {horaCortaMedir(medir.hora)}</p>
+          <p className="mt-0.5 text-[17px] font-semibold text-subtle">
+            {conVita ? "Cuando tengas el número, contáselo a vita." : `A las ${horaCortaMedir(medir.hora)}`}
+          </p>
         </div>
       </div>
       <button
         type="button"
         onClick={onAnotar}
-        className="flex h-[64px] items-center justify-center gap-2 rounded-full bg-primary text-[21px] font-extrabold text-primary-foreground shadow-cta active:scale-[0.98] motion-reduce:transform-none"
+        className="mt-1 flex h-[64px] items-center justify-center gap-2 rounded-full bg-primary text-[21px] font-extrabold text-primary-foreground shadow-cta active:scale-[0.98] motion-reduce:transform-none"
       >
-        Anotar ahora
+        Escribir el número
       </button>
+      {puedePosponer && (
+        <button type="button" onClick={onPosponer} className={secundario}>
+          <VitaIcon name="clock" size={24} strokeWidth={2.4} />
+          Posponer {minutosPosponer} minutos
+        </button>
+      )}
+      {children}
     </section>
   );
 }
+
+const ICONO_MEDIR: Record<TipoMedirSimple, string> = {
+  presion: "heart",
+  glucemia: "droplet",
+  peso: "scale",
+  temperatura: "thermometer",
+};
 
 /** "09:00" -> "9:00". */
 function horaCortaMedir(hhmm: string): string {

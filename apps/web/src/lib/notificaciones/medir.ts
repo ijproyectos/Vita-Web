@@ -95,6 +95,89 @@ export async function procesarMonitoreos(
   return enviados;
 }
 
+/**
+ * Venció un "Posponer N minutos" de "Es hora de medirte…" (modo simple, 064) y
+ * todavía no se anotó: "Hora de medir…" otra vez, a la persona. Una vez por
+ * posposición (dedupe por su id), solo dentro de los 45 min de vencida y fuera
+ * del silencio nocturno. Sin la migración 064 no hace nada.
+ */
+export async function procesarMedicionesPospuestas(admin: SupabaseClient, hoyAR: string, horaAR: string, ahora: Date = new Date()): Promise<number> {
+  const desde = new Date(ahora.getTime() - 45 * 60_000).toISOString();
+  const { data, error } = await admin
+    .from("posposiciones_medicion")
+    .select("id, monitoreo_id, usuario_id, hora, hasta")
+    .eq("fecha", hoyAR)
+    .lte("hasta", ahora.toISOString())
+    .gt("hasta", desde);
+  if (error || !data || data.length === 0) return 0;
+  const pos = data as { id: string; monitoreo_id: string; usuario_id: string; hora: string; hasta: string }[];
+
+  const usuarios = [...new Set(pos.map((p) => p.usuario_id))];
+  const [planesRes, prefs, mediciones] = await Promise.all([
+    admin.from("monitoreos").select("*").in("id", [...new Set(pos.map((p) => p.monitoreo_id))]),
+    obtenerPreferenciasDe(admin, usuarios),
+    admin.from("mediciones").select("usuario_id, tipo, nombre_otra, medido_at").in("usuario_id", usuarios).gte("medido_at", `${hoyAR}T00:00:00-03:00`),
+  ]);
+  if (planesRes.error || mediciones.error) return 0;
+  const planes = new Map(
+    (planesRes.data ?? []).map(aMonitoreo).filter((p): p is Monitoreo => p !== null).map((p) => [p.id, p])
+  );
+  const filas = (mediciones.data ?? []) as FilaMedicion[];
+
+  let enviados = 0;
+  for (const p of pos) {
+    const plan = planes.get(p.monitoreo_id);
+    if (!plan || plan.usuario_id !== p.usuario_id) continue;
+    if (enSilencioNocturno(prefs.get(p.usuario_id) ?? PREFERENCIAS_POR_DEFECTO, horaAR)) continue;
+    const deHoy = filas.filter((m) => m.usuario_id === p.usuario_id && esDeLaMetrica(m, plan));
+    if (tramosDeHoy(plan.horarios, deHoy).find((t) => t.hora === p.hora)?.medicion) continue;
+    if (!(await reclamarEnvio(admin, "medicion_pospuesta", p.id, hoyAR, p.usuario_id))) continue;
+    const titulo = `Hora de medir ${fraseMedir(plan)}`;
+    const cuerpo = "Te lo recuerdo como me pediste.";
+    const url = hrefNuevaMedicion({ tipo: plan.tipo, nombre: plan.nombre_otra, unidad: plan.unidad_otra, hora: p.hora, volver: "/app/avisos" });
+    await entregarAviso(
+      admin,
+      p.usuario_id,
+      { tipo: "medicion", titulo, cuerpo, url, datos: { monitoreoId: plan.id } },
+      { title: titulo, body: cuerpo, url, tag: `medir-${plan.id}-${p.hora}`, renotify: true, datos: { monitoreoId: plan.id } }
+    );
+    enviados++;
+  }
+  return enviados;
+}
+
+/**
+ * Para el resumen de las 21 h: horarios de hoy de cada plan que ya pasaron y no
+ * se anotaron ("la presión de las 9:00"). Si algo falla, mapa vacío: el resumen
+ * sale igual, sin esa parte.
+ */
+export async function medicionesNoAnotadasHoy(
+  admin: SupabaseClient,
+  personaIds: string[],
+  hoyAR: string,
+  horaAR: string,
+  diaHoy: DiaSemana
+): Promise<Map<string, { que: string; hora: string }[]>> {
+  const salida = new Map<string, { que: string; hora: string }[]>();
+  if (personaIds.length === 0) return salida;
+  const [planesRes, mediciones] = await Promise.all([
+    admin.from("monitoreos").select("*").in("usuario_id", personaIds),
+    admin.from("mediciones").select("usuario_id, tipo, nombre_otra, medido_at").in("usuario_id", personaIds).gte("medido_at", `${hoyAR}T00:00:00-03:00`),
+  ]);
+  if (planesRes.error || mediciones.error) return salida;
+  const filas = (mediciones.data ?? []) as FilaMedicion[];
+  const planes = (planesRes.data ?? []).map(aMonitoreo).filter((p): p is Monitoreo => p !== null && planAplica(p, diaHoy, hoyAR));
+  for (const plan of planes) {
+    const deHoy = filas.filter((m) => m.usuario_id === plan.usuario_id && esDeLaMetrica(m, plan));
+    const faltan = tramosDeHoy(plan.horarios, deHoy).filter((t) => !t.medicion && t.hora < horaAR);
+    if (faltan.length === 0) continue;
+    const l = salida.get(plan.usuario_id) ?? [];
+    l.push(...faltan.map((t) => ({ que: fraseMedir(plan), hora: t.hora })));
+    salida.set(plan.usuario_id, l.sort((a, b) => a.hora.localeCompare(b.hora)));
+  }
+  return salida;
+}
+
 type DestinoFamilia = { nombre: string; cuidadores: string[]; prefs: Map<string, PreferenciasAvisos>; relacionDe: Map<string, string | null> };
 
 /** Personas sin ningún celular con avisos, con sus cuidadores Admin. Si algo falla, nadie: no se avisa de más. */

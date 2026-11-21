@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resumenHoy, type DosisHoy } from "./pendientes-hoy";
+import { horasMalCargadas, resumenHoy, type DosisHoy } from "./pendientes-hoy";
 
 const d = (p: Partial<DosisHoy>): DosisHoy => ({ id: "a", nombre: "Enalapril", dosis: "10", unidad: "mg", hora_programada: "08:00", tomado: false, ...p });
 
@@ -26,5 +26,20 @@ describe("resumenHoy", () => {
     const r = resumenHoy([d({ id: "1", hora_programada: "08:00" }), d({ id: "2", hora_programada: "09:00" })], "11:40", new Set(["1"]));
     expect(r.pendientes.map((p) => p.id)).toEqual(["2"]);
     expect(r.noTomadas).toEqual([{ id: "1", nombre: "Enalapril", meta: "08:00 hs · dijo que no la tomó" }]);
+  });
+});
+
+describe("horasMalCargadas", () => {
+  it("lista las horas inválidas, una vez por remedio, y no las válidas", () => {
+    const filas = [
+      { id: "1", nombre: "Enalapril", hora_programada: "9hs" },
+      { id: "2", nombre: "Enalapril", hora_programada: "" },
+      { id: "3", nombre: "Losartán", hora_programada: "08:00" },
+      { id: "4", nombre: "Metformina", hora_programada: "25:00" },
+    ];
+    expect(horasMalCargadas(filas)).toEqual([
+      { id: "1", nombre: "Enalapril" },
+      { id: "4", nombre: "Metformina" },
+    ]);
   });
 });

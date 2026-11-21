@@ -14,6 +14,7 @@ import { useGrabacionVoz } from "@/lib/voz/usar-grabacion-voz";
 import { useSilencioVita } from "@/lib/voz/usar-silencio";
 import { guardarMedicionSimpleAction } from "@/lib/modo-simple/actions";
 import { horaActualEnAR } from "@/lib/modo-simple/formato";
+import { preguntaLocal } from "@/lib/modo-simple/confirmacion-voz";
 import { listaDelDia, respuestaProximoTurno, respuestaQueMeToca, respuestaYaTome, type FilaDelDia, type MedHoy, type TurnoProximo } from "@/lib/modo-simple/respuestas";
 import { VELOCIDAD_VOZ_LENTA, type PrefsModoSimple } from "@/lib/modo-simple/tipos";
 import {
@@ -93,6 +94,7 @@ export function CharlaSimple({
   nombreAyuda,
   onAyudaSinContacto,
   inicial,
+  preguntaInicial,
 }: {
   nombre: string;
   config: PrefsModoSimple;
@@ -105,9 +107,11 @@ export function CharlaSimple({
   /** Opens the sheet that explains where to set the contact (no phone). */
   onAyudaSinContacto: () => void;
   inicial?: VistaInicialCharla;
+  /** Lo que dijo con el botón de vita de abajo y no era "ya la tomé / más tarde / no": se responde al abrir. */
+  preguntaInicial?: string;
 }) {
   const enLinea = useEnLinea() && !inicial?.sinInternet;
-  const { silenciada } = useSilencioVita({ porDefecto: true });
+  const { silenciada } = useSilencioVita({ porDefecto: false });
 
   const [fase, setFase] = useState<Fase>(inicial?.fase ?? "inicio");
   const [pregunta, setPregunta] = useState(inicial?.pregunta ?? "");
@@ -462,6 +466,23 @@ export function CharlaSimple({
     window.addEventListener("keydown", alTeclado);
     return () => window.removeEventListener("keydown", alTeclado);
     // `cerrar` solo usa refs y callbacks estables del hook: se registra una vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Lo dicho desde el botón de vita: las tres preguntas conocidas sin IA, lo demás a vita.
+  // En un timeout (no en el cuerpo del efecto) porque responder cambia el estado.
+  useEffect(() => {
+    const texto = preguntaInicial?.trim();
+    if (!texto) return;
+    const t = setTimeout(() => {
+      const local = preguntaLocal(texto);
+      if (local === "turno") responderLocal(texto, respuestaProximoTurno(turnoProximo, fechaISOEnAR()));
+      else if (local === "tome") responderLocal(texto, respuestaYaTome(medsHoy, horaActualEnAR()), listaDelDia(medsHoy));
+      else if (local === "toca") responderLocal(texto, respuestaQueMeToca(medsHoy), listaDelDia(medsHoy));
+      else void preguntar(texto);
+    }, 0);
+    return () => clearTimeout(t);
+    // Solo al abrir: la pregunta inicial no cambia mientras la charla está abierta.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
