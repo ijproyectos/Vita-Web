@@ -5,6 +5,14 @@ import { toast } from "sonner";
 import { VitaIcon } from "@/lib/vita-icons";
 import { cn } from "@/lib/utils";
 import { borrarSuscripcionAction, guardarSuscripcionAction } from "@/lib/notificaciones/actions";
+import {
+  activarPushNativo,
+  desactivarPushNativo,
+  esNativo,
+  leerTokenNativo,
+  permisoNativo,
+  sincronizarTokenNativo,
+} from "@/lib/notificaciones/push-nativo";
 
 export type EstadoPush = "cargando" | "no-soportado" | "ios-instalar" | "bloqueado" | "inactivo" | "activo";
 
@@ -74,6 +82,10 @@ function aPayload(s: PushSubscription) {
  */
 export async function pedirAvisosPush(): Promise<void> {
   try {
+    if (esNativo()) {
+      await activarPushNativo();
+      return;
+    }
     if (!CLAVE_VAPID || typeof Notification === "undefined" || !("serviceWorker" in navigator)) return;
     const permiso = await Notification.requestPermission();
     if (permiso !== "granted") return;
@@ -94,6 +106,15 @@ export function useNotificacionesPush() {
   useEffect(() => {
     let cancelado = false;
     void (async () => {
+      if (esNativo()) {
+        const permiso = await permisoNativo();
+        if (cancelado) return;
+        const activo = permiso === "granted" && leerTokenNativo() !== null;
+        setEstado(permiso === "denied" ? "bloqueado" : activo ? "activo" : "inactivo");
+        // Android rotates FCM tokens: keep the server in sync.
+        if (permiso === "granted") void sincronizarTokenNativo();
+        return;
+      }
       const { estado: e, suscripcion } = await detectar();
       if (cancelado) return;
       setEstado(e);
@@ -110,6 +131,21 @@ export function useNotificacionesPush() {
   function activar() {
     startTransition(async () => {
       try {
+        if (esNativo()) {
+          // requestPermissions va primero: tiene que correr dentro del tap.
+          const { permiso, registrado } = await activarPushNativo();
+          if (permiso !== "granted") {
+            setEstado(permiso === "denied" ? "bloqueado" : "inactivo");
+            return;
+          }
+          if (!registrado) {
+            toast.error("No pudimos activar los avisos en este dispositivo.");
+            return;
+          }
+          setEstado("activo");
+          toast.success("Listo, vas a recibir los avisos en este celular");
+          return;
+        }
         // requestPermission va primero: tiene que correr dentro del tap.
         const permiso = await Notification.requestPermission();
         if (permiso !== "granted") {
@@ -140,6 +176,11 @@ export function useNotificacionesPush() {
   function desactivar() {
     startTransition(async () => {
       try {
+        if (esNativo()) {
+          await desactivarPushNativo();
+          setEstado("inactivo");
+          return;
+        }
         const registro = await navigator.serviceWorker.getRegistration("/");
         const suscripcion = await registro?.pushManager.getSubscription();
         if (suscripcion) {

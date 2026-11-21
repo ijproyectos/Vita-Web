@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { estaSuspendida, MENSAJE_CUENTA_SUSPENDIDA } from "@/lib/suspensiones/guardia";
-import { borrarSuscripcion, guardarSuscripcion } from "./push";
+import { z } from "zod";
+import { borrarSuscripcion, borrarTokenNativo, guardarSuscripcion, guardarTokenNativo } from "./push";
+import { esTokenNativoValido } from "./push-fcm-logica";
 import { listarFamilia } from "@/lib/familia/nucleo";
 import {
   actualizarEsperaDePersona,
@@ -69,6 +71,49 @@ export async function borrarSuscripcionAction(endpoint: string): Promise<EstadoP
   try {
     const supabase = await createClient();
     const r = await borrarSuscripcion(supabase, usuario.id, endpoint);
+    if (!r.ok) return { status: "error", message: "No pudimos desactivar los avisos." };
+    return { status: "success" };
+  } catch {
+    return { status: "error", message: "No pudimos desactivar los avisos." };
+  }
+}
+
+// --- Push nativo (FCM, app Android) ------------------------------------------
+
+const EntradaTokenNativo = z.object({
+  token: z.string().refine(esTokenNativoValido),
+  plataforma: z.enum(["android", "ios"]),
+  appVersion: z.string().max(40).optional(),
+});
+
+export async function guardarTokenNativoAction(entrada: {
+  token: string;
+  plataforma: "android" | "ios";
+  appVersion?: string;
+}): Promise<EstadoPush> {
+  if (await estaSuspendida()) return { status: "error", message: MENSAJE_CUENTA_SUSPENDIDA };
+  await requireUser();
+
+  const parseado = EntradaTokenNativo.safeParse(entrada);
+  if (!parseado.success) return { status: "error", message: "El dispositivo no es válido." };
+
+  try {
+    const supabase = await createClient();
+    const r = await guardarTokenNativo(supabase, parseado.data);
+    if (!r.ok) return { status: "error", message: "No pudimos activar los avisos. Probá de nuevo." };
+    return { status: "success" };
+  } catch {
+    return { status: "error", message: "No pudimos activar los avisos. Probá de nuevo." };
+  }
+}
+
+export async function borrarTokenNativoAction(token: string): Promise<EstadoPush> {
+  const usuario = await requireUser();
+  if (!esTokenNativoValido(token)) return { status: "error", message: "El dispositivo no es válido." };
+
+  try {
+    const supabase = await createClient();
+    const r = await borrarTokenNativo(supabase, usuario.id, token);
     if (!r.ok) return { status: "error", message: "No pudimos desactivar los avisos." };
     return { status: "success" };
   } catch {

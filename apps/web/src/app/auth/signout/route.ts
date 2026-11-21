@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { origenPublico } from "@/lib/email/origen";
-import { borrarSuscripcion } from "@/lib/notificaciones/push";
+import { borrarSuscripcion, borrarTokenNativo } from "@/lib/notificaciones/push";
+import { esTokenNativoValido } from "@/lib/notificaciones/push-fcm-logica";
 import { COOKIE_MODO_SIMPLE } from "@/lib/modo-simple/recordar";
 
 export async function POST(request: Request) {
@@ -13,11 +14,18 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const endpoint = formData.get("endpoint");
-    if (typeof endpoint === "string" && endpoint.startsWith("https://") && endpoint.length < 2048) {
+    const tokenNativo = formData.get("tokenNativo");
+    const endpointValido = typeof endpoint === "string" && endpoint.startsWith("https://") && endpoint.length < 2048;
+    const tokenValido = esTokenNativoValido(tokenNativo);
+    if (endpointValido || tokenValido) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (user) await borrarSuscripcion(supabase, user.id, endpoint);
+      if (user) {
+        if (endpointValido) await borrarSuscripcion(supabase, user.id, endpoint);
+        // Native app (Capacitor): same idea with this device's FCM token.
+        if (tokenValido) await borrarTokenNativo(supabase, user.id, tokenNativo);
+      }
     }
   } catch {
     // Missing/invalid body or DB error: continue with the logout.
