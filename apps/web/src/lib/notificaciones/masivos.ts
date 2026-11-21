@@ -16,7 +16,7 @@ import { entregarAviso } from "./avisos";
 //
 // Son ANUNCIOS DEL SERVICIO que mandan los dueños y administradores: a propósito NO respetan el silencio nocturno ni
 // los toggles de `preferencias_avisos` (eso es de los avisos de medicación/turnos). Sí respetan el permiso del
-// navegador: solo se envía a quien tiene una suscripción push, y se borran las muertas (404/410, lo hace enviarPush).
+// navegador: solo se envía a quien tiene un dispositivo con push (suscripción web o token nativo), y se borran las muertas (404/410, lo hace enviarPush).
 // Cada usuario recibe además UNA fila en su centro de avisos (tipo `admin_mensaje`) por envío: el cursor del lote es
 // el último usuario procesado, así que ningún usuario se repite aunque dos ticks se superpongan.
 

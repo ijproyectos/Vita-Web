@@ -100,9 +100,13 @@ type DestinoFamilia = { nombre: string; cuidadores: string[]; prefs: Map<string,
 /** Personas sin ningún celular con avisos, con sus cuidadores Admin. Si algo falla, nadie: no se avisa de más. */
 async function cuidadoresSinAvisoPropio(admin: SupabaseClient, usuarios: string[]): Promise<Map<string, DestinoFamilia>> {
   const salida = new Map<string, DestinoFamilia>();
-  const subs = await admin.from("push_suscripciones").select("usuario_id").in("usuario_id", usuarios);
-  if (subs.error) return salida;
-  const conAvisos = new Set((subs.data ?? []).map((s) => s.usuario_id as string));
+  // Un celular con la app nativa (token FCM) también tiene avisos.
+  const [subs, nativos] = await Promise.all([
+    admin.from("push_suscripciones").select("usuario_id").in("usuario_id", usuarios),
+    admin.from("push_tokens_nativos").select("usuario_id").in("usuario_id", usuarios),
+  ]);
+  if (subs.error || nativos.error) return salida;
+  const conAvisos = new Set([...(subs.data ?? []), ...(nativos.data ?? [])].map((s) => s.usuario_id as string));
   const sinAvisos = usuarios.filter((u) => !conAvisos.has(u));
   if (sinAvisos.length === 0) return salida;
 
