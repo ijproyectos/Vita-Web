@@ -364,7 +364,7 @@ Una fila por navegador/dispositivo suscripto a Web Push. Ver `017_push_notificac
 
 ## `push_tokens_nativos`
 
-Una fila por token de FCM (app Android de Capacitor). Migración `065_push_tokens_nativos.sql` (escrita, **NO aplicada**). Es el canal nativo de `enviarPush`, al lado de `push_suscripciones`.
+Una fila por token de FCM (app Android de Capacitor). Migración `065_push_tokens_nativos.sql` (**aplicada 2026-11-21**). Es el canal nativo de `enviarPush`, al lado de `push_suscripciones`.
 
 | columna | tipo | notas |
 |---|---|---|

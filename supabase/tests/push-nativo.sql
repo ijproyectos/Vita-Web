@@ -6,7 +6,7 @@
 -- `FAIL:` aborta la sección.
 --
 -- Requisitos:
---   1. Migración 065 aplicada (NO está aplicada todavía).
+--   1. Migración 065 aplicada (aplicada en producción el 2026-11-21).
 --   2. Dos cuentas reales (login Google): usuario_a y usuario_b.
 --   3. Conectar con el rol `postgres` del pooler (bypassa RLS para fixtures).
 --

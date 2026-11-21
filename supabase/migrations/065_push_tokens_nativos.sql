@@ -1,6 +1,6 @@
 -- Vitapp — Push nativo (FCM) para la app Android (Capacitor): tokens de dispositivo.
 --
--- Escrita, NO aplicada. Aplicarla a mano cuando el usuario lo pida.
+-- Aplicada en producción el 2026-11-21 (dry-run con rollback + psql -1, registrada en schema_migrations).
 --
 -- 1. push_tokens_nativos: una fila por token de FCM (dispositivo/instalación).
 --    RLS owner-only. El envío a OTRO usuario (cron, "Recordarle", avisos a
