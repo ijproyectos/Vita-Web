@@ -28,7 +28,8 @@ import { calcularVersionPrompt, clasificarError, construirFilaRegistro, medicion
 import { registrarRespuestaChat } from "@/lib/chat/registros";
 import { leerPersona, personaSinAvatar } from "@/lib/ai/persona-jarvis";
 import { contextoDinamicoParaModo, leerModoChat, resultadoToolBloqueada, toolsParaModo } from "@/lib/ai/modo-simple";
-import { SYSTEM_PROMPT, armarSystemChat, bloqueCumpleanos, bloqueHoy, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
+import { SYSTEM_PROMPT, armarSystemChat, bloqueCumpleanos, bloqueHoy, bloqueObservaciones, construirContextoPersonas, contextoDinamicoChat } from "@/lib/ai/prompt-chat";
+import { listarObservaciones } from "@/lib/observaciones/nucleo";
 import {
   ejecutarToolIdempotente,
   normalizarPedidoId,
@@ -39,6 +40,7 @@ import {
   UUID_RE,
   clasificarRespuesta,
 } from "@/lib/chat/pedidos";
+import { confirmacionAAgregar, respuestaFija, type ToolEjecutada } from "@/lib/ai/respuesta-fija";
 import { detectarEmergencia, textoEmergencia } from "@/lib/ai/emergencia";
 import * as chat from "@/lib/chat/nucleo";
 import { cargarMemoriasParaContexto, estadoMemoria, listarContradicciones, marcarContradiccionesPreguntadas } from "@/lib/memoria/nucleo";
@@ -78,6 +80,11 @@ const MAX_ITEMS_HOY = 20;
 // está: su resultado puede ser un error de validación que el modelo tiene que ver para pedir el valor de nuevo.
 // `pedir_ayuda_familia` tampoco: el modelo tiene que leer su resultado (avisado / repetido / no se mandó) para
 // no decir nunca "le avisé a tu familia" si no ocurrió.)
+// Tools que solo leen o cambian la UI: si el modelo se corta después de usar SOLO estas, repetir el pedido es seguro.
+// Cualquier otra (escrituras, recordar, resolver_contradiccion, remind_dose, confirmaciones...) impide el reintento silencioso.
+function esToolDeLectura(nombre: string): boolean {
+  return /^(list_|get_)/.test(nombre) || nombre === "buscar_memoria" || nombre === "set_avatar_mood"; // show_* y open_screen dibujan una tarjeta: no se repiten
+}
 const TOOLS_SIN_DATOS = new Set(["set_avatar_mood", "show_today_medications", "show_all_medications", "open_screen"]);
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: REINTENTOS_SDK });
@@ -134,6 +141,20 @@ async function construirContextoCumple(
       propio: p.id === usuarioId,
     }));
     return bloqueCumpleanos(cumplen);
+  } catch {
+    return "";
+  }
+}
+
+// Observaciones de vita (migración 062) de la persona que el chat tiene abierta, al bloque DINÁMICO. Con RLS (un
+// cuidador lee las de quien cuida); sin la migración o ante un error se omite. Nunca en modo simple.
+async function construirContextoObservaciones(
+  supabase: Awaited<ReturnType<typeof createClientConDispositivo>>,
+  personaId: string,
+  nombreAbierto: string | null
+): Promise<string> {
+  try {
+    return bloqueObservaciones(await listarObservaciones(supabase, personaId, 10), nombreAbierto);
   } catch {
     return "";
   }
@@ -197,6 +218,8 @@ export async function POST(request: Request) {
     mensaje?: unknown;
     pedidoId?: string;
     reintento?: boolean;
+    // El cliente reenvía solo, una vez, el pedido que el servidor pidió reintentar en silencio (`{reintentar}`).
+    reintentoAuto?: boolean;
     perfilActivoId?: string;
     confirmacionId?: unknown;
     modo?: unknown;
@@ -313,6 +336,8 @@ export async function POST(request: Request) {
       const temporizadorCorte = setTimeout(() => controlador.abort(), msHastaElCorte(inicioMs, performance.now()));
       let cortePorTiempo = false;
       let fallaPorTiempo = false;
+      let huboToolNoLectura = false; // alguna tool que no es de lectura llegó a ejecutarse (o a pedir confirmación)
+      let reintentarEnSilencio = false; // corte sin texto ni escrituras: el cliente reenvía el mismo pedido una vez
       let escriturasHechas = 0; // tarjetas de escritura ya emitidas: lo hecho no se pierde si se corta
       let quedaParaConfirmar = false; // ya salió una tarjeta "¿Confirmás?": un corte no la deja sin explicación
 
@@ -330,6 +355,7 @@ export async function POST(request: Request) {
           limite: consumo.consultas.limite,
           modoSimple,
           textoEmergencia: emergencia ? textoEmergencia(emergencia) : null,
+          gratis: consumo.consultas.gratis === true,
         })) {
           enviar(evento);
         }
@@ -451,10 +477,11 @@ export async function POST(request: Request) {
         );
         const purgaP = respuestaUsuario === "no" ? purgarPendientes(supabase, user.id) : Promise.resolve();
 
-        const [mensajesGuardados, contextoHoy, contextoCumple, memoriaBruta] = await Promise.all([
+        const [mensajesGuardados, contextoHoy, contextoCumple, contextoObservaciones, memoriaBruta] = await Promise.all([
           colaTempranaP ?? chat.listarCola(supabase, user.id, MAX_MENSAJES_HISTORIAL),
           hoyTempranoP ?? construirContextoHoy(supabase, user.id),
           construirContextoCumple(supabase, user.id, familia),
+          modoSimple ? Promise.resolve("") : construirContextoObservaciones(supabase, abierto?.id ?? user.id, abierto ? abierto.nombre : null),
           modoSimple ? Promise.resolve(null) : (memoriaTempranaP ?? leerMemoriaBruta(supabase, user.id, modoSimple)),
           purgaP,
         ]);
@@ -513,6 +540,7 @@ export async function POST(request: Request) {
           contextoPerfil,
           contextoHoy,
           contextoCumple,
+          contextoObservaciones,
           contextoMemoria: textoMemoria,
           ahora: descripcionAhoraEnAR(),
           hoyISO: fechaDeHoyISO(),
@@ -543,8 +571,11 @@ export async function POST(request: Request) {
           );
 
           medicion.vueltas++;
+          // Primer evento de salida de CUALQUIER tipo de bloque (texto, tool_use, thinking), no solo texto.
+          respuesta.on("streamEvent", (ev) => {
+            if (ev.type === "content_block_start") medicion.primerTokenMs ??= performance.now() - inicioMs;
+          });
           respuesta.on("text", (texto) => {
-            medicion.primerTokenMs ??= performance.now() - inicioMs;
             textoAcumulado += texto;
             enviar({ chunk: texto });
           });
@@ -590,17 +621,22 @@ export async function POST(request: Request) {
             (bloque): bloque is Anthropic.ToolUseBlock => bloque.type === "tool_use"
           );
 
-          for (const u of usosDeTool) medicion.tools.push(u.name); // solo nombres, nunca inputs
+          for (const u of usosDeTool) {
+            medicion.tools.push(u.name); // solo nombres, nunca inputs
+            if (!esToolDeLectura(u.name)) huboToolNoLectura = true;
+          }
 
           const turnoConTexto = mensajeFinal.content.some((b) => b.type === "text" && b.text.trim() !== "");
           const soloSinDatos = usosDeTool.every((u) => TOOLS_SIN_DATOS.has(u.name));
 
           const resultadosTool: Anthropic.ToolResultBlockParam[] = [];
+          const ejecutadas: ToolEjecutada[] = [];
           for (const uso of usosDeTool) {
             // Una tool fuera de la lista activa se rechaza aunque el modelo la nombre.
             const bloqueada = resultadoToolBloqueada(modo, uso);
             if (bloqueada) {
               resultadosTool.push(bloqueada);
+              ejecutadas.push({ nombre: uso.name });
               continue;
             }
             const resultado = await ejecutarToolIdempotente(
@@ -619,6 +655,7 @@ export async function POST(request: Request) {
                 mensajeOrigenId,
               }
             );
+            ejecutadas.push({ nombre: uso.name, accion: resultado.accionUI });
             if (resultado.accionUI) {
               enviar({ action: resultado.accionUI });
               tarjetasDelTurno.push(resultado.accionUI);
@@ -631,6 +668,20 @@ export async function POST(request: Request) {
               tool_use_id: uso.id,
               content: resultado.contenido,
             });
+          }
+
+          // Solo escrituras que salieron bien: la confirmación se arma desde sus resultados y no hace falta
+          // otra vuelta del modelo (2-4 s). Con cualquier falla, confirmación pendiente o lectura, sigue el modelo.
+          const fija = respuestaFija(ejecutadas);
+          if (fija) {
+            const textoDelTurno = mensajeFinal.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+            const extra = confirmacionAAgregar(textoDelTurno, fija, ejecutadas);
+            if (extra) {
+              textoAcumulado += extra;
+              enviar({ chunk: extra });
+            }
+            if (!ejecutadas.some((t) => t.nombre === "set_avatar_mood")) enviar({ action: { type: "avatar_mood", mood: "happy" } });
+            break;
           }
 
           // Ya respondió en texto y solo pidió efectos de UI: otra llamada al
@@ -646,7 +697,15 @@ export async function POST(request: Request) {
           medicion.resultado = "error";
           medicion.errorCodigo = "tiempo";
           if (!textoAcumulado && escriturasHechas === 0 && !quedaParaConfirmar) {
-            fallaPorTiempo = true;
+            // Sin nada dicho, hecho ni mostrado, y si este pedido no es ya el reintento automático: el servidor
+            // no guarda ningún error y le pide al cliente que reenvíe el mismo pedido una vez (el mensaje ya
+            // quedó guardado: el reintento no lo duplica ni cuenta otra interacción).
+            if (cuerpo.reintentoAuto !== true && !huboToolNoLectura) {
+              reintentarEnSilencio = true;
+              medicion.errorCodigo = "tiempo_reintentado";
+            } else {
+              fallaPorTiempo = true;
+            }
           } else {
             const nota = `${textoAcumulado ? "\n\n" : ""}${textoCortePorTiempo(escriturasHechas, quedaParaConfirmar)}`;
             textoAcumulado += nota;
@@ -673,6 +732,12 @@ export async function POST(request: Request) {
           cacheWriteTokens: tokensCacheEscrituraAcumulados,
         });
         if (usoNuevo) enviarUso(usoNuevo);
+        if (reintentarEnSilencio) {
+          // Emergencia: mientras se reenvía, la persona ya tiene los teléfonos en pantalla.
+          if (emergencia) enviar({ chunk: `${textoEmergencia(emergencia)}\n\n` });
+          enviar({ reintentar: true, pedidoId });
+        }
+        if (fallaPorTiempo && emergencia && !/\b(107|911)\b/.test(textoAcumulado)) enviar({ chunk: textoEmergencia(emergencia) });
         if (fallaPorTiempo) enviar({ error: "Se me hizo largo y no pude responderte. Probá de nuevo." });
         enviarFin();
       } catch (e) {

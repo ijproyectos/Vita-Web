@@ -13,6 +13,8 @@ import {
   separarDosis,
 } from "@/lib/inventario/tipos";
 import { perfilActivoEditable } from "@/lib/familia/perfil-activo";
+import { consumirUso, devolverUso } from "@/lib/plan-gratis/nucleo";
+import { MENSAJE_LIMITE_CONTEOS } from "@/lib/plan-gratis/logica";
 
 export type EstadoConteo =
   | { status: "idle" }
@@ -35,7 +37,14 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
   // requireUser fuera del try: su redirect("/login") lanza NEXT_REDIRECT y
   // el catch lo convertiría en un mensaje en vez de redirigir.
   const usuario = await requireUser();
+  // El conteo con foto es de la persona del perfil activo (plan gratis: 1 por mes, migración 061).
+  const destino = await perfilActivoEditable();
+  if (!destino.ok) return { status: "manual", message: destino.message };
+  const personaId = destino.perfil.id;
+  let usoId: number | null = null;
+  let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
   try {
+    supabase = await createClient();
 
     const frente = formData.get("frente");
     if (!(frente instanceof File) || frente.size === 0) {
@@ -51,15 +60,25 @@ export async function contarFotoAction(_prev: EstadoConteo, formData: FormData):
       }
     }
 
+    // Chequeo + registro atómico ANTES de la IA (no se puede superar en paralelo). Si la IA falla se devuelve.
+    const uso = await consumirUso(supabase, personaId, "contar_pastillas");
+    if (!uso.permitido) return { status: "manual", message: MENSAJE_LIMITE_CONTEOS };
+    usoId = uso.usoId;
+
     const codificar = async (f: File) => ({
       base64: Buffer.from(await f.arrayBuffer()).toString("base64"),
       mediaType: f.type,
     });
     const resultado = await contarPastillasEnFoto(usuario.id, await codificar(frente), dorso ? await codificar(dorso) : null);
 
-    if (!resultado.ok) return { status: "manual", message: resultado.error };
+    if (!resultado.ok) {
+      // Solo un conteo exitoso gasta el cupo del mes: los fallos de la IA no cuentan.
+      await devolverUso(supabase, usoId);
+      return { status: "manual", message: resultado.error };
+    }
     return { status: "contado", conteo: resultado.datos };
   } catch (e) {
+    if (supabase) await devolverUso(supabase, usoId);
     return {
       status: "manual",
       message: e instanceof Error ? `No pude contar la foto (${e.message}). Cargá la cantidad a mano.` : "No pude contar la foto. Cargá la cantidad a mano.",

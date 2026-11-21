@@ -45,6 +45,7 @@ import {
 } from "@/lib/chat/confirmaciones-turno";
 import * as turnos from "@/lib/turnos/nucleo";
 import * as medicamentos from "@/lib/medicamentos/nucleo";
+import { prepararRecordatorio } from "@/lib/ai/recordar-toma";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
 
 // Reintentos sin duplicar escrituras (migración 030, `acciones_agente`).
@@ -612,6 +613,16 @@ export async function ejecutarToolIdempotente(
     return { contenido: destino.contenido, accionUI: destino.accionUI };
   }
 
+  // Recordarle: las dosis pendientes exactas quedan en el input ANTES de la clave y de la pendiente, así
+  // la confirmación queda atada a persona + dosis. Solo para otra persona (rol "editar", ya validado arriba).
+  let textoRecordatorio: string | null = null;
+  if (nombre === "remind_dose") {
+    const prep = await prepararRecordatorio(supabase, usuarioId, destino, input);
+    if (!prep.ok) return prep.resultado;
+    input = prep.input;
+    textoRecordatorio = prep.texto;
+  }
+
   // El destino va en la clave: la misma acción para dos personas distintas en
   // un pedido son dos acciones. El claim sigue siendo del usuario logueado.
   const clave = `${destino.destinoId}~${claveSemantica(nombre, input)}`;
@@ -672,6 +683,7 @@ export async function ejecutarToolIdempotente(
       if (objetivo) {
         return { contenido: mensajeEsperandoConfirmacion(objetivo.texto), accionUI: opcionesConfirmarAccion(estado.id) };
       }
+      if (textoRecordatorio) return { contenido: mensajeEsperandoConfirmacion(textoRecordatorio), accionUI: opcionesConfirmarAccion(estado.id) };
       return faltaConfirmacion(destino.persona, estado.id);
     }
     // Confirmación válida: se ejecuta lo que el usuario confirmó (la acción
@@ -778,7 +790,7 @@ export async function confirmarSinModelo(
     return null;
   }
   const p = pendienteDe(fila.resultado);
-  if (!p || !TOOLS_CONFIRMACION_PROPIA.has(p.tool) || p.sesionId !== ctx.sesionId) return null;
+  if (!p || !(TOOLS_CONFIRMACION_PROPIA.has(p.tool) || p.tool === "remind_dose") || p.sesionId !== ctx.sesionId) return null;
   if (!pendienteVigente(fila.created_at, Date.now(), VENTANA_CONFIRMACION_MS)) return null;
   const r = await ejecutarToolIdempotente(
     p.tool,

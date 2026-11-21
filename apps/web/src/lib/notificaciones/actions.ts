@@ -209,7 +209,7 @@ export async function posponerDosisAction(medicamentoIds: string[], minutos: num
 
 /**
  * "Posponer N minutos" de "Es hora de medirte…" (modo simple): el cron vuelve a
- * mandar "Hora de medir…" cuando vence, si no se anotó. Sin la migración 061
+ * mandar "Hora de medir…" cuando vence, si no se anotó. Sin la migración 064
  * devuelve error y la tarjeta igual se oculta en este celular.
  */
 export async function posponerMedicionAction(monitoreoId: string, hora: string, minutos: number = MINUTOS_POSPONER_SERVIDOR): Promise<EstadoPush> {

@@ -12,7 +12,8 @@ import { contextoDinamicoParaModo, toolsParaModo } from "@/lib/ai/modo-simple";
 import { armarSystemChat, bloqueHoy, construirContextoPersonas, contextoDinamicoChat, SYSTEM_PROMPT } from "@/lib/ai/prompt-chat";
 import { costoUSD } from "@/lib/uso-ia/precios";
 import type { MiembroFamilia } from "@/lib/familia/tipos";
-import { calificar, leerVeredicto, percentil, unir, type Resultado, type Respuesta } from "./calificar";
+import { calificar, leerVeredicto, percentil, unir, unirTurnos, type Resultado, type Respuesta } from "./calificar";
+import { respuestaFijaDeEval } from "./respuesta-fija-eval";
 import { AHORA, CASOS, HOY_ISO, USUARIO_ID, type Caso } from "./casos";
 
 const CONCURRENCIA = 4;
@@ -100,24 +101,48 @@ async function correrCaso(cliente: Anthropic, caso: Caso, repeticion: number, si
   try {
     const m1 = await cliente.messages.create({ model: MODELO_IA, max_tokens: MAX_TOKENS_CHAT, system, tools, messages: mensajes });
     sumar(uso, m1.usage);
-    const r1 = leer(m1);
-    let res: Resultado = calificar(caso.reglas, r1);
+    let r1 = leer(m1);
     let r2: Respuesta | undefined;
+    // Caso de 1 paso cuyo primer turno es solo tools (sin texto): la route haría otra vuelta, así que se corre el
+    // segundo turno con un tool_result enlatado y las reglas se califican sobre los dos turnos juntos.
+    // Igual que producción: si todas las tools son escrituras que salieron bien, la confirmación sale de una plantilla
+    // (lib/ai/respuesta-fija.ts) y NO hay segundo turno del modelo.
+    const fija1 = !caso.segundo ? respuestaFijaDeEval(r1.llamadas, {}, r1.texto) : null;
+    if (fija1 !== null) {
+      r1 = unirTurnos(r1, { texto: fija1, llamadas: [] });
+    } else if (!caso.segundo && r1.texto.trim() === "" && r1.llamadas.length > 0) {
+      const usos1 = m1.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+      const m1b = await cliente.messages.create({
+        model: MODELO_IA,
+        max_tokens: MAX_TOKENS_CHAT,
+        system,
+        tools,
+        messages: [...mensajes, { role: "assistant", content: m1.content }, { role: "user", content: usos1.map((u): Anthropic.ToolResultBlockParam => ({ type: "tool_result", tool_use_id: u.id, content: "OK." })) }],
+      });
+      sumar(uso, m1b.usage);
+      r1 = unirTurnos(r1, leer(m1b));
+    }
+    let res: Resultado = calificar(caso.reglas, r1);
     if (caso.segundo) {
       const usos = m1.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
       if (usos.length === 0) {
         res = unir(res, { ok: false, fallas: ["el caso es de 2 pasos pero el modelo no llamó a ninguna tool en el primer turno"], avisos: [] });
       } else {
         const resultados: Anthropic.ToolResultBlockParam[] = usos.map((u) => ({ type: "tool_result", tool_use_id: u.id, content: caso.segundo?.resultadosTool[u.name] ?? "OK." }));
-        const m2 = await cliente.messages.create({
-          model: MODELO_IA,
-          max_tokens: MAX_TOKENS_CHAT,
-          system,
-          tools,
-          messages: [...mensajes, { role: "assistant", content: m1.content }, { role: "user", content: resultados }],
-        });
-        sumar(uso, m2.usage);
-        r2 = leer(m2);
+        const fija2 = respuestaFijaDeEval(r1.llamadas, caso.segundo.resultadosTool, r1.texto);
+        if (fija2 !== null) {
+          r2 = { texto: fija2, llamadas: [] };
+        } else {
+          const m2 = await cliente.messages.create({
+            model: MODELO_IA,
+            max_tokens: MAX_TOKENS_CHAT,
+            system,
+            tools,
+            messages: [...mensajes, { role: "assistant", content: m1.content }, { role: "user", content: resultados }],
+          });
+          sumar(uso, m2.usage);
+          r2 = leer(m2);
+        }
         res = unir(res, calificar(caso.segundo.reglas, r2));
       }
     }

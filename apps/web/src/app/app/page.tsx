@@ -15,6 +15,9 @@ import { NudgeVita } from "@/components/vita/nudge-vita";
 import { listarRecordatoriosPendientes } from "@/lib/notificaciones/recordatorios";
 import { contarNoLeidos, listarPedidosAyudaPendientes } from "@/lib/notificaciones/avisos";
 import { TarjetasPedidoAyuda } from "@/components/vita/tarjeta-pedido-ayuda";
+import { TarjetaObservaciones } from "@/components/vita/observaciones-ui";
+import { aItemsObservacion } from "@/lib/observaciones/items";
+import { listarObservaciones } from "@/lib/observaciones/nucleo";
 import { fechaConOffset, fechaDeHoyISO, formatoFechaCorta, saludoEnAR } from "@/lib/rutina/formato";
 import { VitaIcon } from "@/lib/vita-icons";
 import { esVistaSoloMirar } from "@/lib/familia/solo-mirar";
@@ -58,7 +61,7 @@ export default async function HomePage(props: PageProps<"/app">) {
   }
   if (destino === "modo-simple") redirect("/app/modo-simple");
 
-  const [perfil, medsHoy, todosLosMeds, adherencia, turnosProximos, grupos, noLeidos, pedidosAyuda] = await Promise.all([
+  const [perfil, medsHoy, todosLosMeds, adherencia, turnosProximos, grupos, noLeidos, pedidosAyuda, observaciones] = await Promise.all([
     obtenerPerfilCacheado(pid),
     medicamentos.listarHoy(supabase, pid),
     medicamentos.listarTodos(supabase, pid),
@@ -68,6 +71,8 @@ export default async function HomePage(props: PageProps<"/app">) {
     contarNoLeidos(supabase, usuario.id),
     // Pedidos de ayuda que recibió quien está logueado: se ven con cualquier perfil elegido.
     listarPedidosAyudaPendientes(supabase, usuario.id),
+    // "vita notó…": observaciones por reglas del perfil activo (vacío sin la migración 062).
+    listarObservaciones(supabase, pid),
   ]);
 
   // Los recordatorios ("te recordó X") son para la persona logueada.
@@ -158,6 +163,8 @@ export default async function HomePage(props: PageProps<"/app">) {
       {edadCumple !== null && <TarjetaCumpleanos nombre={nombre} edad={edadCumple} esPropio={activo.esPropio} />}
 
       {activo.esPropio && <TarjetaAvisosApagados />}
+
+      <TarjetaObservaciones items={aItemsObservacion(observaciones)} puedeDescartar={puedeEditar} />
 
       <AvisoRecordatorio items={recordatorios} href="/app/modo-simple" />
 

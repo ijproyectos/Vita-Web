@@ -424,7 +424,7 @@ Feed del centro de notificaciones (`/app/avisos`): una fila por aviso entregado 
 
 **RLS**: select/delete owner-only; insert exige `usuario_id = auth.uid()` y que el medicamento sea propio.
 
-## `posposiciones_medicion` (061, escrita, NO aplicada)
+## `posposiciones_medicion` (064, escrita, NO aplicada)
 
 "Posponer N minutos" de "Es hora de medirte…" en el modo simple. Cuando `hasta` pasa (hasta 45 min después) y ese horario del plan sigue sin anotarse, el cron `dosis-vencidas` vuelve a mandar "Hora de medir…" (`procesarMedicionesPospuestas`, dedupe `medicion_pospuesta` por id).
 
@@ -511,3 +511,17 @@ Migración 036 (escrita, NO aplicada; aditiva sobre 013). Agrega a `uso_ia_diari
 ## Medicamentos: forma, cantidad y fin (052)
 
 `medicamentos.forma` (`pastilla`, `jarabe`, `gotas`, `inyeccion`, `otro`), `cantidad_por_toma` (por fila; null = usa `inventario_pastillas.pastillas_por_toma`) y `fecha_fin` (inclusive, fecha AR; null = sin fin). `inventario_pastillas.stock` es decimal. La RPC `ajustar_stock_por_toma` mueve el stock con la cantidad de la toma (gotas en ml, 20 = 1 ml). Todo lector de la agenda usa `vigenteEnFecha` (`lib/medicamentos/cuando.ts`).
+
+## `observaciones` (migración 062, escrita, NO aplicada)
+
+"vita proactiva", etapa 1: lo que vita nota en los datos de una persona con reglas simples (sin IA). `usuario_id` = la persona dueña de los datos; `tipo` en `stock_bajo_dias`, `tomas_salteadas`, `presion_alta`, `glucemia_fuera_rango`, `estudio_fuera_rango`, `turno_cerca`, `tratamiento_termina`, `medicion_pendiente`, `familia_sin_tomas`; `severidad` `info`/`atencion`; `clave` = clave de dedupe (tipo + referencia + semana ISO), `unique (usuario_id, clave)`; `titulo`/`texto` salen de plantillas de la app; `datos` jsonb solo con números e ids; `href` solo `/app...`; `vigente_hasta`, `vista_at`, `descartada_at`. RLS: el dueño lee lo suyo salvo `familia_sin_tomas` (es un aviso PARA quien cuida); un cuidador aceptado lee lo de la persona (cualquier rol; `familia_sin_tomas` solo con `editar`); marcar vista/descartada: el dueño y un cuidador `editar`, con grant de UPDATE solo sobre esas dos columnas; el dueño también borra lo suyo (Borrar historial); nadie inserta desde la app, solo `service_role` (cron `/api/cron/observaciones`, 08:00-10:59 AR). Se purga a los 30 días de `vigente_hasta`. Además agrega `preferencias_avisos.observaciones boolean default true`.
+
+## Testing del panel: tablas `track_*` (migración 063, escrita, NO aplicada)
+
+El módulo Testing de "vita track" (herramienta del equipo, repo `micasrur/vita-track`) vive en `/adminvita/testing`. Las personas son administradores del panel: se guarda `admin_email` en minúsculas (sin tabla de personas; quién es quién sale de `ADMIN_EMAILS` + `administradores`).
+
+- `track_casos` (`codigo` T-nn, `area`, `funcionalidad`, `prioridad`, `precondicion`, `pasos`, `esperado`, `posicion`, `archivado`), `track_rondas` (`nombre`, `version_app`, `desde`/`hasta`, `estado` activa/cerrada, `creada_por`), `track_asignaciones` (ronda + caso + `admin_email` + `dispositivo`), `track_pruebas` (caso, `estado` OK/Falla/Bloqueado/No aplica, `resultado`, `admin_email`, `ronda_id`, `asignacion_id`, `bug_id`), `track_bugs` (`codigo` B-nn, `severidad`, `estado` Abierto/En arreglo/Arreglado/Verificado/Descartado, `responsable_email`, `recibido_por_email`, `reportado_por` texto, `ticket_externo` texto sin sync), `track_bug_eventos` (historial: creado/cambio/comentario, lo escribe el servidor), `track_reportes` (U-nn, reportes de testers) y `track_adjuntos` (ficha de cada captura/video; un solo padre: bug, reporte o prueba).
+- Los códigos T-/B-/U- los asigna el trigger `track_asignar_codigo`. El estado de un caso es el de su última prueba (sin pruebas = Pendiente).
+- **Seguridad**: RLS habilitada SIN policies y `revoke all` a `anon`/`authenticated` (los pacientes también son `authenticated`, por eso no se copia el `using (true)` de vita-track). Solo `service_role`, desde Server Components y Server Actions del panel DESPUÉS de `requireAdmin()`. Bucket privado `track-adjuntos` (25 MB, imágenes y videos), sin policies sobre `storage.objects`: se sube con URL firmada de subida emitida por el servidor y se lee con URLs firmadas de 1 h.
+- Auditoría en `admin_acciones`: `track_bug_creado`, `track_bug_cerrado`, `track_ronda_creada`, `track_ronda_cerrada` (solo códigos e ids, nunca texto libre).
+- Seed de los 75 casos aparte: `supabase/seeds/track_casos.sql` (se corre a mano con `psql` después de la 063; idempotente). Tests: `supabase/tests/track-testing.sql`.

@@ -68,6 +68,8 @@ export function rutaVolverAPerfil(activo: { esPropio: boolean; rol: string }): s
 const RUTAS_EXACTAS_SOLO_MIRAR = ["/app", "/app/resumen-salud", "/app/tu-salud", "/app/familia", "/app/familia/nuevo"];
 const RUTAS_CON_SUBRUTAS_SOLO_MIRAR = [
   "/app/avisos",
+  // Lo que vita notó de la persona que se mira (solo lectura para un Lector).
+  "/app/observaciones",
   "/app/perfil/seguridad",
   "/app/perfil/privacidad",
   "/app/perfil/ayuda",

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { urlVitaTrack } from "@/lib/admin/testing/vita-track";
 import { VitaIcon } from "@/lib/vita-icons";
 
 const ITEMS = [
@@ -13,9 +14,13 @@ const ITEMS = [
   { href: "/adminvita/vita-plus", etiqueta: "vita+", exacto: false },
   { href: "/adminvita/codigos", etiqueta: "Códigos", exacto: false },
   { href: "/adminvita/notificaciones", etiqueta: "Notificaciones", exacto: false },
+  { href: "/adminvita/testing", etiqueta: "Testing", exacto: false },
   { href: "/adminvita/administradores", etiqueta: "Administradores", exacto: false },
   { href: "/adminvita/sistema", etiqueta: "Sistema", exacto: false },
 ] as const;
+
+// NEXT_PUBLIC_* se incrusta al compilar. Sin variable (o inválida) no hay link.
+const VITA_TRACK = urlVitaTrack(process.env.NEXT_PUBLIC_VITA_TRACK_URL);
 
 export function NavAdmin() {
   const ruta = usePathname();
@@ -36,6 +41,18 @@ export function NavAdmin() {
           </Link>
         );
       })}
+      {VITA_TRACK ? (
+        <a
+          href={VITA_TRACK}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-slate-brand transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-teal motion-reduce:transition-none"
+        >
+          vita track
+          <VitaIcon name="arrow-up-right" size={14} />
+          <span className="sr-only">(se abre en una pestaña nueva)</span>
+        </a>
+      ) : null}
     </nav>
   );
 }

@@ -96,10 +96,10 @@ export async function procesarMonitoreos(
 }
 
 /**
- * Venció un "Posponer N minutos" de "Es hora de medirte…" (modo simple, 061) y
+ * Venció un "Posponer N minutos" de "Es hora de medirte…" (modo simple, 064) y
  * todavía no se anotó: "Hora de medir…" otra vez, a la persona. Una vez por
  * posposición (dedupe por su id), solo dentro de los 45 min de vencida y fuera
- * del silencio nocturno. Sin la migración 061 no hace nada.
+ * del silencio nocturno. Sin la migración 064 no hace nada.
  */
 export async function procesarMedicionesPospuestas(admin: SupabaseClient, hoyAR: string, horaAR: string, ahora: Date = new Date()): Promise<number> {
   const desde = new Date(ahora.getTime() - 45 * 60_000).toISOString();

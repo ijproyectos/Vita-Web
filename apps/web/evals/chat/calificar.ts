@@ -5,7 +5,12 @@ import { TOOLS_DE_ESCRITURA } from "@/lib/ai/destino";
 export type LlamadaTool = { nombre: string; input: Record<string, unknown> };
 
 /** Lo que el modelo respondió en UN turno. */
-export type Respuesta = { texto: string; llamadas: LlamadaTool[] };
+export type Respuesta = {
+  texto: string;
+  llamadas: LlamadaTool[];
+  /** Solo si se unieron dos turnos (primer turno solo con tools + segundo con texto): el texto del PRIMER turno. */
+  textoPrimerTurno?: string;
+};
 
 /** `falla` rompe el caso; `aviso` se informa pero no lo rompe (reglas blandas, p. ej. el mood del avatar). */
 export type Severidad = "falla" | "aviso";
@@ -22,7 +27,9 @@ export type Regla = Base &
     | { tipo: "texto"; regex: RegExp }
     | { tipo: "sinTexto"; regex: RegExp }
     | { tipo: "textoInicio"; regex: RegExp; caracteres: number }
+    | { tipo: "textoEnPrimerTurno" }
     | { tipo: "pregunta" }
+    | { tipo: "preguntaOPide" }
     | { tipo: "maxCaracteres"; n: number }
     | { tipo: "custom"; fn: (r: Respuesta) => string | null }
   );
@@ -36,6 +43,9 @@ export function textoDeCampo(v: unknown): string {
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
+
+/** Pedido explícito o explicación de por qué falta algo, sin signo de pregunta ("Contame el nombre…", "No tengo a Marta…"). */
+export const PIDE_O_EXPLICA = /contame|decime|necesito saber|cu[aá]l|qu[eé] remedio|agregal[ao] primero|no tengo a|no tengo (?:cargad[ao]|registrad[ao]) a/i;
 
 function evaluar(regla: Regla, r: Respuesta): string | null {
   const m = (porDefecto: string) => regla.motivo ?? porDefecto;
@@ -77,6 +87,10 @@ function evaluar(regla: Regla, r: Respuesta): string | null {
     }
     case "textoInicio":
       return regla.regex.test(r.texto.slice(0, regla.caracteres)) ? null : m(`en los primeros ${regla.caracteres} caracteres falta ${regla.regex}`);
+    case "textoEnPrimerTurno":
+      return (r.textoPrimerTurno ?? r.texto).trim() !== "" ? null : m("el primer turno no trae texto (la ayuda debe ir antes de cualquier tool)");
+    case "preguntaOPide":
+      return r.texto.includes("?") || PIDE_O_EXPLICA.test(r.texto) ? null : m("no preguntó ni pidió el dato que falta ni explicó por qué no puede");
     case "pregunta":
       return r.texto.includes("?") ? null : m("no hizo ninguna pregunta");
     case "maxCaracteres":
@@ -127,4 +141,9 @@ export function percentil(valores: number[], p: number): number {
   const orden = [...valores].sort((a, b) => a - b);
   const i = Math.min(orden.length - 1, Math.max(0, Math.ceil((p / 100) * orden.length) - 1));
   return orden[i];
+}
+
+/** Une el primer turno (solo tools, sin texto) con el segundo para calificar un caso de 1 paso como lo vería el usuario. */
+export function unirTurnos(t1: Respuesta, t2: Respuesta): Respuesta {
+  return { texto: `${t1.texto}${t2.texto}`, llamadas: [...t1.llamadas, ...t2.llamadas], textoPrimerTurno: t1.texto };
 }

@@ -1,4 +1,4 @@
--- 061: "Posponer N minutos" en "Es hora de medirte…" del modo simple.
+-- 064: "Posponer N minutos" en "Es hora de medirte…" del modo simple.
 --
 -- Igual que `posposiciones` (020) para las dosis: la persona pospone un horario
 -- de un plan de monitoreo (053) y el cron `dosis-vencidas` vuelve a mandar
