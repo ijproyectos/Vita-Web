@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { origenPublico } from "@/lib/email/origen";
+import { asegurarPerfil } from "@/lib/auth/post-login";
 import { destinoSeguro } from "@/lib/navegacion/destino-seguro";
 
 const TIPOS_OTP: EmailOtpType[] = ["signup", "invite", "magiclink", "recovery", "email_change", "email"];
@@ -37,19 +38,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/auth-code-error`);
   }
 
-  const meta = usuario.user_metadata ?? {};
-  // ignoreDuplicates: true — sin esto, un re-login pisaría el nombre
-  // cada vez con el de Google, descartando cualquier edición que el
-  // usuario haya hecho después en Resumen de salud. Solo se completa
-  // en el primer login (insert real), nunca se actualiza acá.
-  await supabase.from("perfiles").upsert(
-    {
-      id: usuario.id,
-      nombre: (meta.full_name as string | undefined) ?? (meta.name as string | undefined) ?? null,
-      avatar_url: (meta.avatar_url as string | undefined) ?? null,
-    },
-    { onConflict: "id", ignoreDuplicates: true }
-  );
+  await asegurarPerfil(supabase, usuario);
 
   return NextResponse.redirect(`${origin}${next}`);
 }

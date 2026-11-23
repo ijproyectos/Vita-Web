@@ -1,12 +1,12 @@
 import { AvatarPersona } from "@/components/vita/avatar-persona";
-import { GoogleLogo } from "@/components/vita/auth-ui";
+import { AvisoAuth, BotonApple, GoogleLogo } from "@/components/vita/auth-ui";
 import type { RolVinculo } from "@/lib/familia/tipos";
 import { PantallaInvitada, etiquetaRol } from "./piezas";
 import { enmascararEmail } from "@/lib/familia/enmascarar";
 
 // B3 · Quién te invita y con qué cuenta entrás. Primero se ve a quién va a
 // cuidar y quién la invitó; recién después se pide la cuenta. El bloque de
-// cuenta es el de la bienvenida del login. Sin Apple.
+// cuenta es el de la bienvenida del login (Apple solo en iOS nativo).
 export function RecibirInvitacion({
   invitador,
   persona,
@@ -15,6 +15,9 @@ export function RecibirInvitacion({
   email,
   invitoLaPersona,
   onGoogle,
+  onApple,
+  ocupado,
+  error,
   onEmail,
   onEntrar,
 }: {
@@ -28,6 +31,11 @@ export function RecibirInvitacion({
   /** Invitó la propia persona: no se dice "te invitó a cuidar a" su mismo nombre. */
   invitoLaPersona?: boolean;
   onGoogle?: () => void;
+  /** Solo se pasa en iOS nativo: muestra "Continuar con Apple". */
+  onApple?: () => void;
+  /** Un inicio de sesión nativo está abierto: deshabilita los botones. */
+  ocupado?: boolean;
+  error?: string | null;
   onEmail?: () => void;
   onEntrar?: () => void;
 }) {
@@ -56,15 +64,18 @@ export function RecibirInvitacion({
         <button
           type="button"
           onClick={onGoogle}
+          disabled={ocupado}
           className="flex h-[54px] items-center justify-center gap-2.5 rounded-full border border-line bg-card font-heading text-[15.5px] font-bold transition-transform active:scale-[0.98] disabled:opacity-60"
         >
           <GoogleLogo />
           Continuar con Google
         </button>
+        {onApple && <BotonApple onClick={onApple} disabled={ocupado} />}
         <button type="button" onClick={onEmail} className="h-11 text-[14.5px] font-bold text-slate-brand">
           Continuar con email
         </button>
       </div>
+      {error && <AvisoAuth>{error}</AvisoAuth>}
       {onEntrar && (
         <>
           <div className="mb-4 mt-1.5 h-px bg-line-cream" />

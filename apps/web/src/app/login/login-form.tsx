@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { VitaAvatar } from "@/components/vita/vita-avatar";
 import {
   AvisoAuth,
+  BotonApple,
   BotonCta,
   BotonPildora,
   BotonVolver,
@@ -22,6 +23,7 @@ import {
   leerCodigoPortapapeles,
   passwordValida,
 } from "@/components/vita/auth-ui";
+import { useLoginNativo } from "@/lib/auth/use-login-nativo";
 import { ConfirmarPersona, MENSAJE_CODIGO_DE_OTRO_PERFIL } from "@/components/vita/confirmar-persona";
 import type { VistaPreviaCodigo } from "@/lib/acceso-codigo/tipos";
 import { entrarConCodigoAction, verCodigoAction, type EstadoVerCodigo } from "./actions";
@@ -144,6 +146,7 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [nombre, setNombre] = useState("");
   const [cargando, setCargando] = useState<"google" | "codigo" | "email" | null>(null);
+  const nativo = useLoginNativo();
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [motivoEnviado, setMotivoEnviado] = useState<"crear" | "olvide">("crear");
@@ -175,6 +178,11 @@ export function LoginForm({
 
   async function iniciarSesionOAuth(destino: string, origen: "google" | "codigo") {
     setError(null);
+    // Inside the native shell Google blocks the web redirect: use the native sheet.
+    if (nativo.via("google") === "nativo") {
+      await nativo.iniciar("google", destino);
+      return;
+    }
     setCargando(origen);
     const { error } = await createClient().auth.signInWithOAuth({
       provider: "google",
@@ -200,6 +208,9 @@ export function LoginForm({
       window.location.assign(next ?? "/app");
     });
   }
+
+  const ocupado = cargando !== null || nativo.enCurso !== null;
+  const errorSocial = error ?? nativo.error;
 
   const crearOk = passwordValida(password) && email.trim() !== "" && nombre.trim() !== "";
 
@@ -323,17 +334,20 @@ export function LoginForm({
           <button
             type="button"
             onClick={() => iniciarSesionOAuth(next ?? "/app", "google")}
-            disabled={cargando !== null}
+            disabled={ocupado}
             className="flex h-[54px] items-center justify-center gap-2.5 rounded-full border border-line bg-card font-heading text-[15.5px] font-bold transition-transform active:scale-[0.98] disabled:opacity-60"
           >
             <GoogleLogo />
-            {cargando === "google" ? "Conectando…" : "Continuar con Google"}
+            {cargando === "google" || nativo.enCurso === "google" ? "Conectando…" : "Continuar con Google"}
           </button>
+          {nativo.via("apple") === "nativo" && (
+            <BotonApple onClick={() => void nativo.iniciar("apple", next ?? "/app")} cargando={nativo.enCurso === "apple"} disabled={ocupado} />
+          )}
           <button type="button" onClick={() => ir("crear")} className="h-11 text-[14.5px] font-bold text-slate-brand">
             Continuar con email
           </button>
         </div>
-        {error && <AvisoAuth>{error}</AvisoAuth>}
+        {errorSocial && <AvisoAuth>{errorSocial}</AvisoAuth>}
         <div className="mb-4 mt-1.5 h-px bg-line-cream" />
         <div className="text-center text-sm font-medium text-slate-brand">
           ¿Ya tenés cuenta?{" "}
@@ -393,14 +407,14 @@ export function LoginForm({
           {enviandoCodigo ? "Entrando…" : "Pegar código"}
         </BotonPildora>
         <div className="flex-1" />
-        {error && <AvisoAuth>{error}</AvisoAuth>}
+        {errorSocial && <AvisoAuth>{errorSocial}</AvisoAuth>}
         <button
           type="button"
           onClick={() => iniciarSesionOAuth(NEXT_CODIGO, "codigo")}
-          disabled={cargando !== null}
+          disabled={ocupado}
           className="mt-4 text-center text-sm font-bold text-teal-deep disabled:opacity-60"
         >
-          {cargando === "codigo" ? "Conectando…" : "Tengo Google y un código de mi familiar"}
+          {cargando === "codigo" || nativo.enCurso === "google" ? "Conectando…" : "Tengo Google y un código de mi familiar"}
         </button>
         <p className="mt-3 text-balance text-center text-sm font-medium leading-normal text-subtle">
           Si abriste el link de WhatsApp, entrás directo.

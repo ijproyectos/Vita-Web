@@ -51,6 +51,34 @@ export function GoogleLogo() {
   return <img src="/google-g.svg" alt="" width={19} height={19} aria-hidden="true" />;
 }
 
+// Logo de Apple: glifo monocromo (hereda el color del texto con currentColor,
+// así no lleva hex y sirve sobre fondo oscuro o claro).
+export function AppleLogo() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M16.37 1.43c0 1.14-.46 2.2-1.2 2.98-.8.85-2.1 1.5-3.16 1.42-.13-1.1.42-2.25 1.15-2.97.81-.83 2.2-1.45 3.21-1.43zM20.5 17.1c-.55 1.27-.81 1.84-1.52 2.96-.99 1.57-2.39 3.52-4.12 3.54-1.54.02-1.94-1-4.03-.99-2.09.01-2.53 1.01-4.07.99-1.73-.02-3.05-1.78-4.04-3.35C-.2 15.9-.5 10.6 1.3 7.82c1.28-1.98 3.3-3.14 5.2-3.14 1.93 0 3.14 1.06 4.74 1.06 1.55 0 2.5-1.06 4.73-1.06 1.69 0 3.48.92 4.76 2.5-4.18 2.29-3.5 8.26.77 9.92z" />
+    </svg>
+  );
+}
+
+/**
+ * "Continuar con Apple" (HIG: misma altura y presencia que el de Google, fondo
+ * sólido con el logo y el texto en contraste). Solo se muestra en iOS nativo.
+ */
+export function BotonApple({ onClick, cargando, disabled }: { onClick: () => void; cargando?: boolean; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-[54px] items-center justify-center gap-2.5 rounded-full bg-foreground font-heading text-[15.5px] font-bold text-background transition-transform active:scale-[0.98] disabled:opacity-60"
+    >
+      <AppleLogo />
+      {cargando ? "Conectando…" : "Continuar con Apple"}
+    </button>
+  );
+}
+
 /** Pantalla de acceso sobre crema, con padding de la maqueta (62/24/40). */
 export function PantallaAuth({ children, className }: { children: ReactNode; className?: string }) {
   return (
