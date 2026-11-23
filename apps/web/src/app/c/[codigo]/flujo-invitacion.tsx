@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useLoginNativo } from "@/lib/auth/use-login-nativo";
 import { AvisoAuth, BotonCta, BotonVolver, CampoAuth, CodigoSeisCajas, TituloAuth } from "@/components/vita/auth-ui";
 import { pedirAvisosPush } from "@/components/vita/activar-notificaciones";
 import { AceptarInvitacion } from "@/components/vita/invitacion/aceptar-invitacion";
@@ -33,8 +34,14 @@ export function EntrarInvitacion(d: Datos) {
   const [codigoMail, setCodigoMail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, iniciar] = useTransition();
+  const nativo = useLoginNativo();
 
   async function google() {
+    // Inside the native shell Google blocks the web redirect: use the native sheet.
+    if (nativo.via("google") === "nativo") {
+      await nativo.iniciar("google", `/c/${d.codigo}`);
+      return;
+    }
     const { error: e } = await createClient().auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback?next=/c/${d.codigo}` },
@@ -72,7 +79,7 @@ export function EntrarInvitacion(d: Datos) {
   }
 
   if (paso === "inicio") {
-    return <RecibirInvitacion invitador={d.invitador} persona={d.persona} invitoLaPersona={d.invitoLaPersona} rol={d.rol} onGoogle={google} onEmail={() => setPaso("mail")} />;
+    return <RecibirInvitacion invitador={d.invitador} persona={d.persona} invitoLaPersona={d.invitoLaPersona} rol={d.rol} onGoogle={google} onApple={nativo.via("apple") === "nativo" ? () => void nativo.iniciar("apple", `/c/${d.codigo}`) : undefined} ocupado={nativo.enCurso !== null} error={nativo.error} onEmail={() => setPaso("mail")} />;
   }
 
   return (
